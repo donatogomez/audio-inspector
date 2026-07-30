@@ -12,9 +12,9 @@ verifiable, maps to one logical commit, and contains nothing out of scope.
 
 ## 2. Use case with test doubles
 
-- [ ] 2.1 Implement `InspectAudioFileUseCase` (nonisolated async): read properties → derive warnings → compute global status → build report
-- [ ] 2.2 Add a fake `AudioFilePropertyReading` in `AudioInspectorTesting`
-- [ ] 2.3 Unit tests: available/partial/failed outcomes, warning derivation, declared-vs-estimated bitrate — all with the fake, no real files
+- [x] 2.1 Implement `InspectAudioFileUseCase` (nonisolated async): read properties → derive warnings → compute global status → build report
+- [x] 2.2 Add a fake `AudioFilePropertyReading` in `AudioInspectorTesting`
+- [x] 2.3 Unit tests: available/partial/failed outcomes, warning derivation, declared-vs-estimated bitrate — all with the fake, no real files
 
 ## 3. Basic technical inspection (infrastructure)
 
