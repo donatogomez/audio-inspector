@@ -1,0 +1,84 @@
+#!/usr/bin/env bash
+#
+# check-boundaries.sh — enforce Audio Inspector's Clean Architecture import rules.
+#
+# Why this exists: SwiftPM scopes each target's *declared* dependencies, so on a clean/isolated
+# build an undeclared `import` fails with "no such module". But on a full `swift build` SwiftPM
+# emits every module into one shared search directory, so an accidental undeclared import can slip
+# through locally. This script closes that gap (locally and in CI) by statically rejecting forbidden
+# imports. Adapted from the SignalFlow reference (docs/signal-flow-reuse-audit.md) to Audio
+# Inspector's smaller module set. See docs/architecture.md.
+#
+# Exit non-zero on the first violation.
+
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+# Pre-code state: nothing to check until the package exists. Don't fail the build for that.
+if [ ! -d Sources ]; then
+    echo "ℹ️  Sources/ not present yet — no boundaries to check (bootstrap phase)."
+    exit 0
+fi
+
+fail=0
+report() { echo "❌ boundary violation: $1"; fail=1; }
+
+# Frameworks that the pure Domain (and pure DSP) must never see.
+UI_FRAMEWORKS='SwiftUI|AppKit'
+MEDIA_FRAMEWORKS='AVFoundation|AudioToolbox|CoreAudio|AVFAudio'
+
+# Rule 1 — AudioInspectorDomain is pure: no first-party module, no UI, no media/DSP frameworks,
+# no persistence. (Foundation value types are allowed; frameworks are not.)
+if [ -d Sources/AudioInspectorDomain ] && \
+   grep -REn "^\s*import\s+(AudioInspectorAnalysis|AudioInspectorMedia|AudioInspectorTesting|Feature[A-Za-z]+|AudioInspectorApp|DesignSystem[A-Za-z]*|${UI_FRAMEWORKS}|${MEDIA_FRAMEWORKS}|Accelerate|SwiftData)\b" \
+        Sources/AudioInspectorDomain 2>/dev/null; then
+    report "AudioInspectorDomain must import nothing but the standard library / Foundation value types"
+fi
+
+# Rule 2 — Domain and Analysis must not spawn subprocesses (no Process / shell). Only Media may.
+if grep -REn '\bProcess\s*\(' Sources/AudioInspectorDomain Sources/AudioInspectorAnalysis 2>/dev/null; then
+    report "Domain/Analysis must not use Process(...) — subprocess use belongs in AudioInspectorMedia"
+fi
+
+# Rule 3 — AudioInspectorAnalysis is pure DSP: DomainKit + Accelerate only. No UI, no media I/O
+# frameworks, no Media/Feature/App modules.
+if [ -d Sources/AudioInspectorAnalysis ] && \
+   grep -REn "^\s*import\s+(AudioInspectorMedia|Feature[A-Za-z]+|AudioInspectorApp|DesignSystem[A-Za-z]*|${UI_FRAMEWORKS}|${MEDIA_FRAMEWORKS}|SwiftData)\b" \
+        Sources/AudioInspectorAnalysis 2>/dev/null; then
+    report "AudioInspectorAnalysis may depend only on AudioInspectorDomain (+ Accelerate)"
+fi
+
+# Rule 4 — AudioInspectorMedia is the infrastructure adapter (AVFoundation/AudioToolbox/FFmpeg via
+# Process). It must not reach up into UI, features, or the app.
+if [ -d Sources/AudioInspectorMedia ] && \
+   grep -REn "^\s*import\s+(Feature[A-Za-z]+|AudioInspectorApp|DesignSystem[A-Za-z]*|${UI_FRAMEWORKS}|SwiftData)\b" \
+        Sources/AudioInspectorMedia 2>/dev/null; then
+    report "AudioInspectorMedia must not import UI, feature, app, or persistence modules"
+fi
+
+# Rule 5 — Feature modules are vertical UI slices: DomainKit (+ a future DesignSystem) only. They
+# must never reach the infrastructure/analysis concretes or media/DSP frameworks.
+for feature in Sources/Feature*; do
+    [ -d "$feature" ] || continue
+    if grep -REn "^\s*import\s+(AudioInspectorMedia|AudioInspectorAnalysis|${MEDIA_FRAMEWORKS}|Accelerate|SwiftData)\b" "$feature" 2>/dev/null; then
+        report "$(basename "$feature") must not import a concrete infrastructure/analysis module or a media/DSP framework"
+    fi
+done
+
+# Rule 6 — Media frameworks are owned exclusively by AudioInspectorMedia. No other module (not even
+# the app composition root, which depends on the Media *target*) may import them directly.
+media_violators=$(grep -REln "^\s*import\s+(${MEDIA_FRAMEWORKS})\b" Sources 2>/dev/null | grep -v '^Sources/AudioInspectorMedia/' || true)
+if [ -n "$media_violators" ]; then
+    report "AVFoundation/AudioToolbox may only be imported by AudioInspectorMedia (found: $media_violators)"
+fi
+
+# Rule 7 — Accelerate is owned by AudioInspectorAnalysis (pure DSP). No other module imports it.
+accel_violators=$(grep -REln '^\s*import\s+Accelerate\b' Sources 2>/dev/null | grep -v '^Sources/AudioInspectorAnalysis/' || true)
+if [ -n "$accel_violators" ]; then
+    report "Accelerate may only be imported by AudioInspectorAnalysis (found: $accel_violators)"
+fi
+
+if [ "$fail" -eq 0 ]; then
+    echo "✅ architecture boundaries respected"
+fi
+exit "$fail"

@@ -1,0 +1,55 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+
+# Xcode
+build/
+DerivedData/
+*.xcworkspace/xcuserdata/
+*.xcodeproj/xcuserdata/
+*.xcodeproj/project.xcworkspace/xcuserdata/
+*.xcuserstate
+*.moved-aside
+*.pbxuser
+!default.pbxuser
+*.perspectivev3
+!default.perspectivev3
+xcuserdata/
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# Swift Package Manager
+.build/
+.swiftpm/xcode/package.xcworkspace/xcuserdata/
+.swiftpm/configuration/
+Packages/
+Package.resolved.backup
+
+# SwiftPM caches (keep Package.resolved for reproducible builds)
+# Package.resolved is intentionally committed.
+
+# Test / coverage artifacts
+*.xcresult
+coverage/
+*.profraw
+*.profdata
+
+# Tooling
+.netrc
+
+# Claude Code: version the shared OpenSpec commands/skills under .claude/, but never
+# machine-local settings (permissions, etc.) if they ever get created.
+.claude/settings.local.json
+.claude/*.local.json
+
+# Local audio fixtures that must never be committed (copyrighted material)
+/Fixtures/private/
+*.private.flac
+*.private.wav
+*.private.mp3
+*.private.m4a
+*.private.aiff
