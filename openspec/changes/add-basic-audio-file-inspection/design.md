@@ -28,15 +28,17 @@ any forensic conclusion.
   exported identity.
 - `Property<Value>` — an **exhaustive sum type** (ADR-0008), not a struct, so invalid states are
   unrepresentable: `available(Value)` · `unavailable(reason?)` · `unsupported(reason?)` ·
-  `uncertain(value?, reason)` (reason required) · `failed(code, message)`. `code` is a **stable**
-  identifier; `message` is descriptive and not part of the error's identity.
+  `uncertain(value?, reason)` (reason required) · `failed(PropertyFailure)`. A **property-level**
+  failure (`PropertyFailure { code, message }`, stable `code`) is a distinct type from the **global**
+  `InspectionError` — a property failure is never "file could not be opened", and vice-versa.
 - `TechnicalProperties` — `container`, `duration`, `sampleRate`, `channelCount`, `bitDepth`,
   `codec`, `declaredBitrate`, `estimatedBitrate` — each a `Property<…>`. `container` lives **here**
   (it is an extracted technical property), not in the file metadata. Declared and estimated bitrate
   are **separate fields**; `estimatedBitrate` is always `uncertain` with a `reason` describing the
   method and its limitations.
 - `InspectionWarning` — `{ code: WarningCode (stable), field: String?, kind, message: String }`.
-- `InspectionStatus` — `completed | partial | failed(code, message)` — the global outcome.
+- `InspectionStatus` — `completed | partial(message?) | failed(InspectionError)` — the global outcome
+  (its `failed` carries the **global** `InspectionError`, not a property failure).
 - `InspectionReport` — `{ file: AudioFileReference, properties: TechnicalProperties,
   warnings: [InspectionWarning], status: InspectionStatus }`. Pure data; it does **not** know about
   JSON, and it does **not** carry `schemaVersion`, `generatedAt`, or `generator` — those belong to

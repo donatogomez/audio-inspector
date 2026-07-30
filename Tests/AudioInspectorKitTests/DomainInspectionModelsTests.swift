@@ -28,12 +28,12 @@ struct DomainInspectionModelsTests {
         // `reason` is part of the case, so an `uncertain` without a reason cannot be constructed.
     }
 
-    @Test func failedCarriesStableCodeAndMessage() {
-        let p = Property<Int>.failed(InspectionError(code: .propertyReadError, message: "boom"))
+    @Test func failedCarriesPropertyFailureWithStableCodeAndMessage() {
+        let p = Property<Int>.failed(PropertyFailure(code: .propertyReadError, message: "boom"))
         #expect(p.value == nil)
-        guard case let .failed(error) = p else { Issue.record("expected failed"); return }
-        #expect(error.code == .propertyReadError)
-        #expect(error.message == "boom")
+        guard case let .failed(failure) = p else { Issue.record("expected failed"); return }
+        #expect(failure.code == .propertyReadError)
+        #expect(failure.message == "boom")
     }
 
     @Test func propertyEquality() {
@@ -54,11 +54,16 @@ struct DomainInspectionModelsTests {
         #expect(WarningCode.propertyExtractionFailed.rawValue == "property_extraction_failed")
     }
 
-    @Test func errorCodeRawValuesAreStable() {
-        #expect(InspectionErrorCode.propertyReadError.rawValue == "property_read_error")
+    @Test func inspectionErrorCodeRawValuesAreStable() {
+        // Global inspection errors only.
         #expect(InspectionErrorCode.fileOpenFailed.rawValue == "file_open_failed")
         #expect(InspectionErrorCode.fileUnreadable.rawValue == "file_unreadable")
         #expect(InspectionErrorCode.fileAccessDenied.rawValue == "file_access_denied")
+    }
+
+    @Test func propertyFailureCodeRawValuesAreStable() {
+        // Per-property failures only — distinct code space from global inspection errors.
+        #expect(PropertyFailureCode.propertyReadError.rawValue == "property_read_error")
     }
 
     @Test func errorIdentityIsTheCodeNotTheMessage() {
@@ -188,6 +193,8 @@ struct DomainInspectionModelsTests {
         requireSendable(Property<String>.self)
         requireSendable(InspectionError.self)
         requireSendable(InspectionErrorCode.self)
+        requireSendable(PropertyFailure.self)
+        requireSendable(PropertyFailureCode.self)
         requireSendable(WarningCode.self)
         requireSendable(WarningKind.self)
         requireSendable(InspectionWarning.self)

@@ -103,8 +103,11 @@ localized). Initial registry (grows additively):
 
 - Warning codes: `metadata_size_unavailable`, `metadata_modified_at_unavailable`,
   `property_unavailable`, `property_unsupported`, `property_uncertain`, `property_extraction_failed`.
-- Error codes (per-property `failed` and global failure): `property_read_error`, `file_open_failed`,
-  `file_unreadable`, `file_access_denied`.
+- **Property-failure codes** (a single property's `failed` state → `technicalProperties[..].error.code`):
+  `property_read_error`. These come from the domain's `PropertyFailure` and belong only to a property.
+- **Inspection-error codes** (a *global* failure → `inspectionStatus.error.code`): `file_open_failed`,
+  `file_unreadable`, `file_access_denied`. These come from the domain's `InspectionError` and belong
+  only to the whole inspection. The two code spaces are disjoint by design.
 
 ## `warnings[]`
 

@@ -5,7 +5,7 @@ verifiable, maps to one logical commit, and contains nothing out of scope.
 
 ## 1. Domain models & contracts
 
-- [x] 1.1 Add `Property<Value>` (exhaustive sum type; conditional `Sendable`/`Equatable`) plus stable `WarningCode`/`InspectionErrorCode`/`InspectionError`. (Canonical name is `Property<Value>`; no separate `PropertyState` type — the state is the case.)
+- [x] 1.1 Add `Property<Value>` (exhaustive sum type; conditional `Sendable`/`Equatable`) plus stable codes/errors at two distinct levels: `PropertyFailure`/`PropertyFailureCode` (property-level, in `Property.failed`) and `InspectionError`/`InspectionErrorCode` (global), plus `WarningCode`/`WarningKind`. (Canonical name is `Property<Value>`; no separate `PropertyState` type — the state is the case.)
 - [x] 1.2 Add `AudioFileReference`, `AudioFileSource`, `TechnicalProperties`, `InspectionWarning`, `InspectionStatus`, `InspectionReport` value types (Sendable/Equatable)
 - [x] 1.3 Add domain port `AudioFilePropertyReading` (`async throws(InspectionError) -> TechnicalProperties`). `ReportExporting` is **not** a domain port — it lives in the export layer (no domain use case exports); see design.md and ADR-0009.
 - [x] 1.4 Unit tests for the domain value types, invariants, stable codes, and Sendable conformance (pure, no files)

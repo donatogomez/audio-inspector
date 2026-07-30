@@ -19,8 +19,9 @@ public enum Property<Value> {
     /// A value was read but is not reliable. `reason` is required; `value` is optional.
     case uncertain(value: Value?, reason: String)
 
-    /// Extracting this specific property errored. Carries a stable, machine-processable error.
-    case failed(InspectionError)
+    /// Extracting this specific property errored. Carries a **property-level** failure
+    /// (`PropertyFailure`), distinct from the global `InspectionError`.
+    case failed(PropertyFailure)
 }
 
 extension Property: Sendable where Value: Sendable {}

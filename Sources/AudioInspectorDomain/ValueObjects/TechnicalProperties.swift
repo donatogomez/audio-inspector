@@ -7,7 +7,10 @@
 /// - `channelCount`: a count (`Int`)
 /// - `bitDepth`: bits (`Int`)
 /// - `declaredBitrate` / `estimatedBitrate`: bits per second (`Int`)
-/// - `container` / `codec`: lowercased identifier tokens (`String`), which are genuinely open-ended
+/// - `container` / `codec`: identifier tokens (`String`), kept as `String` **deliberately** — the
+///   value space is open-ended and detection-dependent, so they are not modelled as enums for this
+///   slice. Normalization (e.g. lowercasing, canonical spelling) is the responsibility of the future
+///   reading infrastructure (`AudioInspectorMedia`), not the domain type.
 ///
 /// `container` lives here because it is an **extracted technical property** (it can be unavailable/
 /// uncertain/failed), not descriptive file metadata.
