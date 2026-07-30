@@ -1,3 +1,22 @@
+## Superseded
+
+This umbrella change was **superseded before implementation** and archived as `superseded`. Its 43
+tasks were **not** completed and it does **not** represent a delivered implementation.
+
+What supersedes it:
+
+- Project scaffolding is governed by the accepted `project-skeleton` specification.
+- Basic file selection, technical property inspection, and JSON export are governed by
+  `add-basic-audio-file-inspection`.
+- Loudness, spectral analysis, forensic findings, and other advanced capabilities will be introduced
+  through separate incremental OpenSpec changes.
+
+Its delta specifications (`file-import`, `audio-inspection`, `analysis-reporting`,
+`level-loudness-metrics`, `spectral-visualization`) are **historical planning artifacts**, are **not
+contractual/accepted specifications**, and were **not** promoted to `openspec/specs/`. Any JSON field
+names herein are obsolete; the canonical `schemaVersion` 1 contract lives in `docs/json-schema-v1.md`.
+The full history is preserved here deliberately.
+
 ## Why
 
 Audio Inspector needs a solid, spec-driven foundation and a deliberately small first slice before
