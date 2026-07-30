@@ -19,7 +19,7 @@ verifiable, maps to one logical commit, and contains nothing out of scope.
 ## 3. Basic technical inspection (infrastructure)
 
 - [ ] 3.1 Implement the AVFoundation/AudioToolbox adapter for `AudioFilePropertyReading` (metadata only, no DSP), mapping each field to the correct `PropertyState`
-- [ ] 3.2 Map file identity (name, extension, size, container, modification date, sandbox-safe path) into `AudioFileReference`
+- [ ] 3.2 Map file metadata (name, extension, size, modification date, safe `source` descriptor) into `AudioFileReference`; read `container` as a technical property into `TechnicalProperties`
 - [ ] 3.3 Integration tests against a few in-test generated fixtures (no copyrighted audio)
 
 ## 4. JSON export (schemaVersion 1)

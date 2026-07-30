@@ -39,9 +39,11 @@ estimated). It MUST NOT perform any DSP (no decoding-for-analysis, FFT, loudness
 
 ### Requirement: Represent each property's availability and certainty explicitly
 
-Every technical property in the result SHALL carry an explicit state from the set `available`,
-`unavailable`, `unsupported`, `uncertain`, `failed`. The system MUST NOT invent a value when a
-property is not available, and MUST NOT present an inference as a fact.
+Every technical property in the result SHALL carry an explicit state from the exhaustive set
+`available` (value required), `unavailable`, `unsupported`, `uncertain` (reason required), `failed`
+(stable `code` + message). Invalid combinations (e.g. a value with `unsupported`) SHALL be
+unrepresentable. The system MUST NOT invent a value when a property is not available, and MUST NOT
+present an inference as a fact.
 
 #### Scenario: A property the format does not expose
 
@@ -61,11 +63,12 @@ property is not available, and MUST NOT present an inference as a fact.
 
 ### Requirement: Produce a structured inspection report with warnings and a global status
 
-The system SHALL produce a structured report containing: the inspected file's identity (name,
-extension, size in bytes, container/type, a sandbox-safe path representation, and modification date
-labelled as file metadata), the technical properties with their states, a list of warnings for
+The system SHALL produce a structured report containing: the inspected file's descriptive metadata
+(name, extension, size in bytes, modification date labelled as file metadata, and a safe `source`
+descriptor), the technical properties with their states (**including `container` as a technical
+property**, not as file metadata), a list of warnings — each with a stable `code` — for
 unavailable/unsupported/uncertain/failed fields, and a global inspection status of `completed`,
-`partial`, or `failed`.
+`partial`, or `failed` (a global failure carries a stable `error.code`).
 
 #### Scenario: Partial inspection
 
@@ -79,28 +82,40 @@ unavailable/unsupported/uncertain/failed fields, and a global inspection status 
 - **THEN** the report sets the global status to `failed` with a message, contains no fabricated
   properties, and the app remains responsive
 
-### Requirement: Represent the file with a sandbox-safe path
+### Requirement: Represent the file origin safely (no location disclosure)
 
-The report and any export SHALL represent the file by name/extension and a **sandbox-safe path
-representation**, and MUST NOT include the user's absolute private path by default.
+The report and any export SHALL represent the file origin with a safe `source` descriptor —
+`kind = userSelectedLocalFile`, a `displayName`, and `locationDisclosure = omitted` — and MUST NOT
+include, by default, the absolute path, a `file://` URL, a security-scoped bookmark, sandbox-internal
+identifiers, or the parent directory name. There is no `path` field.
 
-#### Scenario: Path representation in the result
+#### Scenario: Source representation in the export
 
-- **WHEN** a report is produced for a selected file
-- **THEN** the file is shown by its display name and a safe path representation, not the absolute
-  `/Users/...` path
+- **WHEN** a report is exported for a selected file
+- **THEN** the export contains a `source` object with `kind = userSelectedLocalFile`, the display
+  name, and `locationDisclosure = omitted`, and contains no absolute path, `file://` URL, bookmark,
+  or parent directory name
 
 ### Requirement: Export the report as schemaVersion 1 JSON
 
-The system SHALL export the report as JSON following the `schemaVersion` 1 contract in
-`docs/json-schema-v1.md`, including at least `schemaVersion`, `generatedAt`, `generator`,
-`inspectedFile`, `technicalProperties`, `warnings`, and `inspectionStatus`. Property states in the
-export SHALL distinguish absent, unsupported, uncertain, and extraction-error cases. Schema changes
-SHALL be additive where possible; an incompatible change SHALL increment `schemaVersion`.
+The system SHALL export the report as JSON following the canonical `schemaVersion` 1 contract in
+`docs/json-schema-v1.md`. The envelope fields `schemaVersion`, `generatedAt`, and `generator` are
+produced by the exporter (not the domain report). Each technical property SHALL be a flat object
+`{ state, value, unit?, reason?, error? }` that distinguishes `unavailable`, `unsupported`,
+`uncertain` (with a required `reason`), and `failed` (with a stable `error.code` and `message`).
+Warnings SHALL carry a stable `code`; a global failure SHALL set `inspectionStatus.state = failed`
+with a stable `error.code`. Schema changes SHALL be additive where possible; an incompatible change
+SHALL increment `schemaVersion`.
 
 #### Scenario: Export produces versioned JSON
 
 - **WHEN** the user exports a completed or partial inspection
-- **THEN** the system writes a JSON document with `schemaVersion` = 1 and the required top-level
-  fields, where each technical property carries its explicit state and no absolute private path is
-  included by default
+- **THEN** the system writes a JSON document with `schemaVersion` = 1, the envelope fields, and each
+  technical property carrying its explicit `state` (and `reason`/`error` as applicable), with no
+  absolute path or location disclosed by default
+
+#### Scenario: Stable machine-processable codes
+
+- **WHEN** a property is `failed` or a warning is emitted
+- **THEN** the output includes a stable `code` (message text is descriptive only and not part of the
+  code's identity), so results can be processed automatically

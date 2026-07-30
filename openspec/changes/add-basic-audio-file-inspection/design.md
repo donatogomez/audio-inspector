@@ -21,21 +21,26 @@ any forensic conclusion.
 
 ### Domain models (in `AudioInspectorDomain`, all `Sendable` value types)
 
-- `AudioFileReference` — an opaque, domain-level handle for a selected file: a stable `id`,
-  `displayName`, `fileExtension`, `sizeBytes`, `safePath` (display representation), and
-  `modifiedAt` (file metadata). **No `URL`, no bookmark, no AVFoundation** — infrastructure produces
-  this from the picked file.
-- `PropertyState` — `available | unavailable | unsupported | uncertain | failed` (ADR-0008).
-- `Property<Value>` — pairs a `PropertyState` with an optional `Value` and an optional `note`; the
-  invariant is that only `available`/`uncertain` may carry a value.
-- `TechnicalProperties` — `container`, `duration` (seconds), `sampleRate` (Hz), `channelCount`,
-  `bitDepth` (bits), `codec`, `declaredBitrate` (bps), `estimatedBitrate` (bps) — each a
-  `Property<…>`. Declared and estimated bitrate are **separate fields**.
-- `InspectionWarning` — `{ field: String?, kind: PropertyState, message: String }`.
-- `InspectionStatus` — `completed | partial | failed(message)` — the global outcome.
+- `AudioFileReference` — an opaque, domain-level descriptor of the selected file: a stable `id`,
+  `displayName`, `fileExtension`, `sizeBytes`, `modifiedAt` (file metadata), and a `source` kind
+  (`userSelectedLocalFile`). **No path, no `URL`, no bookmark, no AVFoundation** — the actual
+  security-scoped access handle stays in infrastructure (ADR-0010) and is never part of this
+  exported identity.
+- `Property<Value>` — an **exhaustive sum type** (ADR-0008), not a struct, so invalid states are
+  unrepresentable: `available(Value)` · `unavailable(reason?)` · `unsupported(reason?)` ·
+  `uncertain(value?, reason)` (reason required) · `failed(code, message)`. `code` is a **stable**
+  identifier; `message` is descriptive and not part of the error's identity.
+- `TechnicalProperties` — `container`, `duration`, `sampleRate`, `channelCount`, `bitDepth`,
+  `codec`, `declaredBitrate`, `estimatedBitrate` — each a `Property<…>`. `container` lives **here**
+  (it is an extracted technical property), not in the file metadata. Declared and estimated bitrate
+  are **separate fields**; `estimatedBitrate` is always `uncertain` with a `reason` describing the
+  method and its limitations.
+- `InspectionWarning` — `{ code: WarningCode (stable), field: String?, kind, message: String }`.
+- `InspectionStatus` — `completed | partial | failed(code, message)` — the global outcome.
 - `InspectionReport` — `{ file: AudioFileReference, properties: TechnicalProperties,
-  warnings: [InspectionWarning], status: InspectionStatus, generatedAt: Date }`. Pure data; it does
-  **not** know about JSON (ADR-0009).
+  warnings: [InspectionWarning], status: InspectionStatus }`. Pure data; it does **not** know about
+  JSON, and it does **not** carry `schemaVersion`, `generatedAt`, or `generator` — those belong to
+  the export envelope (ADR-0009).
 
 ### Ports (protocols in `AudioInspectorDomain`)
 
@@ -63,10 +68,13 @@ any forensic conclusion.
 
 ### JSON export (`schemaVersion` 1)
 
-The field-level contract lives in `docs/json-schema-v1.md` (updated by this change to the concrete
-first-export shape). The domain report maps to a `Codable` DTO in the export layer; the DTO adds
-`schemaVersion` and `generator`. See ADR-0009. Absent/unsupported/uncertain/error are distinguished
-by each property's `state`.
+The field-level contract lives in `docs/json-schema-v1.md` (the canonical v1 shape). The exporter
+creates the **envelope** (`schemaVersion`, `generatedAt`, `generator`) and maps the domain report
+into a **flat** `Codable` DTO where each property is `{ state, value, unit?, reason?, error? }`
+(ADR-0009). The file origin is exported as a safe `source` object (`kind`, `displayName`,
+`locationDisclosure: "omitted"`) — **no path, URL, bookmark, or parent directory** (ADR-0010).
+Absent/unsupported/uncertain/error are distinguished by each property's `state`; `container` is a
+technical property, not file metadata.
 
 ### Testability without real files
 
@@ -98,13 +106,15 @@ result carries a sandbox-safe representation. No new entitlement beyond App Sand
 
 ## Open Questions
 
-- **JSON v1 field names**: this change renames the earlier illustrative top-level fields
-  (`fileIdentity`→`inspectedFile`, `mediaProperties`→`technicalProperties`,
-  `analysisStatus`→`inspectionStatus`, engine id→`generator`) and adds top-level `warnings`, with
-  DSP-era `measurements`/`findings` becoming **additive future** fields (still v1). Confirm this is
-  the desired canonical v1 shape.
-- **Umbrella `bootstrap-…` change**: it still proposes overlapping capabilities (`file-import`,
-  `audio-inspection`, `analysis-reporting`). Recommend later narrowing or retiring it so per-slice
-  changes are the source of truth. Governance decision for the maintainer.
-- **Path representation**: exact form of the sandbox-safe path (display name only vs a redacted/
-  relativized path). Leaning: display name + last path component; never the absolute path.
+- **Umbrella `bootstrap-…` change** (governance, for the maintainer): analysis shows it is fully
+  superseded — its foundational content shipped as plain commits + the accepted `project-skeleton`
+  spec, its basic-inspection content is now governed here, and its loudness/spectral/findings
+  content belongs to future per-slice changes. Narrowing it would empty it, so per the "if it becomes
+  purposeless, stop and propose" rule it is **not** edited here; recommendation is to archive it as
+  *superseded* (or replace it with a lean foundational change). Awaiting the maintainer's decision.
+  Until then, the obsolete JSON field names exist **only** inside that (never-accepted, to-be-retired)
+  change — never in an accepted spec or in the canonical `docs/json-schema-v1.md`.
+
+_Resolved during consistency review:_ JSON v1 field names are fixed as canonical in
+`docs/json-schema-v1.md`; the file origin uses a safe `source` object (no path) with
+`locationDisclosure: "omitted"`; the property model is an exhaustive sum type (ADR-0008).
