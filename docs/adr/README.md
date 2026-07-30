@@ -19,3 +19,5 @@ disguise. Copy `0000-adr-template.md` for new ones.
 | [0008](0008-property-availability-and-certainty-model.md) | Explicit property availability & certainty model | Accepted |
 | [0009](0009-domain-report-vs-json-contract.md) | Separate domain report from JSON export contract | Accepted |
 | [0010](0010-sandboxed-file-access-for-inspection.md) | Sandboxed, temporary file access (no bookmark persistence yet) | Accepted |
+| [0011](0011-avfoundation-infrastructure-boundary.md) | AVFoundation infrastructure boundary for property reading | Accepted |
+| [0012](0012-audio-property-extraction-strategy.md) | Audio property extraction strategy (API priority, reliability tiers) | Accepted (strategy); reliability = hypothesis pending spike |
