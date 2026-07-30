@@ -16,3 +16,6 @@ disguise. Copy `0000-adr-template.md` for new ones.
 | [0005](0005-module-structure.md) | Module structure (seam-driven targets) | Accepted |
 | [0006](0006-loudness-truepeak-methodology.md) | Loudness & true-peak methodology | Accepted (approach); constants pending impl |
 | [0007](0007-license-and-distribution.md) | License (MIT) and distribution | Accepted |
+| [0008](0008-property-availability-and-certainty-model.md) | Explicit property availability & certainty model | Accepted |
+| [0009](0009-domain-report-vs-json-contract.md) | Separate domain report from JSON export contract | Accepted |
+| [0010](0010-sandboxed-file-access-for-inspection.md) | Sandboxed, temporary file access (no bookmark persistence yet) | Accepted |
