@@ -43,3 +43,8 @@ unclear; the detailed docs and ADRs elaborate on each.
 
 12. **Small, reviewable changes; grow only at real seams.** Prefer minimal increments and add
     modules/abstractions only when a genuine boundary appears — never speculatively.
+
+13. **Every increment ships a runnable, demoable app end-to-end. Complex algorithms are added only
+    once a complete functional flow exists.** The first slice is select → open → decode → show
+    properties → export JSON, with no complex math; LUFS, True Peak, FFT/spectrum, spectrogram, and
+    DR come afterwards, one small verifiable increment at a time.

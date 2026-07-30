@@ -9,24 +9,37 @@ is committed until its OpenSpec change is approved.
 Vision, architecture, ADRs, module plan, privacy/security docs, and the first OpenSpec change
 `bootstrap-native-macos-audio-analysis-foundation`. **No app code yet.**
 
-## Phase 1 — MVP: single-file inspection *(deliberately small)*
+## Phase 1 — MVP: single-file inspection *(deliberately small, vertical-slice-first)*
 
-The first working native app. Scope, per the product brief:
+The first working native app, built as **vertical slices**: a complete runnable flow first, complex
+math only afterwards (see [project-principles.md](project-principles.md) #13). Every increment leaves
+the app runnable and demoable.
+
+### Phase 1a — Runnable end-to-end slice *(no complex math)*
 
 - **Native-decoding spike first** (ADR-0003): validate AVFoundation/AudioToolbox sufficiency for the
   seven formats against real + synthetic fixtures before committing MVP decoding to native APIs.
-- Native macOS app shell (window, sidebar, table, detail, empty states).
+- Native macOS app shell (window, empty states, toolbar, menus).
 - Import **one** file via drag-and-drop and the file picker (security-scoped bookmarks).
 - Inspect behind a probing abstraction — **native-first**, with FFprobe as a dev/reference
   cross-check — **always selecting the audio stream explicitly** so cover art/other streams never
   contaminate results.
-- Decode audio (streamed) and compute: format, codec, duration, bitrate (declared + estimated,
-  CBR/VBR), sample rate, bit depth (declared + effective estimate), channels, sample peak, RMS,
-  LUFS integrated, true peak, basic clipping, DC offset.
-- Visuals: full waveform, average spectrum, basic spectrogram, significant max frequency.
-- Cautious, well-explained warnings + a plain-language summary.
-- Export the result as versioned JSON (`schemaVersion` 1 — see [json-schema-v1.md](json-schema-v1.md)).
-- Tests (unit + synthetic fixtures) from the start.
+- Decode audio (streamed) and show **properties only**: format, codec, duration, bitrate (declared +
+  estimated, CBR/VBR), sample rate, declared bit depth, channels; plus a file hash.
+- Export the result as versioned JSON (`schemaVersion` 1 — see [json-schema-v1.md](json-schema-v1.md)),
+  with empty `measurements`/`findings` at this stage.
+- Tests for the slice (import/decode/properties/export; originals unmodified). **No DSP yet.**
+
+### Phase 1b — Add analysis incrementally *(each step still runnable)*
+
+Only once 1a runs end-to-end, add — one small increment at a time:
+
+- Simple level metrics (arithmetic): sample peak, RMS, DC offset, basic clipping.
+- **Loudness (complex):** integrated LUFS and true peak (oversampling), cross-checked vs FFmpeg
+  `ebur128`.
+- **Spectral visuals (complex):** full waveform, average spectrum (FFT), basic spectrogram, and the
+  significant max frequency.
+- Effective-bit-depth estimate; cautious, well-explained findings with confidence + a plain summary.
 - **No ML, no speculative complex detections yet.**
 
 ## Phase 2 — Batch, integrity & persistence
