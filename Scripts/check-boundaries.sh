@@ -78,6 +78,14 @@ if [ -n "$accel_violators" ]; then
     report "Accelerate may only be imported by AudioInspectorAnalysis (found: $accel_violators)"
 fi
 
+# Rule 8 — AudioInspectorTesting is a test-only support module (fixtures, port fakes, builders).
+# No production target may depend on it — only test targets (which live under Tests/, not Sources/).
+# So no file under Sources/ may import it.
+testing_violators=$(grep -REln '^\s*import\s+AudioInspectorTesting\b' Sources 2>/dev/null | grep -v '^Sources/AudioInspectorTesting/' || true)
+if [ -n "$testing_violators" ]; then
+    report "AudioInspectorTesting is test-only — no Sources/ target may import it (found: $testing_violators)"
+fi
+
 if [ "$fail" -eq 0 ]; then
     echo "✅ architecture boundaries respected"
 fi

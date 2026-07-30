@@ -1,0 +1,32 @@
+name: CI
+
+# Every commit on main builds, tests, and respects the architecture boundaries.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Build, test & enforce boundaries
+    runs-on: macos-26 # ships Xcode 26 / Swift 6.2 by default
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Swift version
+        run: swift --version
+
+      # Fail fast on architecture violations before spending build time.
+      - name: Enforce architecture boundaries
+        run: ./Scripts/check-boundaries.sh
+
+      - name: Build (Swift 6, strict concurrency)
+        run: swift build
+
+      - name: Test (Swift Testing)
+        run: swift test
