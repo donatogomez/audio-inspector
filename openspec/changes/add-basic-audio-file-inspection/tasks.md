@@ -5,10 +5,10 @@ verifiable, maps to one logical commit, and contains nothing out of scope.
 
 ## 1. Domain models & contracts
 
-- [ ] 1.1 Add `PropertyState` and `Property<Value>` (Sendable) with the value/state invariant
-- [ ] 1.2 Add `AudioFileReference`, `TechnicalProperties`, `InspectionWarning`, `InspectionStatus`, `InspectionReport` value types (Sendable)
-- [ ] 1.3 Add domain ports `AudioFilePropertyReading` and `ReportExporting`
-- [ ] 1.4 Unit tests for the domain value types and invariants (pure, no files)
+- [x] 1.1 Add `Property<Value>` (exhaustive sum type; conditional `Sendable`/`Equatable`) plus stable `WarningCode`/`InspectionErrorCode`/`InspectionError`. (Canonical name is `Property<Value>`; no separate `PropertyState` type — the state is the case.)
+- [x] 1.2 Add `AudioFileReference`, `AudioFileSource`, `TechnicalProperties`, `InspectionWarning`, `InspectionStatus`, `InspectionReport` value types (Sendable/Equatable)
+- [x] 1.3 Add domain port `AudioFilePropertyReading` (`async throws(InspectionError) -> TechnicalProperties`). `ReportExporting` is **not** a domain port — it lives in the export layer (no domain use case exports); see design.md and ADR-0009.
+- [x] 1.4 Unit tests for the domain value types, invariants, stable codes, and Sendable conformance (pure, no files)
 
 ## 2. Use case with test doubles
 
@@ -18,7 +18,7 @@ verifiable, maps to one logical commit, and contains nothing out of scope.
 
 ## 3. Basic technical inspection (infrastructure)
 
-- [ ] 3.1 Implement the AVFoundation/AudioToolbox adapter for `AudioFilePropertyReading` (metadata only, no DSP), mapping each field to the correct `PropertyState`
+- [ ] 3.1 Implement the AVFoundation/AudioToolbox adapter for `AudioFilePropertyReading` (metadata only, no DSP), mapping each field to the correct `Property` case
 - [ ] 3.2 Map file metadata (name, extension, size, modification date, safe `source` descriptor) into `AudioFileReference`; read `container` as a technical property into `TechnicalProperties`
 - [ ] 3.3 Integration tests against a few in-test generated fixtures (no copyrighted audio)
 
