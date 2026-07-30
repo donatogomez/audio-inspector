@@ -16,11 +16,19 @@ verifiable, maps to one logical commit, and contains nothing out of scope.
 - [x] 2.2 Add a fake `AudioFilePropertyReading` in `AudioInspectorTesting`
 - [x] 2.3 Unit tests: available/partial/failed outcomes, warning derivation, declared-vs-estimated bitrate — all with the fake, no real files
 
-## 3. Basic technical inspection (infrastructure)
+## 3. Basic technical inspection (infrastructure — `AVFoundationAudioFilePropertyReader`)
 
-- [ ] 3.1 Implement the AVFoundation/AudioToolbox adapter for `AudioFilePropertyReading` (metadata only, no DSP), mapping each field to the correct `Property` case
-- [ ] 3.2 Map file metadata (name, extension, size, modification date, safe `source` descriptor) into `AudioFileReference`; read `container` as a technical property into `TechnicalProperties`
-- [ ] 3.3 Integration tests against a few in-test generated fixtures (no copyrighted audio)
+Spec fixed by design.md §"Infrastructure reader", ADR-0011 (boundary) and ADR-0012 (extraction
+strategy). No DSP. The use case and port are unchanged. Reliability of native APIs is a hypothesis
+pending the ADR-0003 native-decoding spike.
+
+- [ ] 3.1 Create `AVFoundationAudioFilePropertyReader` in `AudioInspectorMedia` conforming to `AudioFilePropertyReading` (skeleton + explicit audio-track selection; no field mapping yet)
+- [ ] 3.2 Map the reliable stream facts to `Property` cases from the audio track's `AudioStreamBasicDescription`: `sampleRate`, `channelCount`, `codec`, and `bitDepth` (PCM/lossless `available`, lossy `unsupported`)
+- [ ] 3.3 Map `duration` (from `AVAsset`) and `container` (from UTI / `AudioFormatID`), applying `uncertain` on estimate/discrepancy per ADR-0012
+- [ ] 3.4 Map the two bitrate fields separately: `declaredBitrate` (nominal/derived-exact or `unavailable`) and `estimatedBitrate` (**always `uncertain`** with a `reason`)
+- [ ] 3.5 Translate AVFoundation/AudioToolbox errors into domain errors: whole-file failures → thrown `InspectionError` (`fileOpenFailed`/`fileUnreadable`/`fileAccessDenied`); single-property errors → `Property.failed(.propertyReadError)` — no `NSError`/`OSStatus` crosses the port (ADR-0011 §5)
+- [ ] 3.6 Unit tests with in-memory doubles/fixtures for the mapping and error-translation logic (no real files)
+- [ ] 3.7 Integration tests against a few in-test generated fixtures — deterministic, no copyrighted audio — covering well-formed, lossy (no bit depth), and unopenable/corrupt files
 
 ## 4. JSON export (schemaVersion 1)
 
