@@ -18,17 +18,18 @@ verifiable, maps to one logical commit, and contains nothing out of scope.
 
 ## 3. Basic technical inspection (infrastructure — `AVFoundationAudioFilePropertyReader`)
 
-Spec fixed by design.md §"Infrastructure reader", ADR-0011 (boundary) and ADR-0012 (extraction
-strategy). No DSP. The use case and port are unchanged. Reliability of native APIs is a hypothesis
-pending the ADR-0003 native-decoding spike.
+Spec fixed by design.md §"Infrastructure reader", ADR-0011 (boundary, Accepted) and ADR-0012
+(extraction strategy, **Proposed**), with the candidate matrix in `docs/audio-property-matrix.md`
+(pre-spike hypothesis). No DSP. The use case and port are unchanged. Native-API sources/reliability are
+hypotheses pending the ADR-0003 native-decoding spike, so the spike is the first task.
 
-- [ ] 3.1 Create `AVFoundationAudioFilePropertyReader` in `AudioInspectorMedia` conforming to `AudioFilePropertyReading` (skeleton + explicit audio-track selection; no field mapping yet)
-- [ ] 3.2 Map the reliable stream facts to `Property` cases from the audio track's `AudioStreamBasicDescription`: `sampleRate`, `channelCount`, `codec`, and `bitDepth` (PCM/lossless `available`, lossy `unsupported`)
-- [ ] 3.3 Map `duration` (from `AVAsset`) and `container` (from UTI / `AudioFormatID`), applying `uncertain` on estimate/discrepancy per ADR-0012
-- [ ] 3.4 Map the two bitrate fields separately: `declaredBitrate` (nominal/derived-exact or `unavailable`) and `estimatedBitrate` (**always `uncertain`** with a `reason`)
-- [ ] 3.5 Translate AVFoundation/AudioToolbox errors into domain errors: whole-file failures → thrown `InspectionError` (`fileOpenFailed`/`fileUnreadable`/`fileAccessDenied`); single-property errors → `Property.failed(.propertyReadError)` — no `NSError`/`OSStatus` crosses the port (ADR-0011 §5)
-- [ ] 3.6 Unit tests with in-memory doubles/fixtures for the mapping and error-translation logic (no real files)
-- [ ] 3.7 Integration tests against a few in-test generated fixtures — deterministic, no copyrighted audio — covering well-formed, lossy (no bit depth), and unopenable/corrupt files
+- [ ] 3.1 **Documented technical spike**: validate the candidate sources against real + synthetic fixtures for MP3, WAV, AIFF, FLAC, ALAC, AAC, M4A; confirm which properties are reliable/approximate/absent; record findings and promote ADR-0012 (or update it if a gap is found)
+- [ ] 3.2 Adapter skeleton: `AVFoundationAudioFilePropertyReader` in `AudioInspectorMedia` conforming to `AudioFilePropertyReading`, implementing the deterministic track-selection policy; no field mapping yet
+- [ ] 3.3 Map the reliable structural facts from the selected track's format description: `sampleRate` and `channelCount` (valid → `available`; no track → `unavailable`; disagreement → `uncertain`; read error → `failed`)
+- [ ] 3.4 Map `container`, `duration`, and `codec` with their uncertainty policies (direct recognition → `available`; UTI/extension-only or estimate/discrepancy → `uncertain`; `codec` emits a stable non-localized token)
+- [ ] 3.5 Map the conditional capabilities: `bitDepth` (PCM/lossless `available`, lossy `unsupported`, never formula-inferred), and the two bitrates kept separate — `declaredBitrate` (directly declared or `unavailable`, no self-computation) and `estimatedBitrate` (**always `uncertain`** with a `reason`)
+- [ ] 3.6 Translate platform errors into domain errors by scope: whole-file failures → thrown `InspectionError` (`fileOpenFailed`/`fileUnreadable`/`fileAccessDenied`); single-property errors → `Property.failed(.propertyReadError)` — no `NSError`/`OSStatus` crosses the port (ADR-0011 §5)
+- [ ] 3.7 Tests: unit tests for the mapper and error-translation with controlled in-memory inputs (no real files), **plus** one minimal integration test on a fixture generated in-test with public APIs and stably writable in CI (PCM WAV/AIFF); formats that macOS can read but not reliably generate in CI (e.g. lossy) are covered by the 3.1 spike / manual exploratory validation, not a CI codec matrix; no copyrighted audio; fixtures cleaned up
 
 ## 4. JSON export (schemaVersion 1)
 

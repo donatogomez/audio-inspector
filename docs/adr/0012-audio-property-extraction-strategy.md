@@ -1,7 +1,8 @@
 # ADR-0012: Audio property extraction strategy — API priority, reliability tiers, and discrepancy policy
 
-- **Status**: Accepted (strategy). Per-property *reliability* claims are **hypotheses pending the
-  ADR-0003 native-decoding spike** — not asserted as fact.
+- **Status**: **Proposed** — the strategy shape is agreed, but the concrete APIs, per-property
+  availability, and reliability all **depend on the ADR-0003 native-decoding spike** and are not
+  asserted as fact. Promote to Accepted once the spike validates them.
 - **Date**: 2026-07-31
 - **Deciders**: Project maintainer
 - **Related**: ADR-0003 (native-first), ADR-0008 (property model), ADR-0011 (infrastructure boundary),
@@ -23,18 +24,24 @@ container-declared rather than stream-measured, and that native sufficiency is u
 
 ### 1. API priority (highest-trust source first, per property)
 
-1. **Audio-track `AudioStreamBasicDescription`** (via `AVAssetTrack.load(.formatDescriptions)` →
-   `CMAudioFormatDescriptionGetStreamBasicDescription`) is the **primary** source for `sampleRate`,
-   `channelCount`, `bitDepth`, and `codec`. The **audio track is always selected explicitly** — cover
-   art and non-audio tracks are ignored (ADR-0003 §5).
-2. **`AVAsset` duration** (`load(.duration)`, a `CMTime`) is primary for `duration`.
-3. **The file UTI / asset format** (UniformTypeIdentifiers `UTType`, plus the track's `AudioFormatID`)
-   is primary for `container`.
-4. **AudioToolbox `AudioFile` properties** are a **fallback** consulted only when the ASBD/asset path
-   is silent or ambiguous (e.g. a declared/nominal bitrate the ASBD does not carry).
-5. **Computation from other properties** is the **last resort** and is *never* reported as measured:
-   an estimate derived from `fileSize × 8 / duration` (or `AVAssetTrack.estimatedDataRate`, whose own
-   API name says "estimated") is always `uncertain`, never `available`.
+All sources named below are **candidates, subject to spike validation**; exact API/property names are
+*expected*, not contractual, and may change with the SDK (the detailed matrix lives in
+`docs/audio-property-matrix.md`). The priority order is:
+
+1. **The selected audio track's stream format description** is the expected primary source for
+   `sampleRate`, `channelCount`, `bitDepth`, and `codec`. The **audio track is selected explicitly** by
+   the deterministic track-selection policy in the change design — cover art and non-audio tracks are
+   ignored (ADR-0003 §5).
+2. **The asset's duration** is the expected primary source for `duration`.
+3. **The framework-recognized file type** is primary for `container`; the file UTI/extension is only a
+   **weak hint**, never proof of the real container.
+4. **AudioToolbox file properties** are a **fallback under evaluation** — a *possible* lower-level
+   source (e.g. for a nominal bitrate the format description does not carry), **not** a decided
+   dependency and **not** a requirement of the adapter's first cut. No AudioToolbox-specific abstraction
+   is designed until the spike shows it is needed.
+5. **Self-computation from other properties** is the **last resort** and is *never* reported as
+   measured: a computed estimate (or a framework value whose own API self-labels as an estimate) always
+   feeds `estimatedBitrate` as `uncertain`, never `available`.
 
 The reader consults exactly the sources needed for one property and stops at the first trustworthy
 answer; it does not average or blend independent sources into a single fabricated number.
@@ -47,10 +54,13 @@ answer; it does not average or blend independent sources into a single fabricate
 - **Approximate (must be `uncertain` when present)** — `estimatedBitrate` **always** (per the group-1
   domain contract), and any value that had to be computed or came from an API that self-labels as an
   estimate. A tentative value may be carried, but always with a `reason`.
-- **Conditional / not always knowable** — `declaredBitrate` (Apple does **not** guarantee a
-  container-declared nominal bitrate across all target formats; PCM can be *derived exactly* from
-  `sampleRate × channels × bitDepth`, but lossy nominal bitrate may simply be absent → `unavailable`);
-  `bitDepth` for lossy codecs is **not a meaningful property** → `unsupported`.
+- **Conditional / not always knowable** — `declaredBitrate` is `available` **only** when the
+  container/codec metadata *directly declares* a nominal bitrate (with **no self-computation**). Apple
+  does not guarantee such a declared value across the target formats, so it is frequently `unavailable`
+  (including for PCM and most lossy files). A PCM bitrate *can* be computed exactly from
+  `sampleRate × channels × bitDepth`, but that is a **computation**, so it feeds `estimatedBitrate`
+  (always `uncertain`), never `declaredBitrate`. `bitDepth` for lossy codecs is **not a meaningful
+  property** → `unsupported`.
 - **Impossible to know from metadata alone (out of scope here)** — true (measured) loudness, real
   dynamic range, transcode/source authenticity, actual per-frame integrity. These are **not** read by
   this reader; they are never emitted as basic properties, and their absence is not a `failed`.
@@ -105,6 +115,7 @@ from "untrustworthy".
 
 ## Follow-ups
 
-The concrete per-property source/state matrix lives in the change's `design.md`. The reliability claims
-are validated (and this ADR updated if a gap is found) by the ADR-0003 native-decoding spike against
-real and synthetic fixtures for MP3, WAV, AIFF, FLAC, ALAC, AAC, M4A.
+The concrete per-property source/state matrix lives in `docs/audio-property-matrix.md` (status:
+pre-spike hypothesis), summarized in the change's `design.md`. The reliability claims are validated
+(and this ADR promoted to Accepted, or updated if a gap is found) by the ADR-0003 native-decoding spike
+against real and synthetic fixtures for MP3, WAV, AIFF, FLAC, ALAC, AAC, M4A.
