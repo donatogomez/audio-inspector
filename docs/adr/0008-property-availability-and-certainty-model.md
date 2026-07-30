@@ -1,56 +1,68 @@
-# ADR-0008: Explicit property availability and certainty model
+# ADR-0008: Explicit property availability and certainty model (exhaustive, no invalid states)
 
 - **Status**: Accepted
 - **Date**: 2026-07-30
 - **Deciders**: Project maintainer
-- **Related**: docs/analysis-methodology.md, ADR-0009, change add-basic-audio-file-inspection
+- **Related**: docs/analysis-methodology.md, ADR-0009, docs/json-schema-v1.md, change add-basic-audio-file-inspection
 
 ## Context
 
 Audio metadata is frequently missing, format-dependent, or unreliable. The product's core principle
-is honesty: never invent values, never present inference as fact, and distinguish evidence from
-uncertainty (`docs/analysis-methodology.md`). A property therefore cannot be modelled as a plain
-optional — "absent", "the format can't express this", "readable but untrustworthy", and "extraction
-errored" are semantically different and must be distinguishable in the UI and the JSON export.
+is honesty: never invent values, never present inference as fact (`docs/analysis-methodology.md`).
+"Absent", "the format can't express this", "readable but untrustworthy", and "extraction errored"
+are semantically different and must be distinguishable. A loose struct of `{ state, value?, note? }`
+is rejected because it permits **incoherent combinations** (e.g. `state = available` with no value,
+or `state = failed` with a value).
 
 ## Decision
 
-Model every technical property as a `Property<Value>` in `AudioInspectorDomain`: a `Sendable` value
-type pairing a `PropertyState` with an optional value and an optional note. `PropertyState` is a
-closed enum:
+Model a property in `AudioInspectorDomain` as an **exhaustive sum type** (Swift `enum` with
+associated values) that makes invalid states unrepresentable. Conceptually:
 
-- `available` — a trustworthy value is present;
-- `unavailable` — the file/format simply does not carry it;
-- `unsupported` — the format cannot express it (e.g. bit depth for a lossy codec);
-- `uncertain` — a value was read but is not reliable (may carry the tentative value + note);
-- `failed` — extracting this specific property errored (inspection continues for the rest).
+- `available(value)` — a trustworthy value is present (value is **required**);
+- `unavailable(reason?)` — the file/format does not carry it;
+- `unsupported(reason?)` — the format cannot express it (e.g. bit depth for a lossy codec);
+- `uncertain(value?, reason)` — read but not reliable; **reason is required**, value optional;
+- `failed(code, message)` — extracting this property errored; inspection continues for the rest.
 
-Invariant: only `available` and `uncertain` may carry a value. Non-`available` states drive
-`InspectionWarning`s and the global `InspectionStatus`.
+Only `available` (required) and `uncertain` (optional) can carry a value; `unavailable`,
+`unsupported`, and `failed` cannot. `failed` carries a **stable `code`** (machine-processable) and a
+descriptive `message`. **Error codes are part of the identity; messages are not** — messages may be
+reworded/localized without changing behaviour, so automated processing keys off `code`.
+
+Non-`available` cases drive `InspectionWarning`s (each with its own stable `code`) and the global
+`InspectionStatus`.
+
+### Domain model vs serialized contract
+
+The safe domain model above (a sum type) is **distinct** from its wire representation. The JSON
+export DTO (ADR-0009) uses a **flat** shape — `{ state, value, unit, reason, error }` — because JSON
+has no sum types; the mapper (domain → DTO) is the only place that flattening happens, and it upholds
+the same invariants (e.g. never emits `value` for `unsupported`). See `docs/json-schema-v1.md`.
 
 ## Alternatives considered
 
-- **Plain `Optional<Value>` (nil = missing).** Collapses four distinct meanings into one; can't tell
-  "unsupported" from "errored". Rejected.
-- **A single global confidence on the whole report.** Too coarse; certainty is per-property.
-  Rejected (a report-level status still exists, but per-property state is primary).
-- **Throwing per property.** Loses partial results and forces control-flow for normal "absent"
-  cases. Rejected; `failed` is a state, not an exception at the report level.
+- **`{ state, value?, note? }` struct.** Permits invalid combinations; rejected (this ADR's whole
+  point).
+- **Plain `Optional<Value>`.** Collapses four "no value" meanings into one; can't tell "unsupported"
+  from "errored". Rejected.
+- **Throwing per property.** Loses partial results and forces control-flow for the normal "absent"
+  case. Rejected; `failed` is a state at the report level, not an exception.
 
 ## Consequences
 
 ### Positive
-- Honest by construction; the UI and JSON can render each state distinctly; reused by every future
-  metric/finding.
+- Invalid states are unrepresentable in the domain; honest by construction; reused by every future
+  metric/finding. Stable `code`s make warnings/errors machine-processable.
 
 ### Negative / costs
-- A generic wrapper adds a little verbosity and requires explicit DTO mapping for JSON.
+- A sum type needs an explicit, tested mapper to the flat JSON DTO (more mapping code).
 
 ### Neutral
-- Establishes the vocabulary (`available/unavailable/unsupported/uncertain/failed`) that later
-  analysis layers reuse alongside the confidence levels in `docs/analysis-methodology.md`.
+- Establishes the `available/unavailable/unsupported/uncertain/failed` vocabulary reused alongside
+  the confidence levels in `docs/analysis-methodology.md`.
 
 ## Follow-ups
 
-Implemented in the `add-basic-audio-file-inspection` slice; the JSON representation of each state is
-fixed in `docs/json-schema-v1.md`.
+Implemented in the `add-basic-audio-file-inspection` slice; the flat JSON representation and the
+initial stable code registry live in `docs/json-schema-v1.md`.

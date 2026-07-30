@@ -14,17 +14,25 @@ types (field names, additive evolution, `schemaVersion`).
 
 ## Decision
 
-Keep two distinct representations:
+Keep two distinct representations, joined by an explicit mapper:
 
 - **Domain report** — `InspectionReport` and friends: pure `Sendable` value types in
-  `AudioInspectorDomain`, carrying the data and its `PropertyState`s. The domain does **not** import
-  `JSONEncoder`/`Codable`-for-wire and knows nothing about `schemaVersion`.
-- **Export contract** — a `Codable` DTO plus a `JSONEncoder`, living in the export layer (app/infra)
-  behind the domain port `ReportExporting`. The DTO maps the domain report to the field-level
-  contract in `docs/json-schema-v1.md` and owns `schemaVersion`, `generator`, and field naming.
+  `AudioInspectorDomain`, carrying the data and its property states. The domain:
+  - does **not** know `schemaVersion`;
+  - does **not** import `JSONEncoder`/`Codable`-for-wire;
+  - does **not** own the generation timestamp or generator identity.
+- **Export envelope** — a `Codable` DTO plus a `JSONEncoder`, in the export layer (app/infra) behind
+  the domain port `ReportExporting`. The **exporter creates the versioned envelope**: it owns
+  `schemaVersion`, `generatedAt`, and `generator`, and maps the domain report into the field-level
+  contract in `docs/json-schema-v1.md` (flat property shape, field naming, redaction).
 
-Mapping is explicit at that boundary; changing the wire shape never forces a domain change and
-vice-versa.
+An **explicit mapper** (domain → DTO) is the only coupling point, so the domain report and the wire
+DTO **evolve independently**: renaming a JSON field or adding an additive `schemaVersion`-1 field
+never touches the domain, and refactoring domain types never breaks the contract.
+
+`generatedAt` is the **export** time, which need not equal the inspection time; if inspection time is
+ever needed on the wire it becomes a separate, explicit field — it is not conflated with the
+envelope timestamp.
 
 ## Alternatives considered
 

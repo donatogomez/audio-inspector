@@ -23,8 +23,10 @@ are sensitive (`docs/privacy.md`) and are not a stable identity.
 - **No bookmark persistence** in this slice: security-scoped bookmarks (for re-access across launches)
   belong with persistence (ADR-0004, Phase 2) and are explicitly out of scope here.
 - **Identity & output**: the absolute path is **not** treated as stable identity and is **not**
-  exported by default. The result carries a sandbox-safe representation (display name + last path
-  component); redaction happens in the export mapping layer (ADR-0009).
+  exported by default. The export carries a safe `source` object — `{ kind:
+  "userSelectedLocalFile", displayName, locationDisclosure: "omitted" }` — and **never** the
+  absolute path, a `file://` URL, a security-scoped bookmark, sandbox-internal identifiers, or even
+  the parent directory name. Redaction happens in the export mapping layer (ADR-0009).
 
 ## Alternatives considered
 
