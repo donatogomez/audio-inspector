@@ -28,43 +28,51 @@ any forensic conclusion.
   exported identity.
 - `Property<Value>` — an **exhaustive sum type** (ADR-0008), not a struct, so invalid states are
   unrepresentable: `available(Value)` · `unavailable(reason?)` · `unsupported(reason?)` ·
-  `uncertain(value?, reason)` (reason required) · `failed(code, message)`. `code` is a **stable**
-  identifier; `message` is descriptive and not part of the error's identity.
+  `uncertain(value?, reason)` (reason required) · `failed(PropertyFailure)`. A **property-level**
+  failure (`PropertyFailure { code, message }`, stable `code`) is a distinct type from the **global**
+  `InspectionError` — a property failure is never "file could not be opened", and vice-versa.
 - `TechnicalProperties` — `container`, `duration`, `sampleRate`, `channelCount`, `bitDepth`,
   `codec`, `declaredBitrate`, `estimatedBitrate` — each a `Property<…>`. `container` lives **here**
   (it is an extracted technical property), not in the file metadata. Declared and estimated bitrate
   are **separate fields**; `estimatedBitrate` is always `uncertain` with a `reason` describing the
   method and its limitations.
 - `InspectionWarning` — `{ code: WarningCode (stable), field: String?, kind, message: String }`.
-- `InspectionStatus` — `completed | partial | failed(code, message)` — the global outcome.
+- `InspectionStatus` — `completed | partial(message?) | failed(InspectionError)` — the global outcome
+  (its `failed` carries the **global** `InspectionError`, not a property failure).
 - `InspectionReport` — `{ file: AudioFileReference, properties: TechnicalProperties,
   warnings: [InspectionWarning], status: InspectionStatus }`. Pure data; it does **not** know about
   JSON, and it does **not** carry `schemaVersion`, `generatedAt`, or `generator` — those belong to
   the export envelope (ADR-0009).
 
-### Ports (protocols in `AudioInspectorDomain`)
+### Ports (protocol in `AudioInspectorDomain`)
 
-- `AudioFilePropertyReading` — `func readProperties(of: AudioFileReference) async -> TechnicalProperties`.
+- `AudioFilePropertyReading` — `func readProperties(of: AudioFileReference) async throws(InspectionError) -> TechnicalProperties`.
   Implemented later by `AudioInspectorMedia` using AVFoundation/AudioToolbox; the domain sees only
-  its own value types, so AVFoundation never leaks inward.
-- `ReportExporting` — `func export(_ report: InspectionReport) throws -> Data`. Implemented outside
-  the domain (App/infra) with a `Codable` DTO + `JSONEncoder` (ADR-0009); the domain does **not**
-  import `JSONEncoder`.
+  its own value types, so AVFoundation never leaks inward. Narrow responsibility — it only *reads*:
+  per-property issues are `Property` cases; a **global** failure is a typed `throws(InspectionError)`.
+
+**`ReportExporting` is NOT a domain port** (decision, group 1). No domain use case exports — the use
+case returns a domain `InspectionReport`, and exporting it to JSON is a delivery concern invoked by
+the app/UI layer. Defining an export protocol in the domain would be a port with no domain consumer.
+So the export protocol/DTO/`JSONEncoder` live entirely in the **export layer** (ADR-0009); the
+domain stays free of any export concept.
 
 ### Use case
 
 - `InspectAudioFileUseCase` (`nonisolated`, `async`): takes an `AudioFileReference`, calls
   `AudioFilePropertyReading`, derives warnings from any non-`available` property, computes the global
-  `InspectionStatus`, and returns an `InspectionReport`. It owns no state and is fully testable with
-  a **fake** `AudioFilePropertyReading` — no real files needed.
+  `InspectionStatus` (mapping a thrown `InspectionError` to `.failed`), and returns an
+  `InspectionReport`. It owns no state and is fully testable with a **fake** `AudioFilePropertyReading`
+  — no real files needed.
 
 ### Infrastructure (later commits, not this spec step)
 
 - `AudioInspectorMedia`: the file picker adapter and the AVFoundation/AudioToolbox implementation of
   `AudioFilePropertyReading`, mapping platform metadata to domain value types and choosing the right
-  `PropertyState` per field. Sandbox handling per ADR-0010.
-- App composition root: the `Codable` DTO + `JSONEncoder` implementation of `ReportExporting`, wired
-  and injected. Minimal SwiftUI presentation in a feature target.
+  `Property` case per field. Sandbox handling per ADR-0010.
+- Export layer: the `Codable` DTO + `JSONEncoder` that maps an `InspectionReport` to the
+  `schemaVersion` 1 contract, wired in the composition root. Minimal SwiftUI presentation in a
+  feature target.
 
 ### JSON export (`schemaVersion` 1)
 
@@ -95,7 +103,7 @@ result carries a sandbox-safe representation. No new entitlement beyond App Sand
 ## Risks / Trade-offs
 
 - **AVFoundation may not expose some properties for some formats** → that is exactly why
-  `PropertyState` exists; map missing/uncertain fields to `unsupported`/`unavailable`/`uncertain`
+  the `Property` sum type exists; map missing/uncertain fields to `unsupported`/`unavailable`/`uncertain`
   rather than guessing. Validated by the later native-decoding spike (bootstrap ADR-0003).
 - **Bit depth / codec reliability varies** → only report them `available` when reliably
   determinable; otherwise `uncertain`/`unsupported`.

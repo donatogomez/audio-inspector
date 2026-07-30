@@ -23,7 +23,10 @@ associated values) that makes invalid states unrepresentable. Conceptually:
 - `unavailable(reason?)` — the file/format does not carry it;
 - `unsupported(reason?)` — the format cannot express it (e.g. bit depth for a lossy codec);
 - `uncertain(value?, reason)` — read but not reliable; **reason is required**, value optional;
-- `failed(code, message)` — extracting this property errored; inspection continues for the rest.
+- `failed(PropertyFailure)` — extracting this property errored; inspection continues for the rest.
+  `PropertyFailure { code, message }` is a **property-level** failure, deliberately distinct from the
+  **global** `InspectionError` (used by the reading port's throw and `InspectionStatus.failed`) so
+  the two error levels never share a code space.
 
 Only `available` (required) and `uncertain` (optional) can carry a value; `unavailable`,
 `unsupported`, and `failed` cannot. `failed` carries a **stable `code`** (machine-processable) and a

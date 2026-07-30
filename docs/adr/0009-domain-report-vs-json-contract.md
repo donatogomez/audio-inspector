@@ -21,10 +21,13 @@ Keep two distinct representations, joined by an explicit mapper:
   - does **not** know `schemaVersion`;
   - does **not** import `JSONEncoder`/`Codable`-for-wire;
   - does **not** own the generation timestamp or generator identity.
-- **Export envelope** — a `Codable` DTO plus a `JSONEncoder`, in the export layer (app/infra) behind
-  the domain port `ReportExporting`. The **exporter creates the versioned envelope**: it owns
-  `schemaVersion`, `generatedAt`, and `generator`, and maps the domain report into the field-level
-  contract in `docs/json-schema-v1.md` (flat property shape, field naming, redaction).
+- **Export envelope** — a `Codable` DTO plus a `JSONEncoder`, defined **entirely in the export layer
+  (app/infra)**, not the domain. There is **no export port in the domain**: no domain use case
+  exports (the use case returns a domain `InspectionReport`; exporting is a delivery concern the app
+  invokes), so an export protocol lives with the exporter, not in `AudioInspectorDomain`. The
+  **exporter creates the versioned envelope**: it owns `schemaVersion`, `generatedAt`, and
+  `generator`, and maps the domain report into the field-level contract in `docs/json-schema-v1.md`
+  (flat property shape, field naming, redaction).
 
 An **explicit mapper** (domain → DTO) is the only coupling point, so the domain report and the wire
 DTO **evolve independently**: renaming a JSON field or adding an additive `schemaVersion`-1 field
