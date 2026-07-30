@@ -1,120 +1,117 @@
 # JSON export — schema version 1
 
-The **contract** for Audio Inspector's JSON export. This is a specification only — no `Codable` or
-Swift code is implemented yet. The goal is a **minimal, extensible** shape, not a model of every
-future metric. The OpenSpec requirement lives in the `analysis-reporting` capability; this document
-is the field-level reference it points to.
+The **contract** for Audio Inspector's JSON export. Specification only — the `Codable` DTO that
+produces it lives in the export layer (ADR-0009), never in the domain. This document is the
+field-level reference the `audio-file-inspection` OpenSpec capability points to. The shape is
+deliberately minimal for the first slice (technical properties, no DSP) and grows **additively**.
 
 ## Versioning rules
 
 - `schemaVersion` is an **integer**, starting at **1**.
-- Changes are **additive when possible** (new optional fields do **not** bump the version).
+- Changes are **additive when possible** — new optional fields (e.g. future `measurements`,
+  `findings` for DSP results) do **not** bump the version.
 - An **incompatible** change (removing/renaming a field, changing a type or the meaning of a value)
   **increments `schemaVersion`**.
-- `analysisEngineVersion` is separate: it tracks the *analysis methodology/thresholds*, so results
-  can change while the schema stays at 1.
 
 ## Top-level shape
 
-| Field | Type | Notes |
-| --- | --- | --- |
-| `schemaVersion` | integer | `1` for this contract. |
-| `analysisEngineVersion` | string | Version of the analysis engine/methodology that produced the result. |
-| `generatedAt` | string (ISO-8601) | When the export was produced. |
-| `fileIdentity` | object | Identity of the analyzed file (see below). |
-| `mediaProperties` | object | Container/codec/technical facts (see below). |
-| `measurements` | object | Computed metrics (open map; MVP fills a subset). |
-| `findings` | array of finding | Observations/warnings (see below); may be empty. |
-| `analysisStatus` | object | Completion/status of the analysis (see below). |
+| Field | Type | Null? | Notes |
+| --- | --- | --- | --- |
+| `schemaVersion` | integer | no | `1` for this contract. |
+| `generatedAt` | string (ISO-8601, UTC, `Z`) | no | When the export was produced. |
+| `generator` | object | no | `{ "name": string, "version": string }` — the app/generator identity. |
+| `inspectedFile` | object | no | File identity (see below). |
+| `technicalProperties` | object | no | Map of property → stateful value (see below). |
+| `warnings` | array | no | May be empty. Warning objects (see below). |
+| `inspectionStatus` | object | no | Global outcome (see below). |
 
-## `fileIdentity`
+Future (additive, still v1): `measurements` and `findings` appear only once DSP slices land.
 
-| Field | Type | Notes |
-| --- | --- | --- |
-| `fileName` | string | Display name only — never a full personal path in shared exports. |
-| `sizeBytes` | integer | |
-| `modifiedAt` | string (ISO-8601) | |
-| `fileHash` | object | `{ "algorithm": string, "value": string }` — cryptographic hash of file bytes. |
-| `audioHash` | object \| null | Optional hash of decoded PCM, when available. |
+## `inspectedFile`
 
-## `mediaProperties`
+| Field | Type | Null? | Notes |
+| --- | --- | --- | --- |
+| `name` | string | no | Display name incl. extension. |
+| `fileExtension` | string | yes | Lowercased, no dot; `null` if none. |
+| `sizeBytes` | integer | no | File size in bytes. |
+| `container` | string | yes | Detected container/type; `null` if undetermined. |
+| `path` | string | no | **Sandbox-safe** representation (display name / last component). **Never the absolute private path by default.** |
+| `modifiedAt` | string (ISO-8601) \| null | yes | File modification date — **file metadata only, not forensic evidence**. |
 
-Measured facts, each a plain value (with units where relevant): `container`, `codec`,
-`durationSeconds`, `declaredBitrateKbps`, `estimatedAvgBitrateKbps`, `bitrateMode` (`"cbr"` |
-`"vbr"`), `sampleRateHz`, `declaredBitDepth`, `effectiveBitDepth` (nullable estimate), `channels`,
-`channelLayout`, `hasCoverArt` (boolean). Unknown/inapplicable fields are `null`.
+## `technicalProperties`
 
-## `measurements`
+An object whose keys are property names and whose values are **stateful property** objects:
 
-An open object of metric → value, so new metrics are additive. MVP keys (each a number with an
-implied unit documented in [analysis-methodology.md](analysis-methodology.md)): `samplePeakDbfs`,
-`truePeakDbfs`, `rmsDbfs`, `integratedLufs`, `dcOffset`, `clippingDetected` (boolean),
-`intersampleClippingSuspected` (boolean), `significantMaxFrequencyHz`. Absent metrics are omitted or
-`null`; adding a metric later does not bump `schemaVersion`.
+```
+{ "state": <state>, "value": <typed> | null, "unit": <string> (optional), "note": <string> (optional) }
+```
 
-## `findings[]`
+- `state` ∈ `"available" | "unavailable" | "unsupported" | "uncertain" | "failed"` (ADR-0008).
+- `value` is present (non-null) **only** for `available` and (optionally) `uncertain`; it is `null`
+  for `unavailable`, `unsupported`, and `failed`.
+- This is how the four "no value" meanings are distinguished: **absent** = `unavailable`; **format
+  cannot express it** = `unsupported`; **read but untrustworthy** = `uncertain`; **extraction
+  errored** = `failed`.
 
-Each finding is an object:
+MVP property keys, with units:
 
-| Field | Type | Notes |
-| --- | --- | --- |
-| `identifier` | string | **Stable** slug (e.g. `"possible-transcoding"`) so findings can be tracked across versions. |
-| `severity` | string | e.g. `"info"` \| `"notice"` \| `"warning"`. |
-| `confidence` | string | One of `none` \| `weak` \| `medium` \| `strong` \| `inconclusive`. |
-| `evidence` | array | Measured facts backing the finding (e.g. `[{ "label": "spectral cutoff", "value": "16.1 kHz", "detail": "persists 92% of file" }]`). |
-| `explanation` | string | Plain-language why-it-matters. |
-| `alternativeExplanations` | array of string | Other plausible causes; may be empty. |
+| Key | value type | unit | Notes |
+| --- | --- | --- | --- |
+| `duration` | number | `seconds` | |
+| `sampleRate` | integer | `hertz` | |
+| `channelCount` | integer | `channels` | |
+| `bitDepth` | integer | `bits` | `unsupported` for most lossy codecs. |
+| `codec` | string | — | Only `available` when reliably determinable. |
+| `declaredBitrate` | integer | `bitsPerSecond` | The container/stream-declared bitrate. |
+| `estimatedBitrate` | integer | `bitsPerSecond` | Derived from size/duration — **distinct** from declared. |
 
-This mirrors the evidence/inference/conclusion + confidence model in
-[analysis-methodology.md](analysis-methodology.md). **No aggregate 0–100 score field exists.**
+## `warnings[]`
 
-## `analysisStatus`
+| Field | Type | Null? | Notes |
+| --- | --- | --- | --- |
+| `field` | string | yes | The property key it concerns; `null` if general. |
+| `kind` | string | no | One of the non-`available` states: `unavailable`/`unsupported`/`uncertain`/`failed`. |
+| `message` | string | no | Plain-language explanation. |
 
-| Field | Type | Notes |
-| --- | --- | --- |
-| `state` | string | e.g. `"completed"` \| `"partial"` \| `"failed"` \| `"cancelled"`. |
-| `warnings` | array of string | Non-fatal issues during analysis (e.g. a metric skipped). |
-| `notes` | string \| null | Optional free-text (e.g. what could not be determined). |
+## `inspectionStatus`
 
-## Illustrative example (non-normative)
+| Field | Type | Null? | Notes |
+| --- | --- | --- | --- |
+| `state` | string | no | `"completed"` \| `"partial"` \| `"failed"`. |
+| `message` | string | yes | Present especially for `failed`. |
+
+## Realistic example
 
 ```json
 {
   "schemaVersion": 1,
-  "analysisEngineVersion": "0.1.0",
-  "generatedAt": "2026-07-30T18:20:00Z",
-  "fileIdentity": {
-    "fileName": "track.flac",
-    "sizeBytes": 31457280,
-    "modifiedAt": "2026-07-01T10:00:00Z",
-    "fileHash": { "algorithm": "sha256", "value": "…" },
-    "audioHash": { "algorithm": "sha256", "value": "…" }
+  "generatedAt": "2026-07-30T16:40:00Z",
+  "generator": { "name": "Audio Inspector", "version": "0.1.0" },
+  "inspectedFile": {
+    "name": "interview-side-a.m4a",
+    "fileExtension": "m4a",
+    "sizeBytes": 8421376,
+    "container": "mpeg-4",
+    "path": "interview-side-a.m4a",
+    "modifiedAt": "2026-06-12T09:03:00Z"
   },
-  "mediaProperties": {
-    "container": "FLAC", "codec": "flac", "durationSeconds": 253.4,
-    "declaredBitrateKbps": null, "estimatedAvgBitrateKbps": 992, "bitrateMode": "vbr",
-    "sampleRateHz": 96000, "declaredBitDepth": 24, "effectiveBitDepth": 16,
-    "channels": 2, "channelLayout": "stereo", "hasCoverArt": true
+  "technicalProperties": {
+    "duration":        { "state": "available",   "value": 372.51, "unit": "seconds" },
+    "sampleRate":      { "state": "available",   "value": 44100,  "unit": "hertz" },
+    "channelCount":    { "state": "available",   "value": 2,      "unit": "channels" },
+    "bitDepth":        { "state": "unsupported", "value": null,   "note": "AAC does not expose a PCM bit depth" },
+    "codec":           { "state": "available",   "value": "aac" },
+    "declaredBitrate": { "state": "available",   "value": 128000, "unit": "bitsPerSecond" },
+    "estimatedBitrate":{ "state": "uncertain",   "value": 180904, "unit": "bitsPerSecond", "note": "derived from size/duration; includes container overhead" }
   },
-  "measurements": {
-    "samplePeakDbfs": -1.2, "truePeakDbfs": -0.8, "rmsDbfs": -14.6,
-    "integratedLufs": -12.9, "dcOffset": 0.0001,
-    "clippingDetected": false, "intersampleClippingSuspected": false,
-    "significantMaxFrequencyHz": 21000
-  },
-  "findings": [
-    {
-      "identifier": "inflated-sample-rate",
-      "severity": "warning",
-      "confidence": "medium",
-      "evidence": [
-        { "label": "significant max frequency", "value": "≈21 kHz", "detail": "no useful energy above" },
-        { "label": "effective bit depth", "value": "16", "detail": "lower 8 bits look like padding" }
-      ],
-      "explanation": "Stored as 24/96 but the signal looks like a 16/44.1 source; no real quality gain.",
-      "alternativeExplanations": ["A deliberately band-limited master could look similar."]
-    }
+  "warnings": [
+    { "field": "bitDepth", "kind": "unsupported", "message": "Bit depth is not defined for this lossy codec." },
+    { "field": "estimatedBitrate", "kind": "uncertain", "message": "Estimated from file size and duration, not read from the stream." }
   ],
-  "analysisStatus": { "state": "completed", "warnings": [], "notes": null }
+  "inspectionStatus": { "state": "partial", "message": "Some properties are not exposed by this format." }
 }
 ```
+
+This document supersedes the earlier illustrative draft: it fixes the concrete `schemaVersion` 1
+field names for the first export. DSP-era fields will be added additively without bumping the
+version.
