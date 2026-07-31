@@ -125,7 +125,10 @@ strategy), and the task-3.1 evidence in
 ### Flow (per inspection)
 
 1. Resolve the security-scoped resource for the selected file (infrastructure-only; ADR-0010) and
-   `defer` its release.
+   `defer` its release. Because the domain `AudioFileReference` carries no URL, the adapter obtains the
+   URL through a **constructor-injected resolver seam** (`(AudioFileReference) -> URL?`); the sandbox
+   file-selection work (group 6) wires the concrete security-scoped provider, and until then the default
+   resolver yields no URL (a global access failure). The 3.2 skeleton establishes this seam only.
 2. Build an `AVURLAsset` and load `duration` and the **audio** tracks. If the asset cannot be opened /
    read / is access-denied → **throw** `InspectionError` (`fileOpenFailed` / `fileUnreadable` /
    `fileAccessDenied`); nothing else runs.
