@@ -53,12 +53,15 @@ private extension AVFoundationAudioFilePropertyReader {
     /// Not `Sendable`-required: it never crosses an isolation boundary (the reader is nonisolated and the
     /// mappers are synchronous, called without an intervening `await`).
     struct LoadedAudio {
-        /// The selected audio track (`track[0]`), or `nil` when the file exposes no audio track.
-        let audioTrack: AVAssetTrack?
-        /// The first format description of the selected track, or `nil` when absent.
+        /// The resolved file URL — raw material for `container` inference (UTI/extension) in task 3.4.
+        let url: URL
+        /// The first format description of the selected audio track (`track[0]`), or `nil` when the file
+        /// exposes no audio track or the track carries no description. Its ASBD feeds 3.3 and 3.5.
         let formatDescription: CMFormatDescription?
-        /// The asset duration, or `nil` when the duration load failed — a **per-property** concern, not a
-        /// global failure (spike 0031, experiments E/H).
+        /// The asset duration, or `nil` when the duration load **errored** — a **per-property** concern,
+        /// not a global failure (spike 0031, experiments E/H). A successful load yields a `CMTime`
+        /// (possibly indefinite) that 3.4 maps by value, so `nil` here signals to 3.6 that the duration
+        /// read failed (→ property-level `failed`), distinct from a present-but-indefinite duration.
         let duration: CMTime?
     }
 
@@ -76,9 +79,11 @@ private extension AVFoundationAudioFilePropertyReader {
             if let audioTrack {
                 formatDescription = try await audioTrack.load(.formatDescriptions).first
             }
-            // Duration failure is per-property, not global (spike 0031/E,H) → keep it optional.
+            // Duration failure is per-property, not global (spike 0031/E,H): a *thrown* load error
+            // collapses to `nil` here (→ 3.6 property-level `failed`), while a successful load keeps its
+            // `CMTime` (possibly indefinite) for 3.4 to map by value.
             let duration = try? await asset.load(.duration)
-            return LoadedAudio(audioTrack: audioTrack, formatDescription: formatDescription, duration: duration)
+            return LoadedAudio(url: url, formatDescription: formatDescription, duration: duration)
         } catch {
             throw Self.globalError(from: error)
         }
