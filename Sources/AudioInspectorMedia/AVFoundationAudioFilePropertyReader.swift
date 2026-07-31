@@ -89,19 +89,38 @@ private extension AVFoundationAudioFilePropertyReader {
         }
     }
 
-    /// Assembles `TechnicalProperties` from the per-field mappers. Field mapping is deferred: every
-    /// mapper currently returns a conservative placeholder (see the referenced tasks).
+    /// Assembles `TechnicalProperties` from the per-field mappers. The audio stream basic description is
+    /// extracted **once** here and shared by the structural mappers (`sampleRate`/`channelCount`), so the
+    /// CoreMedia access is not duplicated. The remaining fields are still conservative placeholders (see
+    /// the referenced tasks).
     func technicalProperties(from loaded: LoadedAudio) -> TechnicalProperties {
-        TechnicalProperties(
+        let streamDescription = Self.streamBasicDescription(from: loaded.formatDescription)
+        return TechnicalProperties(
             container: container(from: loaded),
             duration: duration(from: loaded),
-            sampleRate: sampleRate(from: loaded),
-            channelCount: channelCount(from: loaded),
+            sampleRate: sampleRate(from: streamDescription),
+            channelCount: channelCount(from: streamDescription),
             bitDepth: bitDepth(from: loaded),
             codec: codec(from: loaded),
             declaredBitrate: declaredBitrate(from: loaded),
             estimatedBitrate: estimatedBitrate(from: loaded)
         )
+    }
+}
+
+// MARK: - Audio stream basic description (shared by the structural mappers)
+
+private extension AVFoundationAudioFilePropertyReader {
+    /// Copies the `AudioStreamBasicDescription` out of a format description, or `nil` when the description
+    /// is absent or carries no ASBD (e.g. no audio track was selected).
+    ///
+    /// The CoreMedia call returns a pointer valid only while the `CMFormatDescription` lives; it is
+    /// dereferenced and **copied immediately** into a value here. No pointer is stored, retained, or
+    /// escapes this function — only a value copy is returned. No force-unwrap, no AudioToolbox.
+    static func streamBasicDescription(from formatDescription: CMFormatDescription?) -> AudioStreamBasicDescription? {
+        guard let formatDescription else { return nil }
+        guard let pointer = CMAudioFormatDescriptionGetStreamBasicDescription(formatDescription) else { return nil }
+        return pointer.pointee
     }
 }
 
@@ -118,14 +137,29 @@ private extension AVFoundationAudioFilePropertyReader {
         .unavailable(reason: nil)
     }
 
-    func sampleRate(from _: LoadedAudio) -> Property<Int> {
-        // TODO(3.3): from the selected track's ASBD `mSampleRate`.
-        .unavailable(reason: nil)
+    /// `sampleRate` (Hz) from the ASBD `mSampleRate`. Conservative: `available` only for a finite,
+    /// strictly-positive value that is **exactly** an integer (the domain models Hz as `Int`, so no
+    /// silent rounding). No ASBD, or a non-representable value → `unavailable` (task 3.6 owns the wider
+    /// `uncertain`/`failed`/discrepancy policy; not reachable from a single already-loaded description).
+    func sampleRate(from streamDescription: AudioStreamBasicDescription?) -> Property<Int> {
+        guard let streamDescription else { return .unavailable(reason: nil) }
+        let hertz = streamDescription.mSampleRate
+        guard hertz.isFinite, hertz > 0, let value = Int(exactly: hertz) else {
+            return .unavailable(reason: nil)
+        }
+        return .available(value)
     }
 
-    func channelCount(from _: LoadedAudio) -> Property<Int> {
-        // TODO(3.3): from the selected track's ASBD `mChannelsPerFrame`.
-        .unavailable(reason: nil)
+    /// `channelCount` from the ASBD `mChannelsPerFrame`. Conservative: `available` only for a
+    /// strictly-positive count safely representable as the domain's `Int`. Never inferred from channel
+    /// layouts, labels, or names. No ASBD, or a zero count → `unavailable`.
+    func channelCount(from streamDescription: AudioStreamBasicDescription?) -> Property<Int> {
+        guard let streamDescription else { return .unavailable(reason: nil) }
+        let channels = streamDescription.mChannelsPerFrame
+        guard channels > 0, let value = Int(exactly: channels) else {
+            return .unavailable(reason: nil)
+        }
+        return .available(value)
     }
 
     func bitDepth(from _: LoadedAudio) -> Property<Int> {
