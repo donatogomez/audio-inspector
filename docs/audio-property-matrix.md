@@ -62,8 +62,8 @@ fixtures. Lossy/FLAC/ALAC/AAC/M4A remain **unvalidated** (candidate). Full evide
 
 | Property | Validated source (PCM) | Discarded / negative finding | Confidence after spike | Recommended state | Open questions |
 | --- | --- | --- | --- | --- | --- |
-| `container` | — (none reliable) | `URLResourceValues.contentType` (UTI) is extension-driven and **lied** (WAV→`.aiff` reported `public.aiff-audio`); AVFoundation exposes **no real container** signal | High that UTI is unreliable | **`uncertain`** from UTI/extension; `unavailable` if none — **never `available`** via AVFoundation alone | Does AudioToolbox `kAudioFilePropertyFileFormat` give the real container? (fallback, unexercised) |
-| `duration` | `AVAsset.load(.duration)` → `CMTime` seconds | `CMTime` valid/numeric flags do **not** prove correctness: truncated file → valid, numeric, finite `0.0` | Medium | `available` if finite numeric; `uncertain` if indefinite/degraded; **no exact-vs-estimated promise** | Behavior for VBR/lossy without seek tables (untested) |
+| `container` | — (none found among evaluated APIs) | `URLResourceValues.contentType` (UTI) is extension-driven and was **wrong** for the renamed copy (WAV→`.aiff` reported `public.aiff-audio`); no container token found among the evaluated AVFoundation/CoreMedia APIs (only the codec) | High that UTI is unreliable | **`uncertain`** from UTI/extension; `unavailable` if none — **never `available`** on current evidence | Does AudioToolbox `kAudioFilePropertyFileFormat` give the real container? (fallback, unexercised) |
+| `duration` | `AVAsset.load(.duration)` → `CMTime` seconds | `CMTime` valid/numeric flags do **not** prove correctness: a truncated copy returned valid+numeric+finite `0.0` | Medium | **positive** finite numeric → candidate `available`; **`0.0`** → `uncertain`/`unavailable` unless legit zero-length; indefinite/non-numeric → `unavailable`/`uncertain`; **no exact-vs-estimated promise** | VBR/lossy without seek tables (untested); how to evidence a legitimate zero-length |
 | `sampleRate` | ASBD `mSampleRate` | — | High (PCM) | `available`; `unavailable` if no track | Multi-track / disagreement (untested for N>1) |
 | `channelCount` | ASBD `mChannelsPerFrame` | — | High (PCM) | `available`; `unavailable` if no track | Exotic channel layouts (untested) |
 | `bitDepth` | ASBD `mBitsPerChannel` (=16 observed) | **Not** `mBytesPerFrame`/`mBytesPerPacket` (2/4, channel-dependent) | High (PCM) | `available` when `lpcm` & `mBitsPerChannel>0`; **`unsupported`** for lossy | Confirm lossy → `mBitsPerChannel==0` (untested) |
@@ -76,6 +76,8 @@ fixtures. Lossy/FLAC/ALAC/AAC/M4A remain **unvalidated** (candidate). Full evide
 OK, duration degraded to `0.0`, no throw). A pure property-level `failed` was **not** forced (rare;
 open for 3.6). Absence of a datum (`estimatedDataRate==0`) is **not** an error.
 
-**AudioToolbox decision:** **not** adopted for group 3 — AVFoundation + CoreMedia cover every field the
-basic PCM slice needs. Kept as an unexercised, documented fallback for the *real container* and a
-*nominal bitrate* only, to be validated in isolation if a later slice needs them.
+**AudioToolbox decision:** **not** adopted for group 3 and **not exercised**. AVFoundation + CoreMedia
+determined the fields the basic PCM slice needs; `container` (`uncertain`) and `declaredBitrate`
+(`unavailable`) stay so **by limitation, not for lack of AudioToolbox**, and compressed formats were not
+tested. Kept as an unexercised, documented fallback for the *real container* and a *nominal bitrate*
+only, to be revisited at 3.5 / once compressed fixtures exist.

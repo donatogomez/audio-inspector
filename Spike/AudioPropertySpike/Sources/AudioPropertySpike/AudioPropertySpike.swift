@@ -18,17 +18,21 @@ struct AudioPropertySpike {
             return
         }
 
-        await runExperimentSuite()
+        // A genuine setup failure (temp dir / fixture generation) must exit non-zero. The suite returns
+        // only after its `defer` cleanup has run, so calling exit() here never skips cleanup.
+        let ok = await runExperimentSuite()
+        if !ok { exit(EXIT_FAILURE) }
     }
 
-    static func runExperimentSuite() async {
+    /// Runs the full A–I suite. Returns `false` on a fatal setup failure (after cleaning up).
+    static func runExperimentSuite() async -> Bool {
         let fileManager = FileManager.default
         let workDir = fileManager.temporaryDirectory.appendingPathComponent("audio-property-spike-\(UUID().uuidString)")
         do {
             try fileManager.createDirectory(at: workDir, withIntermediateDirectories: true)
         } catch {
             print("FATAL: could not create work dir: \(error)")
-            return
+            return false
         }
         defer { try? fileManager.removeItem(at: workDir) }
 
@@ -41,7 +45,13 @@ struct AudioPropertySpike {
             try generatePCMFixture(at: aiffURL, sampleRate: 44100, channels: 2, bitDepth: 16, bigEndian: true, seconds: 0.25)
         } catch {
             print("FATAL: fixture generation failed: \(error)")
-            return
+            return false // `defer` above still runs → temp dir cleaned up before the caller exits non-zero
+        }
+
+        header("EXPERIMENT C (helper) — codec token serialization (synthetic, exercises the hex fallback)")
+        for code in [0x6C70_636D, 0x6161_6320, 0x6D73_0000, 0x0000_0001] as [UInt32] {
+            // 'lpcm' (printable) · 'aac ' (trailing space) · 'ms\0\0' (nulls) · pure control/binary
+            print("  fourCCToken(0x\(String(format: "%08X", code))) = \(fourCCToken(code))")
         }
 
         header("EXPERIMENTS A–E, G — well-formed fixtures (raw signals)")
@@ -85,6 +95,7 @@ struct AudioPropertySpike {
 
         header("DONE — work dir will be removed")
         print("(All fixtures and temp copies were generated at runtime and are now deleted.)")
+        return true
     }
 
     static func header(_ title: String) {

@@ -144,9 +144,11 @@ The audio track is chosen by an explicit, revisable rule — never an undefined 
 - **Zero audio tracks** → every stream-level field (`sampleRate`, `channelCount`, `bitDepth`, `codec`)
   is `unavailable`; this is not a global failure by itself.
 - **Exactly one audio track** → use it.
-- **Multiple audio tracks** → select the **first** audio track in track order and record that a
-  selection was made; alternate/auxiliary tracks are ignored in this slice (multi-track handling is a
-  later concern).
+- **Multiple audio tracks** → select the **first** element of the returned audio tracks (the
+  framework-provided order is **observable but its semantics are not guaranteed** — this is a
+  provisional, revisable rule, not a claim of a "primary/preferred" track) and record that a selection
+  was made; alternate/auxiliary tracks are ignored in this slice. Multi-track ordering was **not
+  validated** by spike 0031 (single-track fixtures) — a later concern.
 - **Empty or missing format description** → the affected field is `unavailable` (no data), not `failed`.
 - **Multiple format descriptions, or a format change within the track** → if they disagree on a field,
   that field is `uncertain` with a `reason`; the reader does not pick one and present it as fact.
@@ -176,18 +178,22 @@ determined reliably**, it is `uncertain` with a `reason`.
 ### Per-property policy (summary — full matrix is a separate pre-spike document)
 
 The detailed source/reliability/state matrix lives in
-[docs/audio-property-matrix.md](../../../docs/audio-property-matrix.md) (**status: pre-spike
-hypothesis** — candidate sources, not contractual). The contract-level rules per field:
+[docs/audio-property-matrix.md](../../../docs/audio-property-matrix.md) (**status: partially validated
+by spike 0031** for PCM WAV/AIFF — observed/inferred/not-tested marked there). The contract-level rules
+per field (the most conservative statement; the report may carry more detail):
 
-- **`container`** — spike 0031 found AVFoundation exposes **no direct real-container signal** (only the
-  codec), and the UTI is extension-driven and provably unreliable (a WAV renamed `.aiff` reported
-  `public.aiff-audio`). So in this slice `container` is `uncertain` with a `reason` when inferred from
-  UTI/extension, and `unavailable` when no type is resolvable — **never `available`** via AVFoundation
-  alone. Conflicting signals → `uncertain` (no invented reconciliation). **No deep byte inspection.**
-- **`duration`** — `available` only for a valid, finite duration with no estimate signal; indefinite or
-  known/suspected-estimate → `uncertain`; absent → `unavailable`; load error → `failed`. There is **no
-  guaranteed public signal** to prove exact-vs-estimated, so the reader cannot promise a precise
-  available/uncertain split in every case — that limitation is documented, not papered over.
+- **`container`** — spike 0031 found **no direct real-container signal among the AVFoundation/CoreMedia
+  APIs evaluated** (only the codec), and the UTI is extension-driven and was provably wrong for a WAV
+  renamed `.aiff` (reported `public.aiff-audio`). So in this slice `container` is `uncertain` with a
+  `reason` when inferred from UTI/extension, and `unavailable` when no type is resolvable — **never
+  `available`** on current evidence. Conflicting signals → `uncertain` (no invented reconciliation).
+  **No deep byte inspection.**
+- **`duration`** — a **positive**, finite, numeric duration with no estimate signal → `available`; a
+  returned **`0.0`** → `uncertain`/`unavailable` unless a legitimate zero-length is evidenced (spike
+  0031: a truncated copy returned a valid+numeric+finite `0.0`, so a bare "finite → available" rule is
+  insufficient); indefinite/non-numeric → `unavailable`/`uncertain`; load error → `failed`. There is
+  **no guaranteed public signal** to prove exact-vs-estimated, so the reader does not promise that
+  split — a documented limitation.
 - **`sampleRate` / `channelCount`** — read from the selected track's format description per the
   track-selection policy above: valid value → `available`; no track → `unavailable`; descriptions
   disagree/implausible → `uncertain`; read error → `failed`.
@@ -217,7 +223,9 @@ codes (which vary by SDK):
   access denied) → it is **global**: throw `InspectionError` with the semantically matching stable
   `code`.
 - If the error breaks **one** extraction while the rest can still be read → it is **per-property**:
-  `Property.failed(PropertyFailure(code: .propertyReadError, …))`.
+  `Property.failed(PropertyFailure(code: .propertyReadError, …))`. E.g. a `load(.duration)` failure when
+  the tracks/format descriptions still loaded is a **property-level** `duration` failure, **not** global
+  — the classifier keys on scope, never on which API threw (spike 0031, Experiment H).
 
 Absence is never `failed`; it is `unavailable`/`unsupported` per the field.
 

@@ -6,8 +6,13 @@ import UniformTypeIdentifiers
 enum SpikeError: Error { case bufferAllocationFailed }
 
 /// Decode a FourCharCode (e.g. an `AudioFormatID` or media subtype) into a stable, non-localized token.
-/// ASCII when all four bytes are printable; otherwise a fixed-width hex fallback. This is exactly the
-/// candidate `codec` token format under evaluation in the spike (Experiment C).
+///
+/// The four bytes are **big-endian** (most-significant byte = first character), matching how CoreAudio
+/// packs a `FourCharCode`. A token is rendered as ASCII only when every byte is an **unambiguous
+/// printable** character `0x21…0x7E` — space (`0x20`), NUL and control bytes are deliberately excluded
+/// so a space-padded or partially-empty FourCC (e.g. `'aac '`, `'ms\0\0'`) can never produce a visually
+/// ambiguous token; those fall back to a fixed-width uppercase hex form. This is the candidate `codec`
+/// token format under evaluation (Experiment C); the final serialization is deferred to 3.2/the ADR.
 func fourCCToken(_ code: UInt32) -> String {
     let bytes = [
         UInt8((code >> 24) & 0xFF),
@@ -15,9 +20,9 @@ func fourCCToken(_ code: UInt32) -> String {
         UInt8((code >> 8) & 0xFF),
         UInt8(code & 0xFF),
     ]
-    let printable = bytes.allSatisfy { $0 >= 0x20 && $0 <= 0x7E }
-    if printable {
-        return "'" + String(bytes: bytes, encoding: .ascii)! + "'"
+    let unambiguouslyPrintable = bytes.allSatisfy { $0 >= 0x21 && $0 <= 0x7E }
+    if unambiguouslyPrintable {
+        return "'" + String(decoding: bytes, as: UTF8.self) + "'"
     }
     return String(format: "0x%08X", code)
 }
