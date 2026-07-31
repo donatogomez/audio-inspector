@@ -96,8 +96,10 @@ copyrighted audio.
 
 Group 3 adds the **first real** implementation of the domain port `AudioFilePropertyReading`:
 `AVFoundationAudioFilePropertyReader`, living in `AudioInspectorMedia`. It reads metadata-level facts
-using Apple's media stack — **no DSP**. See ADR-0011 (infrastructure boundary) and ADR-0012 (extraction
-strategy).
+using Apple's media stack — **no DSP**. See ADR-0011 (infrastructure boundary), ADR-0012 (extraction
+strategy), and the task-3.1 evidence in
+[docs/spikes/0031-audio-property-api-validation.md](../../../docs/spikes/0031-audio-property-api-validation.md)
+(partially validated for PCM WAV/AIFF).
 
 ### Responsibility & boundary
 
@@ -177,10 +179,11 @@ The detailed source/reliability/state matrix lives in
 [docs/audio-property-matrix.md](../../../docs/audio-property-matrix.md) (**status: pre-spike
 hypothesis** — candidate sources, not contractual). The contract-level rules per field:
 
-- **`container`** — `available` **only on direct framework recognition** of the file's type. A type
-  known solely from UTI/extension is an *inference*, so it is `uncertain` with a `reason`, never
-  `available`. No information → `unavailable`. Conflicting signals → `uncertain` (no invented
-  reconciliation). **No deep byte inspection** in this slice.
+- **`container`** — spike 0031 found AVFoundation exposes **no direct real-container signal** (only the
+  codec), and the UTI is extension-driven and provably unreliable (a WAV renamed `.aiff` reported
+  `public.aiff-audio`). So in this slice `container` is `uncertain` with a `reason` when inferred from
+  UTI/extension, and `unavailable` when no type is resolvable — **never `available`** via AVFoundation
+  alone. Conflicting signals → `uncertain` (no invented reconciliation). **No deep byte inspection.**
 - **`duration`** — `available` only for a valid, finite duration with no estimate signal; indefinite or
   known/suspected-estimate → `uncertain`; absent → `unavailable`; load error → `failed`. There is **no
   guaranteed public signal** to prove exact-vs-estimated, so the reader cannot promise a precise

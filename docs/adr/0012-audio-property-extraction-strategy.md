@@ -115,7 +115,19 @@ from "untrustworthy".
 
 ## Follow-ups
 
-The concrete per-property source/state matrix lives in `docs/audio-property-matrix.md` (status:
-pre-spike hypothesis), summarized in the change's `design.md`. The reliability claims are validated
-(and this ADR promoted to Accepted, or updated if a gap is found) by the ADR-0003 native-decoding spike
-against real and synthetic fixtures for MP3, WAV, AIFF, FLAC, ALAC, AAC, M4A.
+The concrete per-property source/state matrix lives in `docs/audio-property-matrix.md`, summarized in
+the change's `design.md`.
+
+**Spike 0031** (`docs/spikes/0031-audio-property-api-validation.md`, task 3.1) has now **partially
+validated** this strategy for **PCM WAV/AIFF**: the reliable direct sources (ASBD `sampleRate`,
+`channelCount`, `bitDepth`, `codec` FourCC), the `container` = `uncertain` stance (the UTI is
+extension-driven and provably unreliable), `declaredBitrate` = `unavailable` (no direct source;
+`estimatedDataRate` is 0 for PCM and named "estimated"), the always-`uncertain` `estimatedBitrate`, and
+the global-vs-property error rule. It also concluded AudioToolbox is **not** needed for this slice.
+
+This ADR **remains Proposed**. Promotion to Accepted requires closing what the spike could not: (a)
+lossy/FLAC/ALAC/AAC/M4A behavior (bit depth `unsupported`, codec tokens, any `estimatedDataRate`
+usefulness); (b) multi-track ordering and format-description discrepancy handling for N>1; (c) whether
+an AudioToolbox fallback is ever justified for the real container or a nominal bitrate. Those are
+validated (and this ADR updated) as groups 3.3+ and later slices exercise real/synthetic fixtures for
+MP3, WAV, AIFF, FLAC, ALAC, AAC, M4A.
