@@ -16,11 +16,20 @@ verifiable, maps to one logical commit, and contains nothing out of scope.
 - [x] 2.2 Add a fake `AudioFilePropertyReading` in `AudioInspectorTesting`
 - [x] 2.3 Unit tests: available/partial/failed outcomes, warning derivation, declared-vs-estimated bitrate — all with the fake, no real files
 
-## 3. Basic technical inspection (infrastructure)
+## 3. Basic technical inspection (infrastructure — `AVFoundationAudioFilePropertyReader`)
 
-- [ ] 3.1 Implement the AVFoundation/AudioToolbox adapter for `AudioFilePropertyReading` (metadata only, no DSP), mapping each field to the correct `Property` case
-- [ ] 3.2 Map file metadata (name, extension, size, modification date, safe `source` descriptor) into `AudioFileReference`; read `container` as a technical property into `TechnicalProperties`
-- [ ] 3.3 Integration tests against a few in-test generated fixtures (no copyrighted audio)
+Spec fixed by design.md §"Infrastructure reader", ADR-0011 (boundary, Accepted) and ADR-0012
+(extraction strategy, **Proposed**), with the candidate matrix in `docs/audio-property-matrix.md`
+(pre-spike hypothesis). No DSP. The use case and port are unchanged. Native-API sources/reliability are
+hypotheses pending the ADR-0003 native-decoding spike, so the spike is the first task.
+
+- [ ] 3.1 **Documented technical spike**: validate the candidate sources against real + synthetic fixtures for MP3, WAV, AIFF, FLAC, ALAC, AAC, M4A; confirm which properties are reliable/approximate/absent; record findings and promote ADR-0012 (or update it if a gap is found)
+- [ ] 3.2 Adapter skeleton: `AVFoundationAudioFilePropertyReader` in `AudioInspectorMedia` conforming to `AudioFilePropertyReading`, implementing the deterministic track-selection policy; no field mapping yet
+- [ ] 3.3 Map the reliable structural facts from the selected track's format description: `sampleRate` and `channelCount` (valid → `available`; no track → `unavailable`; disagreement → `uncertain`; read error → `failed`)
+- [ ] 3.4 Map `container`, `duration`, and `codec` with their uncertainty policies (direct recognition → `available`; UTI/extension-only or estimate/discrepancy → `uncertain`; `codec` emits a stable non-localized token)
+- [ ] 3.5 Map the conditional capabilities: `bitDepth` (PCM/lossless `available`, lossy `unsupported`, never formula-inferred), and the two bitrates kept separate — `declaredBitrate` (directly declared or `unavailable`, no self-computation) and `estimatedBitrate` (**always `uncertain`** with a `reason`)
+- [ ] 3.6 Translate platform errors into domain errors by scope: whole-file failures → thrown `InspectionError` (`fileOpenFailed`/`fileUnreadable`/`fileAccessDenied`); single-property errors → `Property.failed(.propertyReadError)` — no `NSError`/`OSStatus` crosses the port (ADR-0011 §5)
+- [ ] 3.7 Tests: unit tests for the mapper and error-translation with controlled in-memory inputs (no real files), **plus** one minimal integration test on a fixture generated in-test with public APIs and stably writable in CI (PCM WAV/AIFF); formats that macOS can read but not reliably generate in CI (e.g. lossy) are covered by the 3.1 spike / manual exploratory validation, not a CI codec matrix; no copyrighted audio; fixtures cleaned up
 
 ## 4. JSON export (schemaVersion 1)
 

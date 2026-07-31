@@ -92,6 +92,132 @@ in-memory `InspectionReport` and asserting on the DTO/JSON. Only a small number 
 tests touch real files, using deterministic fixtures generated in-test (later slice) — never
 copyrighted audio.
 
+## Infrastructure reader (Group 3 — `AVFoundationAudioFilePropertyReader`)
+
+Group 3 adds the **first real** implementation of the domain port `AudioFilePropertyReading`:
+`AVFoundationAudioFilePropertyReader`, living in `AudioInspectorMedia`. It reads metadata-level facts
+using Apple's media stack — **no DSP**. See ADR-0011 (infrastructure boundary) and ADR-0012 (extraction
+strategy).
+
+### Responsibility & boundary
+
+- **The use case does not change.** `InspectAudioFileUseCase` keeps depending **only** on the port; it
+  cannot tell the fake from the real reader. All group-3 work sits *below* the port.
+- **AVFoundation implements the port.** `AVFoundationAudioFilePropertyReader: AudioFilePropertyReading`
+  is the only place Apple media APIs are touched; `AudioInspectorMedia` is the only target that imports
+  AVFoundation/AudioToolbox (enforced by the build graph + `Scripts/check-boundaries.sh`).
+- **The domain never knows AVFoundation.** No `AVAsset`, `AVAssetTrack`, `CMFormatDescription`,
+  `AudioStreamBasicDescription`, `NSError`, `AVError`, or `OSStatus` crosses the port. `Property<Value>`
+  stays generic over plain value types (ADR-0011 §4).
+- **Dependencies (candidate sources, subject to spike validation — see
+  [audio-property-matrix.md](../../../docs/audio-property-matrix.md)):** AVFoundation and CoreMedia for
+  the asset, its audio track, and the track's stream format description; UniformTypeIdentifiers only as
+  a **weak hint** for `container`. **AudioToolbox is a fallback under evaluation, not a decided
+  requirement** — it must not shape the adapter's initial design (ADR-0012). Every concrete API name in
+  the matrix is *expected*, not contractual, until the ADR-0003 spike validates it.
+- **Invariants:** never mutates the file; selects the **audio track explicitly** (ignores cover art /
+  non-audio tracks); never invents a value; per-property judgement produces a `Property` case; a
+  whole-file failure is a typed `throws(InspectionError)`; the file is accessed only for the inspection
+  duration (ADR-0010) and that security-scoped handling stays in infrastructure.
+
+### Flow (per inspection)
+
+1. Resolve the security-scoped resource for the selected file (infrastructure-only; ADR-0010) and
+   `defer` its release.
+2. Build an `AVURLAsset` and load `duration` and the **audio** tracks. If the asset cannot be opened /
+   read / is access-denied → **throw** `InspectionError` (`fileOpenFailed` / `fileUnreadable` /
+   `fileAccessDenied`); nothing else runs.
+3. Select the audio track by the deterministic **track-selection policy** below; load its format
+   description(s).
+4. Map each field independently into its `Property` case (per-field policy below; full matrix in
+   [audio-property-matrix.md](../../../docs/audio-property-matrix.md)). A single field erroring maps to
+   `Property.failed`; the rest continue.
+5. Read `container`; assemble `TechnicalProperties` and return it. Warnings/status derivation stays in
+   the (unchanged) use case.
+
+### Track-selection policy (deterministic)
+
+The audio track is chosen by an explicit, revisable rule — never an undefined "primary track":
+
+- **Zero audio tracks** → every stream-level field (`sampleRate`, `channelCount`, `bitDepth`, `codec`)
+  is `unavailable`; this is not a global failure by itself.
+- **Exactly one audio track** → use it.
+- **Multiple audio tracks** → select the **first** audio track in track order and record that a
+  selection was made; alternate/auxiliary tracks are ignored in this slice (multi-track handling is a
+  later concern).
+- **Empty or missing format description** → the affected field is `unavailable` (no data), not `failed`.
+- **Multiple format descriptions, or a format change within the track** → if they disagree on a field,
+  that field is `uncertain` with a `reason`; the reader does not pick one and present it as fact.
+- **A read that genuinely errors** (the description load throws) → the affected field is `failed`.
+
+### Mapping infrastructure → domain
+
+Translation happens **only** inside the adapter (ADR-0011 §3). Apple errors are **caught and converted**
+(ADR-0011 §5): a whole-file error → thrown `InspectionError`; a single-property extraction error →
+`Property.failed(PropertyFailure(code: .propertyReadError, message:))`. Apple's `NSError`/`OSStatus` text
+may inform the *message* but never the *identity* — identity is the stable domain `code` (ADR-0008).
+
+Per-property meaning of each non-`available` state, applied uniformly:
+
+- **`unavailable`** — the file/format simply does not carry it (the source is *silent*), e.g. no
+  container-declared nominal bitrate, or no audio track for a stream-level fact.
+- **`unsupported`** — the format cannot express it, e.g. `bitDepth` for a lossy codec (AAC/MP3).
+- **`uncertain`** — read but not reliable: an estimate, a self-labelled-estimate API, or a value made
+  untrustworthy by a source discrepancy (ADR-0012 §3). Carries a `reason`.
+- **`failed`** — extracting *that* property errored (API threw / returned inconsistent data) while the
+  rest of the inspection continues. Distinct from "absent" and "untrustworthy".
+
+When Apple does **not** offer a property, it is `unavailable` (silent) or `unsupported` (format cannot
+express it) — never a fabricated value and never `failed`. When a property exists but **cannot be
+determined reliably**, it is `uncertain` with a `reason`.
+
+### Per-property policy (summary — full matrix is a separate pre-spike document)
+
+The detailed source/reliability/state matrix lives in
+[docs/audio-property-matrix.md](../../../docs/audio-property-matrix.md) (**status: pre-spike
+hypothesis** — candidate sources, not contractual). The contract-level rules per field:
+
+- **`container`** — `available` **only on direct framework recognition** of the file's type. A type
+  known solely from UTI/extension is an *inference*, so it is `uncertain` with a `reason`, never
+  `available`. No information → `unavailable`. Conflicting signals → `uncertain` (no invented
+  reconciliation). **No deep byte inspection** in this slice.
+- **`duration`** — `available` only for a valid, finite duration with no estimate signal; indefinite or
+  known/suspected-estimate → `uncertain`; absent → `unavailable`; load error → `failed`. There is **no
+  guaranteed public signal** to prove exact-vs-estimated, so the reader cannot promise a precise
+  available/uncertain split in every case — that limitation is documented, not papered over.
+- **`sampleRate` / `channelCount`** — read from the selected track's format description per the
+  track-selection policy above: valid value → `available`; no track → `unavailable`; descriptions
+  disagree/implausible → `uncertain`; read error → `failed`.
+- **`codec`** — emit a **stable, non-localized token** derived from the track's technical format
+  identifier (e.g. a serialized `AudioFormatID`/FourCC); **never** a localized system description.
+  Full normalization is out of scope; the exact token serialization is pending the spike. Known
+  identifier → `available`; no track → `unavailable`; container vs track disagree → `uncertain`.
+- **`bitDepth`** — a **conditional capability**: `available` only when a semantically-applicable value
+  is present (PCM/lossless); **`unsupported` for lossy codecs** (not a stand-in for "the API didn't give
+  it"); ambiguous signal → `uncertain`; absent where expected → `unavailable`. Bits-per-channel is not
+  interchangeable with bits-per-sample or packet/frame size, and is **never inferred by formula**.
+- **`declaredBitrate` vs `estimatedBitrate`** — the two are kept strictly separate:
+  - `declaredBitrate` is a nominal rate **directly declared** by container/codec metadata, with **no
+    self-computation**. If only an estimate exists (including any framework value whose API self-labels
+    as an estimate), `declaredBitrate` is `unavailable`. PCM's exact size is a *computation*, so it does
+    **not** make `declaredBitrate` `available` either — it feeds the estimate.
+  - `estimatedBitrate` is **always `uncertain`** (group-1 contract), carrying the method in its
+    `reason`. Its candidate formula, prerequisites, and why it is always approximate are documented in
+    the matrix (spike-pending, non-contractual); it is not computed when its inputs are missing.
+
+### Global vs per-property errors (semantic rule, not an SDK code table)
+
+The adapter classifies an Apple error by its **scope/effect**, not by enumerating `NSError`/`OSStatus`
+codes (which vary by SDK):
+
+- If the error prevents producing **any** useful set of properties (cannot open, unreadable input,
+  access denied) → it is **global**: throw `InspectionError` with the semantically matching stable
+  `code`.
+- If the error breaks **one** extraction while the rest can still be read → it is **per-property**:
+  `Property.failed(PropertyFailure(code: .propertyReadError, …))`.
+
+Absence is never `failed`; it is `unavailable`/`unsupported` per the field.
+
 ## Sandbox & file selection (summary — see ADR-0010)
 
 Native open panel under App Sandbox; the panel grants user-scoped read access to the chosen file.
