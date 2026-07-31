@@ -123,11 +123,14 @@ private extension AVFoundationAudioFilePropertyReader {
         return pointer.pointee
     }
 
-    /// Serializes a FourCharCode (e.g. an `AudioFormatID`) into a stable, **non-localized** token, per
-    /// spike 0031/C: the four **big-endian** bytes as ASCII only when every byte is unambiguously
-    /// printable (`0x21…0x7E` — space, NUL and control bytes excluded so a padded/empty code can never
-    /// produce a visually ambiguous token); otherwise a fixed-width uppercase hex fallback. Deterministic,
-    /// never a localized system description. No force-unwrap.
+    /// Serializes a FourCharCode (e.g. an `AudioFormatID`) into a stable, **non-localized** token
+    /// (finalizing the serialization the spike deferred — spike 0031/C). The four bytes are read
+    /// **big-endian** (MSB = first char). When every byte is printable ASCII (`0x20…0x7E`), **trailing
+    /// spaces are trimmed** so common space-padded codes read naturally — e.g. `'aac '`
+    /// (`kAudioFormatMPEG4AAC`) → `aac`, `'lpcm'` → `lpcm`. Any NUL/control/non-ASCII byte, an empty
+    /// result, or a leading/internal space (never legitimate padding) falls back to a fixed-width
+    /// uppercase hex form, keeping the token unambiguous. Deterministic; never a localized description;
+    /// no force-unwrap.
     static func fourCharCodeToken(_ code: UInt32) -> String {
         let bytes = [
             UInt8((code >> 24) & 0xFF),
@@ -135,9 +138,13 @@ private extension AVFoundationAudioFilePropertyReader {
             UInt8((code >> 8) & 0xFF),
             UInt8(code & 0xFF),
         ]
-        let unambiguouslyPrintable = bytes.allSatisfy { $0 >= 0x21 && $0 <= 0x7E }
-        if unambiguouslyPrintable {
-            return String(decoding: bytes, as: UTF8.self)
+        if bytes.allSatisfy({ $0 >= 0x20 && $0 <= 0x7E }) {
+            var end = bytes.count
+            while end > 0, bytes[end - 1] == 0x20 { end -= 1 } // trim trailing-space padding only
+            let trimmed = bytes[0 ..< end]
+            if !trimmed.isEmpty, !trimmed.contains(0x20) { // reject empty / leading / internal spaces
+                return String(decoding: trimmed, as: UTF8.self)
+            }
         }
         return String(format: "0x%08X", code)
     }
@@ -152,7 +159,11 @@ private extension AVFoundationAudioFilePropertyReader {
     /// APIs (only the codec), and the content type is a *type/extension inference* that was provably wrong
     /// for a renamed file. So a resolved type is `uncertain` — carrying the stable, **non-localized** UTI
     /// identifier as the tentative value with a reason — **never `available`** on this evidence. No type
-    /// resolvable → `unavailable`. No deep byte inspection; no deduction from MIME/codec/name (ADR-0012).
+    /// resolvable → `unavailable`. A `resourceValues` read error (via `try?`) is conservatively folded
+    /// into the same `unavailable` here — **not** because "no type" and "read error" are equivalent, but
+    /// because distinguishing them into a per-property `failed` is task 3.6. No deep byte inspection; no
+    /// deduction from MIME/codec/name; any resolved type (incl. a generic UTI) is carried as-is under
+    /// `uncertain`, since the state already disclaims reliability (ADR-0012).
     func container(from url: URL) -> Property<String> {
         guard let contentType = (try? url.resourceValues(forKeys: [.contentTypeKey]))?.contentType else {
             return .unavailable(reason: nil)
@@ -165,21 +176,25 @@ private extension AVFoundationAudioFilePropertyReader {
 
     /// `duration` (seconds) from the already-loaded `CMTime` (no re-load, no second asset access).
     ///
-    /// Conservative per spike 0031/E (a truncated file returned a valid+numeric `0.0`): a **positive**,
-    /// finite, numeric time → `available`; a non-positive time → `uncertain` (read but not trustworthy —
-    /// may be an empty or truncated file); `nil` (the load errored) or an invalid/indefinite/non-numeric
-    /// time → `unavailable`. The refinement of an errored load into a property-level `failed` is task 3.6.
+    /// Conservative per spike 0031/E (a truncated file returned a valid+numeric `0.0`):
+    /// - a **positive**, finite, numeric time → `available`;
+    /// - **exactly zero** → `uncertain`, **keeping the observed `0` as the tentative value** (read but not
+    ///   trustworthy — may be a genuinely empty file or a truncated read; the two are indistinguishable);
+    /// - a **negative** time → `unavailable` (nonsensical/invalid — not a plausible tentative value);
+    /// - `nil` (the load errored) or an invalid/indefinite/non-numeric/non-finite time → `unavailable`.
+    /// Refining an errored load into a property-level `failed` is task 3.6.
     func duration(from time: CMTime?) -> Property<Double> {
         guard let time, time.isValid, time.isNumeric else { return .unavailable(reason: nil) }
         let seconds = CMTimeGetSeconds(time)
         guard seconds.isFinite else { return .unavailable(reason: nil) }
-        guard seconds > 0 else {
+        if seconds > 0 { return .available(seconds) }
+        if seconds == 0 {
             return .uncertain(
-                value: nil,
-                reason: "Duration was reported as non-positive and could not be confirmed; the file may be empty or truncated."
+                value: 0,
+                reason: "Duration was reported as zero and could not be confirmed; the file may be empty or truncated."
             )
         }
-        return .available(seconds)
+        return .unavailable(reason: nil) // negative duration is invalid
     }
 
     /// `sampleRate` (Hz) from the ASBD `mSampleRate`. Conservative: `available` only for a finite,
