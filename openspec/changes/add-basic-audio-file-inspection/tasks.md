@@ -23,7 +23,7 @@ Spec fixed by design.md §"Infrastructure reader", ADR-0011 (boundary, Accepted)
 (pre-spike hypothesis). No DSP. The use case and port are unchanged. Native-API sources/reliability are
 hypotheses pending the ADR-0003 native-decoding spike, so the spike is the first task.
 
-- [ ] 3.1 **Documented technical spike**: validate the candidate sources against real + synthetic fixtures for MP3, WAV, AIFF, FLAC, ALAC, AAC, M4A; confirm which properties are reliable/approximate/absent; record findings and promote ADR-0012 (or update it if a gap is found)
+- [x] 3.1 **Documented technical spike** — validated candidate sources against runtime-generated PCM WAV/AIFF fixtures; recorded which properties are reliable/approximate/absent, the track/container/duration/codec/bitDepth/bitrate/error policies, and the AudioToolbox decision in `docs/spikes/0031-audio-property-api-validation.md`; ADR-0012 updated (stays Proposed) and the matrix marked partially-validated. Lossy/FLAC/ALAC/AAC/M4A remain for 3.3+ / a wider spike.
 - [ ] 3.2 Adapter skeleton: `AVFoundationAudioFilePropertyReader` in `AudioInspectorMedia` conforming to `AudioFilePropertyReading`, implementing the deterministic track-selection policy; no field mapping yet
 - [ ] 3.3 Map the reliable structural facts from the selected track's format description: `sampleRate` and `channelCount` (valid → `available`; no track → `unavailable`; disagreement → `uncertain`; read error → `failed`)
 - [ ] 3.4 Map `container`, `duration`, and `codec` with their uncertainty policies (direct recognition → `available`; UTI/extension-only or estimate/discrepancy → `uncertain`; `codec` emits a stable non-localized token)

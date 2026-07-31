@@ -1,19 +1,23 @@
-# Audio property extraction matrix — pre-spike hypothesis
+# Audio property extraction matrix
 
-**Status: pre-spike hypothesis.** Nothing here is a contractual guarantee. The concrete APIs, their
-availability, and their reliability are **candidate sources subject to validation by the ADR-0003
-native-decoding spike** (against real and synthetic fixtures for MP3, WAV, AIFF, FLAC, ALAC, AAC,
-M4A). API and property names are illustrative of the *expected* source and may change with the SDK;
-where a source is not yet decided it is marked *under evaluation*.
+**Status: partially validated by spike 0031** (PCM WAV/AIFF only; see
+`docs/spikes/0031-audio-property-api-validation.md`). The two tables below are the **pre-spike
+hypotheses**, kept verbatim for history; the **Post-spike findings** section records what was actually
+observed and the decision now proposed. Lossy/FLAC/ALAC/AAC/M4A remain **unvalidated** (candidate,
+subject to the wider spike / real files). API and property names may change with the SDK.
 
 - Decisions (why AVFoundation sits behind the port; how errors are translated): **ADR-0011**.
 - Strategy (API priority, reliability tiers, discrepancy policy): **ADR-0012** (Proposed).
 - Change contract: `openspec/changes/add-basic-audio-file-inspection/design.md` §"Infrastructure reader".
+- Evidence: **spike 0031** (`docs/spikes/0031-audio-property-api-validation.md`).
 
 The domain never sees any of these APIs; the adapter in `AudioInspectorMedia` maps them to
 `Property<Value>` (ADR-0008: `available` / `unavailable` / `unsupported` / `uncertain` / `failed`).
 
-## Candidate sources & expected reliability
+> _The next two tables are the **pre-spike hypotheses**, preserved unchanged for history. The
+> post-spike decisions are in the "Post-spike findings" section at the bottom._
+
+## Candidate sources & expected reliability (pre-spike hypothesis)
 
 | Property | Candidate source (subject to spike validation) | Expected reliability | Key limitations / open questions |
 | --- | --- | --- | --- |
@@ -49,3 +53,31 @@ The domain never sees any of these APIs; the adapter in `AudioInspectorMedia` ma
 - **Container/header overhead:** the size includes container/header/metadata bytes, not just audio
   payload, so the result is inherently approximate — this is **why it is always `uncertain`**.
 - **Never** feeds `declaredBitrate`: a self-computed value is by definition not "declared".
+
+## Post-spike findings (spike 0031 — PCM WAV/AIFF)
+
+What was actually observed on macOS 26.3 / Xcode 26.6 / Swift 6.3.3 against runtime-generated PCM
+fixtures. Lossy/FLAC/ALAC/AAC/M4A remain **unvalidated** (candidate). Full evidence:
+`docs/spikes/0031-audio-property-api-validation.md`.
+
+| Property | Validated source (PCM) | Discarded / negative finding | Confidence after spike | Recommended state | Open questions |
+| --- | --- | --- | --- | --- | --- |
+| `container` | — (none found among evaluated APIs) | `URLResourceValues.contentType` (UTI) is extension-driven and was **wrong** for the renamed copy (WAV→`.aiff` reported `public.aiff-audio`); no container token found among the evaluated AVFoundation/CoreMedia APIs (only the codec) | High that UTI is unreliable | **`uncertain`** from UTI/extension; `unavailable` if none — **never `available`** on current evidence | Does AudioToolbox `kAudioFilePropertyFileFormat` give the real container? (fallback, unexercised) |
+| `duration` | `AVAsset.load(.duration)` → `CMTime` seconds | `CMTime` valid/numeric flags do **not** prove correctness: a truncated copy returned valid+numeric+finite `0.0` | Medium | **positive** finite numeric → candidate `available`; **`0.0`** → `uncertain`/`unavailable` unless legit zero-length; indefinite/non-numeric → `unavailable`/`uncertain`; **no exact-vs-estimated promise** | VBR/lossy without seek tables (untested); how to evidence a legitimate zero-length |
+| `sampleRate` | ASBD `mSampleRate` | — | High (PCM) | `available`; `unavailable` if no track | Multi-track / disagreement (untested for N>1) |
+| `channelCount` | ASBD `mChannelsPerFrame` | — | High (PCM) | `available`; `unavailable` if no track | Exotic channel layouts (untested) |
+| `bitDepth` | ASBD `mBitsPerChannel` (=16 observed) | **Not** `mBytesPerFrame`/`mBytesPerPacket` (2/4, channel-dependent) | High (PCM) | `available` when `lpcm` & `mBitsPerChannel>0`; **`unsupported`** for lossy | Confirm lossy → `mBitsPerChannel==0` (untested) |
+| `codec` | `mFormatID` / media subtype FourCC (`'lpcm'`) | localized descriptions (not used) | High | `available` as stable token: ASCII FourCC if printable, else `0x%08X` | Non-printable IDs (untested); normalization out of scope |
+| `declaredBitrate` | — (none) | `AVAssetTrack.estimatedDataRate` = **0.0 for PCM** and is named "estimated" anyway | High that no direct source exists (PCM) | **`unavailable`** | AudioToolbox `kAudioFilePropertyBitRate` for lossy? (fallback, unexercised) |
+| `estimatedBitrate` | `fileSize×8/duration` (418336 vs stream 352800 — overhead) | using it as `declaredBitrate` | High that it is approximate | **always `uncertain`**; input from `estimatedDataRate` (if >0) or the file-based formula | `estimatedDataRate` usefulness for lossy (untested) |
+
+**Errors (semantic classes observed):** asset/`loadTracks` throw → **global** `InspectionError`
+(missing / empty / text-as-audio); a truncated file loaded with **partial** results (structural fields
+OK, duration degraded to `0.0`, no throw). A pure property-level `failed` was **not** forced (rare;
+open for 3.6). Absence of a datum (`estimatedDataRate==0`) is **not** an error.
+
+**AudioToolbox decision:** **not** adopted for group 3 and **not exercised**. AVFoundation + CoreMedia
+determined the fields the basic PCM slice needs; `container` (`uncertain`) and `declaredBitrate`
+(`unavailable`) stay so **by limitation, not for lack of AudioToolbox**, and compressed formats were not
+tested. Kept as an unexercised, documented fallback for the *real container* and a *nominal bitrate*
+only, to be revisited at 3.5 / once compressed fixtures exist.
