@@ -96,12 +96,12 @@ private extension AVFoundationAudioFilePropertyReader {
     func technicalProperties(from loaded: LoadedAudio) -> TechnicalProperties {
         let streamDescription = Self.streamBasicDescription(from: loaded.formatDescription)
         return TechnicalProperties(
-            container: container(from: loaded),
-            duration: duration(from: loaded),
+            container: container(from: loaded.url),
+            duration: duration(from: loaded.duration),
             sampleRate: sampleRate(from: streamDescription),
             channelCount: channelCount(from: streamDescription),
             bitDepth: bitDepth(from: loaded),
-            codec: codec(from: loaded),
+            codec: codec(from: streamDescription),
             declaredBitrate: declaredBitrate(from: loaded),
             estimatedBitrate: estimatedBitrate(from: loaded)
         )
@@ -122,19 +122,64 @@ private extension AVFoundationAudioFilePropertyReader {
         guard let pointer = CMAudioFormatDescriptionGetStreamBasicDescription(formatDescription) else { return nil }
         return pointer.pointee
     }
+
+    /// Serializes a FourCharCode (e.g. an `AudioFormatID`) into a stable, **non-localized** token, per
+    /// spike 0031/C: the four **big-endian** bytes as ASCII only when every byte is unambiguously
+    /// printable (`0x21…0x7E` — space, NUL and control bytes excluded so a padded/empty code can never
+    /// produce a visually ambiguous token); otherwise a fixed-width uppercase hex fallback. Deterministic,
+    /// never a localized system description. No force-unwrap.
+    static func fourCharCodeToken(_ code: UInt32) -> String {
+        let bytes = [
+            UInt8((code >> 24) & 0xFF),
+            UInt8((code >> 16) & 0xFF),
+            UInt8((code >> 8) & 0xFF),
+            UInt8(code & 0xFF),
+        ]
+        let unambiguouslyPrintable = bytes.allSatisfy { $0 >= 0x21 && $0 <= 0x7E }
+        if unambiguouslyPrintable {
+            return String(decoding: bytes, as: UTF8.self)
+        }
+        return String(format: "0x%08X", code)
+    }
 }
 
 // MARK: - Per-field mappers (placeholders — completed by 3.3–3.5; conservative per ADR-0012/§12)
 
 private extension AVFoundationAudioFilePropertyReader {
-    func container(from _: LoadedAudio) -> Property<String> {
-        // TODO(3.4): infer from UTI/extension → `uncertain` (never `available`; spike 0031/F).
-        .unavailable(reason: nil)
+    /// `container` from the file's content type (`URLResourceValues.contentType`, a `UTType`).
+    ///
+    /// Spike 0031/F found **no direct real-container signal** among the evaluated AVFoundation/CoreMedia
+    /// APIs (only the codec), and the content type is a *type/extension inference* that was provably wrong
+    /// for a renamed file. So a resolved type is `uncertain` — carrying the stable, **non-localized** UTI
+    /// identifier as the tentative value with a reason — **never `available`** on this evidence. No type
+    /// resolvable → `unavailable`. No deep byte inspection; no deduction from MIME/codec/name (ADR-0012).
+    func container(from url: URL) -> Property<String> {
+        guard let contentType = (try? url.resourceValues(forKeys: [.contentTypeKey]))?.contentType else {
+            return .unavailable(reason: nil)
+        }
+        return .uncertain(
+            value: contentType.identifier,
+            reason: "Inferred from the file's type identifier; not verified against the container bytes."
+        )
     }
 
-    func duration(from _: LoadedAudio) -> Property<Double> {
-        // TODO(3.4): positive finite numeric → `available`; `0.0` → `uncertain`/`unavailable` (spike 0031/E).
-        .unavailable(reason: nil)
+    /// `duration` (seconds) from the already-loaded `CMTime` (no re-load, no second asset access).
+    ///
+    /// Conservative per spike 0031/E (a truncated file returned a valid+numeric `0.0`): a **positive**,
+    /// finite, numeric time → `available`; a non-positive time → `uncertain` (read but not trustworthy —
+    /// may be an empty or truncated file); `nil` (the load errored) or an invalid/indefinite/non-numeric
+    /// time → `unavailable`. The refinement of an errored load into a property-level `failed` is task 3.6.
+    func duration(from time: CMTime?) -> Property<Double> {
+        guard let time, time.isValid, time.isNumeric else { return .unavailable(reason: nil) }
+        let seconds = CMTimeGetSeconds(time)
+        guard seconds.isFinite else { return .unavailable(reason: nil) }
+        guard seconds > 0 else {
+            return .uncertain(
+                value: nil,
+                reason: "Duration was reported as non-positive and could not be confirmed; the file may be empty or truncated."
+            )
+        }
+        return .available(seconds)
     }
 
     /// `sampleRate` (Hz) from the ASBD `mSampleRate`. Conservative: `available` only for a finite,
@@ -167,9 +212,13 @@ private extension AVFoundationAudioFilePropertyReader {
         .unavailable(reason: nil)
     }
 
-    func codec(from _: LoadedAudio) -> Property<String> {
-        // TODO(3.4): stable non-localized FourCC token from the ASBD `mFormatID`.
-        .unavailable(reason: nil)
+    /// `codec` as a stable, non-localized token from the ASBD `mFormatID` (the decoded audio format —
+    /// direct recognition, high confidence per spike 0031/C). Serialization follows the spike's policy
+    /// (`fourCharCodeToken`). No ASBD, or a zero format id → `unavailable`. Container-vs-track discrepancy
+    /// reconciliation is out of scope here (a later concern); a valid id maps directly to `available`.
+    func codec(from streamDescription: AudioStreamBasicDescription?) -> Property<String> {
+        guard let streamDescription, streamDescription.mFormatID != 0 else { return .unavailable(reason: nil) }
+        return .available(Self.fourCharCodeToken(streamDescription.mFormatID))
     }
 
     func declaredBitrate(from _: LoadedAudio) -> Property<Int> {
