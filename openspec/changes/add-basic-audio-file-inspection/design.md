@@ -129,14 +129,21 @@ strategy), and the task-3.1 evidence in
    URL through a **constructor-injected resolver seam** (`(AudioFileReference) -> URL?`); the sandbox
    file-selection work (group 6) wires the concrete security-scoped provider, and until then the default
    resolver yields no URL (a global access failure). The 3.2 skeleton establishes this seam only.
-2. Build an `AVURLAsset` and load `duration` and the **audio** tracks. If the asset cannot be opened /
-   read / is access-denied → **throw** `InspectionError` (`fileOpenFailed` / `fileUnreadable` /
-   `fileAccessDenied`); nothing else runs.
-3. Select the audio track by the deterministic **track-selection policy** below; load its format
-   description(s).
+2. Build an `AVURLAsset` and load the **audio** tracks — the **only** whole-file step. If that load
+   fails (the asset cannot be opened / read / is access-denied) → **throw** a **global** `InspectionError`
+   (`fileAccessDenied` for permission denial, `fileUnreadable` for an unrecognizable/corrupt file, else
+   the `fileOpenFailed` fallback — classified by *scope*, not by which API threw, ADR-0011 §5); nothing
+   else runs.
+3. Select the audio track by the deterministic **track-selection policy** below, then run the remaining
+   loads as **per-property** loads that do **not** abort the inspection: the track's format
+   description(s), its `estimatedDataRate`, and the asset `duration`. Each captures value / absence /
+   read-error, so a thrown load becomes a per-property `Property.failed` (the ASBD-dependent fields —
+   `sampleRate`/`channelCount`/`bitDepth`/`codec` — fail together when the format-descriptions load
+   errors) rather than a global failure.
 4. Map each field independently into its `Property` case (per-field policy below; full matrix in
    [audio-property-matrix.md](../../../docs/audio-property-matrix.md)). A single field erroring maps to
-   `Property.failed`; the rest continue.
+   `Property.failed(PropertyFailure(.propertyReadError, …))`; the rest continue. No `NSError`/`AVError`/
+   `OSStatus` crosses the port — Apple errors are inspected only inside the adapter.
 5. Read `container`; assemble `TechnicalProperties` and return it. Warnings/status derivation stays in
    the (unchanged) use case.
 
