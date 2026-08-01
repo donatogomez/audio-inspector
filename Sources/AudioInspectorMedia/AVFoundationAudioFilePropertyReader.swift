@@ -7,17 +7,18 @@ import AudioInspectorDomain
 
 /// The native (AVFoundation/CoreMedia) implementation of the domain port `AudioFilePropertyReading`.
 ///
-/// **Task 3.2 — skeleton only.** This establishes the adapter's shape and the deterministic
-/// track-selection flow validated by spike 0031 (`docs/spikes/0031-audio-property-api-validation.md`);
-/// the per-field mapping is intentionally **not** implemented here — each mapper returns a conservative
-/// placeholder and is completed by tasks 3.3 (`sampleRate`/`channelCount`), 3.4 (`container`/`duration`/
-/// `codec`) and 3.5 (`bitDepth`/bitrates). Error translation is skeletal (a single conservative global
-/// code); the scope-based taxonomy is task 3.6 (ADR-0011 §5).
+/// It opens the selected file, runs a deterministic track-selection flow (spike 0031), and maps each
+/// technical field into its `Property` case. **Errors are classified by scope, not by which API threw**
+/// (ADR-0011 §5, task 3.6): a whole-file failure (the asset/tracks cannot be opened or read) is a
+/// thrown **global** `InspectionError`; a single-property read failure — while the rest of the report
+/// can still be produced — becomes `Property.failed(PropertyFailure(.propertyReadError, …))`. Absence of
+/// a datum is `unavailable`/`uncertain`, never `failed`.
 ///
 /// Boundary (ADR-0011): this type lives in `AudioInspectorMedia` — the only target allowed to import
-/// AVFoundation/CoreMedia — and returns **only** domain value types; no `AVAsset`, `CMFormatDescription`,
-/// `NSError`, or `OSStatus` ever crosses the port. It imports no AudioToolbox (ADR-0012: not adopted for
-/// this slice).
+/// AVFoundation/CoreMedia — and returns **only** domain value types. No `AVAsset`, `CMFormatDescription`,
+/// `AudioStreamBasicDescription`, `NSError`, `AVError`, or `OSStatus` ever crosses the port; Apple errors
+/// are inspected only inside this adapter and converted to stable domain codes. It imports no
+/// AudioToolbox (ADR-0012: not adopted for this slice).
 public struct AVFoundationAudioFilePropertyReader: AudioFilePropertyReading {
     /// Resolves the file URL to open for a domain reference.
     ///
@@ -28,7 +29,7 @@ public struct AVFoundationAudioFilePropertyReader: AudioFilePropertyReading {
     /// no security-scoped access is implemented here.
     private let resolveURL: @Sendable (AudioFileReference) -> URL?
 
-    /// Minimal initializer — no singletons, no shared/mutable state, no caches (§8).
+    /// Minimal initializer — no singletons, no shared/mutable state, no caches.
     public init(resolveURL: @escaping @Sendable (AudioFileReference) -> URL? = { _ in nil }) {
         self.resolveURL = resolveURL
     }
@@ -46,75 +47,114 @@ public struct AVFoundationAudioFilePropertyReader: AudioFilePropertyReading {
     }
 }
 
-// MARK: - Flow (open → load tracks → select track[0] → first format description)
+// MARK: - Load result (value / absence / read-error, without leaking the Apple error)
 
 private extension AVFoundationAudioFilePropertyReader {
-    /// The raw AVFoundation pieces the field mappers (3.3–3.5) will read from, gathered by the flow.
-    /// Not `Sendable`-required: it never crosses an isolation boundary (the reader is nonisolated and the
-    /// mappers are synchronous, called without an intervening `await`).
-    struct LoadedAudio {
-        /// The resolved file URL — raw material for `container` inference (UTI/extension) in task 3.4.
-        let url: URL
-        /// The first format description of the selected audio track (`track[0]`), or `nil` when the file
-        /// exposes no audio track or the track carries no description. Its ASBD feeds 3.3 and 3.5.
-        let formatDescription: CMFormatDescription?
-        /// The asset duration, or `nil` when the duration load **errored** — a **per-property** concern,
-        /// not a global failure (spike 0031, experiments E/H). A successful load yields a `CMTime`
-        /// (possibly indefinite) that 3.4 maps by value, so `nil` here signals to 3.6 that the duration
-        /// read failed (→ property-level `failed`), distinct from a present-but-indefinite duration.
-        let duration: CMTime?
-        /// The selected track's `estimatedDataRate` (bits/s) as a **flat value copy** — feeds
-        /// `estimatedBitrate` (3.5). `nil` when there is no audio track or the load errored (per-property,
-        /// not global). Spike 0031/G observed `0` for PCM, i.e. absence of a usable estimate.
-        let estimatedDataRate: Float?
+    /// The outcome of one per-property load, preserving the distinction the domain needs. It carries a
+    /// **flat value copy** on success and *no* Apple error on failure — the original `NSError`/`AVError`
+    /// is caught and discarded at the point of failure, never stored or forwarded (ADR-0011 §5).
+    enum LoadedProperty<Value> {
+        /// A value was obtained.
+        case value(Value)
+        /// The source is simply absent (no track, no description, no datum) — not an error.
+        case unavailable
+        /// Reading this specific datum errored, while the rest of the inspection can continue.
+        case failed
     }
 
-    /// Opens the asset and runs the deterministic track-selection policy. A whole-file failure (the asset
-    /// or its tracks cannot be opened/read) is a **global** `InspectionError` (ADR-0011); a duration-only
-    /// failure is kept per-property (optional) and does not abort the inspection.
+    /// Runs an async throwing load and captures value-or-read-error, converting a thrown Apple error into
+    /// a scope-local `.failed` without letting it escape.
+    static func captured<Value>(_ operation: () async throws -> Value) async -> LoadedProperty<Value> {
+        do {
+            return .value(try await operation())
+        } catch {
+            return .failed
+        }
+    }
+}
+
+// MARK: - Flow (open → load tracks [global] → per-property loads → assemble)
+
+private extension AVFoundationAudioFilePropertyReader {
+    /// The per-load results the field mappers read from. Not `Sendable`-required: it never crosses an
+    /// isolation boundary (the reader is nonisolated and the mappers are synchronous, called without an
+    /// intervening `await`). It holds only flat value copies — no `AVAsset`/`AVAssetTrack`/pointer.
+    struct LoadedAudio {
+        /// The resolved file URL — raw material for `container` inference (its own read is done in the
+        /// `container` mapper, which distinguishes an absent type from a resource-values read error).
+        let url: URL
+        /// The first format description of the selected audio track: `value` / `unavailable` (no track or
+        /// no description) / `failed` (the `formatDescriptions` load errored). Feeds every ASBD field.
+        let formatDescription: LoadedProperty<CMFormatDescription>
+        /// The asset duration: `value` (a possibly-indefinite `CMTime`) / `failed` (the load errored).
+        let duration: LoadedProperty<CMTime>
+        /// The selected track's `estimatedDataRate` (bits/s): `value` / `unavailable` (no track) /
+        /// `failed` (the load errored).
+        let estimatedDataRate: LoadedProperty<Float>
+    }
+
+    /// Opens the asset and runs the deterministic track-selection policy.
+    ///
+    /// **Scope rule (ADR-0011):** only a *whole-file* failure — the asset or its audio tracks cannot be
+    /// opened/read, so no useful property set can be produced — is a thrown **global** `InspectionError`.
+    /// Every *subsequent* per-property load (format descriptions, estimated data rate, duration) is
+    /// captured as `value`/`unavailable`/`failed` and does **not** abort the inspection.
     func loadAudio(from url: URL) async throws(InspectionError) -> LoadedAudio {
         let asset = AVURLAsset(url: url)
+
+        let audioTracks: [AVAssetTrack]
         do {
-            let audioTracks = try await asset.loadTracks(withMediaType: .audio)
-            // Deterministic track-selection policy (spike 0031/A): the first audio track, or none.
-            // This is a provisional rule — not a claim of a "primary/preferred" track.
-            let audioTrack = audioTracks.first
-            var formatDescription: CMFormatDescription?
-            var estimatedDataRate: Float?
-            if let audioTrack {
-                formatDescription = try await audioTrack.load(.formatDescriptions).first
-                // Per-property signal for `estimatedBitrate` (3.5): a thrown load collapses to `nil` (not
-                // global). Stored as a flat `Float` copy — no `AVAssetTrack` is retained.
-                estimatedDataRate = try? await audioTrack.load(.estimatedDataRate)
-            }
-            // Duration failure is per-property, not global (spike 0031/E,H): a *thrown* load error
-            // collapses to `nil` here (→ 3.6 property-level `failed`), while a successful load keeps its
-            // `CMTime` (possibly indefinite) for 3.4 to map by value.
-            let duration = try? await asset.load(.duration)
-            return LoadedAudio(
-                url: url,
-                formatDescription: formatDescription,
-                duration: duration,
-                estimatedDataRate: estimatedDataRate
-            )
+            audioTracks = try await asset.loadTracks(withMediaType: .audio)
         } catch {
-            throw Self.globalError(from: error)
+            throw Self.globalError(from: error) // whole-file failure → global, classified by scope
         }
+        // Deterministic track-selection policy (spike 0031/A): the first audio track, or none.
+        let audioTrack = audioTracks.first
+
+        let formatDescription: LoadedProperty<CMFormatDescription>
+        let estimatedDataRate: LoadedProperty<Float>
+        if let audioTrack {
+            // A thrown `formatDescriptions` load → `.failed` for the ASBD fields (per-property, not
+            // global); an empty list → `.unavailable`. `.first` distinguishes the two.
+            do {
+                if let first = try await audioTrack.load(.formatDescriptions).first {
+                    formatDescription = .value(first)
+                } else {
+                    formatDescription = .unavailable
+                }
+            } catch {
+                formatDescription = .failed
+            }
+            estimatedDataRate = await Self.captured { try await audioTrack.load(.estimatedDataRate) }
+        } else {
+            // Zero audio tracks: stream fields are `unavailable` (not a global failure, spike 0031/A).
+            formatDescription = .unavailable
+            estimatedDataRate = .unavailable
+        }
+
+        let duration = await Self.captured { try await asset.load(.duration) }
+
+        return LoadedAudio(
+            url: url,
+            formatDescription: formatDescription,
+            duration: duration,
+            estimatedDataRate: estimatedDataRate
+        )
     }
 
     /// Assembles `TechnicalProperties` from the per-field mappers. The audio stream basic description is
-    /// extracted **once** here and shared by the structural mappers (`sampleRate`/`channelCount`), so the
-    /// CoreMedia access is not duplicated. The remaining fields are still conservative placeholders (see
-    /// the referenced tasks).
+    /// derived **once** here (preserving the value/absence/read-error distinction) and shared by every
+    /// ASBD-dependent mapper (`sampleRate`/`channelCount`/`bitDepth`/`codec`), so the CoreMedia access is
+    /// not duplicated.
     func technicalProperties(from loaded: LoadedAudio) -> TechnicalProperties {
-        let streamDescription = Self.streamBasicDescription(from: loaded.formatDescription)
+        let stream = Self.streamProperty(from: loaded.formatDescription)
         return TechnicalProperties(
             container: container(from: loaded.url),
             duration: duration(from: loaded.duration),
-            sampleRate: sampleRate(from: streamDescription),
-            channelCount: channelCount(from: streamDescription),
-            bitDepth: bitDepth(from: streamDescription),
-            codec: codec(from: streamDescription),
+            sampleRate: sampleRate(from: stream),
+            channelCount: channelCount(from: stream),
+            bitDepth: bitDepth(from: stream),
+            codec: codec(from: stream),
             declaredBitrate: declaredBitrate(from: loaded),
             estimatedBitrate: estimatedBitrate(from: loaded.estimatedDataRate)
         )
@@ -124,14 +164,24 @@ private extension AVFoundationAudioFilePropertyReader {
 // MARK: - Audio stream basic description (shared by the structural mappers)
 
 private extension AVFoundationAudioFilePropertyReader {
-    /// Copies the `AudioStreamBasicDescription` out of a format description, or `nil` when the description
-    /// is absent or carries no ASBD (e.g. no audio track was selected).
-    ///
-    /// The CoreMedia call returns a pointer valid only while the `CMFormatDescription` lives; it is
-    /// dereferenced and **copied immediately** into a value here. No pointer is stored, retained, or
-    /// escapes this function — only a value copy is returned. No force-unwrap, no AudioToolbox.
-    static func streamBasicDescription(from formatDescription: CMFormatDescription?) -> AudioStreamBasicDescription? {
-        guard let formatDescription else { return nil }
+    /// Lifts the format-description load result into an ASBD load result. `failed`/`unavailable` pass
+    /// through; a present description with no ASBD is `unavailable` (absence, not an error).
+    static func streamProperty(from formatDescription: LoadedProperty<CMFormatDescription>) -> LoadedProperty<AudioStreamBasicDescription> {
+        switch formatDescription {
+        case .failed:
+            return .failed
+        case .unavailable:
+            return .unavailable
+        case let .value(description):
+            if let asbd = streamBasicDescription(from: description) { return .value(asbd) }
+            return .unavailable
+        }
+    }
+
+    /// Copies the `AudioStreamBasicDescription` out of a format description, or `nil` when it carries no
+    /// ASBD. The CoreMedia pointer is dereferenced and **copied immediately** into a value; no pointer is
+    /// stored, retained, or escapes this function. No force-unwrap, no AudioToolbox.
+    static func streamBasicDescription(from formatDescription: CMFormatDescription) -> AudioStreamBasicDescription? {
         guard let pointer = CMAudioFormatDescriptionGetStreamBasicDescription(formatDescription) else { return nil }
         return pointer.pointee
     }
@@ -161,9 +211,15 @@ private extension AVFoundationAudioFilePropertyReader {
         }
         return String(format: "0x%08X", code)
     }
+
+    /// A property-level read failure with the stable domain code. Messages are deterministic,
+    /// non-localized, and contain no path/filename/system value (ADR-0008).
+    static func readFailure(_ message: String) -> PropertyFailure {
+        PropertyFailure(code: .propertyReadError, message: message)
+    }
 }
 
-// MARK: - Per-field mappers (placeholders — completed by 3.3–3.5; conservative per ADR-0012/§12)
+// MARK: - Per-field mappers
 
 private extension AVFoundationAudioFilePropertyReader {
     /// `container` from the file's content type (`URLResourceValues.contentType`, a `UTType`).
@@ -171,16 +227,17 @@ private extension AVFoundationAudioFilePropertyReader {
     /// Spike 0031/F found **no direct real-container signal** among the evaluated AVFoundation/CoreMedia
     /// APIs (only the codec), and the content type is a *type/extension inference* that was provably wrong
     /// for a renamed file. So a resolved type is `uncertain` — carrying the stable, **non-localized** UTI
-    /// identifier as the tentative value with a reason — **never `available`** on this evidence. No type
-    /// resolvable → `unavailable`. A `resourceValues` read error (via `try?`) is conservatively folded
-    /// into the same `unavailable` here — **not** because "no type" and "read error" are equivalent, but
-    /// because distinguishing them into a per-property `failed` is task 3.6. No deep byte inspection; no
-    /// deduction from MIME/codec/name; any resolved type (incl. a generic UTI) is carried as-is under
-    /// `uncertain`, since the state already disclaims reliability (ADR-0012).
+    /// identifier as the tentative value — **never `available`**. An absent type is `unavailable`; a
+    /// `resourceValues` **read error** is `failed` (now distinguished from absence, task 3.6). No deep
+    /// byte inspection; no deduction from MIME/codec/name; no path/URL in messages (ADR-0012).
     func container(from url: URL) -> Property<String> {
-        guard let contentType = (try? url.resourceValues(forKeys: [.contentTypeKey]))?.contentType else {
-            return .unavailable(reason: nil)
+        let contentType: UTType?
+        do {
+            contentType = try url.resourceValues(forKeys: [.contentTypeKey]).contentType
+        } catch {
+            return .failed(Self.readFailure("Could not read the file's content type."))
         }
+        guard let contentType else { return .unavailable(reason: nil) }
         return .uncertain(
             value: contentType.identifier,
             reason: "Inferred from the file's type identifier; not verified against the container bytes."
@@ -188,112 +245,161 @@ private extension AVFoundationAudioFilePropertyReader {
     }
 
     /// `duration` (seconds) from the already-loaded `CMTime` (no re-load, no second asset access).
-    ///
-    /// Conservative per spike 0031/E (a truncated file returned a valid+numeric `0.0`):
-    /// - a **positive**, finite, numeric time → `available`;
-    /// - **exactly zero** → `uncertain`, **keeping the observed `0` as the tentative value** (read but not
-    ///   trustworthy — may be a genuinely empty file or a truncated read; the two are indistinguishable);
-    /// - a **negative** time → `unavailable` (nonsensical/invalid — not a plausible tentative value);
-    /// - `nil` (the load errored) or an invalid/indefinite/non-numeric/non-finite time → `unavailable`.
-    /// Refining an errored load into a property-level `failed` is task 3.6.
-    func duration(from time: CMTime?) -> Property<Double> {
-        guard let time, time.isValid, time.isNumeric else { return .unavailable(reason: nil) }
-        let seconds = CMTimeGetSeconds(time)
-        guard seconds.isFinite else { return .unavailable(reason: nil) }
-        if seconds > 0 { return .available(seconds) }
-        if seconds == 0 {
-            return .uncertain(
-                value: 0,
-                reason: "Duration was reported as zero and could not be confirmed; the file may be empty or truncated."
-            )
+    /// A read error → `failed`; otherwise, conservative per spike 0031/E: positive finite numeric →
+    /// `available`; exactly zero → `uncertain` keeping the observed `0`; negative → `unavailable`;
+    /// invalid/indefinite/non-numeric/non-finite → `unavailable`.
+    func duration(from loaded: LoadedProperty<CMTime>) -> Property<Double> {
+        switch loaded {
+        case .failed:
+            return .failed(Self.readFailure("Could not read the duration."))
+        case .unavailable:
+            return .unavailable(reason: nil)
+        case let .value(time):
+            guard time.isValid, time.isNumeric else { return .unavailable(reason: nil) }
+            let seconds = CMTimeGetSeconds(time)
+            guard seconds.isFinite else { return .unavailable(reason: nil) }
+            if seconds > 0 { return .available(seconds) }
+            if seconds == 0 {
+                return .uncertain(
+                    value: 0,
+                    reason: "Duration was reported as zero and could not be confirmed; the file may be empty or truncated."
+                )
+            }
+            return .unavailable(reason: nil) // negative duration is invalid
         }
-        return .unavailable(reason: nil) // negative duration is invalid
     }
 
-    /// `sampleRate` (Hz) from the ASBD `mSampleRate`. Conservative: `available` only for a finite,
-    /// strictly-positive value that is **exactly** an integer (the domain models Hz as `Int`, so no
-    /// silent rounding). No ASBD, or a non-representable value → `unavailable` (task 3.6 owns the wider
-    /// `uncertain`/`failed`/discrepancy policy; not reachable from a single already-loaded description).
-    func sampleRate(from streamDescription: AudioStreamBasicDescription?) -> Property<Int> {
-        guard let streamDescription else { return .unavailable(reason: nil) }
-        let hertz = streamDescription.mSampleRate
-        guard hertz.isFinite, hertz > 0, let value = Int(exactly: hertz) else {
+    /// `sampleRate` (Hz) from the ASBD `mSampleRate`. Read error → `failed`; no track/description/ASBD →
+    /// `unavailable`; `available` only for a finite, strictly-positive value that is **exactly** an
+    /// integer (the domain models Hz as `Int`, so no silent rounding).
+    func sampleRate(from stream: LoadedProperty<AudioStreamBasicDescription>) -> Property<Int> {
+        switch stream {
+        case .failed:
+            return .failed(Self.readFailure("Could not read the audio format description."))
+        case .unavailable:
             return .unavailable(reason: nil)
+        case let .value(asbd):
+            let hertz = asbd.mSampleRate
+            guard hertz.isFinite, hertz > 0, let value = Int(exactly: hertz) else {
+                return .unavailable(reason: nil)
+            }
+            return .available(value)
         }
-        return .available(value)
     }
 
-    /// `channelCount` from the ASBD `mChannelsPerFrame`. Conservative: `available` only for a
-    /// strictly-positive count safely representable as the domain's `Int`. Never inferred from channel
-    /// layouts, labels, or names. No ASBD, or a zero count → `unavailable`.
-    func channelCount(from streamDescription: AudioStreamBasicDescription?) -> Property<Int> {
-        guard let streamDescription else { return .unavailable(reason: nil) }
-        let channels = streamDescription.mChannelsPerFrame
-        guard channels > 0, let value = Int(exactly: channels) else {
+    /// `channelCount` from the ASBD `mChannelsPerFrame`. Read error → `failed`; no ASBD → `unavailable`;
+    /// `available` only for a strictly-positive count safely representable as the domain's `Int`. Never
+    /// inferred from channel layouts, labels, or names.
+    func channelCount(from stream: LoadedProperty<AudioStreamBasicDescription>) -> Property<Int> {
+        switch stream {
+        case .failed:
+            return .failed(Self.readFailure("Could not read the audio format description."))
+        case .unavailable:
             return .unavailable(reason: nil)
+        case let .value(asbd):
+            let channels = asbd.mChannelsPerFrame
+            guard channels > 0, let value = Int(exactly: channels) else {
+                return .unavailable(reason: nil)
+            }
+            return .available(value)
         }
-        return .available(value)
     }
 
-    /// `bitDepth` (bits) from the ASBD `mBitsPerChannel` — **never** formula-inferred from byte/packet or
-    /// channel fields (spike 0031/D). Only **Linear PCM** has a spike-validated, semantically-applicable
-    /// sample depth → `available` when `mBitsPerChannel > 0` (PCM with a `0` field is anomalous →
-    /// `unavailable`). For any non-PCM format, robustly telling a lossy codec (bit depth genuinely
-    /// N/A → `unsupported`) from a lossless-compressed one (bit depth *does* apply) needs codec
-    /// classification the spike did not validate and ADR-0012 forbids via a codec table; asserting
-    /// `unsupported` for arbitrary non-PCM would be false precision. So non-PCM is conservatively
-    /// `unavailable` here — the finer lossy→`unsupported` split is deferred to a compressed-format
-    /// validation beyond this slice. No ASBD → `unavailable`.
-    func bitDepth(from streamDescription: AudioStreamBasicDescription?) -> Property<Int> {
-        guard let streamDescription, streamDescription.mFormatID == kAudioFormatLinearPCM else {
+    /// `bitDepth` (bits) from the ASBD `mBitsPerChannel` — **never** formula-inferred (spike 0031/D). Read
+    /// error → `failed`. Only **Linear PCM** has a spike-validated, semantically-applicable sample depth →
+    /// `available` when `mBitsPerChannel > 0` (PCM with a `0` field → `unavailable`). Any **non-PCM**
+    /// format → `unavailable`: robustly telling a lossy codec (bit depth N/A → `unsupported`) from a
+    /// lossless-compressed one needs codec classification the spike did not validate and ADR-0012 forbids
+    /// via a codec table, so `unsupported` is intentionally not emitted here (the split is deferred).
+    func bitDepth(from stream: LoadedProperty<AudioStreamBasicDescription>) -> Property<Int> {
+        switch stream {
+        case .failed:
+            return .failed(Self.readFailure("Could not read the audio format description."))
+        case .unavailable:
             return .unavailable(reason: nil)
+        case let .value(asbd):
+            guard asbd.mFormatID == kAudioFormatLinearPCM else { return .unavailable(reason: nil) }
+            let bits = asbd.mBitsPerChannel
+            guard bits > 0, let value = Int(exactly: bits) else { return .unavailable(reason: nil) }
+            return .available(value)
         }
-        let bits = streamDescription.mBitsPerChannel
-        guard bits > 0, let value = Int(exactly: bits) else { return .unavailable(reason: nil) }
-        return .available(value)
     }
 
     /// `codec` as a stable, non-localized token from the ASBD `mFormatID` (the decoded audio format —
-    /// direct recognition, high confidence per spike 0031/C). Serialization follows the spike's policy
-    /// (`fourCharCodeToken`). No ASBD, or a zero format id → `unavailable`. Container-vs-track discrepancy
-    /// reconciliation is out of scope here (a later concern); a valid id maps directly to `available`.
-    func codec(from streamDescription: AudioStreamBasicDescription?) -> Property<String> {
-        guard let streamDescription, streamDescription.mFormatID != 0 else { return .unavailable(reason: nil) }
-        return .available(Self.fourCharCodeToken(streamDescription.mFormatID))
+    /// direct recognition, spike 0031/C). Read error → `failed`; no ASBD or a zero format id →
+    /// `unavailable`; a valid id → `available` (token via `fourCharCodeToken`).
+    func codec(from stream: LoadedProperty<AudioStreamBasicDescription>) -> Property<String> {
+        switch stream {
+        case .failed:
+            return .failed(Self.readFailure("Could not read the audio format description."))
+        case .unavailable:
+            return .unavailable(reason: nil)
+        case let .value(asbd):
+            guard asbd.mFormatID != 0 else { return .unavailable(reason: nil) }
+            return .available(Self.fourCharCodeToken(asbd.mFormatID))
+        }
     }
 
     /// `declaredBitrate` — a nominal rate **directly declared** by container/codec metadata, with **no
-    /// self-computation**. Spike 0031/G found no such direct source among the evaluated AVFoundation APIs
-    /// (and `estimatedDataRate` is an *estimate*, never a declared value), so with no direct source in
-    /// this flow it is `unavailable`. No value is fabricated; no AudioToolbox is adopted for this slice.
+    /// self-computation**. Spike 0031/G found no such direct source among the evaluated AVFoundation APIs,
+    /// and the adapter does not attempt to read one, so it is always `unavailable` — an *absence of
+    /// capability*, **not** a read error, so never `failed`. No value is fabricated; no AudioToolbox.
     func declaredBitrate(from _: LoadedAudio) -> Property<Int> {
         .unavailable(reason: nil)
     }
 
-    /// `estimatedBitrate` — **always `uncertain`** with a `reason` (never `available`): it is an estimate
-    /// by nature (criterion 3.5; ADR-0012). It carries the framework's `estimatedDataRate` (bits/s) as
-    /// the tentative value only when that value is finite, strictly positive, and **exactly** an `Int`
-    /// (no silent rounding); otherwise — absent, `0` (spike 0031/G observed this for PCM), negative,
-    /// non-finite, or fractional — it stays `uncertain` with **no** fabricated value. It never carries a
-    /// declared bitrate and never self-computes from size/duration.
-    func estimatedBitrate(from estimatedDataRate: Float?) -> Property<Int> {
-        guard let rate = estimatedDataRate, rate.isFinite, rate > 0, let value = Int(exactly: rate) else {
-            return .uncertain(value: nil, reason: "No reliable bitrate estimate is available from the file.")
+    /// `estimatedBitrate` — **always `uncertain`** by contract (criterion 3.5; matrix; design), except a
+    /// genuine read **error**, which the matrix reserves for `failed`. So: a read error → `failed`; a
+    /// usable value (finite, `>0`, exactly an `Int`, no rounding) → `uncertain(value)`; absence or an
+    /// unusable value (no track, `0`, negative, non-finite, fractional) → `uncertain(nil)`. It never
+    /// carries a declared bitrate and never self-computes from size/duration.
+    func estimatedBitrate(from loaded: LoadedProperty<Float>) -> Property<Int> {
+        switch loaded {
+        case .failed:
+            return .failed(Self.readFailure("Could not read the estimated data rate."))
+        case .unavailable:
+            return .uncertain(value: nil, reason: Self.noEstimateReason)
+        case let .value(rate):
+            guard rate.isFinite, rate > 0, let value = Int(exactly: rate) else {
+                return .uncertain(value: nil, reason: Self.noEstimateReason)
+            }
+            return .uncertain(
+                value: value,
+                reason: "Framework estimated data rate; an estimate — not a declared bitrate — that may not exactly represent the stream."
+            )
         }
-        return .uncertain(
-            value: value,
-            reason: "Framework estimated data rate; an estimate — not a declared bitrate — that may not exactly represent the stream."
-        )
     }
+
+    static var noEstimateReason: String { "No reliable bitrate estimate is available from the file." }
 }
 
-// MARK: - Error conversion (skeleton — scope-based taxonomy is task 3.6, ADR-0011 §5)
+// MARK: - Global error classification (by scope/effect — ADR-0011 §5; no Apple error crosses the port)
 
 private extension AVFoundationAudioFilePropertyReader {
-    /// Converts a whole-file AVFoundation failure into a **global** domain error. The precise code
-    /// selection (open vs unreadable vs access-denied, by scope/effect) is refined in 3.6; crucially, no
-    /// `NSError`/`OSStatus`/`AVError` value crosses the port — only the stable domain code (ADR-0011 §5).
-    static func globalError(from _: some Error) -> InspectionError {
-        InspectionError(code: .fileOpenFailed, message: "The file could not be opened for inspection.")
+    /// Converts a whole-file failure into a **global** `InspectionError`, classified by scope using
+    /// bridged Swift error types (inspected **only here**, never forwarded). Permission denial →
+    /// `fileAccessDenied`; an unrecognizable/corrupt/unreadable file → `fileUnreadable`; anything else →
+    /// the stable `fileOpenFailed` fallback. No `NSError`/`AVError`/`OSStatus`/`localizedDescription`/URL
+    /// leaves this function — only a stable code and a deterministic message.
+    static func globalError(from error: some Error) -> InspectionError {
+        if let cocoa = error as? CocoaError {
+            switch cocoa.code {
+            case .fileReadNoPermission:
+                return InspectionError(code: .fileAccessDenied, message: "Access to the file was denied.")
+            case .fileReadCorruptFile, .fileReadUnknown, .fileReadNoSuchFile:
+                return InspectionError(code: .fileUnreadable, message: "The file could not be read for inspection.")
+            default:
+                break
+            }
+        }
+        if let av = error as? AVError {
+            switch av.code {
+            case .fileFormatNotRecognized, .failedToParse, .undecodableMediaData:
+                return InspectionError(code: .fileUnreadable, message: "The file's media could not be recognized or read.")
+            default:
+                break
+            }
+        }
+        return InspectionError(code: .fileOpenFailed, message: "The file could not be opened for inspection.")
     }
 }
