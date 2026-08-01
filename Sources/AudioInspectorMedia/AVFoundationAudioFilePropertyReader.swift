@@ -386,9 +386,13 @@ private extension AVFoundationAudioFilePropertyReader {
             switch cocoa.code {
             case .fileReadNoPermission:
                 return InspectionError(code: .fileAccessDenied, message: "Access to the file was denied.")
-            case .fileReadCorruptFile, .fileReadUnknown, .fileReadNoSuchFile:
+            case .fileReadCorruptFile:
+                // Opened, but the media is corrupt → "opened but not read".
                 return InspectionError(code: .fileUnreadable, message: "The file could not be read for inspection.")
             default:
+                // A missing file (`fileReadNoSuchFile`) could not be *opened*, and an unknown read error
+                // is not reliably "unreadable media" — both take the stable `fileOpenFailed` fallback
+                // rather than over-claiming `fileUnreadable`.
                 break
             }
         }
