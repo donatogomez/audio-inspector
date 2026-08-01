@@ -63,6 +63,10 @@ private extension AVFoundationAudioFilePropertyReader {
         /// (possibly indefinite) that 3.4 maps by value, so `nil` here signals to 3.6 that the duration
         /// read failed (→ property-level `failed`), distinct from a present-but-indefinite duration.
         let duration: CMTime?
+        /// The selected track's `estimatedDataRate` (bits/s) as a **flat value copy** — feeds
+        /// `estimatedBitrate` (3.5). `nil` when there is no audio track or the load errored (per-property,
+        /// not global). Spike 0031/G observed `0` for PCM, i.e. absence of a usable estimate.
+        let estimatedDataRate: Float?
     }
 
     /// Opens the asset and runs the deterministic track-selection policy. A whole-file failure (the asset
@@ -76,14 +80,23 @@ private extension AVFoundationAudioFilePropertyReader {
             // This is a provisional rule — not a claim of a "primary/preferred" track.
             let audioTrack = audioTracks.first
             var formatDescription: CMFormatDescription?
+            var estimatedDataRate: Float?
             if let audioTrack {
                 formatDescription = try await audioTrack.load(.formatDescriptions).first
+                // Per-property signal for `estimatedBitrate` (3.5): a thrown load collapses to `nil` (not
+                // global). Stored as a flat `Float` copy — no `AVAssetTrack` is retained.
+                estimatedDataRate = try? await audioTrack.load(.estimatedDataRate)
             }
             // Duration failure is per-property, not global (spike 0031/E,H): a *thrown* load error
             // collapses to `nil` here (→ 3.6 property-level `failed`), while a successful load keeps its
             // `CMTime` (possibly indefinite) for 3.4 to map by value.
             let duration = try? await asset.load(.duration)
-            return LoadedAudio(url: url, formatDescription: formatDescription, duration: duration)
+            return LoadedAudio(
+                url: url,
+                formatDescription: formatDescription,
+                duration: duration,
+                estimatedDataRate: estimatedDataRate
+            )
         } catch {
             throw Self.globalError(from: error)
         }
@@ -100,10 +113,10 @@ private extension AVFoundationAudioFilePropertyReader {
             duration: duration(from: loaded.duration),
             sampleRate: sampleRate(from: streamDescription),
             channelCount: channelCount(from: streamDescription),
-            bitDepth: bitDepth(from: loaded),
+            bitDepth: bitDepth(from: streamDescription),
             codec: codec(from: streamDescription),
             declaredBitrate: declaredBitrate(from: loaded),
-            estimatedBitrate: estimatedBitrate(from: loaded)
+            estimatedBitrate: estimatedBitrate(from: loaded.estimatedDataRate)
         )
     }
 }
@@ -222,9 +235,22 @@ private extension AVFoundationAudioFilePropertyReader {
         return .available(value)
     }
 
-    func bitDepth(from _: LoadedAudio) -> Property<Int> {
-        // TODO(3.5): PCM `mBitsPerChannel` → `available`; lossy → `unsupported`; never formula-inferred.
-        .unavailable(reason: nil)
+    /// `bitDepth` (bits) from the ASBD `mBitsPerChannel` — **never** formula-inferred from byte/packet or
+    /// channel fields (spike 0031/D). Only **Linear PCM** has a spike-validated, semantically-applicable
+    /// sample depth → `available` when `mBitsPerChannel > 0` (PCM with a `0` field is anomalous →
+    /// `unavailable`). For any non-PCM format, robustly telling a lossy codec (bit depth genuinely
+    /// N/A → `unsupported`) from a lossless-compressed one (bit depth *does* apply) needs codec
+    /// classification the spike did not validate and ADR-0012 forbids via a codec table; asserting
+    /// `unsupported` for arbitrary non-PCM would be false precision. So non-PCM is conservatively
+    /// `unavailable` here — the finer lossy→`unsupported` split is deferred to a compressed-format
+    /// validation beyond this slice. No ASBD → `unavailable`.
+    func bitDepth(from streamDescription: AudioStreamBasicDescription?) -> Property<Int> {
+        guard let streamDescription, streamDescription.mFormatID == kAudioFormatLinearPCM else {
+            return .unavailable(reason: nil)
+        }
+        let bits = streamDescription.mBitsPerChannel
+        guard bits > 0, let value = Int(exactly: bits) else { return .unavailable(reason: nil) }
+        return .available(value)
     }
 
     /// `codec` as a stable, non-localized token from the ASBD `mFormatID` (the decoded audio format —
@@ -236,14 +262,28 @@ private extension AVFoundationAudioFilePropertyReader {
         return .available(Self.fourCharCodeToken(streamDescription.mFormatID))
     }
 
+    /// `declaredBitrate` — a nominal rate **directly declared** by container/codec metadata, with **no
+    /// self-computation**. Spike 0031/G found no such direct source among the evaluated AVFoundation APIs
+    /// (and `estimatedDataRate` is an *estimate*, never a declared value), so with no direct source in
+    /// this flow it is `unavailable`. No value is fabricated; no AudioToolbox is adopted for this slice.
     func declaredBitrate(from _: LoadedAudio) -> Property<Int> {
-        // TODO(3.5): only a directly declared nominal rate; otherwise `unavailable` (no self-computation).
         .unavailable(reason: nil)
     }
 
-    func estimatedBitrate(from _: LoadedAudio) -> Property<Int> {
-        // TODO(3.5): always `uncertain` with a `reason`; no bitrate computation in 3.2 (§15).
-        .unavailable(reason: nil)
+    /// `estimatedBitrate` — **always `uncertain`** with a `reason` (never `available`): it is an estimate
+    /// by nature (criterion 3.5; ADR-0012). It carries the framework's `estimatedDataRate` (bits/s) as
+    /// the tentative value only when that value is finite, strictly positive, and **exactly** an `Int`
+    /// (no silent rounding); otherwise — absent, `0` (spike 0031/G observed this for PCM), negative,
+    /// non-finite, or fractional — it stays `uncertain` with **no** fabricated value. It never carries a
+    /// declared bitrate and never self-computes from size/duration.
+    func estimatedBitrate(from estimatedDataRate: Float?) -> Property<Int> {
+        guard let rate = estimatedDataRate, rate.isFinite, rate > 0, let value = Int(exactly: rate) else {
+            return .uncertain(value: nil, reason: "No reliable bitrate estimate is available from the file.")
+        }
+        return .uncertain(
+            value: value,
+            reason: "Framework estimated data rate; an estimate — not a declared bitrate — that may not exactly represent the stream."
+        )
     }
 }
 
