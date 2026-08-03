@@ -15,6 +15,7 @@ verifiable, maps to one logical commit, and contains nothing out of scope.
 - [x] 2.1 Implement `InspectAudioFileUseCase` (nonisolated async): read properties → derive warnings → compute global status → build report
 - [x] 2.2 Add a fake `AudioFilePropertyReading` in `AudioInspectorTesting`
 - [x] 2.3 Unit tests: available/partial/failed outcomes, warning derivation, declared-vs-estimated bitrate — all with the fake, no real files
+- [ ] 2.4 Derive descriptive-metadata warnings in `InspectAudioFileUseCase`: emit `metadata_size_unavailable` when `sizeBytes == nil` and `metadata_modified_at_unavailable` when `modifiedAt == nil` (both codes when both are absent), derived from the `AudioFileReference` in **both** the successful and the global-failure paths, combined with the technical-property warnings **with no duplicates**; global status is `.completed` when there is no global failure and no warnings, `.partial` when there is no global failure and ≥1 warning, and `.failed(error)` is **preserved on a global (reader-thrown) failure even when metadata warnings are present** (never recomputed to `.partial`). Unit tests cover every case. Implements the `docs/json-schema-v1.md` plain-nullable-metadata rule. **No JSON-exporter code** (DTO/mapper/encoder/`ReportExporting` stay in group 4).
 
 ## 3. Basic technical inspection (infrastructure — `AVFoundationAudioFilePropertyReader`)
 

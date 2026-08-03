@@ -84,6 +84,11 @@ into a **flat** `Codable` DTO where each property is `{ state, value, unit?, rea
 Absent/unsupported/uncertain/error are distinguished by each property's `state`; `container` is a
 technical property, not file metadata.
 
+The mapper emits `technicalProperties: {}` **iff** `inspectionStatus == .failed` (a global failure — no
+property was inspected); in `completed`/`partial` it emits the eight explicit per-property entries.
+Descriptive-metadata warnings (`metadata_size_unavailable` / `metadata_modified_at_unavailable`) are
+produced by the **use case** from the `AudioFileReference`, never fabricated by the exporter.
+
 ### Testability without real files
 
 Everything above the picker/AVFoundation adapter is tested with in-memory value types and a fake

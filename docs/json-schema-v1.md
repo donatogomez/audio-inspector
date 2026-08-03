@@ -95,6 +95,15 @@ MVP property keys and units (units are stable tokens: `seconds`, `hertz`, `bitsP
 | `declaredBitrate` | integer | `bitsPerSecond` | Container/stream-declared. |
 | `estimatedBitrate` | integer | `bitsPerSecond` | **Always `uncertain`**; `reason` states the method (size÷duration) and its limitations (includes container overhead; not read from the stream). Kept **separate** from `declaredBitrate`. |
 
+**Failure vs. inspection outcome.** `technicalProperties` reflects whether property inspection
+happened. When `inspectionStatus.state` is `"failed"` (a global failure — the file could not be opened
+or read at all), `technicalProperties` **MUST** be the empty object `{}`: no property was inspected.
+When the state is `"completed"` or `"partial"`, all eight technical-property keys **MUST** be present,
+each with its explicit `state` (an absent datum is `unavailable`/`unsupported`, never omitted). `{}`
+therefore means "no inspection occurred", distinct from an inspected property that turned out absent.
+Descriptive-metadata warnings (`metadata_*`, see below) may still appear on a global failure **without**
+changing the `failed` state.
+
 ## Stable codes
 
 `code`s (warnings) and `error.code`s (failed) are **stable, machine-processable** snake_case tokens;

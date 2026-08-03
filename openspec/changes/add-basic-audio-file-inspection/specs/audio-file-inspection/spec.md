@@ -82,6 +82,13 @@ unavailable/unsupported/uncertain/failed fields, and a global inspection status 
 - **THEN** the report sets the global status to `failed` with a message, contains no fabricated
   properties, and the app remains responsive
 
+#### Scenario: A descriptive-metadata attribute is missing
+
+- **WHEN** the inspected file's `sizeBytes` and/or `modifiedAt` is not available
+- **THEN** the report emits the corresponding stable warning code(s) (`metadata_size_unavailable` /
+  `metadata_modified_at_unavailable`); absent a global failure the global status is `partial`, and on a
+  global failure the status remains `failed`
+
 ### Requirement: Represent the file origin safely (no location disclosure)
 
 The report and any export SHALL represent the file origin with a safe `source` descriptor —
