@@ -19,13 +19,13 @@
 
 **Focus:** None in progress — the tree is at a clean checkpoint, ready for the next slice.
 
-**Status:** The documentation architecture is consolidated on `main`; its PR is merged and closed.
-Groups 1–3 of the active change are complete and integrated. Group 4 has not started.
+**Status:** Groups 1–3 of the active change are complete and integrated on `main`, including the
+Group-2 correction that derives descriptive-metadata warnings. Group 4 has not started.
 
 **Next step:** Begin Group 4 of `add-basic-audio-file-inspection` (see its `tasks.md`).
 
-**Why:** With the reader (Group 3) integrated and the docs stable, the next vertical-slice step is the
-one Group 4 defines.
+**Why:** The inspection-report pipeline is now contract-complete; the next vertical-slice step is the
+JSON export that Group 4 defines.
 
 **Open questions / threads:** None.
 
