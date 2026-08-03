@@ -1,12 +1,12 @@
 import Foundation
 
-import AudioInspectorApp
+@testable import AudioInspectorApp
 import AudioInspectorDomain
 
 // Shared, deterministic helpers for the JSON v1 export tests. No files, no real clock, no real
 // bundle: a fixed generator identity and a fixed export instant are injected, and reports are built
-// entirely in memory. Only the exporter's **public** API is used (no `@testable`) — the DTOs, mapper,
-// and encoder stay internal and are verified through the decoded JSON.
+// entirely in memory. The exporter's API is internal to `AudioInspectorApp`, so it is reached via
+// `@testable import`; the DTOs, mapper, and encoder are verified through the decoded JSON.
 //
 // The encoded bytes are inspected **exclusively via `Codable`**: they are decoded with `JSONDecoder`
 // into `JSONValue`, a closed, typed JSON tree — no untyped-object serialization API, no heterogeneous

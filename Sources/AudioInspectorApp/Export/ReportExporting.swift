@@ -11,7 +11,7 @@ import Foundation
 /// Lives in the export layer, not the domain: there is no domain use case that exports, so an export
 /// protocol in `AudioInspectorDomain` would be a port with no domain consumer (ADR-0009). It depends
 /// only on `AudioInspectorDomain`, so it can be extracted into its own target later untouched.
-public protocol ReportExporting: Sendable {
+protocol ReportExporting: Sendable {
     /// Encodes `report` into `schemaVersion` 1 JSON bytes. Throws on an encoding failure.
     func export(_ report: InspectionReport) throws -> Data
 }
@@ -20,11 +20,11 @@ public protocol ReportExporting: Sendable {
 ///
 /// Injected into the exporter so it is **not** coupled to the real app bundle: tests supply a fixed
 /// identity, and the composition root (group 5) supplies the app's real name/version.
-public struct ReportGenerator: Sendable, Equatable {
-    public let name: String
-    public let version: String
+struct ReportGenerator: Sendable, Equatable {
+    let name: String
+    let version: String
 
-    public init(name: String, version: String) {
+    init(name: String, version: String) {
         self.name = name
         self.version = version
     }

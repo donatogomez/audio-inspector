@@ -10,7 +10,7 @@ import Foundation
 /// - `generator` is injected, so tests assert a deterministic name/version.
 ///
 /// It never touches a `URL` or the filesystem — encoding only (group 5 owns writing).
-public struct JSONReportExporter: ReportExporting {
+struct JSONReportExporter: ReportExporting {
     private let generator: ReportGenerator
     private let now: @Sendable () -> Date
 
@@ -18,12 +18,12 @@ public struct JSONReportExporter: ReportExporting {
     ///   - generator: the envelope's `generator` identity (injected — never read from the bundle here).
     ///   - now: the export clock, called once per `export` to stamp `generatedAt`. Defaults to the
     ///     live system clock; tests pass a fixed instant.
-    public init(generator: ReportGenerator, now: @escaping @Sendable () -> Date = { Date() }) {
+    init(generator: ReportGenerator, now: @escaping @Sendable () -> Date = { Date() }) {
         self.generator = generator
         self.now = now
     }
 
-    public func export(_ report: InspectionReport) throws -> Data {
+    func export(_ report: InspectionReport) throws -> Data {
         let envelope = InspectionReportMapper.envelope(for: report, generatedAt: now(), generator: generator)
         return try Self.makeEncoder().encode(envelope)
     }
