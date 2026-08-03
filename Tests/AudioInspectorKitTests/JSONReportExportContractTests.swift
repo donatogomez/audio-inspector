@@ -53,9 +53,11 @@ struct JSONReportExportContractTests {
             status: .partial(message: "Some properties are not exposed by this format.")
         )
 
-        let produced = try exportObject(report, now: date("2026-07-30T16:40:00Z"))
-        let expected = try decodeObject(Self.canonicalPartial)
-        #expect(jsonEqual(produced, expected))
+        let produced = try exportValue(report, now: date("2026-07-30T16:40:00Z"))
+        let expected = try decodeValue(Self.canonicalPartial)
+        // Structural deep-equality (key sets, states, codes, value types, explicit nulls); key order
+        // is irrelevant because `JSONValue` compares objects order-independently.
+        #expect(produced == expected)
     }
 
     // MARK: - Global failure (structural identity; descriptive messages are not pinned)
@@ -81,35 +83,36 @@ struct JSONReportExportContractTests {
             status: .failed(InspectionError(code: .fileOpenFailed, message: "The audio file could not be opened."))
         )
 
-        let object = try exportObject(report, now: date("2026-07-30T16:41:00Z"))
+        let object = try exportValue(report, now: date("2026-07-30T16:41:00Z"))
 
         // Envelope.
-        #expect(object["schemaVersion"] as? Int == 1)
-        #expect(object["generatedAt"] as? String == "2026-07-30T16:41:00Z")
+        #expect(object["schemaVersion"]?.int == 1)
+        #expect(object["generatedAt"]?.string == "2026-07-30T16:41:00Z")
 
-        // inspectedFile — sizeBytes present as 0, modifiedAt explicit null.
-        let inspected = try #require(object["inspectedFile"] as? [String: Any])
-        #expect(inspected["name"] as? String == "broken.wav")
-        #expect(inspected["sizeBytes"] as? Int == 0)
-        #expect(inspected.keys.contains("modifiedAt"))
-        #expect(inspected["modifiedAt"] is NSNull)
+        // inspectedFile — sizeBytes present as 0, modifiedAt explicit null (present, not omitted).
+        let inspected = try #require(object["inspectedFile"])
+        #expect(inspected["name"]?.string == "broken.wav")
+        #expect(inspected["sizeBytes"]?.int == 0)
+        #expect(inspected["modifiedAt"] != nil)
+        #expect(inspected["modifiedAt"]?.isNull == true)
 
-        // No property was inspected → empty object.
-        #expect((object["technicalProperties"] as? [String: Any])?.isEmpty == true)
+        // No property was inspected → empty object (present as an object, and empty).
+        #expect(try #require(object["technicalProperties"]?.keys).isEmpty)
 
         // Metadata warning survives on the failure path.
-        let encodedWarnings = try #require(object["warnings"] as? [[String: Any]])
+        let encodedWarnings = try #require(object["warnings"]?.array)
         #expect(encodedWarnings.count == 1)
-        #expect(encodedWarnings[0]["code"] as? String == "metadata_modified_at_unavailable")
-        #expect(encodedWarnings[0]["field"] as? String == "modifiedAt")
-        #expect(encodedWarnings[0]["kind"] as? String == "unavailable")
+        #expect(encodedWarnings[0]["code"]?.string == "metadata_modified_at_unavailable")
+        #expect(encodedWarnings[0]["field"]?.string == "modifiedAt")
+        #expect(encodedWarnings[0]["kind"]?.string == "unavailable")
 
-        // Global failure carries the stable error code (identity); messages stay descriptive.
-        let status = try #require(object["inspectionStatus"] as? [String: Any])
-        #expect(status["state"] as? String == "failed")
-        let error = try #require(status["error"] as? [String: Any])
-        #expect(error["code"] as? String == "file_open_failed")
-        #expect(status["message"] != nil)
+        // Global failure carries the stable error code (identity); the descriptive status message
+        // mirrors the error message (the domain carries one narrative for a failure — see audit note).
+        let status = try #require(object["inspectionStatus"])
+        #expect(status["state"]?.string == "failed")
+        let error = try #require(status["error"])
+        #expect(error["code"]?.string == "file_open_failed")
+        #expect(status["message"] == error["message"])
     }
 
     // The canonical partial example verbatim from docs/json-schema-v1.md.

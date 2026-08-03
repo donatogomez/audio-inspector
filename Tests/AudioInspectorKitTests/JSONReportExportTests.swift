@@ -6,60 +6,61 @@ import AudioInspectorDomain
 
 /// Export tests for the JSON v1 slice (group 4). Every `InspectionReport` is built **in memory** — no
 /// audio files, no AVFoundation, no filesystem, no real bundle, no real clock. The clock and generator
-/// identity are injected deterministically. The encoded bytes are decoded with `JSONSerialization`
-/// (test-only) so assertions inspect the **decoded structure** — real key presence, explicit `null`
-/// vs. an omitted key, and real JSON scalar types — rather than fragile substring matching.
+/// identity are injected deterministically. The encoded bytes are decoded with `JSONDecoder` into a
+/// closed, typed `JSONValue` tree (see the support file) so assertions inspect the **decoded
+/// structure** — real key presence, explicit `null` vs. an omitted key, and real JSON scalar types —
+/// using only `Codable`, never an untyped-object serialization API and never a heterogeneous map.
 @Suite("Export — JSON v1 report exporter")
 struct JSONReportExportTests {
 
     // MARK: - Envelope
 
     @Test func envelopeCarriesSchemaVersionGeneratorAndExportClock() throws {
-        let object = try exportObject(report(status: .completed))
+        let object = try exportValue(report(status: .completed))
 
-        #expect(object["schemaVersion"] as? Int == 1)
+        #expect(object["schemaVersion"]?.int == 1)
         // `generatedAt` is the injected export instant, formatted as ISO-8601 UTC with `Z`.
-        #expect(object["generatedAt"] as? String == "2026-08-03T12:00:00Z")
-        let generator = try #require(object["generator"] as? [String: Any])
-        #expect(generator["name"] as? String == "Audio Inspector")
-        #expect(generator["version"] as? String == "0.1.0")
+        #expect(object["generatedAt"]?.string == "2026-08-03T12:00:00Z")
+        let generator = try #require(object["generator"])
+        #expect(generator["name"]?.string == "Audio Inspector")
+        #expect(generator["version"]?.string == "0.1.0")
     }
 
     @Test func generatedAtIsEvaluatedPerExportNotAtInspection() throws {
         // Two exports of the *same* report with two clocks → two distinct `generatedAt` values,
         // proving the clock is read on each `export` (not baked into the report).
-        let report = report(status: .completed)
-        let first = try exportObject(report, now: date("2026-08-03T12:00:00Z"))
-        let second = try exportObject(report, now: date("2026-08-03T15:30:45Z"))
-        #expect(first["generatedAt"] as? String == "2026-08-03T12:00:00Z")
-        #expect(second["generatedAt"] as? String == "2026-08-03T15:30:45Z")
+        let subject = report(status: .completed)
+        let first = try exportValue(subject, now: date("2026-08-03T12:00:00Z"))
+        let second = try exportValue(subject, now: date("2026-08-03T15:30:45Z"))
+        #expect(first["generatedAt"]?.string == "2026-08-03T12:00:00Z")
+        #expect(second["generatedAt"]?.string == "2026-08-03T15:30:45Z")
     }
 
     @Test func envelopeNeverLeaksTheReportsEphemeralId() throws {
-        let report = report(status: .completed)
-        let object = try exportObject(report)
+        let subject = report(status: .completed)
+        let object = try exportValue(subject)
         // The domain `AudioFileReference.id` (a per-inspection UUID) appears nowhere in the wire form.
         #expect(!allKeys(object).contains("id"))
-        let data = try exportData(report)
+        let data = try exportData(subject)
         let text = try #require(String(data: data, encoding: .utf8))
-        #expect(!text.contains(report.file.id.uuidString))
+        #expect(!text.contains(subject.file.id.uuidString))
     }
 
     // MARK: - inspectedFile (nullable metadata + safe source)
 
     @Test func inspectedFileCarriesMetadataAndSafeSource() throws {
-        let object = try exportObject(report(status: .completed))
-        let file = try #require(object["inspectedFile"] as? [String: Any])
+        let object = try exportValue(report(status: .completed))
+        let file = try #require(object["inspectedFile"])
 
-        #expect(file["name"] as? String == "interview-side-a.m4a")
-        #expect(file["fileExtension"] as? String == "m4a")
-        #expect(file["sizeBytes"] as? Int == 8_421_376)
-        #expect(file["modifiedAt"] as? String == "2026-06-12T09:03:00Z")
+        #expect(file["name"]?.string == "interview-side-a.m4a")
+        #expect(file["fileExtension"]?.string == "m4a")
+        #expect(file["sizeBytes"]?.int == 8_421_376)
+        #expect(file["modifiedAt"]?.string == "2026-06-12T09:03:00Z")
 
-        let source = try #require(file["source"] as? [String: Any])
-        #expect(source["kind"] as? String == "userSelectedLocalFile")
-        #expect(source["displayName"] as? String == "interview-side-a.m4a")
-        #expect(source["locationDisclosure"] as? String == "omitted")
+        let source = try #require(file["source"])
+        #expect(source["kind"]?.string == "userSelectedLocalFile")
+        #expect(source["displayName"]?.string == "interview-side-a.m4a")
+        #expect(source["locationDisclosure"]?.string == "omitted")
     }
 
     @Test func nullableFileMetadataIsExplicitNullNotOmitted() throws {
@@ -70,14 +71,14 @@ struct JSONReportExportTests {
             modifiedAt: nil,
             source: .userSelectedLocalFile(displayName: "broken.wav", locationDisclosure: .omitted)
         )
-        let report = InspectionReport(file: file, properties: TechnicalProperties(), warnings: [], status: .completed)
-        let object = try exportObject(report)
-        let inspected = try #require(object["inspectedFile"] as? [String: Any])
+        let subject = InspectionReport(file: file, properties: TechnicalProperties(), warnings: [], status: .completed)
+        let object = try exportValue(subject)
+        let inspected = try #require(object["inspectedFile"])
 
         // The keys are present (not omitted) and hold an explicit JSON `null`.
         for key in ["fileExtension", "sizeBytes", "modifiedAt"] {
-            #expect(inspected.keys.contains(key), "\(key) must be present")
-            #expect(inspected[key] is NSNull, "\(key) must be explicit null")
+            #expect(inspected[key] != nil, "\(key) must be present")
+            #expect(inspected[key]?.isNull == true, "\(key) must be explicit null")
         }
     }
 
@@ -93,8 +94,8 @@ struct JSONReportExportTests {
             modifiedAt: date("2026-01-01T00:00:00Z"),
             source: .userSelectedLocalFile(displayName: "song.flac", locationDisclosure: .omitted)
         )
-        let report = InspectionReport(file: file, properties: allAvailableProperties(), warnings: [], status: .completed)
-        let object = try exportObject(report)
+        let subject = InspectionReport(file: file, properties: allAvailableProperties(), warnings: [], status: .completed)
+        let object = try exportValue(subject)
 
         // No location-bearing key exists anywhere in the decoded object.
         let forbidden: Set<String> = [
@@ -104,48 +105,48 @@ struct JSONReportExportTests {
         #expect(allKeys(object).isDisjoint(with: forbidden))
 
         // `inspectedFile` and `source` expose exactly the safe key sets — nothing more.
-        let inspected = try #require(object["inspectedFile"] as? [String: Any])
-        #expect(Set(inspected.keys) == ["name", "fileExtension", "sizeBytes", "modifiedAt", "source"])
-        let source = try #require(inspected["source"] as? [String: Any])
-        #expect(Set(source.keys) == ["kind", "displayName", "locationDisclosure"])
+        let inspected = try #require(object["inspectedFile"])
+        #expect(try #require(inspected.keys) == ["name", "fileExtension", "sizeBytes", "modifiedAt", "source"])
+        let source = try #require(inspected["source"])
+        #expect(try #require(source.keys) == ["kind", "displayName", "locationDisclosure"])
     }
 
     // MARK: - technicalProperties — states, value types, units, reasons, errors
 
     @Test func completedEmitsAllEightPropertyKeys() throws {
-        let object = try exportObject(report(properties: allAvailableProperties(), status: .completed))
-        let technical = try #require(object["technicalProperties"] as? [String: Any])
-        #expect(Set(technical.keys) == [
+        let object = try exportValue(report(properties: allAvailableProperties(), status: .completed))
+        let technicalKeys = try #require(object["technicalProperties"]?.keys)
+        #expect(technicalKeys == [
             "container", "duration", "sampleRate", "channelCount",
             "bitDepth", "codec", "declaredBitrate", "estimatedBitrate",
         ])
     }
 
     @Test func availableValuesAreRealJSONScalarsWithUnits() throws {
-        let object = try exportObject(report(properties: allAvailableProperties(), status: .completed))
-        let technical = try #require(object["technicalProperties"] as? [String: Any])
+        let object = try exportValue(report(properties: allAvailableProperties(), status: .completed))
+        let technical = try #require(object["technicalProperties"])
 
         // String value (no unit).
-        let container = try #require(technical["container"] as? [String: Any])
-        #expect(container["state"] as? String == "available")
-        #expect(container["value"] as? String == "wav")
+        let container = try #require(technical["container"])
+        #expect(container["state"]?.string == "available")
+        #expect(container["value"]?.string == "wav")
         #expect(container["unit"] == nil)
 
         // Double value with a unit — a real JSON number, not a quoted string.
-        let duration = try #require(technical["duration"] as? [String: Any])
-        #expect(duration["value"] as? Double == 10.5)
-        #expect(!(duration["value"] is String))
-        #expect(duration["unit"] as? String == "seconds")
+        let duration = try #require(technical["duration"])
+        #expect(duration["value"]?.double == 10.5)
+        #expect(duration["value"]?.isNumber == true)
+        #expect(duration["unit"]?.string == "seconds")
 
         // Int value with a unit — a real JSON number.
-        let sampleRate = try #require(technical["sampleRate"] as? [String: Any])
-        #expect(sampleRate["value"] as? Int == 44_100)
-        #expect(!(sampleRate["value"] is String))
-        #expect(sampleRate["unit"] as? String == "hertz")
+        let sampleRate = try #require(technical["sampleRate"])
+        #expect(sampleRate["value"]?.int == 44_100)
+        #expect(sampleRate["value"]?.isNumber == true)
+        #expect(sampleRate["unit"]?.string == "hertz")
 
         // Int value, unitless field → no `unit` key.
-        let channelCount = try #require(technical["channelCount"] as? [String: Any])
-        #expect(channelCount["value"] as? Int == 2)
+        let channelCount = try #require(technical["channelCount"])
+        #expect(channelCount["value"]?.int == 2)
         #expect(channelCount["unit"] == nil)
     }
 
@@ -154,71 +155,71 @@ struct JSONReportExportTests {
         properties.declaredBitrate = .unavailable(reason: nil)
         properties.bitDepth = .unsupported(reason: "AAC does not define a PCM bit depth")
         properties.codec = .failed(PropertyFailure(code: .propertyReadError, message: "codec read error"))
-        let object = try exportObject(report(properties: properties, status: .partial(message: "x")))
-        let technical = try #require(object["technicalProperties"] as? [String: Any])
+        let object = try exportValue(report(properties: properties, status: .partial(message: "x")))
+        let technical = try #require(object["technicalProperties"])
 
         // unavailable → value explicit null, no unit/reason/error.
-        let declared = try #require(technical["declaredBitrate"] as? [String: Any])
-        #expect(declared["state"] as? String == "unavailable")
-        #expect(declared["value"] is NSNull)
-        #expect(Set(declared.keys) == ["state", "value"])
+        let declared = try #require(technical["declaredBitrate"])
+        #expect(declared["state"]?.string == "unavailable")
+        #expect(declared["value"]?.isNull == true)
+        #expect(try #require(declared.keys) == ["state", "value"])
 
         // unsupported → value null, reason present.
-        let bitDepth = try #require(technical["bitDepth"] as? [String: Any])
-        #expect(bitDepth["state"] as? String == "unsupported")
-        #expect(bitDepth["value"] is NSNull)
-        #expect(bitDepth["reason"] as? String == "AAC does not define a PCM bit depth")
+        let bitDepth = try #require(technical["bitDepth"])
+        #expect(bitDepth["state"]?.string == "unsupported")
+        #expect(bitDepth["value"]?.isNull == true)
+        #expect(bitDepth["reason"]?.string == "AAC does not define a PCM bit depth")
         #expect(bitDepth["error"] == nil)
 
         // failed → value null, structured error (stable code + message), no reason/unit.
-        let codec = try #require(technical["codec"] as? [String: Any])
-        #expect(codec["state"] as? String == "failed")
-        #expect(codec["value"] is NSNull)
-        let error = try #require(codec["error"] as? [String: Any])
-        #expect(error["code"] as? String == "property_read_error")
-        #expect(error["message"] as? String == "codec read error")
-        #expect(Set(codec.keys) == ["state", "value", "error"])
+        let codec = try #require(technical["codec"])
+        #expect(codec["state"]?.string == "failed")
+        #expect(codec["value"]?.isNull == true)
+        let error = try #require(codec["error"])
+        #expect(error["code"]?.string == "property_read_error")
+        #expect(error["message"]?.string == "codec read error")
+        #expect(try #require(codec.keys) == ["state", "value", "error"])
     }
 
     @Test func uncertainWithValueKeepsValueUnitAndRequiredReason() throws {
         var properties = allAvailableProperties()
         properties.estimatedBitrate = .uncertain(value: 180_904, reason: "estimated from size/duration")
-        let object = try exportObject(report(properties: properties, status: .partial(message: "x")))
-        let technical = try #require(object["technicalProperties"] as? [String: Any])
+        let object = try exportValue(report(properties: properties, status: .partial(message: "x")))
+        let technical = try #require(object["technicalProperties"])
 
-        let estimated = try #require(technical["estimatedBitrate"] as? [String: Any])
-        #expect(estimated["state"] as? String == "uncertain")
-        #expect(estimated["value"] as? Int == 180_904)
-        #expect(estimated["unit"] as? String == "bitsPerSecond")
-        #expect(estimated["reason"] as? String == "estimated from size/duration")
+        let estimated = try #require(technical["estimatedBitrate"])
+        #expect(estimated["state"]?.string == "uncertain")
+        #expect(estimated["value"]?.int == 180_904)
+        #expect(estimated["unit"]?.string == "bitsPerSecond")
+        #expect(estimated["reason"]?.string == "estimated from size/duration")
     }
 
     @Test func uncertainWithoutValueHasNullValueNoUnitButKeepsReason() throws {
         var properties = allAvailableProperties()
         properties.estimatedBitrate = .uncertain(value: nil, reason: "cannot estimate")
-        let object = try exportObject(report(properties: properties, status: .partial(message: "x")))
-        let technical = try #require(object["technicalProperties"] as? [String: Any])
+        let object = try exportValue(report(properties: properties, status: .partial(message: "x")))
+        let technical = try #require(object["technicalProperties"])
 
-        let estimated = try #require(technical["estimatedBitrate"] as? [String: Any])
-        #expect(estimated["state"] as? String == "uncertain")
-        #expect(estimated["value"] is NSNull)
+        let estimated = try #require(technical["estimatedBitrate"])
+        #expect(estimated["state"]?.string == "uncertain")
+        #expect(estimated["value"]?.isNull == true)
         #expect(estimated["unit"] == nil) // no value → no unit to attach
-        #expect(estimated["reason"] as? String == "cannot estimate")
+        #expect(estimated["reason"]?.string == "cannot estimate")
     }
 
     @Test func globalFailureEmitsEmptyTechnicalPropertiesObject() throws {
         // A failed status must yield `{}` — even though the report carries an all-`unavailable` set,
         // the exporter must NOT emit eight `unavailable` entries (the gate is the status).
         let error = InspectionError(code: .fileOpenFailed, message: "The audio file could not be opened.")
-        let report = InspectionReport(
+        let subject = InspectionReport(
             file: makeReference(),
             properties: TechnicalProperties(),
             warnings: [],
             status: .failed(error)
         )
-        let object = try exportObject(report)
-        let technical = try #require(object["technicalProperties"] as? [String: Any])
-        #expect(technical.isEmpty)
+        let object = try exportValue(subject)
+        // Present as an object, and empty (`{}`) — distinct from a non-object.
+        #expect(try #require(object["technicalProperties"]?.keys).isEmpty)
     }
 
     // MARK: - warnings & status
@@ -228,57 +229,58 @@ struct JSONReportExportTests {
             InspectionWarning(code: .propertyUnsupported, field: "bitDepth", kind: .unsupported, message: "no bit depth"),
             InspectionWarning(code: .metadataSizeUnavailable, field: "sizeBytes", kind: .unavailable, message: "no size"),
         ]
-        let object = try exportObject(report(properties: allAvailableProperties(), warnings: warnings, status: .partial(message: "x")))
-        let encoded = try #require(object["warnings"] as? [[String: Any]])
+        let object = try exportValue(report(properties: allAvailableProperties(), warnings: warnings, status: .partial(message: "x")))
+        let encoded = try #require(object["warnings"]?.array)
 
         #expect(encoded.count == 2)
-        #expect(encoded[0]["code"] as? String == "property_unsupported")
-        #expect(encoded[0]["field"] as? String == "bitDepth")
-        #expect(encoded[0]["kind"] as? String == "unsupported")
-        #expect(encoded[0]["message"] as? String == "no bit depth")
+        #expect(encoded[0]["code"]?.string == "property_unsupported")
+        #expect(encoded[0]["field"]?.string == "bitDepth")
+        #expect(encoded[0]["kind"]?.string == "unsupported")
+        #expect(encoded[0]["message"]?.string == "no bit depth")
         // A metadata warning rides through the same array unchanged.
-        #expect(encoded[1]["code"] as? String == "metadata_size_unavailable")
-        #expect(encoded[1]["field"] as? String == "sizeBytes")
-        #expect(encoded[1]["kind"] as? String == "unavailable")
+        #expect(encoded[1]["code"]?.string == "metadata_size_unavailable")
+        #expect(encoded[1]["field"]?.string == "sizeBytes")
+        #expect(encoded[1]["kind"]?.string == "unavailable")
     }
 
     @Test func exporterAddsNoWarningsOfItsOwn() throws {
         // An empty warnings list stays empty — the exporter never derives warnings.
-        let object = try exportObject(report(properties: allAvailableProperties(), warnings: [], status: .completed))
-        let encoded = try #require(object["warnings"] as? [Any])
+        let object = try exportValue(report(properties: allAvailableProperties(), warnings: [], status: .completed))
+        let encoded = try #require(object["warnings"]?.array)
         #expect(encoded.isEmpty)
     }
 
     @Test func completedStatusHasNoMessageAndNoError() throws {
-        let object = try exportObject(report(status: .completed))
-        let status = try #require(object["inspectionStatus"] as? [String: Any])
-        #expect(status["state"] as? String == "completed")
+        let object = try exportValue(report(status: .completed))
+        let status = try #require(object["inspectionStatus"])
+        #expect(status["state"]?.string == "completed")
         #expect(status["message"] == nil)
         #expect(status["error"] == nil)
     }
 
     @Test func partialStatusCarriesMessageButNoError() throws {
-        let object = try exportObject(report(status: .partial(message: "some properties missing")))
-        let status = try #require(object["inspectionStatus"] as? [String: Any])
-        #expect(status["state"] as? String == "partial")
-        #expect(status["message"] as? String == "some properties missing")
+        let object = try exportValue(report(status: .partial(message: "some properties missing")))
+        let status = try #require(object["inspectionStatus"])
+        #expect(status["state"]?.string == "partial")
+        #expect(status["message"]?.string == "some properties missing")
         #expect(status["error"] == nil)
     }
 
     @Test func failedStatusCarriesStableErrorCode() throws {
         let error = InspectionError(code: .fileAccessDenied, message: "access denied")
-        let report = InspectionReport(
+        let subject = InspectionReport(
             file: makeReference(),
             properties: TechnicalProperties(),
             warnings: [],
             status: .failed(error)
         )
-        let object = try exportObject(report)
-        let status = try #require(object["inspectionStatus"] as? [String: Any])
-        #expect(status["state"] as? String == "failed")
-        let encodedError = try #require(status["error"] as? [String: Any])
-        #expect(encodedError["code"] as? String == "file_access_denied")
-        #expect(status["message"] != nil)
+        let object = try exportValue(subject)
+        let status = try #require(object["inspectionStatus"])
+        #expect(status["state"]?.string == "failed")
+        let encodedError = try #require(status["error"])
+        #expect(encodedError["code"]?.string == "file_access_denied")
+        // The failed status message mirrors the error message (the domain carries a single narrative).
+        #expect(status["message"]?.string == "access denied")
     }
 
     @Test func globalFailureWithMetadataWarningsStaysFailedAndKeepsWarnings() throws {
@@ -293,20 +295,20 @@ struct JSONReportExportTests {
             ),
         ]
         let error = InspectionError(code: .fileOpenFailed, message: "The audio file could not be opened.")
-        let report = InspectionReport(
+        let subject = InspectionReport(
             file: makeReference(modifiedAt: nil),
             properties: TechnicalProperties(),
             warnings: warnings,
             status: .failed(error)
         )
-        let object = try exportObject(report)
+        let object = try exportValue(subject)
 
-        let status = try #require(object["inspectionStatus"] as? [String: Any])
-        #expect(status["state"] as? String == "failed")
-        #expect((object["technicalProperties"] as? [String: Any])?.isEmpty == true)
-        let encoded = try #require(object["warnings"] as? [[String: Any]])
+        let status = try #require(object["inspectionStatus"])
+        #expect(status["state"]?.string == "failed")
+        #expect(try #require(object["technicalProperties"]?.keys).isEmpty)
+        let encoded = try #require(object["warnings"]?.array)
         #expect(encoded.count == 1)
-        #expect(encoded[0]["code"] as? String == "metadata_modified_at_unavailable")
+        #expect(encoded[0]["code"]?.string == "metadata_modified_at_unavailable")
     }
 
     // MARK: - Encoding errors (non-finite values)
@@ -315,9 +317,9 @@ struct JSONReportExportTests {
         for badDuration in [Double.nan, .infinity, -.infinity] {
             var properties = allAvailableProperties()
             properties.duration = .available(badDuration)
-            let report = report(properties: properties, status: .completed)
+            let subject = report(properties: properties, status: .completed)
             #expect(throws: (any Error).self) {
-                _ = try exportData(report)
+                _ = try exportData(subject)
             }
         }
     }
