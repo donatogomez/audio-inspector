@@ -17,15 +17,15 @@
 
 ---
 
-**Focus:** The documentation-architecture migration.
+**Focus:** None in progress — the tree is at a clean checkpoint, ready for the next slice.
 
-**Status:** Group 3 is complete and task 3.7 is integrated into `main`. The documentation migration is
-applied on its own separate branch (kept distinct from any functional change).
+**Status:** The documentation architecture is consolidated on `main`; its PR is merged and closed.
+Groups 1–3 of the active change are complete and integrated. Group 4 has not started.
 
-**Next step:** Audit, commit, and publish the documentation architecture.
+**Next step:** Begin Group 4 of `add-basic-audio-file-inspection` (see its `tasks.md`).
 
-**Why:** Land the migration as a self-contained change so that stable knowledge, current intent, and
-tool-owned sources stay cleanly separated before Group 4 begins.
+**Why:** With the reader (Group 3) integrated and the docs stable, the next vertical-slice step is the
+one Group 4 defines.
 
 **Open questions / threads:** None.
 
