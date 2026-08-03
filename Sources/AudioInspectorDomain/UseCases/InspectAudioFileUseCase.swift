@@ -23,17 +23,22 @@ public struct InspectAudioFileUseCase: Sendable {
     public func execute(file: AudioFileReference) async -> InspectionReport {
         do {
             let properties = try await reader.readProperties(of: file)
-            let warnings = Self.warnings(for: properties)
+            // Property warnings (from the inspected technical properties) plus descriptive-metadata
+            // warnings (from the file reference). Their code spaces are disjoint ⇒ no duplicates. Any
+            // warning of either kind, absent a global failure, degrades the status to `.partial`.
+            let warnings = Self.warnings(for: properties) + Self.metadataWarnings(for: file)
             let status: InspectionStatus = warnings.isEmpty ? .completed : .partial(message: Self.partialMessage)
             return InspectionReport(file: file, properties: properties, warnings: warnings, status: status)
         } catch {
-            // Typed throw: `error` is an `InspectionError`. The properties are represented explicitly
-            // as the default all-`unavailable` set — nothing is fabricated; the reason lives in the
-            // failed status. The contract does not require per-property warnings on a global failure.
+            // Typed throw: `error` is an `InspectionError`. Properties are the default all-`unavailable`
+            // set — nothing is fabricated; the reason lives in the failed status (the exporter maps this
+            // to `technicalProperties: {}`). No per-property warnings are added (no property was
+            // inspected), but descriptive-metadata warnings from the file reference are still included;
+            // the status stays `.failed` regardless of any warning (never recomputed to `.partial`).
             return InspectionReport(
                 file: file,
                 properties: TechnicalProperties(),
-                warnings: [],
+                warnings: Self.metadataWarnings(for: file),
                 status: .failed(error)
             )
         }
@@ -72,6 +77,33 @@ private extension InspectAudioFileUseCase {
             warning(for: p.declaredBitrate, field: .declaredBitrate),
             warning(for: p.estimatedBitrate, field: .estimatedBitrate),
         ].compactMap { $0 }
+    }
+
+    /// Descriptive-metadata warnings derived from the **file reference** (not from technical
+    /// properties): a missing `sizeBytes`/`modifiedAt` yields its stable code. Derived on every path,
+    /// including a global failure, because the reference's metadata is known independently of whether
+    /// the audio could be read; how it affects the global status is decided by the caller. These codes
+    /// are disjoint from the technical-property codes and each attribute yields at most one warning, so
+    /// a combined list never duplicates.
+    static func metadataWarnings(for file: AudioFileReference) -> [InspectionWarning] {
+        var warnings: [InspectionWarning] = []
+        if file.sizeBytes == nil {
+            warnings.append(InspectionWarning(
+                code: .metadataSizeUnavailable,
+                field: "sizeBytes",
+                kind: .unavailable,
+                message: "File size in bytes is not available for this file."
+            ))
+        }
+        if file.modifiedAt == nil {
+            warnings.append(InspectionWarning(
+                code: .metadataModifiedAtUnavailable,
+                field: "modifiedAt",
+                kind: .unavailable,
+                message: "Modification date is not available for this file."
+            ))
+        }
+        return warnings
     }
 
     /// The single place that maps a `Property` state to a warning. `available` produces no warning;

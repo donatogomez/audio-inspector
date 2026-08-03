@@ -195,7 +195,96 @@ struct InspectAudioFileUseCaseTests {
         requireSendable(FakeAudioFilePropertyReading.self)
     }
 
+    // MARK: - 11. Descriptive-metadata warnings (task 2.4)
+
+    @Test func missingSizeYieldsMetadataWarningAndPartial() async {
+        let ref = reference(sizeBytes: nil, modifiedAt: Date(timeIntervalSince1970: 0))
+        let reader = FakeAudioFilePropertyReading(succeedingWith: allAvailableProperties())
+
+        let report = await InspectAudioFileUseCase(reader: reader).execute(file: ref)
+
+        #expect(isPartial(report.status))
+        #expect(report.warnings.count == 1)
+        #expect(hasWarning(report.warnings, code: .metadataSizeUnavailable, field: "sizeBytes", kind: .unavailable))
+    }
+
+    @Test func missingModifiedAtYieldsMetadataWarningAndPartial() async {
+        let ref = reference(sizeBytes: 1_024, modifiedAt: nil)
+        let reader = FakeAudioFilePropertyReading(succeedingWith: allAvailableProperties())
+
+        let report = await InspectAudioFileUseCase(reader: reader).execute(file: ref)
+
+        #expect(isPartial(report.status))
+        #expect(report.warnings.count == 1)
+        #expect(hasWarning(report.warnings, code: .metadataModifiedAtUnavailable, field: "modifiedAt", kind: .unavailable))
+    }
+
+    @Test func bothMetadataMissingYieldsTwoDistinctWarningsAndPartial() async {
+        let ref = reference(sizeBytes: nil, modifiedAt: nil)
+        let reader = FakeAudioFilePropertyReading(succeedingWith: allAvailableProperties())
+
+        let report = await InspectAudioFileUseCase(reader: reader).execute(file: ref)
+
+        #expect(isPartial(report.status))
+        #expect(report.warnings.count == 2)
+        #expect(hasWarning(report.warnings, code: .metadataSizeUnavailable, field: "sizeBytes", kind: .unavailable))
+        #expect(hasWarning(report.warnings, code: .metadataModifiedAtUnavailable, field: "modifiedAt", kind: .unavailable))
+        expectNoDuplicateWarnings(report.warnings)
+    }
+
+    @Test func metadataAndTechnicalWarningsCombineWithoutDuplicates() async {
+        var props = allAvailableProperties()
+        props.bitDepth = .unavailable(reason: nil) // one technical warning
+        let ref = reference(sizeBytes: nil, modifiedAt: Date(timeIntervalSince1970: 0))
+        let reader = FakeAudioFilePropertyReading(succeedingWith: props)
+
+        let report = await InspectAudioFileUseCase(reader: reader).execute(file: ref)
+
+        #expect(isPartial(report.status))
+        #expect(report.warnings.count == 2)
+        // Both a technical and a metadata warning are present — checked by identity, not by order.
+        #expect(hasWarning(report.warnings, code: .propertyUnavailable, field: "bitDepth", kind: .unavailable))
+        #expect(hasWarning(report.warnings, code: .metadataSizeUnavailable, field: "sizeBytes", kind: .unavailable))
+        expectNoDuplicateWarnings(report.warnings)
+    }
+
+    @Test func globalFailureWithMissingMetadataStaysFailedButIncludesMetadataWarnings() async {
+        let ref = reference(sizeBytes: nil, modifiedAt: nil)
+        let error = InspectionError(code: .fileOpenFailed, message: "could not open")
+        let reader = FakeAudioFilePropertyReading(failingWith: error)
+
+        let report = await InspectAudioFileUseCase(reader: reader).execute(file: ref)
+
+        // Status preserved as `.failed` — never recomputed to `.partial`, even with warnings present.
+        #expect(report.status == .failed(error))
+        // Properties stay the safe all-`unavailable` set (the exporter maps this to `{}`).
+        #expect(report.properties == TechnicalProperties())
+        // Metadata warnings ARE derived on the global-failure path.
+        #expect(report.warnings.count == 2)
+        #expect(hasWarning(report.warnings, code: .metadataSizeUnavailable, field: "sizeBytes", kind: .unavailable))
+        #expect(hasWarning(report.warnings, code: .metadataModifiedAtUnavailable, field: "modifiedAt", kind: .unavailable))
+    }
+
     // MARK: - Local helpers
+
+    private func reference(sizeBytes: Int?, modifiedAt: Date?) -> AudioFileReference {
+        AudioFileReference(
+            displayName: "clip.wav",
+            fileExtension: "wav",
+            sizeBytes: sizeBytes,
+            modifiedAt: modifiedAt,
+            source: .userSelectedLocalFile(displayName: "clip.wav", locationDisclosure: .omitted)
+        )
+    }
+
+    private func hasWarning(_ warnings: [InspectionWarning], code: WarningCode, field: String, kind: WarningKind) -> Bool {
+        warnings.contains { $0.code == code && $0.field == field && $0.kind == kind }
+    }
+
+    private func expectNoDuplicateWarnings(_ warnings: [InspectionWarning]) {
+        let keys = warnings.map { "\($0.code.rawValue)|\($0.field ?? "")" }
+        #expect(Set(keys).count == keys.count)
+    }
 
     private func isPartial(_ status: InspectionStatus) -> Bool {
         if case .partial = status { return true }
