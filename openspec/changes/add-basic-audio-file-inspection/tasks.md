@@ -34,9 +34,9 @@ hypotheses pending the ADR-0003 native-decoding spike, so the spike is the first
 
 ## 4. JSON export (schemaVersion 1)
 
-- [ ] 4.1 Implement the `Codable` DTO + `JSONEncoder` `ReportExporting` in the app/infra layer (domain stays free of JSONEncoder), per `docs/json-schema-v1.md`
-- [ ] 4.2 Ensure states distinguish absent/unsupported/uncertain/failed and no absolute private path is emitted by default
-- [ ] 4.3 Unit tests: encode in-memory reports; assert top-level fields, per-property states, and stable field names
+- [x] 4.1 Implement the `Codable` DTO + `JSONEncoder` `ReportExporting` in the app/infra layer (domain stays free of JSONEncoder), per `docs/json-schema-v1.md`
+- [x] 4.2 Ensure states distinguish absent/unsupported/uncertain/failed and no absolute private path is emitted by default
+- [x] 4.3 Unit tests: encode in-memory reports; assert top-level fields, per-property states, and stable field names
 
 ## 5. Minimal presentation
 
