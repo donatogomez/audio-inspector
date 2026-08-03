@@ -26,23 +26,37 @@ enum JSONScalar: Encodable {
 }
 
 /// A stable `{ code, message }` object — the shape shared by a property `failed` error and a global
-/// `inspectionStatus.error`. Both fields are always present, so the synthesized encoding is correct.
+/// `inspectionStatus.error`. Both fields are always present. `CodingKeys` pins the wire names so a
+/// Swift property rename can never silently change the contract.
 struct CodeMessageDTO: Encodable {
     let code: String
     let message: String
+
+    enum CodingKeys: String, CodingKey {
+        case code, message
+    }
 }
 
-/// The `generator` envelope object. Both fields always present.
+/// The `generator` envelope object. Both fields always present; wire names pinned by `CodingKeys`.
 struct GeneratorDTO: Encodable {
     let name: String
     let version: String
+
+    enum CodingKeys: String, CodingKey {
+        case name, version
+    }
 }
 
 /// The safe `source` object. All three fields always present; carries no path/URL/bookmark by shape.
+/// Wire names pinned by `CodingKeys`.
 struct SourceDTO: Encodable {
     let kind: String
     let displayName: String
     let locationDisclosure: String
+
+    enum CodingKeys: String, CodingKey {
+        case kind, displayName, locationDisclosure
+    }
 }
 
 /// `inspectedFile`. `fileExtension`/`sizeBytes`/`modifiedAt` are schema-nullable and MUST appear as
@@ -163,7 +177,8 @@ struct InspectionStatusDTO: Encodable {
     }
 }
 
-/// The top-level envelope. Every field is always present, so the synthesized encoding is correct.
+/// The top-level envelope. Every field is always present; `CodingKeys` pins the wire names so an
+/// internal property rename can never silently change the contract.
 struct ReportEnvelopeDTO: Encodable {
     let schemaVersion: Int
     let generatedAt: Date
@@ -172,6 +187,10 @@ struct ReportEnvelopeDTO: Encodable {
     let technicalProperties: TechnicalPropertiesDTO
     let warnings: [WarningDTO]
     let inspectionStatus: InspectionStatusDTO
+
+    enum CodingKeys: String, CodingKey {
+        case schemaVersion, generatedAt, generator, inspectedFile, technicalProperties, warnings, inspectionStatus
+    }
 }
 
 /// Encodes an optional as an **explicit `null`** when it is `nil` (instead of omitting the key), for
