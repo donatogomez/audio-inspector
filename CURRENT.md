@@ -19,13 +19,15 @@
 
 **Focus:** None in progress — the tree is at a clean checkpoint, ready for the next slice.
 
-**Status:** Groups 1–3 of the active change are complete and integrated on `main`, including the
-Group-2 correction that derives descriptive-metadata warnings. Group 4 has not started.
+**Status:** Groups 1–4 of the active change are complete and integrated on `main`. The JSON v1 report
+export now lives in the App layer (`AudioInspectorApp`), mapping a domain `InspectionReport` to
+`schemaVersion` 1 bytes. Group 5 has not started.
 
-**Next step:** Begin Group 4 of `add-basic-audio-file-inspection` (see its `tasks.md`).
+**Next step:** Begin Group 5 of `add-basic-audio-file-inspection` — the minimal presentation of the
+report and the action that writes the export (see its `tasks.md`).
 
-**Why:** The inspection-report pipeline is now contract-complete; the next vertical-slice step is the
-JSON export that Group 4 defines.
+**Why:** With the report pipeline and its JSON export in place, the remaining vertical-slice step is
+surfacing the report in the UI and wiring the export action to disk.
 
 **Open questions / threads:** None.
 
