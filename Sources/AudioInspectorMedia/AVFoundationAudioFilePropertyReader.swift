@@ -49,7 +49,11 @@ public struct AVFoundationAudioFilePropertyReader: AudioFilePropertyReading {
 
 // MARK: - Load result (value / absence / read-error, without leaking the Apple error)
 
-private extension AVFoundationAudioFilePropertyReader {
+// `internal` (not `private`) so the pure mapping/error-translation surface below is reachable from the
+// package's test target via `@testable import` — deterministic in-memory unit tests drive the field
+// mappers and the global-error classifier with controlled inputs (task 3.7), without opening real
+// files. These helpers stay inside `AudioInspectorMedia`; no Apple type crosses the domain port.
+extension AVFoundationAudioFilePropertyReader {
     /// The outcome of one per-property load, preserving the distinction the domain needs. It carries a
     /// **flat value copy** on success and *no* Apple error on failure — the original `NSError`/`AVError`
     /// is caught and discarded at the point of failure, never stored or forwarded (ADR-0011 §5).
@@ -75,7 +79,7 @@ private extension AVFoundationAudioFilePropertyReader {
 
 // MARK: - Flow (open → load tracks [global] → per-property loads → assemble)
 
-private extension AVFoundationAudioFilePropertyReader {
+extension AVFoundationAudioFilePropertyReader {
     /// The per-load results the field mappers read from. Not `Sendable`-required: it never crosses an
     /// isolation boundary (the reader is nonisolated and the mappers are synchronous, called without an
     /// intervening `await`). It holds only flat value copies — no `AVAsset`/`AVAssetTrack`/pointer.
@@ -163,7 +167,7 @@ private extension AVFoundationAudioFilePropertyReader {
 
 // MARK: - Audio stream basic description (shared by the structural mappers)
 
-private extension AVFoundationAudioFilePropertyReader {
+extension AVFoundationAudioFilePropertyReader {
     /// Lifts the format-description load result into an ASBD load result. `failed`/`unavailable` pass
     /// through; a present description with no ASBD is `unavailable` (absence, not an error).
     static func streamProperty(from formatDescription: LoadedProperty<CMFormatDescription>) -> LoadedProperty<AudioStreamBasicDescription> {
@@ -221,7 +225,7 @@ private extension AVFoundationAudioFilePropertyReader {
 
 // MARK: - Per-field mappers
 
-private extension AVFoundationAudioFilePropertyReader {
+extension AVFoundationAudioFilePropertyReader {
     /// `container` from the file's content type (`URLResourceValues.contentType`, a `UTType`).
     ///
     /// Spike 0031/F found **no direct real-container signal** among the evaluated AVFoundation/CoreMedia
@@ -237,6 +241,14 @@ private extension AVFoundationAudioFilePropertyReader {
         } catch {
             return .failed(Self.readFailure("Could not read the file's content type."))
         }
+        return Self.container(fromContentType: contentType)
+    }
+
+    /// The **pure** `container` mapping — the loaded content type (or its absence) → `Property`, with no
+    /// filesystem access. Split out of `container(from:)` so the load (IO, which can `failed`) is
+    /// separable from the deterministic mapping (a resolved type → `uncertain`; no type → `unavailable`),
+    /// which task 3.7 unit-tests with a controlled `UTType?` and no real file.
+    static func container(fromContentType contentType: UTType?) -> Property<String> {
         guard let contentType else { return .unavailable(reason: nil) }
         return .uncertain(
             value: contentType.identifier,
@@ -375,7 +387,7 @@ private extension AVFoundationAudioFilePropertyReader {
 
 // MARK: - Global error classification (by scope/effect — ADR-0011 §5; no Apple error crosses the port)
 
-private extension AVFoundationAudioFilePropertyReader {
+extension AVFoundationAudioFilePropertyReader {
     /// Converts a whole-file failure into a **global** `InspectionError`, classified by scope using
     /// bridged Swift error types (inspected **only here**, never forwarded). Permission denial →
     /// `fileAccessDenied`; an unrecognizable/corrupt/unreadable file → `fileUnreadable`; anything else →

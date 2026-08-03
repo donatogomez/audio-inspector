@@ -92,6 +92,20 @@ in-memory `InspectionReport` and asserting on the DTO/JSON. Only a small number 
 tests touch real files, using deterministic fixtures generated in-test (later slice) — never
 copyrighted audio.
 
+The AVFoundation adapter itself (group 3) is likewise tested without needing real files for its
+*logic*: its pure per-field mappers and the whole-file **global-error classifier** are `internal`
+(not `private`), so the package test target drives them via `@testable import` with controlled
+in-memory inputs — a hand-built `AudioStreamBasicDescription`, a `CMTime`, a `Float` data rate, a
+`UTType`, a `LoadedProperty` state, or a constructed `CocoaError`/`AVError`. This is a **testability
+seam only**: it changes visibility, not behaviour or the reader's public API, and no Apple type
+crosses the domain port (the internal surface stays inside `AudioInspectorMedia`). `container`'s
+mapping is split into a pure `container(fromContentType: UTType?)` helper so the load (IO, which can
+`failed`) is separable from the deterministic type→`Property` mapping. A single **integration** test
+generates a tiny PCM WAV/AIFF fixture in-test with public `AVAudioFile` APIs (unique temp dir,
+removed via `defer`) to exercise the real load path end-to-end; SDK-dependent error *codes* are not
+pinned in that integration test (the classifier's code mapping is covered deterministically by the
+in-memory suite), consistent with spike 0031's SDK-dependence caveat.
+
 ## Infrastructure reader (Group 3 — `AVFoundationAudioFilePropertyReader`)
 
 Group 3 adds the **first real** implementation of the domain port `AudioFilePropertyReading`:
