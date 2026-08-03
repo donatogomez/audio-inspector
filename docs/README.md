@@ -15,19 +15,8 @@
 - [claude-code-setup.md](claude-code-setup.md) — OpenSpec-generated config and the (deferred) review-agent proposal.
 - [adr/](adr/README.md) — architecture decision records.
 
-## Where each kind of information lives
+## The repo-wide information map
 
-To avoid duplicating the same content in several places, each source has a distinct job. Prefer a
-cross-link over a copy.
-
-| Source | Holds | Does **not** hold |
-| --- | --- | --- |
-| **OpenSpec specs** (`openspec/specs/`) | Current, accepted behavior and requirements — the source of truth for *what the system does*. | Rationale, proposals, or how-to. |
-| **OpenSpec changes** (`openspec/changes/`) | In-flight proposals: `proposal.md` (why), `design.md` (how), `specs/` deltas, `tasks.md` (work). Archived on completion. | Long-lived reference material. |
-| **docs/** | Stable, human-oriented material: vision, architecture, methodology, concurrency, testing, guides. | Per-change task lists or accepted-requirement text (those live in OpenSpec). |
-| **ADRs** (`docs/adr/`) | Significant, hard-to-reverse decisions with consequences and rejected alternatives. Immutable once accepted. | Day-to-day design detail or requirements. |
-| **GitHub issues / PRs** | Execution and review of specific work. | Specifications — an issue never replaces a spec. |
-
-Rule of thumb: a **requirement** goes in an OpenSpec spec; a **decision** goes in an ADR; an
-**explanation/guide** goes in `docs/`; a **task** goes in an OpenSpec change's `tasks.md`; **review
-of a change** goes in a PR.
+This file is only the index of `docs/` above. The single, repo-wide map of **where each kind of
+information lives** (OpenSpec specs vs. changes, `docs/`, ADRs, git, GitHub issues) is defined **once**
+in [`OVERVIEW.md`](../OVERVIEW.md) §5 — consult it there rather than duplicating it here.

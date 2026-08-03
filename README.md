@@ -71,9 +71,10 @@ and the [SignalFlow reuse audit](docs/signal-flow-reuse-audit.md) that shaped th
 
 ## Project status
 
-**Early bootstrap.** This repository currently contains the vision, architecture, ADRs, and the
-first spec-driven OpenSpec change proposal. No application code has been implemented yet. See
-[docs/roadmap.md](docs/roadmap.md) and the active OpenSpec change under `openspec/changes/`.
+In active early development. Rather than embed a status line that would drift, this README points to
+the live sources: [OVERVIEW.md](OVERVIEW.md) for architecture and orientation,
+[docs/roadmap.md](docs/roadmap.md) for the plan, and `openspec list` / the active change under
+`openspec/changes/` for current progress.
 
 ## Development
 

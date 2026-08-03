@@ -1,20 +1,14 @@
 # Contributing to Audio Inspector
 
-Audio Inspector is developed **spec-first**. Read this before writing code.
+The operational **runbook**: environment, commands, workflow, and the definition of done. It
+deliberately does **not** restate the architecture, the invariants, or the working rules — those live
+in [`OVERVIEW.md`](OVERVIEW.md) (orientation + invariants) and [`CLAUDE.md`](CLAUDE.md) (rules + session
+protocol). Read those two once before starting.
 
-## Golden rules
+Development is **spec-first** and mostly solo + AI: no significant code without an approved OpenSpec
+change, and **never implement on `main`** — branch per change.
 
-1. **No significant implementation without an approved OpenSpec change.** Specs are the source of
-   truth. Code follows an approved proposal + specification, not the other way around.
-2. **Never modify a user's original audio files.** All analysis is read-only.
-3. **Everything is local.** No network calls for analysis, no telemetry, no uploads.
-4. **Treat file paths and names as untrusted input.** Never interpolate them into shell strings;
-   always pass separated arguments to `Process`.
-5. **Do not work directly on `main`** for implementation. Use a branch per change.
-
-## Environment requirements
-
-Verified working baseline for this project (as of bootstrap):
+## Environment
 
 | Tool | Minimum / used | Notes |
 | --- | --- | --- |
@@ -29,94 +23,51 @@ Verified working baseline for this project (as of bootstrap):
 | SwiftLint | 0.65+ | `brew install swiftlint` |
 | SwiftFormat | 0.62+ | `brew install swiftformat` |
 
-Install the toolchain tools:
-
 ```bash
 brew install ffmpeg swiftlint swiftformat gh
 npm install -g @fission-ai/openspec
 ```
 
-> FFmpeg from Homebrew is a **GPL build**. That is fine for local development and CI, but it has
-> distribution implications for any shipped binary. See
-> [docs/adr/0003-ffmpeg-vs-native-audio-strategy.md](docs/adr/0003-ffmpeg-vs-native-audio-strategy.md).
+> Homebrew FFmpeg is a **GPL build** — fine for local dev/CI, but it has distribution implications for
+> any shipped binary (ADR-0003). The MVP ships without FFmpeg.
+
+Export `OPENSPEC_TELEMETRY=0` (the project opts out of OpenSpec telemetry; CI sets it too).
 
 ## OpenSpec workflow
 
-This project uses the modern OpenSpec artifact workflow (schema `spec-driven`). Do **not** invent
-commands — consult `openspec --help` or the skills in `.claude/`.
+Modern artifact workflow (schema `spec-driven`); artifact order **proposal → (design, specs) → tasks**.
+Every requirement needs at least one `#### Scenario:` (exactly four hashtags) in WHEN/THEN form. Don't
+invent commands — check `openspec --help` or the `.claude/` skills.
 
 ```bash
-openspec list                       # active changes
-openspec new change "<kebab-name>"  # scaffold a new change
-openspec status --change "<name>"   # artifact progress (proposal → design/specs → tasks)
-openspec instructions <artifact> --change "<name>"   # template + guidance for an artifact
-openspec validate <name> --strict   # validate a change or spec
-openspec archive <name>             # after a change is fully implemented and merged
+OPENSPEC_TELEMETRY=0 openspec list                        # active changes
+OPENSPEC_TELEMETRY=0 openspec new change "<kebab-name>"   # scaffold a change
+OPENSPEC_TELEMETRY=0 openspec status --change "<name>"    # artifact progress
+OPENSPEC_TELEMETRY=0 openspec validate <name> --strict    # validate a change/spec
+OPENSPEC_TELEMETRY=0 openspec archive <name>              # after implemented AND merged
 ```
 
-Artifact order for `spec-driven`: **proposal → (design, specs) → tasks**. Every requirement in a
-spec MUST have at least one `#### Scenario:` (exactly four hashtags) in WHEN/THEN form.
+## Definition of done
 
-### Telemetry
-
-OpenSpec collects anonymous usage stats by default. This project opts out. Disable it in your
-shell:
+A change is done when all four gates are green:
 
 ```bash
-export OPENSPEC_TELEMETRY=0   # or: export DO_NOT_TRACK=1
+./Scripts/check-boundaries.sh                              # architecture boundaries
+swift build -Xswiftc -warnings-as-errors                   # zero-warnings build
+swift test                                                 # Swift Testing suite
+OPENSPEC_TELEMETRY=0 openspec validate --all --strict      # specs/changes valid
 ```
 
-CI sets `OPENSPEC_TELEMETRY=0`. See [docs/privacy.md](docs/privacy.md).
+Style, run locally before pushing: `swiftformat --lint . && swiftlint`.
 
-## Architectural decisions
+## Adding a decision
 
-Non-trivial technical choices are recorded as ADRs in [docs/adr/](docs/adr/). Add a new numbered
-ADR (copy `0000-adr-template.md`) when you make a decision that future contributors would
-otherwise have to reverse-engineer.
-
-## Code quality
-
-- Swift 6, Strict Concurrency, warnings treated as errors.
-- Value types by default; correct `Sendable`; explicit actor isolation. No global singletons;
-  use dependency injection.
-- Typed errors; never silently ignore errors. Structured logging with `OSLog`.
-- No `JSONSerialization` (use `Codable`). No completion handlers in new code (use async/await).
-- No force-unwrap except where provably safe and commented.
-- Domain models depend on **none** of: FFmpeg, AVFoundation, AudioToolbox, Accelerate, SwiftUI,
-  AppKit, Core Data, SwiftData, `Process`/shell. See [docs/architecture.md](docs/architecture.md)
-  and the enforced boundaries below.
-- Run before pushing:
-
-```bash
-swift build
-swift test
-./Scripts/check-boundaries.sh
-swiftformat --lint . && swiftlint
-```
-
-## Architecture boundaries
-
-The dependency rule is enforced by the SwiftPM build graph (a target sees only its declared deps)
-and, as a full-build backstop, by [`Scripts/check-boundaries.sh`](Scripts/check-boundaries.sh):
-`AudioInspectorDomain` stays pure; `AudioInspectorMedia` is the only home of AVFoundation/
-AudioToolbox/FFmpeg-via-`Process`; `AudioInspectorAnalysis` owns Accelerate; features never import
-Media/Analysis. Run the script locally; CI will run it too.
+Copy `docs/adr/0000-adr-template.md` for a hard, hard-to-reverse choice a future contributor would
+otherwise have to reverse-engineer. ADRs are immutable once Accepted; reverse one with a new
+superseding ADR.
 
 ## Pull requests
 
-Small, single-purpose PRs. Fill in [`.github/pull_request_template.md`](.github/pull_request_template.md):
-link the approved OpenSpec change, confirm no cross-boundary imports, and paste `swift test` /
-`check-boundaries.sh` output. `main` must stay green. See
-[docs/testing-strategy.md](docs/testing-strategy.md) for the testing conventions.
-
-## Tests
-
-- Prefer **Swift Testing** for new tests; XCTest only where required.
-- Synthetic fixtures are generated **during tests** (sine, silence, clipping, DC offset, white
-  noise, 50/60 Hz hum, inverted channels, low-pass cut, 16→24 padding, inflated sample rate, …).
-- **No copyrighted musical material in the repository**, ever.
-
-## Commits
-
-Conventional Commits (`feat`, `fix`, `docs`, `refactor`, `chore`, `test`, `ci`, …). Do not add
-AI co-author trailers.
+Small, single-purpose PRs using [`.github/pull_request_template.md`](.github/pull_request_template.md):
+link the approved OpenSpec change, confirm no cross-boundary imports, and paste the gate output. `main`
+must stay green.
