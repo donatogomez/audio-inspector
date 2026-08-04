@@ -21,9 +21,10 @@ exhaustive. Higher tiers verify the wiring.
 
 The end-to-end tier runs inside `swift test`: it walks the whole production chain — a generated
 fixture on disk, the safe file reference, the real media reader, the use case, the report held by the
-flow model, its presentation, the real exporter and a real write — substituting **only** the points
-where a person acts (the open panel, the save panel, and a file dropped onto the window, which reaches
-the suite as an injected URL) plus the clock and generator identity.
+flow model, its presentation, the real exporter and a real write — substituting **only** the two
+points where a person acts in that flow (the open and save panels) plus the clock and generator
+identity. The other human entry point, dropping a file onto the window, is covered a tier below: the
+integration tests inject the URL the drop would have produced and drive the same coordinator.
 
 What it deliberately cannot reach: code signing, the entitlements the shipped app actually gets, the
 sandbox powerbox, the native panels, a real drag from Finder, visual rendering, and real network
