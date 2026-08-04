@@ -139,7 +139,7 @@ the cases the spike did not reach are listed at the end.
 
 ### C. Additional — dynamic network observation
 
-15. With the app running, observe it for the duration of a full inspect-and-export cycle using either
+24. With the app running, observe it for the duration of a full inspect-and-export cycle using either
     - Instruments → *Network*, attached to the AudioInspector process; or
     - `nettop -p $(pgrep -x AudioInspector)` in Terminal.
     Expected: no outgoing connections. Record what you observed, including "no traffic seen".
