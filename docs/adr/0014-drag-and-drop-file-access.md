@@ -65,9 +65,10 @@ replacement. Generation 1 carries **no** deprecation annotation at all for its `
   bare `Bool`; the items are unavailable until the drop is performed, so the app cannot know whether
   the content is acceptable beforehand. The highlight therefore states what is expected ("Drop one
   audio file"), never that the current payload is valid.
-- **File-reference URL normalisation, if needed, belongs to `AudioInspectorApp`.** Should a dropped URL
-  arrive in file-reference form (`file:///.file/id=…`), it is normalised at the drop boundary, before
-  `AudioFileReferenceMapper` is reached — see the risk note below.
+- **No URL normalisation is performed.** A sandboxed observation (below) found conventional path URLs in
+  every case tested, so no normalisation is introduced, `filePathURL` is not consulted, no
+  file-reference adapter exists, and `AudioFileReferenceMapper` is untouched. Preventive normalisation
+  would be code defending against a condition never observed.
 
 ## Alternatives considered
 
@@ -135,10 +136,12 @@ replacement. Generation 1 carries **no** deprecation annotation at all for its `
 - **Targeting feedback cannot be confirmatory** on this API generation, so the highlight promises less
   than a user might expect from it.
 - **The sandbox path is not reachable by `swift test`.** The package tests run unsandboxed and unsigned,
-  so whether the auto-start extension survives the asynchronous hop between the synchronous drop handler
-  and the inspection can only be observed in a signed, sandboxed `.app`. **Manual validation is part of
-  the definition of done for the implementing change**, not an optional extra.
-- Whether a dropped URL ever arrives in file-reference form is **not yet established** — see below.
+  so the behaviour recorded below can only be re-checked in a signed, sandboxed `.app`. **Manual
+  validation is part of the definition of done for the implementing change**, not an optional extra.
+- **The observation is a sample, not a proof.** It covers the locations and item kinds listed below on
+  one machine and one macOS version. Locations and sources it did not cover — iCloud files (downloaded
+  or evicted), aliases, symlinks, `.app` bundles and file-promise sources such as Mail — remain
+  unobserved, so a file-reference URL is unproven rather than impossible.
 
 ### Neutral
 
@@ -146,22 +149,42 @@ replacement. Generation 1 carries **no** deprecation annotation at all for its `
 - Should bookmarks arrive with persistence (ADR-0004), this decision is unaffected: the scope stays
   "items the user explicitly selected", by whichever explicit mechanism.
 
-## Risks to verify during implementation
+## Evidence from the sandboxed observation
 
-- **The shape of the URL Finder actually delivers is unverified.** File-reference URLs
-  (`file:///.file/id=…`) are documented for the `NSItemProvider` path, **not** for
-  `dropDestination(for: URL.self)`; this record makes no claim that Finder produces them here. It
-  matters because `AudioFileReferenceMapper` derives `displayName` from `lastPathComponent` and
-  `fileExtension` from `pathExtension`, so a reference URL would put a meaningless name into the report
-  and into the exported JSON's `source.displayName`. **A manual, sandboxed observation must settle it
-  before the normalisation design is fixed.** If only the drop can produce such URLs, normalisation
-  belongs to the drop adapter in `AudioInspectorApp` and `AudioFileReferenceMapper` stays untouched; if
-  the panel could produce them too, the mapper would be the correct owner and touching it would be
-  justified by evidence rather than by convenience.
-- **Security-scope survival across the async boundary** (see negative consequences). If it fails, the
-  escalation is: acquire the scope synchronously inside the drop handler; and only if that is
-  insufficient, an **in-memory, never persisted** bookmark round-trip — which would remain compatible
-  with ADR-0010 and ADR-0004 but must be recorded explicitly.
+Temporary instrumentation on a signed, sandboxed build recorded booleans only — no path, file name,
+extension value or content. What it found:
+
+**Local audio files (Downloads, Music, and another authorised location):** a single item;
+`isFileURL == true`; `isFileReferenceURL == false`; `filePathURL` identical to the delivered URL; a
+non-empty name and extension; not a directory; conforming to `UTType.audio`.
+
+**Security scope:** `startAccessingSecurityScopedResource()` returned **`false`**, and the file was
+readable anyway — both inside the synchronous handler and again after an asynchronous hop, without
+re-acquiring anything. The URL still resolved to the same file resource afterwards. This matches the
+auto-start behaviour Apple DTS describes for panel- and drop-provided URLs, and it confirms the existing
+coordinator pattern is already correct: call `start`, treat `false` as a non-error, and balance with
+`stop` only when it returned `true`.
+
+**Rejectable inputs:** a folder arrived as a local URL with `isDirectory == true` and no audio
+conformance; a two-item drop arrived with `itemCount == 2`; an image dragged from a web page produced
+`itemCount == 0`. All three are distinguishable in the handler, so each can be rejected in full.
+
+**No temporary copy** was involved: the delivered URL pointed at the user's own file throughout.
+
+**Consequences fixed by this evidence:** no normalisation, no `filePathURL`, no file-reference adapter,
+no change to `AudioFileReferenceMapper`, no bookmarks of any kind, no scope acquisition outside
+`SourceInspectionCoordinator`, and no entitlement change.
+
+## Risks that remain
+
+- The observation is a **sample on one machine and one macOS version**, over the locations and item
+  kinds listed above. It does not cover iCloud files (downloaded or evicted), aliases, symlinks, `.app`
+  bundles, or file-promise sources such as Mail. Should any of those ever deliver a file-reference URL,
+  `displayName` and `fileExtension` would be derived from a meaningless last path component, and that
+  name travels into the exported JSON's `source` object. The mitigation is not preventive code but the
+  manual validation run, extended over time.
+- **Sandbox behaviour is still unreachable from `swift test`**, so every re-check of the above belongs
+  to the manual runbook.
 
 ## Relationship to ADR-0010 and ADR-0013
 

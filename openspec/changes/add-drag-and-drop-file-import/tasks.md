@@ -26,21 +26,24 @@ needed at all and, if so, which layer owns it.
 Blocks tasks 3 and 5. `swift test` cannot reach any of this: the package runs unsandboxed and unsigned
 (`docs/testing-strategy.md`).
 
-- [ ] 2.1 Build a signed, sandboxed `.app` carrying a temporary `dropDestination(for: URL.self)` probe
-      that logs **booleans and lengths only** through `OSLog` — never a path, never a filename, nothing
-      durable (`docs/privacy.md`, SECURITY.md).
-- [ ] 2.2 Record, per dropped item: `isFileURL`; whether the path is in file-reference form
-      (`/.file/id=`); whether `(url as NSURL).filePathURL` differs from the delivered URL; whether
-      `lastPathComponent` matches the file's real name; whether `pathExtension` is present; whether it
-      is a directory; the value returned by `startAccessingSecurityScopedResource()`; and whether the
-      file is readable **both inside the drop handler and after the asynchronous hop**.
-- [ ] 2.3 Cover the matrix: `~/Music`, Desktop, Downloads, an external volume, a downloaded iCloud file,
-      an evicted iCloud file, an alias, a symlink, a folder, an `.app` bundle, two files at once, a
-      Safari link, and a Mail attachment (file promise).
-- [ ] 2.4 Write the findings to `docs/spikes/` and remove the probe. Decide on that evidence whether
-      normalisation is required and **who owns it**: the drop adapter in `AudioInspectorApp` if only the
-      drop can produce reference URLs, or `AudioFileReferenceMapper` if the panel can too. Update
-      ADR-0014's risk section with the observed result.
+- [x] 2.1 Built a signed, sandboxed `.app` carrying a temporary `dropDestination(for: URL.self)` probe
+      surfacing **booleans and counts only** in a copyable diagnostic panel — never a path, never a
+      filename, never an extension value, nothing durable (`docs/privacy.md`, SECURITY.md).
+- [x] 2.2 Recorded, per dropped item: item count; `isFileURL`; `isFileReferenceURL`; whether
+      `(url as NSURL).filePathURL` differs from the delivered URL; whether the name and extension are
+      non-empty; whether it is a directory; whether it conforms to `UTType.audio`; the value returned by
+      `startAccessingSecurityScopedResource()`; readability **both inside the drop handler and after an
+      asynchronous hop**; and whether the URL still resolved to the same resource afterwards.
+- [ ] 2.3 Cover the rest of the matrix: a downloaded iCloud file, an evicted iCloud file, an alias, a
+      symlink, an `.app` bundle, and a Mail attachment (file promise). **Partially done** — Downloads,
+      Music, another authorised location, a folder, two files at once and a web item were observed and
+      are recorded in ADR-0014; the entries listed here were not, so a file-reference URL is unproven
+      rather than impossible.
+- [x] 2.4 Removed the probe and recorded the findings in ADR-0014 (*Evidence from the sandboxed
+      observation*) and in `design.md`, rather than in `docs/spikes/`, so the evidence sits next to the
+      decision it settles. **Decision: no normalisation** — Finder delivered conventional path URLs with
+      `filePathURL` identical, so `filePathURL` is not consulted, no file-reference adapter is written
+      and `AudioFileReferenceMapper` is untouched.
 
 ## 3. Dropped-payload routing in `AudioInspectorApp`
 
