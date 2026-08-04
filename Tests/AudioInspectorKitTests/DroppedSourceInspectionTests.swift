@@ -108,6 +108,62 @@ struct DroppedSourceInspectionTests {
         }
     }
 
+    /// The contractual half of the same criterion: the canonical spec says both mechanisms produce the
+    /// same **exported JSON** apart from the envelope fields the exporter generates per export. With the
+    /// clock and the generator identity fixed, those envelope fields are pinned too, so the whole
+    /// decoded tree must match — no field is excluded and nothing is normalised away.
+    ///
+    /// Comparison is structural, through the existing `Codable`-only `JSONValue` tree: no `Any`, no
+    /// `[String: Any]`, no `JSONSerialization`, no textual substitution.
+    ///
+    /// This also proves the report's ephemeral `id` is not exported: the two references carry different
+    /// `UUID`s by construction, so identical JSON is only possible if that value never reaches the wire.
+    /// It is not a second copy of the group-7 end-to-end test — it asserts only panel/drop equivalence.
+    @Test func thePanelAndTheDropExportTheSameJSONForTheSameFile() async throws {
+        try await withTemporaryDirectory { directory in
+            let url = directory.appendingPathComponent("same.wav")
+            try writePCMFixture(to: url)
+
+            let viaPanel = SourceInspectionCoordinator(chooseSource: { url })
+            let viaDrop = SourceInspectionCoordinator()
+
+            guard case let .inspected(panelReport) = await viaPanel.inspect(),
+                  case let .inspected(dropReport) = await viaDrop.inspect(url)
+            else {
+                Issue.record("both entry points must produce a report"); return
+            }
+
+            // Distinct in memory — so an identical export can only mean the id is never serialised.
+            #expect(panelReport.file.id != dropReport.file.id)
+
+            let panelJSON = try exportValue(panelReport, now: fixedNow, generator: fixedGenerator)
+            let dropJSON = try exportValue(dropReport, now: fixedNow, generator: fixedGenerator)
+
+            // The entire tree, envelope included, compared as one value.
+            #expect(panelJSON == dropJSON)
+
+            // Spelled out so a regression names the section that drifted rather than the whole document.
+            #expect(panelJSON["inspectedFile"] == dropJSON["inspectedFile"])
+            #expect(panelJSON["technicalProperties"] == dropJSON["technicalProperties"])
+            #expect(panelJSON["warnings"] == dropJSON["warnings"])
+            #expect(panelJSON["inspectionStatus"] == dropJSON["inspectionStatus"])
+            #expect(panelJSON["schemaVersion"] == dropJSON["schemaVersion"])
+            #expect(panelJSON["generator"] == dropJSON["generator"])
+            #expect(panelJSON["generatedAt"] == dropJSON["generatedAt"])
+
+            // All eight technical properties are present and none is entry-point dependent.
+            let properties = try #require(panelJSON["technicalProperties"]?.keys)
+            #expect(properties == [
+                "container", "duration", "sampleRate", "channelCount",
+                "bitDepth", "codec", "declaredBitrate", "estimatedBitrate",
+            ])
+
+            // The safe origin travels identically, and no location key appears by either route.
+            #expect(!allKeys(dropJSON).contains("path"))
+            #expect(!allKeys(dropJSON).contains("url"))
+        }
+    }
+
     /// A non-file URL cannot even be prepared, and that stays a preparation failure rather than a
     /// fabricated report — the guard lives in the shared body, so both entry points get it.
     @Test func aNonFileURLReachingTheCoordinatorIsAPreparationFailure() async throws {
