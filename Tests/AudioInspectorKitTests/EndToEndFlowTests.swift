@@ -79,9 +79,14 @@ struct EndToEndFlowTests {
             // 7. The report is presentable: the eight rows `ReportView` renders.
             let displays = ReportPropertyFormatter.displays(for: report.properties)
             #expect(displays.count == 8)
-            #expect(displays.allSatisfy { !$0.state.isEmpty })
-            #expect(displays.first { $0.name == "Sample rate" }?.value == "44100")
-            #expect(displays.first { $0.name == "Codec" }?.value == "lpcm")
+            // Every row is well formed: nothing failed to read on a fixture we generated ourselves.
+            #expect(displays.allSatisfy { $0.state != .couldNotBeRead })
+            // Readable value, with the exact figure preserved beside it.
+            #expect(displays.first { $0.name == "Sample rate" }?.value == "44.1 kHz")
+            #expect(displays.first { $0.name == "Sample rate" }?.detail == "44,100 Hz")
+            // The codec token `lpcm` is now named, with the token preserved as detail.
+            #expect(displays.first { $0.name == "Codec" }?.value == "Linear PCM")
+            #expect(displays.first { $0.name == "Codec" }?.detail == "lpcm")
 
             // 8–10. The same report, exported for real to a *different* file.
             let destination = directory.appendingPathComponent("out.json")

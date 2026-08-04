@@ -17,30 +17,32 @@
 
 ---
 
-**Focus:** None in progress — drag & drop is implemented, validated and closed; the tree is at a clean
-checkpoint.
+**Focus:** None in progress — report presentation is closed as far as implementation goes, and its
+manual accessibility validation is **deliberately deferred, not done**.
 
-**Status:** A file can now be inspected by dropping it anywhere on the window as well as by picking it
-in the open panel. Both are explicit user selections and both run the **same** pipeline — one
-coordinator, one security-scope handling, one mapper, one reader, one use case and one flow state
-machine — so neither entry point can drift from the other. A drop that cannot become a single
-inspectable local file is refused whole, keeping any report already on screen, and refusals never
-become inspection failures. No entitlement was added, nothing is persisted, and feature modules stay
-free of file locations, now enforced by the boundary script rather than by convention. ADR-0014 is
-accepted, backed by the automated suite and a sandboxed manual run.
+**Status:** The report reads as a report rather than as the implementation behind it. Internal
+vocabulary no longer reaches the screen: the presentation state is a closed type of its own, warnings
+render from their message and kind, and container and codec are named with the exact token kept beside
+them. Values are formatted for reading against a pinned locale, always preserving the precise figure.
+There is a hero header and grouped properties instead of a settings form, exporting is a toolbar
+action, colour is limited to the state of the reading, and each row is one coherent element for an
+assistive reader. The inspection itself behaves exactly as before.
 
-**Next step:** Not started. The next product step opens as its own OpenSpec change with its own
-proposal — waveform, spectrogram, an educational mode, or anything else. None of them may be grafted
-onto the closed change.
+**Next step:** Waveform — reading samples and drawing them — as its own change. Before it ships, the
+deferred accessibility checks on this surface should be run: VoiceOver, system text sizes, contrast,
+and confirming nothing depends on colour alone. They need a person at a keyboard, so they do not gate
+starting the next slice, only finishing it.
 
-**Why:** The slice existed to add a second way in without a second pipeline, and that is exactly what
-it does; further capability belongs to a different scope.
+**Why:** Presentation was the one part that no automated test can finish judging. Recording those
+checks as done without performing them would be inventing evidence, so they stay open and named.
 
-**Open questions / threads:** One known gap, carried in ADR-0014 and in the manual runbook rather than
-in code: iCloud files, aliases, symlinks, app bundles and Mail file promises were never dropped, so a
-file-reference URL is unproven rather than impossible. It would surface as a wrong display name, and
-the answer is to extend the manual run when such a source appears — not to add preventive
-normalisation.
+**Open questions / threads:** Waveform, spectrogram and the per-property explanations are **not
+started**. Each needs its own change: the first two require reading samples, which is a different kind
+of work, and the explanations add new content that can drift from describing into judging quality, so
+they carry their own normative requirement. Known risks carried forward: the pinned `en_US` locale
+means formatting does not follow the user's region; warning text originates in the domain yet is swept
+by a presentation test; an unmapped wire key would fall back to its raw name; and `Choose another
+file…` still sits at the foot of the window while exporting lives in the toolbar.
 
 ---
 _Last touched: 2026-08-04. Overwrite freely; empty is fine._

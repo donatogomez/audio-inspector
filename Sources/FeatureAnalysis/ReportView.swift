@@ -19,29 +19,65 @@ public struct ReportView: View {
     }
 
     public var body: some View {
-        Form {
-            fileSection
-            propertiesSection
-            warningsSection
-            statusSection
-            exportSection
+        ScrollView {
+            VStack(alignment: .leading, spacing: 24) {
+                heroHeader
+                propertiesSection
+                warningsSection
+                statusSection
+                fileSection
+            }
+            .padding(24)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .formStyle(.grouped)
+        // The export is an action, not a row of the report. `.toolbar` from here attaches it to the
+        // window without moving `ReportExportModel` out of this view, so no ownership changes.
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) { exportAction }
+        }
+    }
+
+    // MARK: - Hero header — what this file is, at a glance
+
+    /// The name, then the handful of facts that identify the file. Everything here also appears in full
+    /// below: the header summarises, it does not replace. Nothing missing is filled in.
+    private var heroHeader: some View {
+        let summary = ReportPropertyFormatter.summary(for: report)
+        return VStack(alignment: .leading, spacing: 6) {
+            Text(summary.fileName)
+                .font(.title2.weight(.semibold))
+                .textSelection(.enabled)
+            if !summary.highlights.isEmpty {
+                Text(summary.highlights.joined(separator: "  ·  "))
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    // The interpunct is decoration; an assistive reader hears a list.
+                    .accessibilityLabel(summary.highlights.joined(separator: ", "))
+            }
+        }
+        .accessibilityElement(children: .combine)
     }
 
     // MARK: - File identity (safe metadata only — never a location)
 
     private var fileSection: some View {
-        Section("File") {
+        ReportSection("File") {
             LabeledContent("Name", value: report.file.displayName)
             if let ext = report.file.fileExtension {
                 LabeledContent("Extension", value: ext)
             }
             if let size = report.file.sizeBytes {
-                LabeledContent("Size", value: "\(size) bytes")
+                LabeledContent("Size") {
+                    VStack(alignment: .trailing, spacing: 1) {
+                        Text(HumanFormat.byteCount(size))
+                        Text(HumanFormat.byteCountExact(size))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
             }
             if let modifiedAt = report.file.modifiedAt {
-                LabeledContent("Modified") { Text(modifiedAt, format: .dateTime) }
+                LabeledContent("Modified", value: HumanFormat.dateTime(modifiedAt))
             }
             LabeledContent("Source", value: sourceDescription)
         }
@@ -57,103 +93,143 @@ public struct ReportView: View {
 
     // MARK: - Technical properties (eight rows, states preserved)
 
+    /// Grouped into what the file is and how it is encoded. Every one of the eight rows still appears.
     private var propertiesSection: some View {
-        Section("Technical properties") {
-            ForEach(ReportPropertyFormatter.displays(for: report.properties)) { property in
-                PropertyRow(property: property)
+        ForEach(ReportPropertyFormatter.groups(for: report.properties)) { group in
+            ReportSection(group.name) {
+                ForEach(group.properties) { property in
+                    PropertyRow(property: property)
+                }
             }
         }
     }
 
-    // MARK: - Warnings (carried verbatim — never derived here)
+    // MARK: - Warnings (hidden entirely when there are none)
 
     @ViewBuilder private var warningsSection: some View {
-        Section("Warnings") {
-            if report.warnings.isEmpty {
-                Text("No warnings")
-                    .foregroundStyle(.secondary)
-            } else {
-                ForEach(Array(report.warnings.enumerated()), id: \.offset) { _, warning in
+        let warnings = ReportPropertyFormatter.displays(for: report.warnings)
+        if !warnings.isEmpty {
+            ReportSection("Notes") {
+                ForEach(warnings) { warning in
                     VStack(alignment: .leading, spacing: 2) {
-                        LabeledContent(warning.field ?? "general", value: warning.code.rawValue)
+                        if let subject = warning.subject {
+                            Text(subject).font(.callout.weight(.medium))
+                        }
                         Text(warning.message)
                             .font(.callout)
                             .foregroundStyle(.secondary)
                     }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(warning.accessibilityLabel)
                 }
             }
         }
     }
 
-    // MARK: - Global status
+    // MARK: - Outcome (about the reading, never about the audio)
 
     private var statusSection: some View {
-        Section("Status") {
-            switch report.status {
-            case .completed:
-                LabeledContent("State", value: "completed")
-            case let .partial(message):
-                LabeledContent("State", value: "partial")
-                if let message {
-                    Text(message).font(.callout).foregroundStyle(.secondary)
-                }
-            case let .failed(error):
-                LabeledContent("State", value: "failed")
-                LabeledContent("Error", value: error.code.rawValue)
-                Text(error.message).font(.callout).foregroundStyle(.secondary)
-            }
+        ReportSection("Result") {
+            Text(ReportPropertyFormatter.outcome(
+                for: report.status,
+                properties: ReportPropertyFormatter.displays(for: report.properties)
+            ).text)
+            .font(.callout)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 
     // MARK: - Export action (transient phase only)
 
-    private var exportSection: some View {
-        Section("Export") {
-            Button("Export JSON…") {
-                Task { await exportModel.export(report) }
-            }
-            .disabled(exportModel.phase == .exporting)
-
+    /// The transient phase sits beside the action rather than occupying a permanent row of the report.
+    private var exportAction: some View {
+        HStack(spacing: 8) {
             switch exportModel.phase {
             case .idle:
                 EmptyView()
             case .exporting:
-                Text("Exporting…").foregroundStyle(.secondary)
+                Text("Exporting…").font(.callout).foregroundStyle(.secondary)
             case .succeeded:
-                Text("Exported").foregroundStyle(.secondary)
+                Text("Exported").font(.callout).foregroundStyle(.secondary)
             case let .failed(message):
-                Text(message).foregroundStyle(.red)
+                Text(message).font(.callout).foregroundStyle(.red)
             }
+
+            Button("Export JSON…") {
+                Task { await exportModel.export(report) }
+            }
+            .disabled(exportModel.phase == .exporting)
         }
     }
 }
 
-/// One technical-property row: name, state, value (+ unit) when present, and a reason/error detail.
+/// A titled block of the report. Replaces `Form` + `.formStyle(.grouped)`, whose grouped-inset look is
+/// the idiom of a Preferences pane rather than of a document being examined.
+private struct ReportSection<Content: View>: View {
+    private let title: String
+    private let content: Content
+
+    init(_ title: String, @ViewBuilder content: () -> Content) {
+        self.title = title
+        self.content = content()
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 10) {
+                content
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 8))
+        }
+    }
+}
+
+/// One technical-property row: name, value, the state in words when it is not simply measured, and a
+/// reason or exact figure as detail.
 private struct PropertyRow: View {
     let property: PropertyDisplay
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
+            // The value carries more weight than its label — the opposite of a settings form.
             LabeledContent(property.name) {
-                Text(valueText)
+                Text(valueText).fontWeight(.medium)
             }
-            Text("state: \(property.state)")
+            // A cleanly measured value carries no state label — the value speaks for itself.
+            if let label = property.state.label {
+                Label {
+                    Text(label)
+                } icon: {
+                    if let symbol = property.state.symbolName {
+                        Image(systemName: symbol)
+                    }
+                }
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                // Only a failure of the *reading* is alerting. An unreliable or undefined property is
+                // an ordinary outcome, and colouring it would imply the file is worse.
+                .foregroundStyle(property.state.isReadFailure ? AnyShapeStyle(.red) : AnyShapeStyle(.secondary))
+            }
             if let detail = property.detail {
                 Text(detail)
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        // One element, one sentence — not four fragments read in sequence.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(property.accessibilityLabel)
     }
 
+    /// The value already carries its unit (`44.1 kHz`), so nothing is appended here.
     private var valueText: String {
-        guard let value = property.value else { return "—" }
-        if let unit = property.unit {
-            return "\(value) \(unit)"
-        }
-        return value
+        property.value ?? "—"
     }
 }
 
