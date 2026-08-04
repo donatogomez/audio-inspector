@@ -19,15 +19,15 @@
 
 **Focus:** None in progress — the tree is at a clean checkpoint, ready for the next slice.
 
-**Status:** Groups 1–4 of the active change are complete and integrated on `main`. The JSON v1 report
-export now lives in the App layer (`AudioInspectorApp`), mapping a domain `InspectionReport` to
-`schemaVersion` 1 bytes. Group 5 has not started.
+**Status:** Groups 1–5 of the active change are complete and integrated on `main`. A report view in
+`FeatureAnalysis` presents an already-available `InspectionReport`, and the App layer can export it
+as JSON v1 to a destination the user chooses. Group 6 has not started.
 
-**Next step:** Begin Group 5 of `add-basic-audio-file-inspection` — the minimal presentation of the
-report and the action that writes the export (see its `tasks.md`).
+**Next step:** Begin Group 6 of `add-basic-audio-file-inspection` — sandboxed selection of the source
+file and wiring selection → inspection → the report view (see its `tasks.md`).
 
-**Why:** With the report pipeline and its JSON export in place, the remaining vertical-slice step is
-surfacing the report in the UI and wiring the export action to disk.
+**Why:** Presentation and export are in place but still have no real report to show: the remaining
+vertical-slice step is letting the user pick a file, running the inspection, and feeding the result in.
 
 **Open questions / threads:** None.
 
