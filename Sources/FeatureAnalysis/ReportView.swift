@@ -190,7 +190,8 @@ private struct ReportSection<Content: View>: View {
     }
 }
 
-/// One technical-property row: name, state, value (+ unit) when present, and a reason/error detail.
+/// One technical-property row: name, value, the state in words when it is not simply measured, and a
+/// reason or exact figure as detail.
 private struct PropertyRow: View {
     let property: PropertyDisplay
 
