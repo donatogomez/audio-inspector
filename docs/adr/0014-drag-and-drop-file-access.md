@@ -1,6 +1,6 @@
 # ADR-0014: Drag & drop as a second explicit user-selection mechanism
 
-- **Status**: Proposed
+- **Status**: Accepted
 - **Date**: 2026-08-04
 - **Deciders**: Project maintainer
 - **Related**: ADR-0010 (sandboxed temporary access — extended, not modified), ADR-0013 (user-selected
@@ -198,16 +198,28 @@ no change to `AudioFileReferenceMapper`, no bookmarks of any kind, no scope acqu
 - Boundary rule 10 rejects `import AppKit` and real use of `URL` in `Sources/Feature*`, so the
   location-free feature boundary is now enforced statically rather than by convention.
 
+## Validation
+
+The implementation was validated by hand against a signed, sandboxed build. Every mandatory case
+passed, with **no anomalies**: drops from several authorised locations, from the initial state and over
+an existing report; whole-drop refusal for multiple items, folders and non-local items; refusal during
+an in-flight inspection; instructive targeting feedback and its accessibility; the previous report
+preserved on refusal and replaced after a valid drop; the source byte-identical before and after;
+nothing remembered across launches; the panel and its cancellation unchanged; and no sandbox,
+security-scope, access or write anomaly. That evidence, together with the automated suite, is what moved
+this record to `Accepted`.
+
 ## Risks that remain
 
-- The observation is a **sample on one machine and one macOS version**, over the locations and item
-  kinds listed above. It does not cover iCloud files (downloaded or evicted), aliases, symlinks, `.app`
-  bundles, or file-promise sources such as Mail. Should any of those ever deliver a file-reference URL,
-  `displayName` and `fileExtension` would be derived from a meaningless last path component, and that
-  name travels into the exported JSON's `source` object. The mitigation is not preventive code but the
-  manual validation run, extended over time.
+- The observation and the validation are a **sample on one machine and one macOS version**. Neither
+  covered iCloud files (downloaded or evicted), aliases, symlinks, `.app` bundles, or file-promise
+  sources such as Mail. Should any of those ever deliver a file-reference URL, `displayName` and
+  `fileExtension` would be derived from a meaningless last path component, and that name travels into
+  the exported JSON's `source` object. The mitigation is not preventive code but the manual runbook,
+  extended as those sources are encountered.
 - **Sandbox behaviour is still unreachable from `swift test`**, so every re-check of the above belongs
-  to the manual runbook.
+  to the manual runbook, which must be re-run whenever drag & drop, the sandbox, the entitlements or the
+  routing change.
 
 ## Relationship to ADR-0010 and ADR-0013
 

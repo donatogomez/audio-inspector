@@ -20,7 +20,18 @@ reported during that run; the **primary** offline guarantee remains the structur
 (group B) being supplementary. Per-run details — dates, tool versions, file names, paths and hashes —
 stay out of the repository; only this durable statement lives here.
 
-Re-run this runbook whenever the selection, export, sandbox or entitlement behaviour changes.
+The **drag & drop** validation (group B) has also been completed successfully on a sandboxed build, with
+**every mandatory case passing and no anomalies observed**: drops from several authorised locations,
+from the initial state and over an existing report; whole-drop refusal for multiple items, folders and
+non-local items; refusal during an in-flight inspection; instructive targeting feedback and its
+accessibility; the previous report preserved on refusal and replaced after a valid drop; correct name
+and extension in the report; the source unchanged; nothing remembered across launches; the panel and its
+cancellation unaffected; and no sandbox or security-scope anomaly. The sources listed in step 23 —
+iCloud files, aliases, symlinks, app bundles and Mail file promises — were **not** exercised and remain
+open (ADR-0014).
+
+Re-run this runbook whenever the selection, drag & drop, export, routing, sandbox or entitlement
+behaviour changes.
 
 ## What is already automated (do not re-verify by hand)
 

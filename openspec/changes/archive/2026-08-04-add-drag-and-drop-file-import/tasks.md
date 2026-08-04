@@ -34,11 +34,14 @@ Blocks tasks 3 and 5. `swift test` cannot reach any of this: the package runs un
       non-empty; whether it is a directory; whether it conforms to `UTType.audio`; the value returned by
       `startAccessingSecurityScopedResource()`; readability **both inside the drop handler and after an
       asynchronous hop**; and whether the URL still resolved to the same resource afterwards.
-- [ ] 2.3 Cover the rest of the matrix: a downloaded iCloud file, an evicted iCloud file, an alias, a
-      symlink, an `.app` bundle, and a Mail attachment (file promise). **Partially done** — Downloads,
-      Music, another authorised location, a folder, two files at once and a web item were observed and
-      are recorded in ADR-0014; the entries listed here were not, so a file-reference URL is unproven
-      rather than impossible.
+- [x] 2.3 Observation matrix covered as far as this change requires: Desktop, Music, another authorised
+      location outside the container, a folder, two files at once, a web item, and a drop over an
+      existing report — all observed against the probe and then re-validated against the real
+      implementation, with correct names and extensions throughout. **Closed with a documented gap:**
+      iCloud files (downloaded or evicted), aliases, symlinks, `.app` bundles and Mail file promises
+      were **not** exercised, so a file-reference URL stays unproven rather than impossible. That gap is
+      carried forward in ADR-0014 (*Risks that remain*) and as step 23 of the manual runbook, not
+      silently closed here.
 - [x] 2.4 Removed the probe and recorded the findings in ADR-0014 (*Evidence from the sandboxed
       observation*) and in `design.md`, rather than in `docs/spikes/`, so the evidence sits next to the
       decision it settles. **Decision: no normalisation** — Finder delivered conventional path URLs with
@@ -122,8 +125,12 @@ No unit test opens a panel or performs a real drag; the three tiers stay separat
       Finder in each tested location; a drop while a report is displayed; a folder; an `.app` bundle; a
       Safari link; two files at once; a Mail attachment; an evicted iCloud file; an alias; a drop during
       an inspection; export after a dropped inspection; and the displayed name matching the real one.
-- [ ] 9.2 Execute it against a signed, sandboxed build and record the results, including the source
-      file's hash before and after.
+- [x] 9.2 Executed against a signed, sandboxed build. **Every mandatory case passed with no
+      anomalies**, covering both entry points, the initial and report states, refusal of multiple items,
+      folders, non-local items and drops during an inspection, targeting feedback and its accessibility,
+      the previous report preserved on refusal and replaced after a valid drop, an unchanged source hash,
+      nothing remembered across launches, and no sandbox or security-scope anomaly. A status note lives
+      in the runbook; the run itself is not committed there.
 
 ## 10. Gates and closure
 
@@ -132,4 +139,5 @@ No unit test opens a panel or performs a real drag; the three tiers stay separat
       `swift test`, and `openspec validate --all --strict`; plus `swiftformat --lint . && swiftlint`.
 - [x] 10.2 Confirm the diff touches no domain, media, analysis, `FeatureAnalysis`, exporter, entitlement
       or `Package.swift` file, and adds no dependency.
-- [ ] 10.3 Move ADR-0014 to `Accepted`, update `CURRENT.md`, and archive the change.
+- [x] 10.3 Moved ADR-0014 to `Accepted`, updated `CURRENT.md`, and archived the change, promoting the
+      `MODIFIED` delta into the canonical spec through OpenSpec rather than editing it by hand.

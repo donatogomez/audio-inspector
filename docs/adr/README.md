@@ -22,4 +22,4 @@ disguise. Copy `0000-adr-template.md` for new ones.
 | [0011](0011-avfoundation-infrastructure-boundary.md) | AVFoundation infrastructure boundary for property reading | Accepted |
 | [0012](0012-audio-property-extraction-strategy.md) | Audio property extraction strategy (API priority, reliability tiers) | Proposed (pending ADR-0003 spike) |
 | [0013](0013-user-selected-file-access.md) | Read-write access to user-selected files (inspection + export) | Accepted |
-| [0014](0014-drag-and-drop-file-access.md) | Drag & drop as a second explicit user-selection mechanism | Proposed |
+| [0014](0014-drag-and-drop-file-access.md) | Drag & drop as a second explicit user-selection mechanism | Accepted |
