@@ -175,6 +175,29 @@ conformance; a two-item drop arrived with `itemCount == 2`; an image dragged fro
 no change to `AudioFileReferenceMapper`, no bookmarks of any kind, no scope acquisition outside
 `SourceInspectionCoordinator`, and no entitlement change.
 
+## How it was implemented
+
+- `SourceInspectionCoordinator` gained `inspect(_ url:)` as the shared body and kept `inspect()` for the
+  panel, which resolves its selection and delegates. That body stays the **only** owner of the
+  `isFileURL` guard, the security scope, the mapper, the reader construction and the use case, so both
+  entry points run exactly the same path. Its scope handling is unchanged.
+- `DroppedSource` in `AudioInspectorApp` holds the synchronous decision, pure and testable without
+  SwiftUI. Being busy is checked first — nothing would be processed anyway, so "wait" is the honest
+  message. Two or more items are refused whole. **The audio check asks the system for conformance to
+  `UTType.audio`, never a hand-written list of formats**, which has a consequence worth stating: a file
+  with no extension resolves to generic data and is refused, exactly as the panel's
+  `allowedContentTypes` would not offer it. The two entry points agree, and the reader with its honest
+  `failed` states remains the source of truth about what can actually be inspected.
+- `ImportFlowModel` shares one private transition body between `selectAndInspect()` and
+  `inspectDroppedSource(using:)`, and carries `DropRejection?` **orthogonally to its state**, so a
+  refusal never discards a report already on screen and never becomes a flow failure. It is cleared by
+  the next accepted operation from either entry point, with no timer and no automatic dismissal.
+- `RootView` applies the drop modifier to the whole window in every state and hands the feature an
+  opaque action with the URL captured inside the closure. The handler starts a plain
+  `Task { @MainActor in … }`; nothing acquires the scope there, and no bookmark exists.
+- Boundary rule 10 rejects `import AppKit` and real use of `URL` in `Sources/Feature*`, so the
+  location-free feature boundary is now enforced statically rather than by convention.
+
 ## Risks that remain
 
 - The observation is a **sample on one machine and one macOS version**, over the locations and item

@@ -17,7 +17,8 @@ account system, and no data transmission. The threat model is therefore local an
   always passed as a separated argument vector via `Process` — never as an interpolated shell
   string. No `sh -c`. See [docs/adr/0003-ffmpeg-vs-native-audio-strategy.md](docs/adr/0003-ffmpeg-vs-native-audio-strategy.md).
 - **Sandboxed, user-granted file access.** The app runs under the macOS App Sandbox and reaches files
-  only through native panels, so access is granted per item by the user — no folder-wide or
+  only through explicit user interactions — native panels or drag and drop — so access is granted per
+  item by the user (ADR-0014) — no folder-wide or
   system-wide entitlement. Because one executable setting covers every user-selected item, the app
   declares `com.apple.security.files.user-selected.read-write`, which the JSON export requires; the
   inspected audio file is still treated as strictly read-only by design. Access is held only for the

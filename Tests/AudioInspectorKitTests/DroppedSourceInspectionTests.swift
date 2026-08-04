@@ -76,6 +76,38 @@ struct DroppedSourceInspectionTests {
         }
     }
 
+    /// The assertion that keeps both entry points on one pipeline: the same file inspected through the
+    /// panel's coordinator and through the drop's produces the same report.
+    ///
+    /// Everything but `AudioFileReference.id` is compared — that identifier is a fresh `UUID` per
+    /// reference, so it plays the same role the exporter's `generatedAt` plays in the JSON: unique per
+    /// run by design. The export itself is not repeated here; `EndToEndFlowTests` already covers it,
+    /// and the exporter is a pure function of the report, so identical reports export identically.
+    @Test func thePanelAndTheDropProduceTheSameReportForTheSameFile() async throws {
+        try await withTemporaryDirectory { directory in
+            let url = directory.appendingPathComponent("same.wav")
+            try writePCMFixture(to: url)
+
+            let viaPanel = SourceInspectionCoordinator(chooseSource: { url })
+            let viaDrop = SourceInspectionCoordinator()
+
+            guard case let .inspected(panelReport) = await viaPanel.inspect(),
+                  case let .inspected(dropReport) = await viaDrop.inspect(url)
+            else {
+                Issue.record("both entry points must produce a report"); return
+            }
+
+            #expect(panelReport.file.displayName == dropReport.file.displayName)
+            #expect(panelReport.file.fileExtension == dropReport.file.fileExtension)
+            #expect(panelReport.file.sizeBytes == dropReport.file.sizeBytes)
+            #expect(panelReport.file.modifiedAt == dropReport.file.modifiedAt)
+            #expect(panelReport.file.source == dropReport.file.source)
+            #expect(panelReport.properties == dropReport.properties)
+            #expect(panelReport.warnings == dropReport.warnings)
+            #expect(panelReport.status == dropReport.status)
+        }
+    }
+
     /// A non-file URL cannot even be prepared, and that stays a preparation failure rather than a
     /// fabricated report — the guard lives in the shared body, so both entry points get it.
     @Test func aNonFileURLReachingTheCoordinatorIsAPreparationFailure() async throws {
