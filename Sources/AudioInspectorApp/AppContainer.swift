@@ -20,8 +20,20 @@ public struct AppContainer {
     public func makeRootView() -> some View {
         RootView(
             flow: ImportFlowModel(action: makeSourceInspectionAction()),
+            inspectDroppedSource: makeDroppedSourceInspectionAction(),
             export: makeReportExportAction()
         )
+    }
+
+    /// Builds the inspection action for a file the user dropped and the root view accepted. The URL is
+    /// captured inside the returned closure, so `FeatureImport` receives an opaque
+    /// `SourceInspectionAction` and never a location. The same coordinator runs it — only its entry
+    /// point differs, which is why no second pipeline exists.
+    func makeDroppedSourceInspectionAction() -> @MainActor (URL) -> SourceInspectionAction {
+        { url in
+            let coordinator = SourceInspectionCoordinator()
+            return { await coordinator.inspect(url) }
+        }
     }
 
     /// Builds the injectable inspection action: the native open panel supplies the file, and the

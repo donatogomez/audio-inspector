@@ -11,10 +11,17 @@ import SwiftUI
 /// them to the features and knows nothing about panels, `URL`s, or the sandbox.
 public struct RootView: View {
     @State private var flow: ImportFlowModel
+    @State private var isDropTargeted = false
+    private let inspectDroppedSource: @MainActor (URL) -> SourceInspectionAction
     private let export: ReportExportAction
 
-    init(flow: ImportFlowModel, export: @escaping ReportExportAction) {
+    init(
+        flow: ImportFlowModel,
+        inspectDroppedSource: @escaping @MainActor (URL) -> SourceInspectionAction,
+        export: @escaping ReportExportAction
+    ) {
         _flow = State(initialValue: flow)
+        self.inspectDroppedSource = inspectDroppedSource
         self.export = export
     }
 
@@ -28,6 +35,33 @@ public struct RootView: View {
             }
         }
         .frame(minWidth: 720, minHeight: 480)
+        // The whole window is the drop target, in every state — dropping onto a report replaces it.
+        .dropDestination(for: URL.self) { (items: [URL], _: CGPoint) -> Bool in
+            handleDrop(items)
+        } isTargeted: { (targeted: Bool) -> Void in
+            isDropTargeted = targeted
+        }
+        .overlay {
+            DropFeedbackOverlay(isTargeted: isDropTargeted, rejection: flow.dropRejection)
+        }
+    }
+
+    /// The synchronous half of the drop. Decides in `AudioInspectorApp` — where `URL` belongs — and
+    /// hands the feature an opaque action already bound to the accepted file. Returns whether the drop
+    /// was taken for processing.
+    private func handleDrop(_ items: [URL]) -> Bool {
+        switch DroppedSource.evaluate(items, isInspecting: flow.state == .working) {
+        case let .accepted(url):
+            let action = inspectDroppedSource(url)
+            // The handler must return synchronously; the inspection is async. A plain MainActor task
+            // is enough — the observation confirmed the granted access survives this hop, so nothing
+            // is acquired here and no bookmark exists (ADR-0014).
+            Task { @MainActor in await flow.inspectDroppedSource(using: action) }
+            return true
+        case let .rejected(rejection):
+            flow.reject(rejection) // leaves `state` untouched, so any report on screen survives
+            return false
+        }
     }
 
     /// The inspected report plus the way back to picking another file. `ReportView` is used exactly as
