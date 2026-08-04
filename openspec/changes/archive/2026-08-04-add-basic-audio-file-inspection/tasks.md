@@ -60,10 +60,10 @@ hypotheses pending the ADR-0003 native-decoding spike, so the spike is the first
 
 ## Acceptance criteria
 
-- [ ] AC.1 A user can select one local audio file and see a structured report with per-property states, warnings, and a global status — with **no DSP**
-- [ ] AC.2 Unavailable/unsupported/uncertain/failed properties are represented explicitly; no value is invented; no inference is shown as fact
-- [ ] AC.3 Declared and estimated bitrate are separate fields
-- [ ] AC.4 The report exports as `schemaVersion` 1 JSON per `docs/json-schema-v1.md`, with no absolute private path by default
-- [ ] AC.5 A global failure (unopenable file) yields `inspectionStatus = failed` with no fabricated data and a responsive app
-- [ ] AC.6 The domain imports none of: AVFoundation, AudioToolbox, URL-bookmark APIs, SwiftUI, AppKit, JSONEncoder; `check-boundaries.sh` passes
-- [ ] AC.7 All scenarios in the `audio-file-inspection` spec are covered by tests
+- [x] AC.1 A user can select one local audio file and see a structured report with per-property states, warnings, and a global status — with **no DSP**
+- [x] AC.2 Unavailable/unsupported/uncertain/failed properties are represented explicitly; no value is invented; no inference is shown as fact
+- [x] AC.3 Declared and estimated bitrate are separate fields
+- [x] AC.4 The report exports as `schemaVersion` 1 JSON per `docs/json-schema-v1.md`, with no absolute private path by default
+- [x] AC.5 A global failure (unopenable file) yields `inspectionStatus = failed` with no fabricated data and a responsive app
+- [x] AC.6 The domain imports none of: AVFoundation, AudioToolbox, URL-bookmark APIs, SwiftUI, AppKit, JSONEncoder; `check-boundaries.sh` passes
+- [x] AC.7 All scenarios in the `audio-file-inspection` spec are covered by tests
