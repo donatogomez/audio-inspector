@@ -85,7 +85,7 @@ enum InspectionOutcomeDisplay: Equatable {
         case let .allRead(count):
             "Read all \(count) properties this format exposes."
         case let .someNotRead(read, total):
-            "Read \(read) of \(total) properties. The rest are not present in the file or not defined by this format."
+            "Read \(read) of \(total) properties cleanly. Each of the remaining \(total - read) shows what is known about it."
         case let .couldNotInspect(message):
             message
         }

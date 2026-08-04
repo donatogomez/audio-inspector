@@ -261,4 +261,70 @@ struct ReportPropertyDisplayTests {
         #expect(failed == .couldNotInspect(message: "This file could not be inspected."))
         #expect(!failed.text.contains("file_unreadable")) // the stable code stays in the JSON
     }
+
+    // MARK: - The outcome is factual about the reading
+
+    /// The remaining count is the arithmetic complement of what was read, so the sentence can never
+    /// disagree with the rows on screen.
+    @Test(arguments: [(0, 8, 8), (3, 8, 5), (7, 8, 1)])
+    func theOutcomeStatesHowManyRemain(read: Int, total: Int, remaining: Int) {
+        let text = InspectionOutcomeDisplay.someNotRead(read: read, total: total).text
+        #expect(text.contains("\(read) of \(total)"))
+        #expect(text.contains("remaining \(remaining)"))
+    }
+
+    /// `readButUnreliable` and `couldNotBeRead` are **not** absence: those properties were read, or an
+    /// attempt failed. The sentence must not attribute a cause it has not established.
+    @Test func theOutcomeAttributesNoCauseToTheUnreadProperties() {
+        var properties = TechnicalProperties()
+        properties.sampleRate = .available(44_100)                       // measured
+        properties.codec = .uncertain(value: "aac", reason: "inferred")  // read, but unreliable
+        properties.duration = .failed(PropertyFailure(code: .propertyReadError, message: "could not be read"))
+        let rows = ReportPropertyFormatter.displays(for: properties)
+
+        // The fixture really does contain the two states this guards against.
+        #expect(rows.contains { $0.state == .readButUnreliable })
+        #expect(rows.contains { $0.state == .couldNotBeRead })
+
+        let text = ReportPropertyFormatter.outcome(for: .partial(message: nil), properties: rows).text
+
+        // Claiming absence or undefinedness would be false for the two states above.
+        for claim in ["not present", "not defined", "missing", "absent", "unavailable"] {
+            #expect(!text.lowercased().contains(claim), "outcome asserts an unestablished cause: \(text)")
+        }
+    }
+
+    /// The approved wording is part of the presentation contract, so it is pinned as well.
+    @Test func theOutcomeUsesTheApprovedWording() {
+        var properties = TechnicalProperties()
+        properties.sampleRate = .available(44_100)
+        let rows = ReportPropertyFormatter.displays(for: properties)
+        let outcome = ReportPropertyFormatter.outcome(for: .partial(message: nil), properties: rows)
+
+        #expect(outcome == .someNotRead(read: 1, total: 8))
+        #expect(outcome.text == "Read 1 of 8 properties cleanly. Each of the remaining 7 shows what is known about it.")
+    }
+
+    /// No internal vocabulary and no judgement, across every shape the outcome can take.
+    @Test func theOutcomeCarriesNoInternalVocabularyAndNoJudgement() {
+        let texts = [
+            InspectionOutcomeDisplay.allRead(count: 8).text,
+            InspectionOutcomeDisplay.someNotRead(read: 3, total: 8).text,
+            InspectionOutcomeDisplay.couldNotInspect(message: "This file could not be inspected.").text,
+        ]
+        let internalVocabulary = [
+            "measured", "notpresent", "notdefinedbyformat", "readbutunreliable", "couldnotberead",
+            "available", "unsupported", "uncertain", "completed", "partial", "_",
+        ]
+        let judgements = ["good", "bad", "better", "worse", "quality", "professional", "recommended", "poor"]
+
+        for text in texts {
+            for term in internalVocabulary {
+                #expect(!text.lowercased().contains(term), "internal vocabulary in: \(text)")
+            }
+            for word in judgements {
+                #expect(!text.lowercased().contains(word), "judgement in: \(text)")
+            }
+        }
+    }
 }
