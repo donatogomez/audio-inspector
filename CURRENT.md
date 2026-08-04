@@ -17,28 +17,32 @@
 
 ---
 
-**Focus:** `improve-report-presentation` — the report surface stops showing the implementation and
-starts reading as a report. No capability is added and the inspection behaves exactly as before.
+**Focus:** None in progress — report presentation is closed as far as implementation goes, and its
+manual accessibility validation is **deliberately deferred, not done**.
 
-**Status:** The functional work is complete and the automated validation is green. Internal vocabulary
-no longer reaches the screen: the presentation state is a closed type of its own, warnings render from
-their message and kind, and container and codec are named with the exact token kept beside them.
-Values are formatted for reading against a pinned locale, always preserving the precise figure. The
-report has a hero header and grouped properties instead of a settings form, exporting is a toolbar
+**Status:** The report reads as a report rather than as the implementation behind it. Internal
+vocabulary no longer reaches the screen: the presentation state is a closed type of its own, warnings
+render from their message and kind, and container and codec are named with the exact token kept beside
+them. Values are formatted for reading against a pinned locale, always preserving the precise figure.
+There is a hero header and grouped properties instead of a settings form, exporting is a toolbar
 action, colour is limited to the state of the reading, and each row is one coherent element for an
-assistive reader.
+assistive reader. The inspection itself behaves exactly as before.
 
-**Next step:** Complete the manual accessibility validation — VoiceOver, system text sizes, contrast,
-and confirming nothing depends on colour alone — then the final review, then close the change. Those
-checks need a person at the keyboard; the suite cannot reach them.
+**Next step:** Waveform — reading samples and drawing them — as its own change. Before it ships, the
+deferred accessibility checks on this surface should be run: VoiceOver, system text sizes, contrast,
+and confirming nothing depends on colour alone. They need a person at a keyboard, so they do not gate
+starting the next slice, only finishing it.
 
-**Why:** Presentation was the one part of the slice that could not be verified automatically end to
-end, so the change is not finished until it has been seen and heard, not only compiled.
+**Why:** Presentation was the one part that no automated test can finish judging. Recording those
+checks as done without performing them would be inventing evidence, so they stay open and named.
 
-**Open questions / threads:** Waveform, spectrogram and the educational per-property explanations are
-**not started**. Each needs its own change: the first two require reading samples, which is a different
-kind of work, and the explanations add new content that can drift from describing into judging quality,
-so they carry their own normative requirement.
+**Open questions / threads:** Waveform, spectrogram and the per-property explanations are **not
+started**. Each needs its own change: the first two require reading samples, which is a different kind
+of work, and the explanations add new content that can drift from describing into judging quality, so
+they carry their own normative requirement. Known risks carried forward: the pinned `en_US` locale
+means formatting does not follow the user's region; warning text originates in the domain yet is swept
+by a presentation test; an unmapped wire key would fall back to its raw name; and `Choose another
+file…` still sits at the foot of the window while exporting lives in the toolbar.
 
 ---
 _Last touched: 2026-08-04. Overwrite freely; empty is fine._

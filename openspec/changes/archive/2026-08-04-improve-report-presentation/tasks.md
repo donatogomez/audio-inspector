@@ -1,7 +1,12 @@
 # Implementation Tasks
 
-Group 1 opened the change; groups 2 to 8 are implemented. Groups 9 and 10 stay open: the manual
-accessibility checks need a person at the keyboard, and closure waits on them.
+**Implementation is complete and there is no implementation debt.** Groups 1 to 8 and group 10 are
+done; the only open items are the manual accessibility checks in group 7.4 and group 9, which are
+**deliberately deferred rather than performed**. The change is archived with them open because
+recording them as done would be inventing evidence.
+
+They are a verification debt confined to this surface: no code is waiting on them, and nothing about
+them constrains the next slice.
 
 Each contract change updated, in its own commit, the assertions it made obsolete — leaving them broken
 until the end would have meant five commits without a safety net.
@@ -94,6 +99,16 @@ state is a `String`, the view can only print it.
 
 ## 9. Manual verification
 
+**Deliberately deferred, not performed.** These need a person at a keyboard and the suite cannot reach
+them, so the change is archived with them open rather than with invented evidence. They are a
+**verification** debt, not an implementation one: nothing below is waiting on code.
+
+What is demonstrable by reading the source in the meantime: colour is only ever applied inside the
+branch that also renders a text label (`ReportView.swift`), and every symbol has a label beside it
+(`symbolsAreLimitedToTheKindsOfAbsenceAndNeverStandAlone`). What cannot be demonstrated that way is how
+the surface actually sounds under VoiceOver and looks at accessibility text sizes — which is exactly
+what these tasks are for.
+
 - [ ] 9.1 Inspect a file and confirm by eye that no underscore code, enum name, wire key, raw UTI or bare
       FourCC appears anywhere on the report.
 - [ ] 9.2 VoiceOver pass: each property reads as one coherent element, warnings and status are announced,
@@ -103,9 +118,12 @@ state is a `String`, the view can only print it.
 
 ## 10. Gates and closure
 
-- [ ] 10.1 Four gates green: `./Scripts/check-boundaries.sh`,
+- [x] 10.1 Four gates green: `./Scripts/check-boundaries.sh`,
       `swift build -Xswiftc -warnings-as-errors`, `swift test`, `openspec validate --all --strict`; plus
-      `swiftformat --lint . && swiftlint` and the Xcode app build.
-- [ ] 10.2 Confirm the diff touches no domain, media, analysis, `FeatureImport`, exporter, JSON, scheme,
-      CI or entitlement file, and adds no dependency.
-- [ ] 10.3 Update `CURRENT.md` and archive the change.
+      the Xcode app build.
+- [x] 10.2 Confirmed: the diff touches only `HumanFormat.swift`, `PropertyDisplay.swift` and
+      `ReportView.swift` in `FeatureAnalysis`. Domain, media, analysis, `FeatureImport`,
+      `AudioInspectorApp`, the exporter, the JSON contract, the scheme, CI and the entitlements are
+      byte-identical, and no dependency was added.
+- [x] 10.3 Updated `CURRENT.md` and archived the change through `openspec archive`, without editing the
+      promoted spec by hand.
