@@ -37,13 +37,12 @@ bookmarks, any DSP, any redesign of the report surface, any change to the JSON c
   provided by configuration (`allowsMultipleSelection = false`, `canChooseDirectories = false`,
   `allowedContentTypes = [.audio]`).
 - **A multi-item drop is rejected in full.** The first element is never taken silently.
-- **URL normalisation, if required, happens in `AudioInspectorApp`**, at the drop boundary, before the
-  domain reference is built. Whether it is required at all depends on the manual observation in task 2:
-  file-reference URLs (`file:///.file/id=…`) are documented for the `NSItemProvider` path, **not** for
-  `dropDestination(for: URL.self)`, and this design asserts nothing about Finder's behaviour until that
-  task reports. If only the drop can produce them, the drop adapter owns the normalisation and
-  `AudioFileReferenceMapper` stays untouched; if the panel could produce them too, the mapper would be
-  the correct owner — a decision to be taken on evidence, not on convenience.
+- **No URL normalisation is performed.** The sandboxed observation (task 2) found conventional path URLs
+  in every case tested, with `filePathURL` identical to the delivered URL and a correct name and
+  extension. So `filePathURL` is not consulted, no file-reference adapter is written, and
+  `AudioFileReferenceMapper` is untouched. Adding normalisation anyway would be defending against a
+  condition never observed — and it would have to be justified, not assumed, the same way its absence
+  now is. ADR-0014 records both the evidence and the locations the observation did not cover.
 - **The feature receives an opaque action, never the URL.** `AudioInspectorApp` builds a
   `SourceInspectionAction` closure that captures the validated URL; `FeatureImport` only invokes it.
 
@@ -174,6 +173,11 @@ exporter are untouched, so no report produced before this change becomes invalid
 
 ## Open Questions
 
-- Does `dropDestination(for: URL.self)` ever deliver a file-reference URL from Finder, and does the
-  auto-started sandbox extension survive the asynchronous hop? Both are settled by task 2 (manual,
-  sandboxed observation) before the routing implementation is finalised.
+Both questions that blocked the routing have been answered by the sandboxed observation in task 2, and
+the answers are recorded in ADR-0014: Finder delivered conventional path URLs (no file-reference form),
+and the granted access survived the asynchronous hop with
+`startAccessingSecurityScopedResource()` returning `false` while the file stayed readable.
+
+What remains open is coverage, not behaviour: the observation did not include iCloud files, aliases,
+symlinks, `.app` bundles or file-promise sources. Those belong to the manual runbook rather than to
+preventive code.

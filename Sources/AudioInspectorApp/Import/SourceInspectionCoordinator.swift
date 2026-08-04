@@ -29,8 +29,12 @@ struct SourceInspectionCoordinator {
     ///     AVFoundation reader, resolving the URL through its constructor seam — the domain reference
     ///     carries no location, so the URL travels outside the domain (ADR-0010). A fresh reader per
     ///     inspection means no shared mutable state and no registry.
+    /// - Parameters:
+    ///   - chooseSource: how the file is obtained. The panel supplies it for the
+    ///     `Choose audio file…` path; the drop path already knows the URL and calls `inspect(_:)`
+    ///     directly, so it leaves this at its default, which chooses nothing.
     init(
-        chooseSource: @escaping SourceProvider,
+        chooseSource: @escaping SourceProvider = { nil },
         makeReader: @escaping ReaderFactory = { url in
             AVFoundationAudioFilePropertyReader { _ in url }
         }
@@ -39,10 +43,19 @@ struct SourceInspectionCoordinator {
         self.makeReader = makeReader
     }
 
+    /// The panel path: ask for a file, then inspect it.
     func inspect() async -> SourceInspectionOutcome {
         guard let url = await chooseSource() else {
             return .cancelled // dismissing the panel is neutral, never an error
         }
+        return await inspect(url)
+    }
+
+    /// The shared body, and the **only** owner of the `isFileURL` guard, the security scope, the
+    /// mapper, the reader construction and the use case. Both entry points run exactly this: the panel
+    /// after resolving its selection, the drop with the URL the composition root already accepted.
+    /// There is no second pipeline.
+    func inspect(_ url: URL) async -> SourceInspectionOutcome {
         // Filenames and paths are untrusted input: anything that is not a file cannot be inspected.
         guard url.isFileURL else {
             return .preparationFailed
@@ -50,7 +63,8 @@ struct SourceInspectionCoordinator {
 
         // Access is held only for this operation and released on every exit path. A `false` result is
         // not an error: a URL that is not security-scoped stays readable, so only a granted scope is
-        // balanced with a matching stop (ADR-0010).
+        // balanced with a matching stop (ADR-0010). A sandboxed observation confirmed this is exactly
+        // what a dropped URL does — `start` returns `false` and the file reads fine (ADR-0014).
         let accessing = url.startAccessingSecurityScopedResource()
         defer { if accessing { url.stopAccessingSecurityScopedResource() } }
 

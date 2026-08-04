@@ -17,8 +17,9 @@ inspection.
   the initial state and while a report is displayed.
 - The drop **reuses the existing pipeline end to end** — the same coordinator, the same security-scoped
   access, the same `AudioFileReferenceMapper`, the same AVFoundation reader, the same
-  `InspectAudioFileUseCase`, the same report and the same export. There is no second pipeline, no second
-  coordinator, and no change to any of those types.
+  `InspectAudioFileUseCase`, the same report and the same export. There is no second pipeline and no
+  second coordinator; the coordinator is extended with a shared body that inspects a URL already
+  obtained, and the mapper, the reader and the use case do not change.
 - **Exactly one file per operation.** A drop carrying more than one item is rejected in full; the first
   item is never chosen silently, because that would be a selection the user did not make.
 - A rejected drop **preserves whatever was on screen**, including a previously shown report, and never

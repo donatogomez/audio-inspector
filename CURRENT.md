@@ -17,26 +17,30 @@
 
 ---
 
-**Focus:** `add-drag-and-drop-file-import` — adding drag & drop as a second explicit way to select the
-single local audio file to inspect, reusing the existing inspection pipeline end to end.
+**Focus:** None in progress — drag & drop is implemented, validated and closed; the tree is at a clean
+checkpoint.
 
-**Status:** The change and ADR-0014 are written and integrated; no functional implementation has
-started. ADR-0014 stays **Proposed** on purpose: it will only be accepted once the implementation, its
-tests, the manual Finder observation and the sandboxed validation back the decision, since an accepted
-ADR is immutable here.
+**Status:** A file can now be inspected by dropping it anywhere on the window as well as by picking it
+in the open panel. Both are explicit user selections and both run the **same** pipeline — one
+coordinator, one security-scope handling, one mapper, one reader, one use case and one flow state
+machine — so neither entry point can drift from the other. A drop that cannot become a single
+inspectable local file is refused whole, keeping any report already on screen, and refusals never
+become inspection failures. No entitlement was added, nothing is persisted, and feature modules stay
+free of file locations, now enforced by the boundary script rather than by convention. ADR-0014 is
+accepted, backed by the automated suite and a sandboxed manual run.
 
-**Next step:** Prepare and run the real Finder/sandbox spike **before** the definitive routing. What
-the drop actually delivers — a conventional path URL or a file-reference one, and whether the granted
-access survives the asynchronous hop — decides whether URL normalisation is needed at all and which
-layer owns it. Only the maintainer can perform it: it needs real drags onto a signed, sandboxed build.
+**Next step:** Not started. The next product step opens as its own OpenSpec change with its own
+proposal — waveform, spectrogram, an educational mode, or anything else. None of them may be grafted
+onto the closed change.
 
-**Why:** Building the routing on an assumption about Finder's behaviour would put a guessed value into
-the report and the exported JSON, which is exactly what the project's honesty invariants forbid. The
-observation is cheap; guessing is not reversible once the shape of the code depends on it.
+**Why:** The slice existed to add a second way in without a second pipeline, and that is exactly what
+it does; further capability belongs to a different scope.
 
-**Open questions / threads:** Does a dropped URL ever arrive in file-reference form, and does the
-auto-started sandbox extension survive into the asynchronous inspection? Both are answered by the
-spike; the normalisation owner follows from the answer.
+**Open questions / threads:** One known gap, carried in ADR-0014 and in the manual runbook rather than
+in code: iCloud files, aliases, symlinks, app bundles and Mail file promises were never dropped, so a
+file-reference URL is unproven rather than impossible. It would surface as a wrong display name, and
+the answer is to extend the manual run when such a source appears — not to add preventive
+normalisation.
 
 ---
 _Last touched: 2026-08-04. Overwrite freely; empty is fine._

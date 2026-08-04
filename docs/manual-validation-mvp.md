@@ -17,10 +17,21 @@ integrity, absence of location disclosure, cancellation, re-selection, export an
 all behaved as specified, with no sandbox, write, access or runtime errors. No network anomalies were
 reported during that run; the **primary** offline guarantee remains the structural rule in
 `Scripts/check-boundaries.sh` plus the absent network entitlement, with the dynamic observation
-(group B) being supplementary. Per-run details — dates, tool versions, file names, paths and hashes —
+(group C) being supplementary. Per-run details — dates, tool versions, file names, paths and hashes —
 stay out of the repository; only this durable statement lives here.
 
-Re-run this runbook whenever the selection, export, sandbox or entitlement behaviour changes.
+The **drag & drop** validation (group B) has also been completed successfully on a sandboxed build, with
+**every mandatory case passing and no anomalies observed**: drops from several authorised locations,
+from the initial state and over an existing report; whole-drop refusal for multiple items, folders and
+non-local items; refusal during an in-flight inspection; instructive targeting feedback and its
+accessibility; the previous report preserved on refusal and replaced after a valid drop; correct name
+and extension in the report; the source unchanged; nothing remembered across launches; the panel and its
+cancellation unaffected; and no sandbox or security-scope anomaly. The sources listed in step 23 —
+iCloud files, aliases, symlinks, app bundles and Mail file promises — were **not** exercised and remain
+open (ADR-0014).
+
+Re-run this runbook whenever the selection, drag & drop, export, routing, sandbox or entitlement
+behaviour changes.
 
 ## What is already automated (do not re-verify by hand)
 
@@ -92,9 +103,43 @@ confirmation, not the primary guarantee.
     import screen with no recent file and no restored report — there is no bookmark and no
     persistence.
 
-### B. Additional — dynamic network observation
+### B. Required — drag & drop (change `add-drag-and-drop-file-import`)
 
-15. With the app running, observe it for the duration of a full inspect-and-export cycle using either
+The temporary spike already observed how Finder delivers a dropped URL under the sandbox: conventional
+path URLs, no file-reference form, `startAccessingSecurityScopedResource()` returning `false` with the
+file still readable, and access surviving the hop into async work (ADR-0014). **Those observations were
+made against throwaway instrumentation, so they must be repeated against the real implementation**, and
+the cases the spike did not reach are listed at the end.
+
+15. **Drop from Desktop, from Music, and from a location outside the container** (an external volume or
+    another folder you have not opened before). Expected each time: the inspection starts immediately
+    and the report shows the file's real name and extension — the proof that no normalisation is needed.
+16. **Drop onto the initial screen** and, separately, **drop while a report is displayed.** Expected: the
+    report surface is left while the inspection runs and the *new* report replaces the old one when it
+    completes. The panel's `Choose another file…` behaves the same way; nothing changed there.
+17. **Drop two files at once.** Expected: the whole drop is refused, no inspection starts, any report on
+    screen stays, and the notice reads *"Drop one file at a time."* — and never names either file.
+18. **Drop a folder**, and **drop a non-local item** (drag an image or a link from a web page). Expected:
+    refused with *"That item cannot be inspected."*, no inspection, previous report intact.
+19. **Drop while an inspection is running.** Expected: no second inspection starts and the notice reads
+    *"Wait for the current inspection to finish."*
+20. **Targeting feedback.** Drag a file over the window without releasing. Expected: a visible border and
+    the text *"Drop one audio file"* — instructive, never claiming the dragged content is valid, and
+    never conveyed by colour alone. With VoiceOver on, confirm the hint and any refusal notice are read
+    aloud.
+21. **Panel unchanged.** Repeat steps 6–12 with `Choose audio file…`, including cancelling the panel from
+    a displayed report: the report must survive and no error may appear.
+22. **Source integrity and no persistence.** Repeat steps 13 and 14 for a file that arrived by drop.
+23. **Coverage the spike did not reach.** Drop, and record what happens for each: a downloaded iCloud
+    file, an evicted iCloud file, an alias, a symlink, an `.app` bundle, and a Mail attachment (a file
+    promise, which SwiftUI drag & drop does not support). Expected: each either inspects correctly or is
+    refused with a visible message — **never a silent no-op and never a hang.** If any of them shows a
+    wrong file name in the report, that is the file-reference URL case ADR-0014 leaves open, and it must
+    be reported rather than worked around.
+
+### C. Additional — dynamic network observation
+
+24. With the app running, observe it for the duration of a full inspect-and-export cycle using either
     - Instruments → *Network*, attached to the AudioInspector process; or
     - `nettop -p $(pgrep -x AudioInspector)` in Terminal.
     Expected: no outgoing connections. Record what you observed, including "no traffic seen".

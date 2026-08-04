@@ -107,6 +107,30 @@ if [ -d Sources ]; then
     fi
 fi
 
+# Rule 10 — Feature modules are location-free (ADR-0010, ADR-0014). A UI slice must never handle a
+# filesystem location or platform UI: URLs, panels and the sandbox belong to AudioInspectorApp, which
+# hands features an opaque action instead. The compiler cannot catch this — `URL` comes from
+# Foundation, which features legitimately use for other value types — so it is enforced statically
+# here. Foundation itself stays allowed; only the `URL` type and AppKit are rejected.
+#
+# Matching, like Rule 9, is deliberately narrow: `.swift` files only, `URL` as a whole word (so
+# `fileURL`, `URLSession` and the plural `URLs` in prose do not trip it), and comment lines — `//`,
+# `///` and `*` continuation lines inside block comments — filtered out, because the feature sources
+# legitimately explain that they never handle a `URL`.
+for feature in Sources/Feature*; do
+    [ -d "$feature" ] || continue
+    name=$(basename "$feature")
+
+    if grep -REn --include='*.swift' "^\s*import\s+AppKit\b" "$feature" 2>/dev/null; then
+        report "$name must not import AppKit — panels and platform UI live in AudioInspectorApp"
+    fi
+
+    if grep -REn --include='*.swift' '\bURL\b' "$feature" 2>/dev/null \
+        | grep -vE '^[^:]+:[0-9]+:[[:space:]]*(///|//|\*)'; then
+        report "$name must not use the URL type — features are location-free (ADR-0010, ADR-0014)"
+    fi
+done
+
 if [ "$fail" -eq 0 ]; then
     echo "✅ architecture boundaries respected"
 fi

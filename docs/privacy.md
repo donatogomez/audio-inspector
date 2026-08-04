@@ -29,14 +29,16 @@ re-analyzing, and it will be clearable at any time.
 
 ## File access
 
-Files are reached only through macOS's secure mechanisms: you pick each one in a native open or save
-panel, and the app holds that access only for the operation that needs it. It runs under the macOS
-App Sandbox. Paths and filenames are treated as untrusted data and never interpolated into shell
-commands. Security-scoped bookmarks — the mechanism that would let the app re-open a file across
-launches — are **not** used yet; they arrive with result persistence.
+Files are reached only through macOS's secure mechanisms: you choose each one explicitly — in a native
+open or save panel, or by dragging it onto the window — and the app holds that access only for the
+operation that needs it. It runs under the macOS App Sandbox. Paths and filenames are treated as
+untrusted data and never interpolated into shell commands. Security-scoped bookmarks — the mechanism
+that would let the app re-open a file across launches — are **not** used yet; they arrive with result
+persistence.
 
 **What the sandbox allows vs. what the app does.** The app requests access only to items *you*
-select in a native panel — no folder-wide or system-wide entitlement. Because one setting covers
+explicitly choose, in a panel or by dropping them (ADR-0014) — no folder-wide or system-wide
+entitlement. Because one setting covers
 every user-selected item, that access is read-write (ADR-0013). What the app actually does with it is
 narrower: **the audio file you inspect is only ever read** — no code path writes to, renames, moves,
 or deletes it — and **the single file the app writes is the export destination you choose** in the

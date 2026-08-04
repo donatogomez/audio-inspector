@@ -1,6 +1,6 @@
 # ADR-0014: Drag & drop as a second explicit user-selection mechanism
 
-- **Status**: Proposed
+- **Status**: Accepted
 - **Date**: 2026-08-04
 - **Deciders**: Project maintainer
 - **Related**: ADR-0010 (sandboxed temporary access — extended, not modified), ADR-0013 (user-selected
@@ -50,12 +50,25 @@ replacement. Generation 1 carries **no** deprecation annotation at all for its `
   non-error and only balances a `true`.
 - **No bookmarks, no persistence.** Nothing is retained after the inspection. ADR-0004's deferral and
   ADR-0010's "no bookmark persistence in this phase" stand unchanged.
-- **The same `SourceInspectionCoordinator` runs both paths.** Its `chooseSource` seam already abstracts
-  *where the URL comes from*; a drop is a provider that already knows the answer. **No second pipeline,
-  no second coordinator, and no change to the coordinator, the mapper, the reader, or the use case.**
+- **The same `SourceInspectionCoordinator` runs both paths.** **No second coordinator and no second
+  pipeline.** The coordinator itself **is extended**: it gains a shared body that inspects a URL already
+  obtained, which `inspect()` calls after the panel resolves its selection and which the drop calls
+  directly with the URL the composition root accepted. That shared body remains the sole owner of the
+  security scope. **The mapper, the reader and the use case do not change at all.**
 - **`URL` and AppKit remain confined to `AudioInspectorApp`.** The drop modifier lives in `RootView`;
   `FeatureImport` receives an opaque action plus safe visual state, never a location. A boundary rule
-  will enforce this statically, because the compiler cannot.
+  enforces this statically, because the compiler cannot: `URL` comes from Foundation, which features
+  legitimately use for other value types.
+- **Routing accepts only what the system presents as audio.** An item whose resolved content type does
+  not conform to `UTType.audio` is refused before the pipeline is entered; only an item with no
+  resolvable type at all goes through, leaving the verdict to the reader. This keeps parity with the
+  panel, whose `allowedContentTypes = [.audio]` filters the same way, and it uses the system's own type
+  resolution rather than a hand-written list of extensions. **Observable consequence, accepted
+  knowingly: an audio file with no extension is typically resolved as generic data and is therefore
+  refused by the drop — exactly as the panel would not offer it.** This is a routing and parity
+  decision, not a claim that such a file is impossible to inspect: were it selected by other means the
+  reader would read it normally, and the reader remains the honest source of truth once an item reaches
+  the pipeline.
 - **Selected API: `View.dropDestination(for: URL.self, action:isTargeted:)`** (macOS 13+), with
   `URL.self` as the payload type.
 - **A drop carrying more than one item is rejected in full.** The first item is never chosen silently:
@@ -65,9 +78,10 @@ replacement. Generation 1 carries **no** deprecation annotation at all for its `
   bare `Bool`; the items are unavailable until the drop is performed, so the app cannot know whether
   the content is acceptable beforehand. The highlight therefore states what is expected ("Drop one
   audio file"), never that the current payload is valid.
-- **File-reference URL normalisation, if needed, belongs to `AudioInspectorApp`.** Should a dropped URL
-  arrive in file-reference form (`file:///.file/id=…`), it is normalised at the drop boundary, before
-  `AudioFileReferenceMapper` is reached — see the risk note below.
+- **No URL normalisation is performed.** A sandboxed observation (below) found conventional path URLs in
+  every case tested, so no normalisation is introduced, `filePathURL` is not consulted, no
+  file-reference adapter exists, and `AudioFileReferenceMapper` is untouched. Preventive normalisation
+  would be code defending against a condition never observed.
 
 ## Alternatives considered
 
@@ -100,9 +114,10 @@ replacement. Generation 1 carries **no** deprecation annotation at all for its `
   correctness, not on taste.**
 - **Placing the drop modifier inside `FeatureImport`.** Simplest to write, and it would put the
   affordance next to the UI that shows it. It would also give a feature module a filesystem location,
-  contradicting ADR-0010 and OVERVIEW §2 — and it would do so **silently**, since the boundary script
-  cannot currently see it. **Rejected**; the modifier lives in `RootView` and a new boundary rule closes
-  the gap.
+  contradicting ADR-0010 and OVERVIEW §2 — and at the time of this decision it would have done so
+  **silently**, because the boundary script had no rule covering it. **Rejected**; the modifier lives in
+  `RootView`, and the boundary rule added by this change closes that gap (see *How it was
+  implemented*).
 - **Mapping a rejected drop to the existing `preparationFailed` outcome.** Cheapest possible wiring, and
   it reuses vocabulary that already exists. But that outcome drives the flow into `.failed`, which would
   **discard a report already on screen** because the user dropped two files by accident. **Rejected**; a
@@ -135,10 +150,12 @@ replacement. Generation 1 carries **no** deprecation annotation at all for its `
 - **Targeting feedback cannot be confirmatory** on this API generation, so the highlight promises less
   than a user might expect from it.
 - **The sandbox path is not reachable by `swift test`.** The package tests run unsandboxed and unsigned,
-  so whether the auto-start extension survives the asynchronous hop between the synchronous drop handler
-  and the inspection can only be observed in a signed, sandboxed `.app`. **Manual validation is part of
-  the definition of done for the implementing change**, not an optional extra.
-- Whether a dropped URL ever arrives in file-reference form is **not yet established** — see below.
+  so the behaviour recorded below can only be re-checked in a signed, sandboxed `.app`. **Manual
+  validation is part of the definition of done for the implementing change**, not an optional extra.
+- **The observation is a sample, not a proof.** It covers the locations and item kinds listed below on
+  one machine and one macOS version. Locations and sources it did not cover — iCloud files (downloaded
+  or evicted), aliases, symlinks, `.app` bundles and file-promise sources such as Mail — remain
+  unobserved, so a file-reference URL is unproven rather than impossible.
 
 ### Neutral
 
@@ -146,22 +163,84 @@ replacement. Generation 1 carries **no** deprecation annotation at all for its `
 - Should bookmarks arrive with persistence (ADR-0004), this decision is unaffected: the scope stays
   "items the user explicitly selected", by whichever explicit mechanism.
 
-## Risks to verify during implementation
+## Evidence from the sandboxed observation
 
-- **The shape of the URL Finder actually delivers is unverified.** File-reference URLs
-  (`file:///.file/id=…`) are documented for the `NSItemProvider` path, **not** for
-  `dropDestination(for: URL.self)`; this record makes no claim that Finder produces them here. It
-  matters because `AudioFileReferenceMapper` derives `displayName` from `lastPathComponent` and
-  `fileExtension` from `pathExtension`, so a reference URL would put a meaningless name into the report
-  and into the exported JSON's `source.displayName`. **A manual, sandboxed observation must settle it
-  before the normalisation design is fixed.** If only the drop can produce such URLs, normalisation
-  belongs to the drop adapter in `AudioInspectorApp` and `AudioFileReferenceMapper` stays untouched; if
-  the panel could produce them too, the mapper would be the correct owner and touching it would be
-  justified by evidence rather than by convenience.
-- **Security-scope survival across the async boundary** (see negative consequences). If it fails, the
-  escalation is: acquire the scope synchronously inside the drop handler; and only if that is
-  insufficient, an **in-memory, never persisted** bookmark round-trip — which would remain compatible
-  with ADR-0010 and ADR-0004 but must be recorded explicitly.
+Temporary instrumentation on a signed, sandboxed build recorded booleans only — no path, file name,
+extension value or content. What it found:
+
+**Local audio files (Downloads, Music, and another authorised location):** a single item;
+`isFileURL == true`; `isFileReferenceURL == false`; `filePathURL` identical to the delivered URL; a
+non-empty name and extension; not a directory; conforming to `UTType.audio`.
+
+**Security scope:** `startAccessingSecurityScopedResource()` returned **`false`**, and the file was
+readable anyway — both inside the synchronous handler and again after an asynchronous hop, without
+re-acquiring anything. The URL still resolved to the same file resource afterwards. This matches the
+auto-start behaviour Apple DTS describes for panel- and drop-provided URLs, and it confirms the existing
+coordinator pattern is already correct: call `start`, treat `false` as a non-error, and balance with
+`stop` only when it returned `true`.
+
+**Rejectable inputs:** a folder arrived as a local URL with `isDirectory == true` and no audio
+conformance; a two-item drop arrived with `itemCount == 2`; an image dragged from a web page produced
+`itemCount == 0`. All three are distinguishable in the handler, so each can be rejected in full.
+
+**No temporary copy** was involved: the delivered URL pointed at the user's own file throughout.
+
+**Consequences fixed by this evidence:** no normalisation, no `filePathURL`, no file-reference adapter,
+no change to `AudioFileReferenceMapper`, no bookmarks of any kind, no scope acquisition outside
+`SourceInspectionCoordinator`, and no entitlement change.
+
+## How it was implemented
+
+- `SourceInspectionCoordinator` gained `inspect(_ url:)` as the shared body and kept `inspect()` for the
+  panel, which resolves its selection and delegates; its initialiser now defaults `chooseSource` to a
+  provider that chooses nothing, for the drop path that supplies the URL directly. That body stays the
+  **only** owner of the `isFileURL` guard, the security scope, the mapper, the reader construction and
+  the use case, so both entry points run exactly the same path. Its scope handling is unchanged, and
+  the mapper, the reader and the use case are untouched.
+- `DroppedSource` in `AudioInspectorApp` holds the synchronous decision, pure and testable without
+  SwiftUI. Being busy is checked first — nothing would be processed anyway, so "wait" is the honest
+  message. Two or more items are refused whole. **The audio check asks the system for conformance to
+  `UTType.audio`, never a hand-written list of formats**, which has a consequence worth stating: a file
+  with no extension resolves to generic data and is refused, exactly as the panel's
+  `allowedContentTypes` would not offer it. The two entry points agree, and the reader with its honest
+  `failed` states remains the source of truth about what can actually be inspected.
+- `ImportFlowModel` shares one private transition body between `selectAndInspect()` and
+  `inspectDroppedSource(using:)`, and carries `DropRejection?` **orthogonally to its state**, so a
+  refusal never discards a report already on screen and never becomes a flow failure. It is cleared by
+  the next accepted operation from either entry point, with no timer and no automatic dismissal.
+- `RootView` applies the drop modifier to the whole window in every state and hands the feature an
+  opaque action with the URL captured inside the closure. The handler starts a plain
+  `Task { @MainActor in … }`; nothing acquires the scope there, and no bookmark exists.
+- Boundary rule 10 in `Scripts/check-boundaries.sh` rejects `import AppKit` and real use of the `URL`
+  type in `Sources/Feature*`, reporting file and line and exiting non-zero. It inspects `.swift` sources
+  only, matches `URL` as a whole word so `fileURL` and `URLSession` do not trip it, filters comment
+  lines so the features' own prose about never handling a `URL` passes, and leaves `import Foundation`
+  allowed. It was checked with controlled negative probes: the real tree passes, while an `AppKit`
+  import, a `URL`-typed property and a `URL(…)` call each fail. The location-free feature boundary is
+  therefore enforced statically rather than by convention.
+
+## Validation
+
+The implementation was validated by hand against a signed, sandboxed build. Every mandatory case
+passed, with **no anomalies**: drops from several authorised locations, from the initial state and over
+an existing report; whole-drop refusal for multiple items, folders and non-local items; refusal during
+an in-flight inspection; instructive targeting feedback and its accessibility; the previous report
+preserved on refusal and replaced after a valid drop; the source byte-identical before and after;
+nothing remembered across launches; the panel and its cancellation unchanged; and no sandbox,
+security-scope, access or write anomaly. That evidence, together with the automated suite, is what moved
+this record to `Accepted`.
+
+## Risks that remain
+
+- The observation and the validation are a **sample on one machine and one macOS version**. Neither
+  covered iCloud files (downloaded or evicted), aliases, symlinks, `.app` bundles, or file-promise
+  sources such as Mail. Should any of those ever deliver a file-reference URL, `displayName` and
+  `fileExtension` would be derived from a meaningless last path component, and that name travels into
+  the exported JSON's `source` object. The mitigation is not preventive code but the manual runbook,
+  extended as those sources are encountered.
+- **Sandbox behaviour is still unreachable from `swift test`**, so every re-check of the above belongs
+  to the manual runbook, which must be re-run whenever drag & drop, the sandbox, the entitlements or the
+  routing change.
 
 ## Relationship to ADR-0010 and ADR-0013
 
@@ -180,9 +259,9 @@ This ADR supersedes nothing.
 
 ## Follow-ups
 
-- The implementing change `add-drag-and-drop-file-import` owns the boundary rule, the manual sandbox
-  validation, and the minimal corrections to `SECURITY.md` and `docs/privacy.md`, which currently state
-  that files are reached only through native panels.
+- The implementing change `add-drag-and-drop-file-import` delivered the boundary rule, the manual
+  sandbox validation, and the minimal corrections to `SECURITY.md` and `docs/privacy.md`, which no
+  longer say that files are reached only through native panels. Nothing from that change is outstanding.
 - Migration to `dropDestination(for:isEnabled:action:)` with `DropSession` becomes possible — and the
   targeting feedback can become confirmatory — if and when the deployment target moves to macOS 26.
 - Batch import (more than one file per operation) remains explicitly out of scope and would need its own

@@ -17,14 +17,16 @@ account system, and no data transmission. The threat model is therefore local an
   always passed as a separated argument vector via `Process` — never as an interpolated shell
   string. No `sh -c`. See [docs/adr/0003-ffmpeg-vs-native-audio-strategy.md](docs/adr/0003-ffmpeg-vs-native-audio-strategy.md).
 - **Sandboxed, user-granted file access.** The app runs under the macOS App Sandbox and reaches files
-  only through native panels, so access is granted per item by the user — no folder-wide or
-  system-wide entitlement. Because one executable setting covers every user-selected item, the app
-  declares `com.apple.security.files.user-selected.read-write`, which the JSON export requires; the
-  inspected audio file is still treated as strictly read-only by design. Access is held only for the
-  operation that needs it, and **no URL or security-scoped bookmark is persisted** in this phase —
-  future bookmark support is a separate decision and scope. See
-  [ADR-0010](docs/adr/0010-sandboxed-file-access-for-inspection.md) and
-  [ADR-0013](docs/adr/0013-user-selected-file-access.md).
+  only through explicit user interactions — a native panel or dragging the file onto the window — so
+  access is granted per item by the user; no folder-wide or system-wide entitlement. Because one
+  executable setting covers every user-selected item, the app declares
+  `com.apple.security.files.user-selected.read-write`, which the JSON export requires; the inspected
+  audio file is still treated as strictly read-only by design. Access is held only for the operation
+  that needs it, and **no URL or security-scoped bookmark is persisted** in this phase — future
+  bookmark support is a separate decision and scope. See
+  [ADR-0010](docs/adr/0010-sandboxed-file-access-for-inspection.md),
+  [ADR-0013](docs/adr/0013-user-selected-file-access.md) and
+  [ADR-0014](docs/adr/0014-drag-and-drop-file-access.md).
 - **Bounded resources.** Streaming, chunked reads, capped concurrency, and cooperative
   cancellation prevent a crafted file from exhausting memory or CPU.
 - **Logs without sensitive data.** Structured `OSLog` output must not leak file contents or full
