@@ -1,4 +1,3 @@
-import AVFoundation
 import Foundation
 import Testing
 
@@ -40,12 +39,7 @@ struct SourceInspectionCoordinatorTests {
         }
     }
 
-    private func withTemporaryDirectory(_ body: (URL) async throws -> Void) async throws {
-        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        defer { try? FileManager.default.removeItem(at: directory) }
-        try await body(directory)
-    }
+    // Temporary directories and the PCM fixture come from `PCMFixtureSupport`.
 
     // MARK: - Cancellation
 
@@ -127,7 +121,7 @@ struct SourceInspectionCoordinatorTests {
     @Test func realReaderInspectsAPCMFixtureEndToEnd() async throws {
         try await withTemporaryDirectory { directory in
             let url = directory.appendingPathComponent("fixture.wav")
-            try Self.writePCMFixture(to: url)
+            try writePCMFixture(to: url)
 
             // Default `makeReader` → the real AVFoundation reader, resolving this URL.
             let coordinator = SourceInspectionCoordinator(chooseSource: { url })
@@ -141,29 +135,5 @@ struct SourceInspectionCoordinatorTests {
             #expect(report.properties.channelCount == .available(1))
             #expect(report.properties.codec == .available("lpcm"))
         }
-    }
-
-    /// A tiny deterministic PCM WAV written with public `AVAudioFile` APIs — no repository binaries,
-    /// no copyrighted audio.
-    private static func writePCMFixture(to url: URL) throws {
-        let settings: [String: Any] = [
-            AVFormatIDKey: kAudioFormatLinearPCM,
-            AVSampleRateKey: 44_100.0,
-            AVNumberOfChannelsKey: 1,
-            AVLinearPCMBitDepthKey: 16,
-            AVLinearPCMIsFloatKey: false,
-            AVLinearPCMIsBigEndianKey: false,
-        ]
-        let file = try AVAudioFile(forWriting: url, settings: settings)
-        guard let buffer = AVAudioPCMBuffer(pcmFormat: file.processingFormat, frameCapacity: 4_410) else {
-            throw CocoaError(.fileWriteUnknown)
-        }
-        buffer.frameLength = 4_410
-        if let channel = buffer.floatChannelData?[0] {
-            for frame in 0 ..< Int(buffer.frameLength) {
-                channel[frame] = 0.1 * sin(2.0 * .pi * 440.0 * Float(frame) / 44_100.0)
-            }
-        }
-        try file.write(from: buffer)
     }
 }
