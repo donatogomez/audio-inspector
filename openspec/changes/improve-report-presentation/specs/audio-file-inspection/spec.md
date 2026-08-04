@@ -43,9 +43,15 @@ status, the safe origin descriptor and the exported JSON contract are unchanged 
 
 #### Scenario: Absence is presented without judgement
 
-- **WHEN** a property is unavailable, not defined by the format, unreliable or could not be read
+- **WHEN** a property is unavailable, not defined by the format, or unreliable
 - **THEN** the report states which of those it is, in plain words, without presenting it as an error, a
   defect, or a statement about the quality of the file
+
+#### Scenario: A failed reading is marked as a failure of the reading
+
+- **WHEN** a property could not be read
+- **THEN** the report says so and may mark it, always with words beside any colour or symbol, without
+  implying a defect of the file
 
 #### Scenario: Presentation never judges quality
 
