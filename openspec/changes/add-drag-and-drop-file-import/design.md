@@ -161,6 +161,11 @@ lines, all of them comments**; with it, the current tree is clean, and a simulat
   Photos may deliver nothing. Any drop that yields no usable file must produce visible feedback.
 - **Regression risk on the panel path** from extracting `inspect(using:)`. Mitigated by requiring the
   existing `ImportFlowModelTests` to stay green **without being modified**.
+- **Multiple-window ownership (future, non-blocking).** The current design assumes one independent flow
+  model per `RootView`. If the app later supports multiple windows or document-style sessions, each drop
+  must be routed only to the receiving window and no inspection state may be shared across windows.
+  Nothing in this change decides that question — it is recorded here so a later windowing slice does not
+  inherit the single-window assumption silently.
 
 ## Migration Plan
 
