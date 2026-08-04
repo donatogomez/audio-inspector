@@ -17,8 +17,7 @@
 
 ---
 
-**Focus:** None in progress — report presentation is closed as far as implementation goes, and its
-manual accessibility validation is **deliberately deferred, not done**.
+**Focus:** None in progress. Report presentation is **closed and integrated**; no change is open.
 
 **Status:** The report reads as a report rather than as the implementation behind it. Internal
 vocabulary no longer reaches the screen: the presentation state is a closed type of its own, warnings
@@ -28,21 +27,28 @@ There is a hero header and grouped properties instead of a settings form, export
 action, colour is limited to the state of the reading, and each row is one coherent element for an
 assistive reader. The inspection itself behaves exactly as before.
 
-**Next step:** Waveform — reading samples and drawing them — as its own change. Before it ships, the
-deferred accessibility checks on this surface should be run: VoiceOver, system text sizes, contrast,
-and confirming nothing depends on colour alone. They need a person at a keyboard, so they do not gate
-starting the next slice, only finishing it.
+Its manual accessibility validation remains **deliberately deferred, not done**: VoiceOver, system text
+sizes, contrast, and confirming nothing depends on colour alone. Those need a person at a keyboard, so
+they were left open and named rather than recorded as evidence that does not exist.
 
-**Why:** Presentation was the one part that no automated test can finish judging. Recording those
-checks as done without performing them would be inventing evidence, so they stay open and named.
+**Next step:** Research and design a **static waveform** — reading samples and drawing them once, with
+no interaction — as its own change, starting from investigation rather than from code. It is the
+thinnest slice that turns the app into something that examines the signal instead of only its
+metadata, and it builds the sample-reading path that everything later depends on.
 
-**Open questions / threads:** Waveform, spectrogram and the per-property explanations are **not
-started**. Each needs its own change: the first two require reading samples, which is a different kind
-of work, and the explanations add new content that can drift from describing into judging quality, so
-they carry their own normative requirement. Known risks carried forward: the pinned `en_US` locale
-means formatting does not follow the user's region; warning text originates in the domain yet is swept
-by a presentation test; an unmapped wire key would fall back to its raw name; and `Choose another
-file…` still sits at the foot of the window while exporting lives in the toolbar.
+**Why:** The product's own premise is to examine the signal, and so far nothing reads a single sample.
+Starting with a still drawing keeps the arithmetic trivial while proving decoding, bounded memory,
+progress and cancellation — the same seam-first order that made the earlier slices work.
+
+**Open questions / threads:** **Not started:** waveform, spectrogram, playback, zoom, editing, and the
+per-property explanations. Each needs its own change — the visual ones because reading samples is a
+different kind of work, the explanations because new prose can drift from describing into judging
+quality and so carries its own normative requirement.
+
+Known risks carried forward from the presentation work: the pinned `en_US` locale means formatting does
+not follow the user's region; warning text originates in the domain yet is swept by a presentation
+test; an unmapped wire key would fall back to its raw name; and `Choose another file…` still sits at
+the foot of the window while exporting lives in the toolbar.
 
 ---
 _Last touched: 2026-08-04. Overwrite freely; empty is fine._
