@@ -45,8 +45,8 @@ hypotheses pending the ADR-0003 native-decoding spike, so the spike is the first
 
 ## 6. File selection (sandbox)
 
-- [ ] 6.1 Native open-panel selection under App Sandbox; hold security-scoped access only for the inspection duration (ADR-0010); no bookmark persistence; set the user-selected file entitlement to read-write per ADR-0013 (source stays read-only by design; hash-verified in 7.2)
-- [ ] 6.2 Wire selection → use case → presentation in the composition root
+- [x] 6.1 Native open-panel selection under App Sandbox; hold security-scoped access only for the inspection duration (ADR-0010); no bookmark persistence; set the user-selected file entitlement to read-write per ADR-0013 (source stays read-only by design; hash-verified in 7.2)
+- [x] 6.2 Wire selection → use case → presentation in the composition root
 
 ## 7. Integration & end-to-end
 
