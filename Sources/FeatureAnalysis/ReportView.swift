@@ -26,10 +26,14 @@ public struct ReportView: View {
                 warningsSection
                 statusSection
                 fileSection
-                exportSection
             }
             .padding(24)
             .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        // The export is an action, not a row of the report. `.toolbar` from here attaches it to the
+        // window without moving `ReportExportModel` out of this view, so no ownership changes.
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) { exportAction }
         }
     }
 
@@ -133,26 +137,24 @@ public struct ReportView: View {
 
     // MARK: - Export action (transient phase only)
 
-    private var exportSection: some View {
-        ReportSection("Export") {
-            HStack(spacing: 10) {
-                Button("Export JSON…") {
-                    Task { await exportModel.export(report) }
-                }
-                .disabled(exportModel.phase == .exporting)
-
-                switch exportModel.phase {
-                case .idle:
-                    EmptyView()
-                case .exporting:
-                    Text("Exporting…").foregroundStyle(.secondary)
-                case .succeeded:
-                    Text("Exported").foregroundStyle(.secondary)
-                case let .failed(message):
-                    Text(message).foregroundStyle(.red)
-                }
+    /// The transient phase sits beside the action rather than occupying a permanent row of the report.
+    private var exportAction: some View {
+        HStack(spacing: 8) {
+            switch exportModel.phase {
+            case .idle:
+                EmptyView()
+            case .exporting:
+                Text("Exporting…").font(.callout).foregroundStyle(.secondary)
+            case .succeeded:
+                Text("Exported").font(.callout).foregroundStyle(.secondary)
+            case let .failed(message):
+                Text(message).font(.callout).foregroundStyle(.red)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
+
+            Button("Export JSON…") {
+                Task { await exportModel.export(report) }
+            }
+            .disabled(exportModel.phase == .exporting)
         }
     }
 }
