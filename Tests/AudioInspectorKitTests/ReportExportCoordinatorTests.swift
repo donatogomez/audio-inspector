@@ -19,14 +19,13 @@ struct ReportExportCoordinatorTests {
         func export(_: InspectionReport) throws -> Data { throw Failure() }
     }
 
-    /// Counts encode invocations. `@MainActor` (hence `Sendable`); the coordinator calls `export`
-    /// synchronously on the main actor, so `assumeIsolated` is valid here.
-    @MainActor private final class ExportCounter { var count = 0 }
-    private struct CountingExporter: ReportExporting {
+    /// Signals each encode through an injected `@Sendable` callback, so "invoked exactly once" is
+    /// enforced by Swift Testing's `confirmation` — no isolation assumptions, locks, or shared state.
+    private struct ConfirmingExporter: ReportExporting {
         let inner: JSONReportExporter
-        let counter: ExportCounter
+        let onExport: @Sendable () -> Void
         func export(_ report: InspectionReport) throws -> Data {
-            MainActor.assumeIsolated { counter.count += 1 }
+            onExport()
             return try inner.export(report)
         }
     }
@@ -58,18 +57,20 @@ struct ReportExportCoordinatorTests {
         let destination = dir.appendingPathComponent("out.json")
 
         let exporter = realExporter()
-        let counter = ExportCounter()
-        var capturedName: String?
-        let coordinator = ReportExportCoordinator(
-            exporter: CountingExporter(inner: exporter, counter: counter),
-            chooseDestination: { name in capturedName = name; return destination }
-        )
         let subject = report(status: .completed)
+        var capturedName: String?
+        var outcome: ExportOutcome?
 
-        let outcome = await coordinator.export(subject)
+        // `expectedCount: 1` fails the test if the exporter runs zero times or more than once.
+        await confirmation("exporter invoked exactly once", expectedCount: 1) { confirmed in
+            let coordinator = ReportExportCoordinator(
+                exporter: ConfirmingExporter(inner: exporter, onExport: { confirmed() }),
+                chooseDestination: { name in capturedName = name; return destination }
+            )
+            outcome = await coordinator.export(subject)
+        }
 
         #expect(outcome == .succeeded)
-        #expect(counter.count == 1) // exporter invoked exactly once
         #expect(capturedName == "interview-side-a-inspection.json") // suggested name passed to selector
 
         // The bytes on disk are exactly the exporter's output (deterministic clock + sorted keys).
@@ -86,7 +87,10 @@ struct ReportExportCoordinatorTests {
         #expect(contents == ["out.json"])
     }
 
-    @Test func writeReplacesAnExistingFileAtomically() async throws {
+    /// Observes the *result* of the replacement: the destination ends up holding exactly the new
+    /// bytes. Atomicity itself is not observable from here — it is a property of the production
+    /// `Data.write(to:options: [.atomic])` call, not something this test can demonstrate.
+    @Test func writeReplacesAnExistingFile() async throws {
         let dir = try makeTempDir()
         defer { try? FileManager.default.removeItem(at: dir) }
         let destination = dir.appendingPathComponent("out.json")
