@@ -112,4 +112,66 @@ struct ReportPropertyDisplayTests {
         #expect(estimated.value == "180.9 kbps")
         #expect(estimated.detail == "180,904 bit/s — estimated")
     }
+
+    // MARK: - Grouping and summary
+
+    /// Grouping reorganises; it must never drop a row.
+    @Test func everyPropertyAppearsInExactlyOneGroup() {
+        let properties = mixedProperties()
+        let all = ReportPropertyFormatter.displays(for: properties)
+        let grouped = ReportPropertyFormatter.groups(for: properties).flatMap(\.properties)
+
+        #expect(grouped.count == all.count)
+        #expect(Set(grouped.map(\.name)) == Set(all.map(\.name)))
+        #expect(Set(grouped.map(\.name)).count == grouped.count) // no row in two groups
+    }
+
+    @Test func groupsSeparateWhatTheFileIsFromHowItIsEncoded() {
+        let groups = ReportPropertyFormatter.groups(for: mixedProperties())
+        #expect(groups.map(\.name) == ["Format", "Encoding"])
+        #expect(groups[0].properties.map(\.name) == ["Container", "Codec", "Duration"])
+        #expect(groups[1].properties.map(\.name) == [
+            "Sample rate", "Channel count", "Bit depth", "Declared bitrate", "Estimated bitrate",
+        ])
+    }
+
+    /// The header summarises what was read; anything missing is left out rather than filled in.
+    @Test func theSummaryOmitsWhatWasNotRead() {
+        let report = InspectionReport(
+            file: AudioFileReference(
+                displayName: "clip.wav",
+                fileExtension: "wav",
+                sizeBytes: 8_421_376,
+                modifiedAt: nil,
+                source: .userSelectedLocalFile(displayName: "clip.wav", locationDisclosure: .omitted)
+            ),
+            properties: mixedProperties(), // channelCount is unavailable
+            warnings: [],
+            status: .partial(message: nil)
+        )
+        let summary = ReportPropertyFormatter.summary(for: report)
+
+        #expect(summary.fileName == "clip.wav")
+        #expect(summary.highlights == ["AAC", "44.1 kHz", "0:10", "8.4 MB"])
+        #expect(!summary.highlights.contains { $0.contains("channel") }) // unavailable ⇒ absent
+    }
+
+    @Test func theSummaryIsEmptyOfHighlightsWhenNothingWasRead() {
+        let report = InspectionReport(
+            file: AudioFileReference(
+                displayName: "unreadable.bin",
+                fileExtension: nil,
+                sizeBytes: nil,
+                modifiedAt: nil,
+                source: .userSelectedLocalFile(displayName: "unreadable.bin", locationDisclosure: .omitted)
+            ),
+            properties: TechnicalProperties(),
+            warnings: [],
+            status: .failed(InspectionError(code: .fileUnreadable, message: "This file could not be inspected."))
+        )
+        let summary = ReportPropertyFormatter.summary(for: report)
+
+        #expect(summary.fileName == "unreadable.bin")
+        #expect(summary.highlights.isEmpty) // nothing invented to fill the header
+    }
 }

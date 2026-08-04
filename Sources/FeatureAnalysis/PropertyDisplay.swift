@@ -76,6 +76,24 @@ struct WarningDisplay: Equatable, Identifiable {
     let state: PropertyPresentationState
 }
 
+/// The few facts that answer "what is this file?" at a glance, above the detail.
+///
+/// Every entry comes from a property the reader actually produced: a value that was not read is simply
+/// absent from the summary rather than filled in with a placeholder.
+struct ReportSummary: Equatable {
+    let fileName: String
+    /// Format, sample rate, channels, duration, size — in that order, omitting whatever is missing.
+    let highlights: [String]
+}
+
+/// One named group of property rows, so the report reads as sections rather than a flat list.
+struct PropertyGroup: Equatable, Identifiable {
+    let name: String
+    let properties: [PropertyDisplay]
+
+    var id: String { name }
+}
+
 /// Turns the domain report into presentable rows. Pure and deterministic, so it is unit-tested without
 /// any view.
 enum ReportPropertyFormatter {
@@ -216,6 +234,43 @@ enum ReportPropertyFormatter {
         case .uncertain: .readButUnreliable
         case .failed: .couldNotBeRead
         }
+    }
+
+    // MARK: - Grouping and summary
+
+    /// Two groups: what the file **is**, and how it is **encoded**. Every one of the eight rows appears
+    /// in exactly one group, so grouping reorganises without hiding anything.
+    static func groups(for properties: TechnicalProperties) -> [PropertyGroup] {
+        let rows = displays(for: properties)
+        func pick(_ names: [String]) -> [PropertyDisplay] {
+            names.compactMap { name in rows.first { $0.name == name } }
+        }
+        return [
+            PropertyGroup(name: "Format", properties: pick(["Container", "Codec", "Duration"])),
+            PropertyGroup(
+                name: "Encoding",
+                properties: pick(["Sample rate", "Channel count", "Bit depth", "Declared bitrate", "Estimated bitrate"])
+            ),
+        ]
+    }
+
+    /// The glance-level answer: name, then the handful of facts that identify the file. Anything the
+    /// reader could not establish is left out rather than guessed.
+    static func summary(for report: InspectionReport) -> ReportSummary {
+        let rows = displays(for: report.properties)
+        func value(_ name: String) -> String? {
+            rows.first { $0.name == name }?.value
+        }
+        var highlights = [
+            value("Codec") ?? value("Container"),
+            value("Sample rate"),
+            value("Channel count"),
+            value("Duration"),
+        ].compactMap { $0 }
+        if let size = report.file.sizeBytes {
+            highlights.append(HumanFormat.byteCount(size))
+        }
+        return ReportSummary(fileName: report.file.displayName, highlights: highlights)
     }
 
     // MARK: - Outcome

@@ -19,20 +19,42 @@ public struct ReportView: View {
     }
 
     public var body: some View {
-        Form {
-            fileSection
-            propertiesSection
-            warningsSection
-            statusSection
-            exportSection
+        ScrollView {
+            VStack(alignment: .leading, spacing: 24) {
+                heroHeader
+                propertiesSection
+                warningsSection
+                statusSection
+                fileSection
+                exportSection
+            }
+            .padding(24)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .formStyle(.grouped)
+    }
+
+    // MARK: - Hero header — what this file is, at a glance
+
+    /// The name, then the handful of facts that identify the file. Everything here also appears in full
+    /// below: the header summarises, it does not replace. Nothing missing is filled in.
+    private var heroHeader: some View {
+        let summary = ReportPropertyFormatter.summary(for: report)
+        return VStack(alignment: .leading, spacing: 6) {
+            Text(summary.fileName)
+                .font(.title2.weight(.semibold))
+                .textSelection(.enabled)
+            if !summary.highlights.isEmpty {
+                Text(summary.highlights.joined(separator: "  ·  "))
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+        }
     }
 
     // MARK: - File identity (safe metadata only — never a location)
 
     private var fileSection: some View {
-        Section("File") {
+        ReportSection("File") {
             LabeledContent("Name", value: report.file.displayName)
             if let ext = report.file.fileExtension {
                 LabeledContent("Extension", value: ext)
@@ -64,10 +86,13 @@ public struct ReportView: View {
 
     // MARK: - Technical properties (eight rows, states preserved)
 
+    /// Grouped into what the file is and how it is encoded. Every one of the eight rows still appears.
     private var propertiesSection: some View {
-        Section("Technical properties") {
-            ForEach(ReportPropertyFormatter.displays(for: report.properties)) { property in
-                PropertyRow(property: property)
+        ForEach(ReportPropertyFormatter.groups(for: report.properties)) { group in
+            ReportSection(group.name) {
+                ForEach(group.properties) { property in
+                    PropertyRow(property: property)
+                }
             }
         }
     }
@@ -77,16 +102,17 @@ public struct ReportView: View {
     @ViewBuilder private var warningsSection: some View {
         let warnings = ReportPropertyFormatter.displays(for: report.warnings)
         if !warnings.isEmpty {
-            Section("Notes") {
+            ReportSection("Notes") {
                 ForEach(warnings) { warning in
                     VStack(alignment: .leading, spacing: 2) {
                         if let subject = warning.subject {
-                            Text(subject).font(.callout)
+                            Text(subject).font(.callout.weight(.medium))
                         }
                         Text(warning.message)
                             .font(.callout)
                             .foregroundStyle(.secondary)
                     }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
         }
@@ -95,34 +121,64 @@ public struct ReportView: View {
     // MARK: - Outcome (about the reading, never about the audio)
 
     private var statusSection: some View {
-        Section("Result") {
+        ReportSection("Result") {
             Text(ReportPropertyFormatter.outcome(
                 for: report.status,
                 properties: ReportPropertyFormatter.displays(for: report.properties)
             ).text)
             .font(.callout)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 
     // MARK: - Export action (transient phase only)
 
     private var exportSection: some View {
-        Section("Export") {
-            Button("Export JSON…") {
-                Task { await exportModel.export(report) }
-            }
-            .disabled(exportModel.phase == .exporting)
+        ReportSection("Export") {
+            HStack(spacing: 10) {
+                Button("Export JSON…") {
+                    Task { await exportModel.export(report) }
+                }
+                .disabled(exportModel.phase == .exporting)
 
-            switch exportModel.phase {
-            case .idle:
-                EmptyView()
-            case .exporting:
-                Text("Exporting…").foregroundStyle(.secondary)
-            case .succeeded:
-                Text("Exported").foregroundStyle(.secondary)
-            case let .failed(message):
-                Text(message).foregroundStyle(.red)
+                switch exportModel.phase {
+                case .idle:
+                    EmptyView()
+                case .exporting:
+                    Text("Exporting…").foregroundStyle(.secondary)
+                case .succeeded:
+                    Text("Exported").foregroundStyle(.secondary)
+                case let .failed(message):
+                    Text(message).foregroundStyle(.red)
+                }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+}
+
+/// A titled block of the report. Replaces `Form` + `.formStyle(.grouped)`, whose grouped-inset look is
+/// the idiom of a Preferences pane rather than of a document being examined.
+private struct ReportSection<Content: View>: View {
+    private let title: String
+    private let content: Content
+
+    init(_ title: String, @ViewBuilder content: () -> Content) {
+        self.title = title
+        self.content = content()
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 10) {
+                content
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 8))
         }
     }
 }
@@ -133,8 +189,9 @@ private struct PropertyRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
+            // The value carries more weight than its label — the opposite of a settings form.
             LabeledContent(property.name) {
-                Text(valueText)
+                Text(valueText).fontWeight(.medium)
             }
             // A cleanly measured value carries no state label — the value speaks for itself.
             if let label = property.state.label {
