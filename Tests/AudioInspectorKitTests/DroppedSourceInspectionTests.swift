@@ -1,0 +1,87 @@
+import Foundation
+import Testing
+
+import AudioInspectorDomain
+import FeatureImport
+@testable import AudioInspectorApp
+
+/// Light integration for the drop path: a dropped URL is routed through the real decision, the real
+/// coordinator, the real AVFoundation reader and the real use case, over a PCM fixture generated
+/// in-test. No panel is opened and no real drag occurs — the URL is injected, which is exactly what the
+/// drop handler does after accepting it.
+///
+/// Export is deliberately not repeated here: `EndToEndFlowTests` already covers it for the shared
+/// pipeline, and both entry points converge on that same pipeline.
+@MainActor
+@Suite("App — dropped source inspection")
+struct DroppedSourceInspectionTests {
+
+    @Test func aDroppedFixtureIsInspectedThroughTheRealPipeline() async throws {
+        try await withTemporaryDirectory { directory in
+            let url = directory.appendingPathComponent("dropped.wav")
+            try writePCMFixture(to: url)
+
+            guard case let .accepted(accepted) = DroppedSource.evaluate([url], isInspecting: false) else {
+                Issue.record("expected the fixture to be accepted"); return
+            }
+
+            // Exactly what `AppContainer.makeDroppedSourceInspectionAction()` builds.
+            let coordinator = SourceInspectionCoordinator()
+            guard case let .inspected(report) = await coordinator.inspect(accepted) else {
+                Issue.record("expected an inspected outcome"); return
+            }
+
+            // Descriptive metadata comes from the dropped file itself, with no normalisation needed.
+            #expect(report.file.displayName == "dropped.wav")
+            #expect(report.file.fileExtension == "wav")
+            #expect(report.file.sizeBytes != nil)
+            #expect(report.properties.sampleRate == .available(44_100))
+            #expect(report.properties.channelCount == .available(1))
+            #expect(report.properties.codec == .available("lpcm"))
+            // The origin stays safe: no path, no URL, no bookmark in the domain reference.
+            #expect(report.file.source == .userSelectedLocalFile(displayName: "dropped.wav", locationDisclosure: .omitted))
+        }
+    }
+
+    @Test func theDroppedSourceFileIsByteIdenticalAfterInspection() async throws {
+        try await withTemporaryDirectory { directory in
+            let url = directory.appendingPathComponent("untouched.wav")
+            try writePCMFixture(to: url)
+            let before = try Data(contentsOf: url)
+
+            let coordinator = SourceInspectionCoordinator()
+            _ = await coordinator.inspect(url)
+
+            #expect(try Data(contentsOf: url) == before) // ADR-0013's read-only promise, drop path
+        }
+    }
+
+    /// The composition root builds the drop action, and driving the flow model with it lands a report —
+    /// the same chain the drop handler runs, without SwiftUI.
+    @Test func theCompositionRootDropActionDrivesTheFlowToAReport() async throws {
+        try await withTemporaryDirectory { directory in
+            let url = directory.appendingPathComponent("wired.wav")
+            try writePCMFixture(to: url)
+
+            let makeAction = AppContainer().makeDroppedSourceInspectionAction()
+            let model = ImportFlowModel(action: { .cancelled }) // the panel action stays unused
+            await model.inspectDroppedSource(using: makeAction(url))
+
+            guard case let .report(report) = model.state else {
+                Issue.record("expected a report state, got \(model.state)"); return
+            }
+            #expect(report.file.displayName == "wired.wav")
+            #expect(report.properties.sampleRate == .available(44_100))
+            #expect(model.dropRejection == nil)
+        }
+    }
+
+    /// A non-file URL cannot even be prepared, and that stays a preparation failure rather than a
+    /// fabricated report — the guard lives in the shared body, so both entry points get it.
+    @Test func aNonFileURLReachingTheCoordinatorIsAPreparationFailure() async throws {
+        let remote = try #require(URL(string: "https://example.com/song.wav"))
+        let coordinator = SourceInspectionCoordinator()
+
+        #expect(await coordinator.inspect(remote) == .preparationFailed)
+    }
+}

@@ -21,11 +21,17 @@ enum DroppedSource {
     /// inspection runs nothing will be processed anyway, so "wait" is the honest message even if the
     /// payload is also malformed.
     ///
-    /// **The audio check rejects only a positive mismatch.** When the system types the item and that
-    /// type does not conform to `UTType.audio`, it is refused; when no type can be determined, the item
-    /// is accepted and the reader decides. There is no hand-written extension list and no claim of
-    /// per-format support: the reader and its honest `failed` states remain the source of truth, exactly
-    /// as `SourceSelection` already reasons about `UTType.audio` for the panel.
+    /// **The audio check asks the system, never a list we wrote.** An item whose resolved content type
+    /// does not conform to `UTType.audio` is refused; only when no type can be resolved at all does the
+    /// item go through, leaving the decision to the reader. In practice the system types nearly
+    /// everything — a file with no extension resolves to generic data and is therefore refused — which
+    /// deliberately matches the panel, whose `allowedContentTypes = [.audio]` would not offer such a
+    /// file either. The consequence is accepted knowingly: an extension-less audio file is refused by
+    /// both entry points alike.
+    ///
+    /// This is a *routing* check, not a support claim. It filters by conformance rather than by a
+    /// hand-written list of formats, and the reader with its honest `failed` states remains the source
+    /// of truth about what can actually be inspected.
     static func evaluate(_ urls: [URL], isInspecting: Bool) -> DroppedSourceDecision {
         if isInspecting {
             return .rejected(.inspectionInProgress)
