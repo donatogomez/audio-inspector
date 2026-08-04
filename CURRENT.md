@@ -17,30 +17,28 @@
 
 ---
 
-**Focus:** None in progress — drag & drop is implemented, validated and closed; the tree is at a clean
-checkpoint.
+**Focus:** `improve-report-presentation` — the report surface stops showing the implementation and
+starts reading as a report. No capability is added and the inspection behaves exactly as before.
 
-**Status:** A file can now be inspected by dropping it anywhere on the window as well as by picking it
-in the open panel. Both are explicit user selections and both run the **same** pipeline — one
-coordinator, one security-scope handling, one mapper, one reader, one use case and one flow state
-machine — so neither entry point can drift from the other. A drop that cannot become a single
-inspectable local file is refused whole, keeping any report already on screen, and refusals never
-become inspection failures. No entitlement was added, nothing is persisted, and feature modules stay
-free of file locations, now enforced by the boundary script rather than by convention. ADR-0014 is
-accepted, backed by the automated suite and a sandboxed manual run.
+**Status:** The functional work is complete and the automated validation is green. Internal vocabulary
+no longer reaches the screen: the presentation state is a closed type of its own, warnings render from
+their message and kind, and container and codec are named with the exact token kept beside them.
+Values are formatted for reading against a pinned locale, always preserving the precise figure. The
+report has a hero header and grouped properties instead of a settings form, exporting is a toolbar
+action, colour is limited to the state of the reading, and each row is one coherent element for an
+assistive reader.
 
-**Next step:** Not started. The next product step opens as its own OpenSpec change with its own
-proposal — waveform, spectrogram, an educational mode, or anything else. None of them may be grafted
-onto the closed change.
+**Next step:** Complete the manual accessibility validation — VoiceOver, system text sizes, contrast,
+and confirming nothing depends on colour alone — then the final review, then close the change. Those
+checks need a person at the keyboard; the suite cannot reach them.
 
-**Why:** The slice existed to add a second way in without a second pipeline, and that is exactly what
-it does; further capability belongs to a different scope.
+**Why:** Presentation was the one part of the slice that could not be verified automatically end to
+end, so the change is not finished until it has been seen and heard, not only compiled.
 
-**Open questions / threads:** One known gap, carried in ADR-0014 and in the manual runbook rather than
-in code: iCloud files, aliases, symlinks, app bundles and Mail file promises were never dropped, so a
-file-reference URL is unproven rather than impossible. It would surface as a wrong display name, and
-the answer is to extend the manual run when such a source appears — not to add preventive
-normalisation.
+**Open questions / threads:** Waveform, spectrogram and the educational per-property explanations are
+**not started**. Each needs its own change: the first two require reading samples, which is a different
+kind of work, and the explanations add new content that can drift from describing into judging quality,
+so they carry their own normative requirement.
 
 ---
 _Last touched: 2026-08-04. Overwrite freely; empty is fine._
