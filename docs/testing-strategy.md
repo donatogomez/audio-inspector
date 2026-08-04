@@ -17,6 +17,21 @@ constraint requires it). Approach adapted from SignalFlow (`docs/09-testing-stra
 Most value sits in the wide base: **pure DSP and evidence logic**, which is fast, deterministic, and
 exhaustive. Higher tiers verify the wiring.
 
+### Where the automated suite stops
+
+The end-to-end tier runs inside `swift test`: it walks the whole production chain — a generated
+fixture on disk, the safe file reference, the real media reader, the use case, the report held by the
+flow model, its presentation, the real exporter and a real write — substituting **only** the two
+points where a person acts (the open and save panels) plus the clock and generator identity.
+
+What it deliberately cannot reach: code signing, the entitlements the shipped app actually gets, the
+sandbox powerbox, the native panels, visual rendering, and real network traffic — the package tests
+run unsandboxed and never launch the `.app`. Those are validated by hand with
+[manual-validation-mvp.md](manual-validation-mvp.md). Two guarantees straddle the line: the *absence
+of networking code* is enforced statically by `Scripts/check-boundaries.sh`, and the *absence of a
+network entitlement* by a configuration test — neither claims to prove that no traffic occurs, which
+only the manual observation can suggest.
+
 ## Swift Testing features we rely on
 
 - `@Test` / `@Suite` grouped by behavior.

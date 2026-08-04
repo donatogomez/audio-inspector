@@ -30,3 +30,15 @@ jobs:
 
       - name: Test (Swift Testing)
         run: swift test
+
+      # The package is only half the product: the shipped artefact is the sandboxed .app. Building it
+      # here catches a broken Xcode project, entitlements file, or app/package wiring that `swift
+      # build` cannot see. Uses the shared scheme (a bare `-target` cannot resolve the package
+      # product); no signing identity is needed just to compile.
+      - name: Build macOS app target
+        run: |
+          xcodebuild -project App/AudioInspector.xcodeproj \
+                     -scheme AudioInspector \
+                     -configuration Debug \
+                     CODE_SIGNING_ALLOWED=NO \
+                     build

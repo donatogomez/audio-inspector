@@ -86,6 +86,27 @@ if [ -n "$testing_violators" ]; then
     report "AudioInspectorTesting is test-only — no Sources/ target may import it (found: $testing_violators)"
 fi
 
+# Rule 9 — the product is offline by construction (docs/privacy.md, SECURITY.md). No production
+# source may reach the network. This is the *structural* half of the guarantee; the configuration
+# half (no network entitlement, which is what the sandbox actually enforces) is asserted by
+# Tests/AudioInspectorKitTests/OfflineConfigurationTests.swift, and observing real traffic belongs to
+# docs/manual-validation-mvp.md. Neither this rule nor those tests claim to prove that no traffic
+# occurs — they prove the code has no way to ask for it and the sandbox would refuse it.
+#
+# Matching is deliberately narrow to avoid firing on prose: imports are anchored to an `import` line,
+# and the type names must appear as a whole word followed by `(` or `.` — i.e. actually used, not
+# merely mentioned in a comment such as "no URLSession here".
+NETWORK_MODULES='Network|WebKit|CFNetwork|NetworkExtension'
+NETWORK_TYPES='URLSession|URLRequest|NWConnection|NWListener|NWBrowser|WKWebView|CFSocket|NSURLConnection'
+if [ -d Sources ]; then
+    if grep -REn "^\s*import\s+(${NETWORK_MODULES})\b" Sources 2>/dev/null; then
+        report "production code must not import a networking framework (the app is offline by construction)"
+    fi
+    if grep -REn "\b(${NETWORK_TYPES})\s*[(.]" Sources 2>/dev/null | grep -vE '^\s*[^:]+:[0-9]+:\s*(///|//|\*)'; then
+        report "production code must not use a networking API (the app is offline by construction)"
+    fi
+fi
+
 if [ "$fail" -eq 0 ]; then
     echo "✅ architecture boundaries respected"
 fi
