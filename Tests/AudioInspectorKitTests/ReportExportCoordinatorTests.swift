@@ -7,7 +7,8 @@ import FeatureAnalysis
 
 /// Coordinator tests with the destination selector injected (no real `NSSavePanel`). Writes go to a
 /// unique temporary directory and are cleaned up. The written bytes are inspected via `Codable`
-/// (`JSONValue`) — never `JSONSerialization`. `FileManager` is used only in the test harness.
+/// (`JSONValue`) — never an untyped-object serialization API. `FileManager` is used only in the test
+/// harness, never in production code.
 @MainActor
 @Suite("App — report export coordinator")
 struct ReportExportCoordinatorTests {
