@@ -32,8 +32,8 @@ enum HumanFormat {
 
     // MARK: - Time
 
-    /// `372.51` → `6:12`; an hour or more → `1:02:03`. Non-finite or negative input yields `nil` rather
-    /// than a fabricated duration.
+    /// `372.51` → `6:13` (rounded to the nearest second; the exact value is kept as detail); an hour or
+    /// more → `1:02:03`. Non-finite or negative input yields `nil` rather than a fabricated duration.
     static func duration(_ seconds: Double) -> String? {
         guard seconds.isFinite, seconds >= 0 else { return nil }
         let value = Duration.seconds(seconds)
