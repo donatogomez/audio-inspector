@@ -50,8 +50,8 @@ hypotheses pending the ADR-0003 native-decoding spike, so the spike is the first
 
 ## 7. Integration & end-to-end
 
-- [ ] 7.1 End-to-end test/flow: select (fixture) → inspect → report → export JSON, no DSP
-- [ ] 7.2 Verify originals are never modified (hash before/after) and no network access occurs
+- [x] 7.1 End-to-end test/flow: select (fixture) → inspect → report → export JSON, no DSP
+- [x] 7.2 Verify originals are never modified (hash before/after) and no network access occurs
 
 ## 8. Documentation & validation
 

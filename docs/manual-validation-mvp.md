@@ -9,6 +9,19 @@ entitlements, the powerbox, the native panels, and real network behaviour are on
 running the application. See [testing-strategy.md](testing-strategy.md) for where this sits in the
 overall pyramid.
 
+## Validation status
+
+The **required** validation (group A below) has been completed successfully on a sandboxed Debug
+build: the source and destination panels, access to a file outside the app container, source
+integrity, absence of location disclosure, cancellation, re-selection, export and relaunch behaviour
+all behaved as specified, with no sandbox, write, access or runtime errors. No network anomalies were
+reported during that run; the **primary** offline guarantee remains the structural rule in
+`Scripts/check-boundaries.sh` plus the absent network entitlement, with the dynamic observation
+(group B) being supplementary. Per-run details — dates, tool versions, file names, paths and hashes —
+stay out of the repository; only this durable statement lives here.
+
+Re-run this runbook whenever the selection, export, sandbox or entitlement behaviour changes.
+
 ## What is already automated (do not re-verify by hand)
 
 These are covered by `swift test` / `Scripts/check-boundaries.sh` and need no manual work:
