@@ -17,7 +17,7 @@ integrity, absence of location disclosure, cancellation, re-selection, export an
 all behaved as specified, with no sandbox, write, access or runtime errors. No network anomalies were
 reported during that run; the **primary** offline guarantee remains the structural rule in
 `Scripts/check-boundaries.sh` plus the absent network entitlement, with the dynamic observation
-(group B) being supplementary. Per-run details — dates, tool versions, file names, paths and hashes —
+(group C) being supplementary. Per-run details — dates, tool versions, file names, paths and hashes —
 stay out of the repository; only this durable statement lives here.
 
 The **drag & drop** validation (group B) has also been completed successfully on a sandboxed build, with
