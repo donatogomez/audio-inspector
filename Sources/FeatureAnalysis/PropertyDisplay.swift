@@ -32,13 +32,13 @@ enum PropertyPresentationState: Equatable, CaseIterable, Sendable {
 }
 
 /// One presentable property row. `value` exists **only** where the domain carries one, so nothing is
-/// fabricated. `detail` carries the reason, or the exact technical token behind a humanised value —
-/// a summary always keeps a visible path back to the precise datum.
+/// fabricated, and it is self-contained: the unit is part of it (`44.1 kHz`), never a separate wire
+/// name such as `hertz`. `detail` carries the reason, or the exact figure behind a rounded value — a
+/// summary always keeps a visible path back to the precise datum.
 struct PropertyDisplay: Equatable, Identifiable {
     let name: String
     let state: PropertyPresentationState
     let value: String?
-    let unit: String?
     let detail: String?
 
     var id: String { name }
@@ -83,28 +83,29 @@ enum ReportPropertyFormatter {
     // MARK: - Properties
 
     /// The eight rows, in declaration order. Declared and estimated bitrate stay separate.
+    ///
+    /// Each numeric field pairs a readable form with the exact one, so rounding never loses the datum.
     static func displays(for properties: TechnicalProperties) -> [PropertyDisplay] {
         [
-            display("Container", properties.container, unit: nil, format: containerName, technicalToken: { $0 }),
-            display("Duration", properties.duration, unit: "seconds") { String($0) },
-            display("Sample rate", properties.sampleRate, unit: "hertz") { String($0) },
-            display("Channel count", properties.channelCount, unit: nil) { String($0) },
-            display("Bit depth", properties.bitDepth, unit: "bits") { String($0) },
-            display("Codec", properties.codec, unit: nil, format: codecName, technicalToken: { $0 }),
-            display("Declared bitrate", properties.declaredBitrate, unit: "bitsPerSecond") { String($0) },
-            display("Estimated bitrate", properties.estimatedBitrate, unit: "bitsPerSecond") { String($0) },
+            display("Container", properties.container, format: containerName, exact: { $0 }),
+            display("Duration", properties.duration, format: { HumanFormat.duration($0) ?? HumanFormat.durationExact($0) }, exact: HumanFormat.durationExact),
+            display("Sample rate", properties.sampleRate, format: HumanFormat.sampleRate, exact: HumanFormat.sampleRateExact),
+            display("Channel count", properties.channelCount, format: HumanFormat.channels, exact: HumanFormat.channelsExact),
+            display("Bit depth", properties.bitDepth, format: HumanFormat.bitDepth, exact: nil),
+            display("Codec", properties.codec, format: codecName, exact: { $0 }),
+            display("Declared bitrate", properties.declaredBitrate, format: HumanFormat.bitrate, exact: HumanFormat.bitrateExact),
+            display("Estimated bitrate", properties.estimatedBitrate, format: HumanFormat.bitrate, exact: HumanFormat.bitrateExact),
         ]
     }
 
     /// Maps one `Property<Value>` to its row, preserving every state distinctly and never fabricating a
-    /// value. `technicalToken` optionally yields the exact underlying token, kept as detail so a
-    /// humanised name never hides the precise datum.
+    /// value. `exact` yields the precise underlying figure or token, kept as detail so a readable form
+    /// never hides it.
     static func display<Value>(
         _ name: String,
         _ property: Property<Value>,
-        unit: String?,
         format: (Value) -> String,
-        technicalToken: ((Value) -> String)? = nil
+        exact: ((Value) -> String)?
     ) -> PropertyDisplay {
         switch property {
         case let .available(value):
@@ -112,58 +113,46 @@ enum ReportPropertyFormatter {
                 name: name,
                 state: .measured,
                 value: format(value),
-                unit: unit,
-                detail: preservedToken(value, format: format, technicalToken: technicalToken)
+                detail: preservedExact(value, format: format, exact: exact)
             )
         case let .unavailable(reason):
-            PropertyDisplay(name: name, state: .notPresent, value: nil, unit: nil, detail: reason)
+            PropertyDisplay(name: name, state: .notPresent, value: nil, detail: reason)
         case let .unsupported(reason):
-            PropertyDisplay(name: name, state: .notDefinedByFormat, value: nil, unit: nil, detail: reason)
+            PropertyDisplay(name: name, state: .notDefinedByFormat, value: nil, detail: reason)
         case let .uncertain(value, reason):
             PropertyDisplay(
                 name: name,
                 state: .readButUnreliable,
                 value: value.map(format),
-                unit: value == nil ? nil : unit,
-                detail: uncertainDetail(value, reason: reason, format: format, technicalToken: technicalToken)
+                detail: uncertainDetail(value, reason: reason, format: format, exact: exact)
             )
         case let .failed(failure):
             // The stable code stays in the JSON, where it is the identity; here only the message.
-            PropertyDisplay(name: name, state: .couldNotBeRead, value: nil, unit: nil, detail: failure.message)
+            PropertyDisplay(name: name, state: .couldNotBeRead, value: nil, detail: failure.message)
         }
     }
 
-    /// Convenience for the fields whose presentable value is their raw value.
-    static func display<Value>(
-        _ name: String,
-        _ property: Property<Value>,
-        unit: String?,
-        _ format: @escaping (Value) -> String
-    ) -> PropertyDisplay {
-        display(name, property, unit: unit, format: format, technicalToken: nil)
-    }
-
-    /// The exact token, shown only when the humanised name actually differs from it.
-    private static func preservedToken<Value>(
+    /// The exact figure, shown only when the readable form actually differs from it.
+    private static func preservedExact<Value>(
         _ value: Value,
         format: (Value) -> String,
-        technicalToken: ((Value) -> String)?
+        exact: ((Value) -> String)?
     ) -> String? {
-        guard let technicalToken else { return nil }
-        let token = technicalToken(value)
-        return token == format(value) ? nil : token
+        guard let exact else { return nil }
+        let precise = exact(value)
+        return precise == format(value) ? nil : precise
     }
 
     private static func uncertainDetail<Value>(
         _ value: Value?,
         reason: String,
         format: (Value) -> String,
-        technicalToken: ((Value) -> String)?
+        exact: ((Value) -> String)?
     ) -> String {
-        guard let value, let token = preservedToken(value, format: format, technicalToken: technicalToken) else {
+        guard let value, let precise = preservedExact(value, format: format, exact: exact) else {
             return reason
         }
-        return "\(token) — \(reason)"
+        return "\(precise) — \(reason)"
     }
 
     // MARK: - Technical tokens with human names

@@ -81,7 +81,9 @@ struct EndToEndFlowTests {
             #expect(displays.count == 8)
             // Every row is well formed: nothing failed to read on a fixture we generated ourselves.
             #expect(displays.allSatisfy { $0.state != .couldNotBeRead })
-            #expect(displays.first { $0.name == "Sample rate" }?.value == "44100")
+            // Readable value, with the exact figure preserved beside it.
+            #expect(displays.first { $0.name == "Sample rate" }?.value == "44.1 kHz")
+            #expect(displays.first { $0.name == "Sample rate" }?.detail == "44,100 Hz")
             // The codec token `lpcm` is now named, with the token preserved as detail.
             #expect(displays.first { $0.name == "Codec" }?.value == "Linear PCM")
             #expect(displays.first { $0.name == "Codec" }?.detail == "lpcm")

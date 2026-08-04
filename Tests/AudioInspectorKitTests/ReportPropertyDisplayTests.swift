@@ -50,34 +50,35 @@ struct ReportPropertyDisplayTests {
         }
     }
 
-    @Test func availableRowsCarryValueAndUnitOnlyWhereMeaningful() throws {
+    /// Values are self-contained — the unit is part of the value, never a separate wire name such as
+    /// `hertz` — and every rounded form keeps its exact figure as detail.
+    @Test func availableRowsAreReadableAndKeepTheExactFigure() throws {
         let displays = ReportPropertyFormatter.displays(for: mixedProperties())
 
+        // `wav` is not a resolvable type identifier, so it is shown unchanged rather than guessed at.
         let container = try #require(displays.first { $0.name == "Container" })
         #expect(container.value == "wav")
-        #expect(container.unit == nil) // container is unitless
+        #expect(container.detail == nil) // nothing to preserve: the name is the token
 
         let duration = try #require(displays.first { $0.name == "Duration" })
-        #expect(duration.value == "10.5")
-        #expect(duration.unit == "seconds")
+        #expect(duration.value == "0:10")
+        #expect(duration.detail == "10.5 seconds")
 
         let sampleRate = try #require(displays.first { $0.name == "Sample rate" })
-        #expect(sampleRate.value == "44100")
-        #expect(sampleRate.unit == "hertz")
+        #expect(sampleRate.value == "44.1 kHz")
+        #expect(sampleRate.detail == "44,100 Hz")
     }
 
-    @Test func absentStatesCarryNoValueAndNoUnit() throws {
+    @Test func absentStatesCarryNoValue() throws {
         let displays = ReportPropertyFormatter.displays(for: mixedProperties())
 
-        // unavailable → no value, no unit.
+        // unavailable → no value.
         let channels = try #require(displays.first { $0.name == "Channel count" })
         #expect(channels.value == nil)
-        #expect(channels.unit == nil)
 
         // unsupported → no value, reason surfaced.
         let bitDepth = try #require(displays.first { $0.name == "Bit depth" })
         #expect(bitDepth.value == nil)
-        #expect(bitDepth.unit == nil)
         #expect(bitDepth.detail == "lossy codec")
 
         // failed → no value, and the human message only: the stable code stays in the JSON, where it
@@ -88,30 +89,27 @@ struct ReportPropertyDisplayTests {
         #expect(declared.detail?.contains("property_read_error") == false)
     }
 
-    @Test func uncertainWithValueKeepsUnitButWithoutValueDropsIt() throws {
+    @Test func uncertainWithValueKeepsTheReasonAndTheExactFigure() throws {
         let displays = ReportPropertyFormatter.displays(for: mixedProperties())
 
-        // uncertain WITH value → value present, unitless field so no unit but reason kept. The codec is
-        // now named, and the exact token is preserved in the detail so the summary never hides the datum.
+        // uncertain WITH value → named codec, with the exact token preserved alongside the reason.
         let codec = try #require(displays.first { $0.name == "Codec" })
         #expect(codec.value == "AAC")
-        #expect(codec.unit == nil) // codec is unitless
         #expect(codec.detail == "aac — inferred")
 
-        // uncertain WITHOUT value → no value ⇒ no unit, reason kept.
+        // uncertain WITHOUT value → no value, reason kept.
         let estimated = try #require(displays.first { $0.name == "Estimated bitrate" })
         #expect(estimated.value == nil)
-        #expect(estimated.unit == nil)
         #expect(estimated.detail == "cannot estimate")
     }
 
-    @Test func uncertainNumericWithValueKeepsItsUnit() throws {
+    @Test func uncertainNumericValueIsReadableAndKeepsItsExactFigure() throws {
         var properties = TechnicalProperties()
         properties.estimatedBitrate = .uncertain(value: 180_904, reason: "estimated")
         let displays = ReportPropertyFormatter.displays(for: properties)
 
         let estimated = try #require(displays.first { $0.name == "Estimated bitrate" })
-        #expect(estimated.value == "180904")
-        #expect(estimated.unit == "bitsPerSecond")
+        #expect(estimated.value == "180.9 kbps")
+        #expect(estimated.detail == "180,904 bit/s — estimated")
     }
 }

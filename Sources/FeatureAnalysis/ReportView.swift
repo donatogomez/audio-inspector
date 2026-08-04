@@ -38,10 +38,17 @@ public struct ReportView: View {
                 LabeledContent("Extension", value: ext)
             }
             if let size = report.file.sizeBytes {
-                LabeledContent("Size", value: "\(size) bytes")
+                LabeledContent("Size") {
+                    VStack(alignment: .trailing, spacing: 1) {
+                        Text(HumanFormat.byteCount(size))
+                        Text(HumanFormat.byteCountExact(size))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
             }
             if let modifiedAt = report.file.modifiedAt {
-                LabeledContent("Modified") { Text(modifiedAt, format: .dateTime) }
+                LabeledContent("Modified", value: HumanFormat.dateTime(modifiedAt))
             }
             LabeledContent("Source", value: sourceDescription)
         }
@@ -143,12 +150,9 @@ private struct PropertyRow: View {
         }
     }
 
+    /// The value already carries its unit (`44.1 kHz`), so nothing is appended here.
     private var valueText: String {
-        guard let value = property.value else { return "—" }
-        if let unit = property.unit {
-            return "\(value) \(unit)"
-        }
-        return value
+        property.value ?? "—"
     }
 }
 
