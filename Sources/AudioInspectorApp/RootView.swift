@@ -41,7 +41,6 @@ public struct RootView: View {
                 Button("Choose another file…") {
                     Task { await flow.selectAndInspect() }
                 }
-                .disabled(flow.state == .working)
             }
             .padding(12)
         }
