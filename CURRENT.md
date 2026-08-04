@@ -19,15 +19,17 @@
 
 **Focus:** None in progress — the tree is at a clean checkpoint, ready for the next slice.
 
-**Status:** Groups 1–5 of the active change are complete and integrated on `main`. A report view in
-`FeatureAnalysis` presents an already-available `InspectionReport`, and the App layer can export it
-as JSON v1 to a destination the user chooses. Group 6 has not started.
+**Status:** Groups 1–6 of the active change are complete and integrated on `main`. The vertical slice
+now runs end to end: the user picks a local audio file under the App Sandbox, it is inspected, the
+report is presented, and it can be exported as JSON v1 to a chosen destination. Group 7 has not
+started.
 
-**Next step:** Begin Group 6 of `add-basic-audio-file-inspection` — sandboxed selection of the source
-file and wiring selection → inspection → the report view (see its `tasks.md`).
+**Next step:** Begin Group 7 of `add-basic-audio-file-inspection` — the end-to-end test of the whole
+flow, and the check that originals are never modified and no network access occurs (see its
+`tasks.md`).
 
-**Why:** Presentation and export are in place but still have no real report to show: the remaining
-vertical-slice step is letting the user pick a file, running the inspection, and feeding the result in.
+**Why:** The slice is functionally complete, so what remains is proving it: an automated end-to-end
+pass over the real path, plus the guarantees the product promises about the user's files.
 
 **Open questions / threads:** None.
 
