@@ -41,16 +41,28 @@ struct ReportPresentationContractTests {
         )
     }
 
-    /// Every string the report can render, gathered in one place.
+    /// Every string the report can render, gathered in **one** place so no sweep works from a partial
+    /// inventory of the surface.
+    ///
+    /// Beyond what this particular report produces, it includes every state label and all three outcome
+    /// shapes: a fixture only exercises the branches it happens to hit, and a guarantee about the
+    /// surface has to cover the branches too.
     private func allPresentedText(_ report: InspectionReport) -> [String] {
         let rows = ReportPropertyFormatter.displays(for: report.properties)
         let warnings = ReportPropertyFormatter.displays(for: report.warnings)
+        let summary = ReportPropertyFormatter.summary(for: report)
         return rows.flatMap { [$0.name, $0.value, $0.detail, $0.state.label, $0.accessibilityLabel].compactMap { $0 } }
             + warnings.flatMap { [$0.subject, $0.message, $0.accessibilityLabel].compactMap { $0 } }
-            + ReportPropertyFormatter.summary(for: report).highlights
-            + [ReportPropertyFormatter.summary(for: report).fileName]
-            + [ReportPropertyFormatter.outcome(for: report.status, properties: rows).text]
+            + summary.highlights
+            + [summary.fileName]
             + ReportPropertyFormatter.groups(for: report.properties).map(\.name)
+            + PropertyPresentationState.allCases.compactMap(\.label)
+            + [
+                ReportPropertyFormatter.outcome(for: report.status, properties: rows).text,
+                InspectionOutcomeDisplay.allRead(count: rows.count).text,
+                InspectionOutcomeDisplay.someNotRead(read: 3, total: rows.count).text,
+                InspectionOutcomeDisplay.couldNotInspect(message: "This file could not be inspected.").text,
+            ]
     }
 
     // MARK: - No internal identifier reaches the surface
@@ -93,6 +105,58 @@ struct ReportPresentationContractTests {
         let warnings = ReportPropertyFormatter.displays(for: everyStateReport().warnings)
         #expect(warnings.contains { $0.subject == nil }) // the fieldless warning exists…
         #expect(!warnings.contains { $0.subject == "general" }) // …and is not given an invented label
+    }
+
+    // MARK: - Nothing presented judges the audio
+
+    /// Invariant #4 — format is not quality — made executable over the **whole** surface: rows, state
+    /// labels, warnings, the hero header, group names and every outcome shape.
+    ///
+    /// Warning messages are swept even though they originate in the domain: the report renders them
+    /// verbatim, and the promoted requirement covers *any* warning presented, wherever it was written.
+    @Test func noPresentedTextCharacterisesAudioQuality() {
+        let report = everyStateReport()
+
+        // Phrases are matched as substrings; single words as whole words, so an innocent word that
+        // merely contains one of them cannot fail the sweep.
+        let forbiddenPhrases = ["high quality", "low quality", "higher quality", "lower quality"]
+        let forbiddenWords: Set<String> = [
+            "good", "bad", "better", "worse", "quality", "professional", "recommended", "poor",
+        ]
+
+        for text in allPresentedText(report) {
+            let lowered = text.lowercased()
+            for phrase in forbiddenPhrases {
+                #expect(!lowered.contains(phrase), "judgement phrase “\(phrase)” in: \(text)")
+            }
+            let words = Set(lowered.split { !$0.isLetter }.map(String.init))
+            let offending = words.intersection(forbiddenWords)
+            #expect(offending.isEmpty, "judgement word(s) \(offending.sorted()) in: \(text)")
+        }
+    }
+
+    /// The sweep is only worth as much as its inventory, so this pins what the inventory must contain.
+    /// If a new source of presented text is added and not gathered, this fails.
+    @Test func theSweepCoversEverySourceOfPresentedText() {
+        let report = everyStateReport()
+        let texts = Set(allPresentedText(report))
+        let rows = ReportPropertyFormatter.displays(for: report.properties)
+        let summary = ReportPropertyFormatter.summary(for: report)
+        let warnings = ReportPropertyFormatter.displays(for: report.warnings)
+
+        #expect(texts.contains("Sample rate"))                                  // a row name
+        #expect(texts.contains("44.1 kHz"))                                     // a row value
+        #expect(texts.contains("44,100 Hz"))                                    // a row detail
+        #expect(texts.contains("Not defined by this format"))                   // a state label
+        #expect(texts.contains(summary.fileName))                               // the hero name
+        #expect(summary.highlights.allSatisfy(texts.contains))                  // every highlight
+        #expect(texts.contains("Format") && texts.contains("Encoding"))         // group names
+        #expect(warnings.allSatisfy { texts.contains($0.message) })             // every warning message
+        #expect(warnings.compactMap(\.subject).allSatisfy(texts.contains))      // every warning subject
+        #expect(rows.allSatisfy { texts.contains($0.accessibilityLabel) })      // accessibility labels
+        #expect(texts.contains(InspectionOutcomeDisplay.allRead(count: 8).text))
+        #expect(texts.contains(InspectionOutcomeDisplay.someNotRead(read: 3, total: 8).text))
+        #expect(texts.contains(InspectionOutcomeDisplay.couldNotInspect(message: "This file could not be inspected.").text))
     }
 
     // MARK: - Names only where certain

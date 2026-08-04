@@ -226,22 +226,9 @@ struct ReportPropertyDisplayTests {
         }
     }
 
-    /// The whole presentation surface, swept for judgement words (invariant #4).
-    @Test func noPresentedTextCharacterisesQuality() {
-        let texts = ReportPropertyFormatter.displays(for: mixedProperties())
-            .flatMap { [$0.name, $0.value, $0.detail, $0.state.label].compactMap { $0 } }
-            + PropertyPresentationState.allCases.compactMap(\.label)
-            + [
-                InspectionOutcomeDisplay.allRead(count: 8).text,
-                InspectionOutcomeDisplay.someNotRead(read: 6, total: 8).text,
-            ]
-        let forbidden = ["good", "bad", "better", "worse", "quality", "professional", "recommended", "poor"]
-        for text in texts {
-            for word in forbidden {
-                #expect(!text.lowercased().contains(word))
-            }
-        }
-    }
+    // The quality-neutrality sweep lives in `ReportPresentationContractTests`, which owns the single
+    // inventory of everything the report can render — rows, warnings, hero header, group names and all
+    // three outcome shapes. It is not duplicated here with a partial inventory.
 
     /// The outcome talks about the reading, never about the audio, and never in enum names.
     @Test func theOutcomeDescribesTheReadingNotTheFile() {
