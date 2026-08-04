@@ -4,8 +4,12 @@
 
 The system SHALL let the user choose one local audio file through the native macOS file-open panel,
 under App Sandbox, gaining user-granted access to that file for the duration of the inspection. The
-system MUST NOT modify the file and MUST NOT require any entitlement beyond App Sandbox plus the
-user-selected read-only file access implied by the open panel.
+system MUST NOT modify the file. It MUST NOT require any entitlement beyond App Sandbox plus the
+user-selected file access the native panels imply — `com.apple.security.files.user-selected.read-write`,
+which one executable setting applies to both the inspected file and the export destination (ADR-0013)
+— and MUST NOT use any folder-wide or system-wide entitlement. The source file is treated as
+read-only by the system's own APIs; the only file the system writes is the export destination the
+user picks.
 
 #### Scenario: User picks a file
 

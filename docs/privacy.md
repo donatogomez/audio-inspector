@@ -29,6 +29,13 @@ Files and folders are reached only through macOS's secure mechanisms (the file i
 security-scoped bookmarks). The app is designed to run under the macOS App Sandbox. Paths and
 filenames are treated as untrusted data and never interpolated into shell commands.
 
+**What the sandbox allows vs. what the app does.** The app requests access only to items *you*
+select in a native panel — no folder-wide or system-wide entitlement. Because one setting covers
+every user-selected item, that access is read-write (ADR-0013). What the app actually does with it is
+narrower: **the audio file you inspect is only ever read** — no code path writes to, renames, moves,
+or deletes it — and **the single file the app writes is the export destination you choose** in the
+save panel. Nothing is written back to your library.
+
 ## Logs
 
 Diagnostic logging uses `OSLog` and avoids recording file contents or unnecessary personal path

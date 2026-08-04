@@ -258,13 +258,17 @@ codes (which vary by SDK):
 
 Absence is never `failed`; it is `unavailable`/`unsupported` per the field.
 
-## Sandbox & file selection (summary — see ADR-0010)
+## Sandbox & file selection (summary — see ADR-0010 and ADR-0013)
 
-Native open panel under App Sandbox; the panel grants user-scoped read access to the chosen file.
-Access is held only for the **duration of the inspection** via `startAccessingSecurityScopedResource`
+Native open panel under App Sandbox; the panel grants user-scoped access to the chosen file. Access
+is held only for the **duration of the inspection** via `startAccessingSecurityScopedResource`
 / `stopAccessingSecurityScopedResource`. **No bookmark persistence** in this slice (persistence is
 deferred). Absolute paths are not treated as stable identity and are not exported by default; the
-result carries a sandbox-safe representation. No new entitlement beyond App Sandbox is requested.
+result carries a sandbox-safe representation. The only entitlement beyond App Sandbox is
+`com.apple.security.files.user-selected.read-write` (ADR-0013) — required because the same executable
+setting covers both the inspected file and the save-panel export destination. No folder-wide or
+system-wide entitlement is added; the **source file is still treated as strictly read-only by the
+design and the code**, and the only thing written is the export destination the user picked.
 
 ## Risks / Trade-offs
 
