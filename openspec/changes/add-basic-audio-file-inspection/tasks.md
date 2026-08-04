@@ -40,8 +40,8 @@ hypotheses pending the ADR-0003 native-decoding spike, so the spike is the first
 
 ## 5. Minimal presentation
 
-- [ ] 5.1 Minimal SwiftUI view (feature target) showing the report: file identity, properties with states, warnings, status
-- [ ] 5.2 An export action that writes the JSON
+- [x] 5.1 Minimal SwiftUI view (feature target) showing the report: file identity, properties with states, warnings, status
+- [x] 5.2 An export action that writes the JSON
 
 ## 6. File selection (sandbox)
 
