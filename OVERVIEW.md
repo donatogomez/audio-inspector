@@ -108,7 +108,8 @@ extraction strategy, still **Proposed**). Its durable rules:
   a single-property read error is a `Property.failed` while the rest of the report continues; **absence
   is never `failed`.** Apple's numeric codes are never enumerated (they vary by SDK).
 - **No Apple type or error crosses the port** (§2). **The URL arrives via an injected resolver seam,**
-  because the domain reference has no URL (ADR-0010); sandboxed selection wires it later.
+  because the domain reference has no URL (ADR-0010); the composition root wires that seam to the
+  file the user picked in the open panel, for the duration of one inspection.
 - **Conservative under an unproven strategy:** where a mapping would need unvalidated codec
   classification, the reader stays conservative rather than guess. Per-field source→state detail lives
   in `docs/audio-property-matrix.md` and the reader source — **not restated here** (it evolves).

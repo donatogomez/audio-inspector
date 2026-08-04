@@ -17,19 +17,22 @@
 
 ---
 
-**Focus:** None in progress — the tree is at a clean checkpoint, ready for the next slice.
+**Focus:** None in progress — the MVP is finished and integrated; the tree is at a clean checkpoint.
 
-**Status:** Groups 1–6 of the active change are complete and integrated on `main`. The vertical slice
-now runs end to end: the user picks a local audio file under the App Sandbox, it is inspected, the
-report is presented, and it can be exported as JSON v1 to a chosen destination. Group 7 has not
-started.
+**Status:** The basic audio-file inspection MVP is complete. The app runs the whole path: the user
+picks a local audio file under the App Sandbox, it is inspected without DSP, the report is presented
+with every property's state, its warnings and a global status, and it can be exported as
+`schemaVersion` 1 JSON to a destination the user chooses. The guarantees behind it are covered too:
+an automated end-to-end pass over the real chain, the source file proven byte-identical after
+inspecting and exporting, an offline configuration with no network capability, the real macOS app
+built in CI, and a manual sandbox validation runbook that has been executed.
 
-**Next step:** Begin Group 7 of `add-basic-audio-file-inspection` — the end-to-end test of the whole
-flow, and the check that originals are never modified and no network access occurs (see its
-`tasks.md`).
+**Next step:** Open a **new** change for the next product step. The MVP change is closed and must not
+be reopened or extended — the next slice (analysis features, or import conveniences such as
+drag-and-drop) starts as its own OpenSpec change with its own proposal.
 
-**Why:** The slice is functionally complete, so what remains is proving it: an automated end-to-end
-pass over the real path, plus the guarantees the product promises about the user's files.
+**Why:** The vertical slice it was created to prove — select → inspect → report → export — now runs
+and is verified, so further work belongs to a different scope rather than to this one.
 
 **Open questions / threads:** None.
 

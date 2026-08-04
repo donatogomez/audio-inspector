@@ -55,8 +55,8 @@ hypotheses pending the ADR-0003 native-decoding spike, so the spike is the first
 
 ## 8. Documentation & validation
 
-- [ ] 8.1 Update any developer docs strictly needed for the slice; confirm ADR-0008/0009/0010 reflect the implementation
-- [ ] 8.2 `swift build -Xswiftc -warnings-as-errors`, `swift test`, `./Scripts/check-boundaries.sh`, `openspec validate --all --strict` all green
+- [x] 8.1 Update any developer docs strictly needed for the slice; confirm ADR-0008/0009/0010 reflect the implementation
+- [x] 8.2 `swift build -Xswiftc -warnings-as-errors`, `swift test`, `./Scripts/check-boundaries.sh`, `openspec validate --all --strict` all green
 
 ## Acceptance criteria
 

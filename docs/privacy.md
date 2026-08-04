@@ -13,21 +13,27 @@ Audio Inspector is built to be private by construction, not by policy alone.
 
 ## What the app stores locally
 
-Only **analysis results and file references** — never your audio and never copies of your files:
+**Today: nothing.** The app keeps no database, remembers no file between launches, and stores no
+bookmark. Close it and it forgets everything; inspecting a file again means picking it again.
+
+When result persistence arrives (a later phase), it will store **analysis results and file
+references** — never your audio and never copies of your files:
 
 - file path and a **security-scoped bookmark**,
 - content hash, size, modification date,
 - computed metrics, warnings, reports, and comparisons,
 - the analysis engine version used.
 
-This local database exists so results persist between launches and can be re-shown without
-re-analyzing. It can be cleared at any time.
+That local database will exist so results persist between launches and can be re-shown without
+re-analyzing, and it will be clearable at any time.
 
 ## File access
 
-Files and folders are reached only through macOS's secure mechanisms (the file importer and
-security-scoped bookmarks). The app is designed to run under the macOS App Sandbox. Paths and
-filenames are treated as untrusted data and never interpolated into shell commands.
+Files are reached only through macOS's secure mechanisms: you pick each one in a native open or save
+panel, and the app holds that access only for the operation that needs it. It runs under the macOS
+App Sandbox. Paths and filenames are treated as untrusted data and never interpolated into shell
+commands. Security-scoped bookmarks — the mechanism that would let the app re-open a file across
+launches — are **not** used yet; they arrive with result persistence.
 
 **What the sandbox allows vs. what the app does.** The app requests access only to items *you*
 select in a native panel — no folder-wide or system-wide entitlement. Because one setting covers
