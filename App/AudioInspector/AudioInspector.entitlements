@@ -4,5 +4,11 @@
 <dict>
 	<key>com.apple.security.app-sandbox</key>
 	<true/>
+	<!-- Access is limited to items the user explicitly picks in a native panel. One executable
+	     setting covers both the inspected audio file and the save-panel export destination, so it
+	     must be read-write (ADR-0013). The source file is still treated as strictly read-only by
+	     design: no code path writes to it. -->
+	<key>com.apple.security.files.user-selected.read-write</key>
+	<true/>
 </dict>
 </plist>

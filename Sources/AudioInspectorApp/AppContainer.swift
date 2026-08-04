@@ -1,13 +1,13 @@
 import FeatureAnalysis
+import FeatureImport
 import SwiftUI
 
 /// The application's composition root.
 ///
-/// This is the only place that wires concrete implementations (media, analysis, export) to the
-/// domain ports/features. The root view is still empty: presenting `ReportView` needs a real report,
-/// which only arrives once source selection and inspection are wired (group 6). This slice therefore
-/// leaves `makeRootView` untouched and only vends the **export action** the presentation will use, so
-/// group 6 can hand a report to `ReportView(report:export:)` without any further composition work.
+/// This is the only place that wires concrete implementations (media, selection, export) to the
+/// domain ports and the feature surfaces. It builds the two injected actions — inspect a
+/// user-selected file, and export a report to a chosen destination — and hands them to the root view,
+/// so the features never see a panel, a `URL`, the sandbox, or the reader.
 @MainActor
 public struct AppContainer {
     /// The exporter identity for this build. Injected here (never read from the bundle in the
@@ -16,9 +16,21 @@ public struct AppContainer {
 
     public init() {}
 
-    /// The app's root view. Still empty — a real report (and thus `ReportView`) arrives with group 6.
+    /// The app's root view, wired to the real selection → inspection → presentation → export flow.
     public func makeRootView() -> some View {
-        RootView()
+        RootView(
+            flow: ImportFlowModel(action: makeSourceInspectionAction()),
+            export: makeReportExportAction()
+        )
+    }
+
+    /// Builds the injectable inspection action: the native open panel supplies the file, and the
+    /// coordinator holds security-scoped access, builds the safe reference, and runs the use case with
+    /// the real AVFoundation reader. `FeatureImport` receives this as an opaque
+    /// `SourceInspectionAction`; it never learns about the panel, the URL, or the reader.
+    func makeSourceInspectionAction() -> SourceInspectionAction {
+        let coordinator = SourceInspectionCoordinator(chooseSource: { await SourceSelection.choose() })
+        return { await coordinator.inspect() }
     }
 
     /// Builds the injectable export action from the existing JSON exporter and the `NSSavePanel`
