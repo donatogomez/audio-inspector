@@ -16,7 +16,7 @@ public struct ImportFlowView: View {
         VStack(spacing: 12) {
             Text("Audio Inspector")
                 .font(.title2)
-            Text("Choose a local audio file to inspect its technical properties. The file is only read, never modified.")
+            Text("Choose a local audio file — or drag one onto this window — to inspect its technical properties. The file is only read, never modified, moved or copied.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)

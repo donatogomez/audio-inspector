@@ -20,17 +20,47 @@ public final class ImportFlowModel {
     }
 
     public private(set) var state: State = .idle
+
+    /// Why the last drop was refused, if any. **Orthogonal to `state`:** it takes part in no
+    /// transition, so a refusal never discards a report already on screen. Any accepted operation —
+    /// from the panel or from a drop — clears it, and nothing else does: there is no timer and no
+    /// automatic dismissal, so the notice survives exactly until the user's next valid interaction.
+    public private(set) var dropRejection: DropRejection?
+
     private let action: SourceInspectionAction
 
     public init(action: @escaping SourceInspectionAction) {
         self.action = action
     }
 
-    /// Runs one selection-and-inspection. Re-entrancy is prevented: while `working`, further calls are
-    /// ignored, so at most one inspection is ever in flight and no stale result can arrive. Cancelling
-    /// restores the **previous** state (an earlier report is kept) and shows no error.
+    /// Runs one selection-and-inspection through the panel.
     public func selectAndInspect() async {
+        await inspect(using: action)
+    }
+
+    /// Runs an inspection of a source the composition root has already accepted. The action is opaque
+    /// and already bound to that source, so this model still never learns about panels, `URL`s, the
+    /// sandbox or the reader.
+    public func inspectDroppedSource(using action: @escaping SourceInspectionAction) async {
+        await inspect(using: action)
+    }
+
+    /// Records that a drop could not be turned into an inspection. `state` is deliberately untouched.
+    public func reject(_ rejection: DropRejection) {
+        dropRejection = rejection
+    }
+
+    public func clearDropRejection() {
+        dropRejection = nil
+    }
+
+    /// The single implementation of the flow's transitions, shared by both entry points so they cannot
+    /// drift apart. Re-entrancy is prevented: while `working`, further calls are ignored, so at most
+    /// one inspection is ever in flight and no stale result can arrive. Cancelling restores the
+    /// **previous** state (an earlier report is kept) and shows no error.
+    private func inspect(using action: SourceInspectionAction) async {
         guard state != .working else { return }
+        dropRejection = nil // an accepted operation supersedes any pending refusal
         let previous = state
         state = .working
         switch await action() {
