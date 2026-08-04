@@ -17,24 +17,26 @@
 
 ---
 
-**Focus:** None in progress — the MVP is finished and integrated; the tree is at a clean checkpoint.
+**Focus:** `add-drag-and-drop-file-import` — adding drag & drop as a second explicit way to select the
+single local audio file to inspect, reusing the existing inspection pipeline end to end.
 
-**Status:** The basic audio-file inspection MVP is complete. The app runs the whole path: the user
-picks a local audio file under the App Sandbox, it is inspected without DSP, the report is presented
-with every property's state, its warnings and a global status, and it can be exported as
-`schemaVersion` 1 JSON to a destination the user chooses. The guarantees behind it are covered too:
-an automated end-to-end pass over the real chain, the source file proven byte-identical after
-inspecting and exporting, an offline configuration with no network capability, the real macOS app
-built in CI, and a manual sandbox validation runbook that has been executed.
+**Status:** The change and ADR-0014 are written and integrated; no functional implementation has
+started. ADR-0014 stays **Proposed** on purpose: it will only be accepted once the implementation, its
+tests, the manual Finder observation and the sandboxed validation back the decision, since an accepted
+ADR is immutable here.
 
-**Next step:** Open a **new** change for the next product step. The MVP change is closed and must not
-be reopened or extended — the next slice (analysis features, or import conveniences such as
-drag-and-drop) starts as its own OpenSpec change with its own proposal.
+**Next step:** Prepare and run the real Finder/sandbox spike **before** the definitive routing. What
+the drop actually delivers — a conventional path URL or a file-reference one, and whether the granted
+access survives the asynchronous hop — decides whether URL normalisation is needed at all and which
+layer owns it. Only the maintainer can perform it: it needs real drags onto a signed, sandboxed build.
 
-**Why:** The vertical slice it was created to prove — select → inspect → report → export — now runs
-and is verified, so further work belongs to a different scope rather than to this one.
+**Why:** Building the routing on an assumption about Finder's behaviour would put a guessed value into
+the report and the exported JSON, which is exactly what the project's honesty invariants forbid. The
+observation is cheap; guessing is not reversible once the shape of the code depends on it.
 
-**Open questions / threads:** None.
+**Open questions / threads:** Does a dropped URL ever arrive in file-reference form, and does the
+auto-started sandbox extension survive into the asynchronous inspection? Both are answered by the
+spike; the normalisation owner follows from the answer.
 
 ---
-_Last touched: 2026-08-03. Overwrite freely; empty is fine._
+_Last touched: 2026-08-04. Overwrite freely; empty is fine._
