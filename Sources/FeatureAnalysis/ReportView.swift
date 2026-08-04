@@ -65,17 +65,17 @@ public struct ReportView: View {
         }
     }
 
-    // MARK: - Warnings (carried verbatim — never derived here)
+    // MARK: - Warnings (hidden entirely when there are none)
 
     @ViewBuilder private var warningsSection: some View {
-        Section("Warnings") {
-            if report.warnings.isEmpty {
-                Text("No warnings")
-                    .foregroundStyle(.secondary)
-            } else {
-                ForEach(Array(report.warnings.enumerated()), id: \.offset) { _, warning in
+        let warnings = ReportPropertyFormatter.displays(for: report.warnings)
+        if !warnings.isEmpty {
+            Section("Notes") {
+                ForEach(warnings) { warning in
                     VStack(alignment: .leading, spacing: 2) {
-                        LabeledContent(warning.field ?? "general", value: warning.code.rawValue)
+                        if let subject = warning.subject {
+                            Text(subject).font(.callout)
+                        }
                         Text(warning.message)
                             .font(.callout)
                             .foregroundStyle(.secondary)
@@ -85,23 +85,15 @@ public struct ReportView: View {
         }
     }
 
-    // MARK: - Global status
+    // MARK: - Outcome (about the reading, never about the audio)
 
     private var statusSection: some View {
-        Section("Status") {
-            switch report.status {
-            case .completed:
-                LabeledContent("State", value: "completed")
-            case let .partial(message):
-                LabeledContent("State", value: "partial")
-                if let message {
-                    Text(message).font(.callout).foregroundStyle(.secondary)
-                }
-            case let .failed(error):
-                LabeledContent("State", value: "failed")
-                LabeledContent("Error", value: error.code.rawValue)
-                Text(error.message).font(.callout).foregroundStyle(.secondary)
-            }
+        Section("Result") {
+            Text(ReportPropertyFormatter.outcome(
+                for: report.status,
+                properties: ReportPropertyFormatter.displays(for: report.properties)
+            ).text)
+            .font(.callout)
         }
     }
 
@@ -137,9 +129,12 @@ private struct PropertyRow: View {
             LabeledContent(property.name) {
                 Text(valueText)
             }
-            Text("state: \(property.state)")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            // A cleanly measured value carries no state label — the value speaks for itself.
+            if let label = property.state.label {
+                Text(label)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
             if let detail = property.detail {
                 Text(detail)
                     .font(.caption)

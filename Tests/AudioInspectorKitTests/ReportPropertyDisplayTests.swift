@@ -32,10 +32,22 @@ struct ReportPropertyDisplayTests {
 
     @Test func eachStateIsDistinctlyRepresented() {
         let displays = ReportPropertyFormatter.displays(for: mixedProperties())
+        // Same eight distinctions as before, now as a closed presentation enum instead of free strings.
         #expect(displays.map(\.state) == [
-            "available", "available", "available", "unavailable",
-            "unsupported", "uncertain", "failed", "uncertain",
+            .measured, .measured, .measured, .notPresent,
+            .notDefinedByFormat, .readButUnreliable, .couldNotBeRead, .readButUnreliable,
         ])
+    }
+
+    /// Only a cleanly measured value goes unlabelled; every other state says what it is, in words that
+    /// describe the reading and never characterise the file.
+    @Test func onlyMeasuredValuesCarryNoStateLabel() {
+        #expect(PropertyPresentationState.measured.label == nil)
+        for state in PropertyPresentationState.allCases where state != .measured {
+            let label = state.label
+            #expect(label != nil)
+            #expect(label?.isEmpty == false)
+        }
     }
 
     @Test func availableRowsCarryValueAndUnitOnlyWhereMeaningful() throws {
@@ -68,20 +80,23 @@ struct ReportPropertyDisplayTests {
         #expect(bitDepth.unit == nil)
         #expect(bitDepth.detail == "lossy codec")
 
-        // failed → no value, stable code:message detail.
+        // failed → no value, and the human message only: the stable code stays in the JSON, where it
+        // is the contract's identity, not something to read.
         let declared = try #require(displays.first { $0.name == "Declared bitrate" })
         #expect(declared.value == nil)
-        #expect(declared.detail == "property_read_error: boom")
+        #expect(declared.detail == "boom")
+        #expect(declared.detail?.contains("property_read_error") == false)
     }
 
     @Test func uncertainWithValueKeepsUnitButWithoutValueDropsIt() throws {
         let displays = ReportPropertyFormatter.displays(for: mixedProperties())
 
-        // uncertain WITH value → value present, unitless field so no unit but reason kept.
+        // uncertain WITH value → value present, unitless field so no unit but reason kept. The codec is
+        // now named, and the exact token is preserved in the detail so the summary never hides the datum.
         let codec = try #require(displays.first { $0.name == "Codec" })
-        #expect(codec.value == "aac")
+        #expect(codec.value == "AAC")
         #expect(codec.unit == nil) // codec is unitless
-        #expect(codec.detail == "inferred")
+        #expect(codec.detail == "aac — inferred")
 
         // uncertain WITHOUT value → no value ⇒ no unit, reason kept.
         let estimated = try #require(displays.first { $0.name == "Estimated bitrate" })
