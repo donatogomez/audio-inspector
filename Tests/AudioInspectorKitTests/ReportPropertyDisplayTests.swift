@@ -174,4 +174,91 @@ struct ReportPropertyDisplayTests {
         #expect(summary.fileName == "unreadable.bin")
         #expect(summary.highlights.isEmpty) // nothing invented to fill the header
     }
+
+    // MARK: - Accessibility, colour and iconography (modelled as data, no snapshots)
+
+    /// A row is announced as one sentence carrying everything it shows, in the same order.
+    @Test func eachRowComposesOneAccessibilityLabel() throws {
+        let displays = ReportPropertyFormatter.displays(for: mixedProperties())
+
+        let sampleRate = try #require(displays.first { $0.name == "Sample rate" })
+        #expect(sampleRate.accessibilityLabel == "Sample rate, 44.1 kHz, 44,100 Hz")
+
+        // Absent values are not announced as empty: the state and reason carry the meaning.
+        let bitDepth = try #require(displays.first { $0.name == "Bit depth" })
+        #expect(bitDepth.accessibilityLabel == "Bit depth, Not defined by this format, lossy codec")
+
+        for display in displays {
+            #expect(!display.accessibilityLabel.isEmpty)
+            #expect(display.accessibilityLabel.hasPrefix(display.name))
+        }
+    }
+
+    @Test func warningsComposeOneAccessibilityLabel() {
+        let warnings = ReportPropertyFormatter.displays(for: [
+            InspectionWarning(code: .propertyUnsupported, field: "bitDepth", kind: .unsupported, message: "Not defined for this codec."),
+            InspectionWarning(code: .metadataSizeUnavailable, field: nil, kind: .unavailable, message: "Size is unknown."),
+        ])
+        #expect(warnings[0].accessibilityLabel == "Bit depth, Not defined for this codec.")
+        #expect(warnings[1].accessibilityLabel == "Size is unknown.") // no subject ⇒ no invented label
+    }
+
+    /// Only a failure of the reading is alerting. Anything else would tell the user their file is
+    /// worse, which presentation may not say.
+    @Test func onlyAReadFailureIsTreatedAsAlerting() {
+        #expect(PropertyPresentationState.couldNotBeRead.isReadFailure)
+        for state in PropertyPresentationState.allCases where state != .couldNotBeRead {
+            #expect(!state.isReadFailure)
+        }
+    }
+
+    /// A symbol marks the one distinction text alone conflates, and never appears without its label,
+    /// so nothing depends on seeing it.
+    @Test func symbolsAreLimitedToTheKindsOfAbsenceAndNeverStandAlone() {
+        #expect(PropertyPresentationState.notDefinedByFormat.symbolName != nil)
+        #expect(PropertyPresentationState.couldNotBeRead.symbolName != nil)
+        #expect(PropertyPresentationState.measured.symbolName == nil)
+        #expect(PropertyPresentationState.notPresent.symbolName == nil)
+        #expect(PropertyPresentationState.readButUnreliable.symbolName == nil)
+
+        for state in PropertyPresentationState.allCases where state.symbolName != nil {
+            #expect(state.label != nil) // a symbol always has words beside it
+        }
+    }
+
+    /// The whole presentation surface, swept for judgement words (invariant #4).
+    @Test func noPresentedTextCharacterisesQuality() {
+        let texts = ReportPropertyFormatter.displays(for: mixedProperties())
+            .flatMap { [$0.name, $0.value, $0.detail, $0.state.label].compactMap { $0 } }
+            + PropertyPresentationState.allCases.compactMap(\.label)
+            + [
+                InspectionOutcomeDisplay.allRead(count: 8).text,
+                InspectionOutcomeDisplay.someNotRead(read: 6, total: 8).text,
+            ]
+        let forbidden = ["good", "bad", "better", "worse", "quality", "professional", "recommended", "poor"]
+        for text in texts {
+            for word in forbidden {
+                #expect(!text.lowercased().contains(word))
+            }
+        }
+    }
+
+    /// The outcome talks about the reading, never about the audio, and never in enum names.
+    @Test func theOutcomeDescribesTheReadingNotTheFile() {
+        let properties = mixedProperties()
+        let rows = ReportPropertyFormatter.displays(for: properties)
+
+        let partial = ReportPropertyFormatter.outcome(for: .partial(message: nil), properties: rows)
+        #expect(partial == .someNotRead(read: 3, total: 8))
+        for name in ["completed", "partial", "failed"] {
+            #expect(!partial.text.lowercased().contains(name))
+        }
+
+        let failed = ReportPropertyFormatter.outcome(
+            for: .failed(InspectionError(code: .fileUnreadable, message: "This file could not be inspected.")),
+            properties: rows
+        )
+        #expect(failed == .couldNotInspect(message: "This file could not be inspected."))
+        #expect(!failed.text.contains("file_unreadable")) // the stable code stays in the JSON
+    }
 }

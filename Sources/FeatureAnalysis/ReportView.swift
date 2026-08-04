@@ -51,8 +51,11 @@ public struct ReportView: View {
                 Text(summary.highlights.joined(separator: "  ·  "))
                     .font(.callout)
                     .foregroundStyle(.secondary)
+                    // The interpunct is decoration; an assistive reader hears a list.
+                    .accessibilityLabel(summary.highlights.joined(separator: ", "))
             }
         }
+        .accessibilityElement(children: .combine)
     }
 
     // MARK: - File identity (safe metadata only — never a location)
@@ -117,6 +120,8 @@ public struct ReportView: View {
                             .foregroundStyle(.secondary)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(warning.accessibilityLabel)
                 }
             }
         }
@@ -197,9 +202,17 @@ private struct PropertyRow: View {
             }
             // A cleanly measured value carries no state label — the value speaks for itself.
             if let label = property.state.label {
-                Text(label)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                Label {
+                    Text(label)
+                } icon: {
+                    if let symbol = property.state.symbolName {
+                        Image(systemName: symbol)
+                    }
+                }
+                .font(.caption)
+                // Only a failure of the *reading* is alerting. An unreliable or undefined property is
+                // an ordinary outcome, and colouring it would imply the file is worse.
+                .foregroundStyle(property.state.isReadFailure ? AnyShapeStyle(.red) : AnyShapeStyle(.secondary))
             }
             if let detail = property.detail {
                 Text(detail)
@@ -207,6 +220,10 @@ private struct PropertyRow: View {
                     .foregroundStyle(.secondary)
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        // One element, one sentence — not four fragments read in sequence.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(property.accessibilityLabel)
     }
 
     /// The value already carries its unit (`44.1 kHz`), so nothing is appended here.

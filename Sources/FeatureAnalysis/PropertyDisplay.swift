@@ -29,6 +29,24 @@ enum PropertyPresentationState: Equatable, CaseIterable, Sendable {
         case .couldNotBeRead: "Could not be read"
         }
     }
+
+    /// The one distinction worth a symbol: "the format has no such concept" versus "reading it failed"
+    /// are semantically different and look identical in text alone. `nil` everywhere else — an icon
+    /// tied to a value would start to look like a verdict.
+    ///
+    /// A symbol never appears without its label, so nothing depends on seeing it.
+    var symbolName: String? {
+        switch self {
+        case .measured, .notPresent, .readButUnreliable: nil
+        case .notDefinedByFormat: "minus.circle"
+        case .couldNotBeRead: "exclamationmark.triangle"
+        }
+    }
+
+    /// Whether this state is a genuine failure of the *reading*. Only this one earns an alerting
+    /// colour; `readButUnreliable` and `notDefinedByFormat` are ordinary results, and colouring them
+    /// would tell the user their file is worse — which is not something presentation may say.
+    var isReadFailure: Bool { self == .couldNotBeRead }
 }
 
 /// One presentable property row. `value` exists **only** where the domain carries one, so nothing is
@@ -42,6 +60,14 @@ struct PropertyDisplay: Equatable, Identifiable {
     let detail: String?
 
     var id: String { name }
+
+    /// One sentence for an assistive reader, so a row is announced as a coherent whole instead of as
+    /// four loose fragments. It carries the same information the row shows, in the same order.
+    var accessibilityLabel: String {
+        [name, value, state.label, detail]
+            .compactMap { $0 }
+            .joined(separator: ", ")
+    }
 }
 
 /// How an inspection ended, said as a statement about the reading rather than about the audio.
@@ -74,6 +100,11 @@ struct WarningDisplay: Equatable, Identifiable {
     let subject: String?
     let message: String
     let state: PropertyPresentationState
+
+    /// Announced as one sentence, subject first when there is one.
+    var accessibilityLabel: String {
+        [subject, message].compactMap { $0 }.joined(separator: ", ")
+    }
 }
 
 /// The few facts that answer "what is this file?" at a glance, above the detail.
