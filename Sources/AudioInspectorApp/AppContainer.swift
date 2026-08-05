@@ -32,7 +32,7 @@ public struct AppContainer {
     func makeDroppedSourceInspectionAction() -> @MainActor (URL) -> SourceInspectionAction {
         { url in
             let coordinator = SourceInspectionCoordinator()
-            return { await coordinator.inspect(url) }
+            return { onReport in await coordinator.inspect(url, onReport: onReport) }
         }
     }
 
@@ -42,7 +42,7 @@ public struct AppContainer {
     /// `SourceInspectionAction`; it never learns about the panel, the URL, or the reader.
     func makeSourceInspectionAction() -> SourceInspectionAction {
         let coordinator = SourceInspectionCoordinator(chooseSource: { await SourceSelection.choose() })
-        return { await coordinator.inspect() }
+        return { onReport in await coordinator.inspect(onReport: onReport) }
     }
 
     /// Builds the injectable export action from the existing JSON exporter and the `NSSavePanel`

@@ -27,7 +27,7 @@ struct DroppedSourceInspectionTests {
 
             // Exactly what `AppContainer.makeDroppedSourceInspectionAction()` builds.
             let coordinator = SourceInspectionCoordinator()
-            guard case let .inspected(report) = await coordinator.inspect(accepted) else {
+            guard case let .inspected(report, _) = await coordinator.inspect(accepted, onReport: { _ in }) else {
                 Issue.record("expected an inspected outcome"); return
             }
 
@@ -50,7 +50,7 @@ struct DroppedSourceInspectionTests {
             let before = try Data(contentsOf: url)
 
             let coordinator = SourceInspectionCoordinator()
-            _ = await coordinator.inspect(url)
+            _ = await coordinator.inspect(url, onReport: { _ in })
 
             #expect(try Data(contentsOf: url) == before) // ADR-0013's read-only promise, drop path
         }
@@ -64,12 +64,13 @@ struct DroppedSourceInspectionTests {
             try writePCMFixture(to: url)
 
             let makeAction = AppContainer().makeDroppedSourceInspectionAction()
-            let model = ImportFlowModel(action: { .cancelled }) // the panel action stays unused
+            let model = ImportFlowModel(action: { _ in .cancelled }) // the panel action stays unused
             await model.inspectDroppedSource(using: makeAction(url))
 
-            guard case let .report(report) = model.state else {
+            guard case let .report(presentation) = model.state else {
                 Issue.record("expected a report state, got \(model.state)"); return
             }
+let report = presentation.report
             #expect(report.file.displayName == "wired.wav")
             #expect(report.properties.sampleRate == .available(44_100))
             #expect(model.dropRejection == nil)
@@ -91,8 +92,8 @@ struct DroppedSourceInspectionTests {
             let viaPanel = SourceInspectionCoordinator(chooseSource: { url })
             let viaDrop = SourceInspectionCoordinator()
 
-            guard case let .inspected(panelReport) = await viaPanel.inspect(),
-                  case let .inspected(dropReport) = await viaDrop.inspect(url)
+            guard case let .inspected(panelReport, _) = await viaPanel.inspect(onReport: { _ in }),
+                  case let .inspected(dropReport, _) = await viaDrop.inspect(url, onReport: { _ in })
             else {
                 Issue.record("both entry points must produce a report"); return
             }
@@ -127,8 +128,8 @@ struct DroppedSourceInspectionTests {
             let viaPanel = SourceInspectionCoordinator(chooseSource: { url })
             let viaDrop = SourceInspectionCoordinator()
 
-            guard case let .inspected(panelReport) = await viaPanel.inspect(),
-                  case let .inspected(dropReport) = await viaDrop.inspect(url)
+            guard case let .inspected(panelReport, _) = await viaPanel.inspect(onReport: { _ in }),
+                  case let .inspected(dropReport, _) = await viaDrop.inspect(url, onReport: { _ in })
             else {
                 Issue.record("both entry points must produce a report"); return
             }
@@ -170,6 +171,6 @@ struct DroppedSourceInspectionTests {
         let remote = try #require(URL(string: "https://example.com/song.wav"))
         let coordinator = SourceInspectionCoordinator()
 
-        #expect(await coordinator.inspect(remote) == .preparationFailed)
+        #expect(await coordinator.inspect(remote, onReport: { _ in }) == .preparationFailed)
     }
 }

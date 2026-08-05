@@ -19,9 +19,12 @@ struct SourceInspectionCoordinator {
     typealias SourceProvider = @MainActor () async -> URL?
     /// Builds the port implementation that reads the file at `url`.
     typealias ReaderFactory = @Sendable (URL) -> any AudioFilePropertyReading
+    /// Builds the port implementation that produces the waveform for the file at `url`.
+    typealias WaveformGeneratorFactory = @Sendable (URL) -> any WaveformGenerating
 
     private let chooseSource: SourceProvider
     private let makeReader: ReaderFactory
+    private let makeWaveformGenerator: WaveformGeneratorFactory
 
     /// - Parameters:
     ///   - chooseSource: how a destination file is obtained (the native open panel in production).
@@ -37,25 +40,39 @@ struct SourceInspectionCoordinator {
         chooseSource: @escaping SourceProvider = { nil },
         makeReader: @escaping ReaderFactory = { url in
             AVFoundationAudioFilePropertyReader { _ in url }
+        },
+        makeWaveformGenerator: @escaping WaveformGeneratorFactory = { url in
+            AVFoundationWaveformGenerator(resolveURL: { _ in url })
         }
     ) {
         self.chooseSource = chooseSource
         self.makeReader = makeReader
+        self.makeWaveformGenerator = makeWaveformGenerator
     }
 
     /// The panel path: ask for a file, then inspect it.
-    func inspect() async -> SourceInspectionOutcome {
+    func inspect(onReport: InspectionReportHandler) async -> SourceInspectionOutcome {
         guard let url = await chooseSource() else {
             return .cancelled // dismissing the panel is neutral, never an error
         }
-        return await inspect(url)
+        return await inspect(url, onReport: onReport)
     }
 
     /// The shared body, and the **only** owner of the `isFileURL` guard, the security scope, the
     /// mapper, the reader construction and the use case. Both entry points run exactly this: the panel
     /// after resolving its selection, the drop with the URL the composition root already accepted.
     /// There is no second pipeline.
-    func inspect(_ url: URL) async -> SourceInspectionOutcome {
+    /// One selection, start to finish: the properties are read and handed back immediately, and only
+    /// then are the samples read for the waveform — **inside the same security-scoped window**.
+    ///
+    /// The order is deliberate. The report is complete on its own and metadata is far quicker to read
+    /// than samples, so holding it back until the waveform is done would delay everything that already
+    /// works for the sake of something optional. `onReport` fires the moment it exists.
+    ///
+    /// The scope is acquired once and released once, covering the mapper, the property reader, the use
+    /// case **and** the waveform: the `defer` below runs only after the sample read has finished, so
+    /// the generator never needs a scope of its own (ADR-0010).
+    func inspect(_ url: URL, onReport: InspectionReportHandler) async -> SourceInspectionOutcome {
         // Filenames and paths are untrusted input: anything that is not a file cannot be inspected.
         guard url.isFileURL else {
             return .preparationFailed
@@ -71,6 +88,34 @@ struct SourceInspectionCoordinator {
         let reference = AudioFileReferenceMapper.reference(for: url)
         let useCase = InspectAudioFileUseCase(reader: makeReader(url))
         // `execute` never throws: a global read failure comes back as a report with `.failed` status.
-        return .inspected(await useCase.execute(file: reference))
+        let report = await useCase.execute(file: reference)
+        onReport(report)
+
+        // Nothing could be read at all, so there is nothing to read samples from either. The report
+        // stands; the waveform is simply absent.
+        if case .failed = report.status {
+            return .inspected(report, waveform: .unavailable)
+        }
+
+        return .inspected(report, waveform: await waveform(for: reference, at: url))
+    }
+
+    /// Produces the waveform and translates its outcome, keeping the three meanings apart.
+    private func waveform(for reference: AudioFileReference, at url: URL) async -> WaveformOutcome {
+        do {
+            guard let envelope = try await makeWaveformGenerator(url).makeWaveform(for: reference) else {
+                // The file opened but offered nothing to size an envelope against — an absence, not a
+                // failure, and never reported as one.
+                return .unavailable
+            }
+            return .available(envelope)
+        } catch {
+            // Cancellation is the user replacing this operation, so it says nothing about the file and
+            // must not be dressed up as a limitation of it.
+            if error.code == .cancelled { return .cancelled }
+            // Human, neutral, and carrying no path, no framework text and no stable code — those stay
+            // where they are meaningful (ADR-0011).
+            return .failed(message: "The waveform for this file could not be produced.")
+        }
     }
 }

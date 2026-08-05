@@ -36,13 +36,14 @@ struct SourceSelectionWiringTests {
         try Data("definitely not audio".utf8).write(to: url)
 
         let coordinator = SourceInspectionCoordinator(chooseSource: { url })
-        let model = ImportFlowModel(action: { await coordinator.inspect() })
+        let model = ImportFlowModel(action: { onReport in await coordinator.inspect(onReport: onReport) })
 
         await model.selectAndInspect()
 
-        guard case let .report(report) = model.state else {
+        guard case let .report(presentation) = model.state else {
             Issue.record("expected a report state, got \(model.state)"); return
         }
+let report = presentation.report
         // Descriptive metadata came from the real file through the mapper.
         #expect(report.file.displayName == "not-audio.wav")
         #expect(report.file.fileExtension == "wav")

@@ -3,6 +3,7 @@ import Foundation
 import Testing
 
 import AudioInspectorDomain
+import AudioInspectorTesting
 import FeatureImport
 @testable import AudioInspectorApp
 @testable import FeatureAnalysis
@@ -53,12 +54,25 @@ struct EndToEndFlowTests {
 
             // 2–6. Selection seam → coordinator (mapper + real reader + use case) → flow model.
             let inspection = SourceInspectionCoordinator(chooseSource: { source })
-            let flow = ImportFlowModel(action: { await inspection.inspect() })
+            let flow = ImportFlowModel(action: { onReport in await inspection.inspect(onReport: onReport) })
             await flow.selectAndInspect()
 
-            guard case let .report(report) = flow.state else {
+                        guard case let .report(presentation) = flow.state else {
                 Issue.record("expected the flow to end in .report, got \(flow.state)"); return
             }
+            let report = presentation.report
+
+            // The waveform travelled the same pipeline, beside the report and never inside it: this run
+            // uses the production generator, so a real second read of the same file happened inside the
+            // one access window.
+            guard case let .available(envelope) = presentation.waveform else {
+                Issue.record("expected an available waveform, got \(presentation.waveform)"); return
+            }
+            #expect(envelope.channelCount == 1, "the envelope describes the file the report describes")
+            #expect(envelope.frameCount > 0)
+            #expect(envelope.buckets.count == min(2_048, envelope.frameCount))
+            // It reaches the surface that draws it, as the state that draws it.
+            #expect(RootView.waveformPresentation(for: presentation.waveform) == .envelope(envelope))
 
             // The report describes the selected file, with no location anywhere in it.
             #expect(report.file.displayName == "fixture.wav")
@@ -102,8 +116,9 @@ struct EndToEndFlowTests {
             #expect(exportModel.phase == .succeeded)
             #expect(suggestedName == "fixture-inspection.json")
 
-            // Exporting neither recalculates nor mutates the report the UI holds.
-            #expect(flow.state == .report(report))
+            // Exporting neither recalculates nor mutates the report the UI holds, and it leaves
+            // whatever became of the waveform beside it untouched.
+            #expect(flow.state == .report(presentation))
 
             // 11. Read the bytes back and decode them with `Codable` only.
             let json = try JSONDecoder().decode(JSONValue.self, from: Data(contentsOf: destination))
@@ -154,6 +169,74 @@ struct EndToEndFlowTests {
             #expect(try attributes(of: source) == attributesBefore)
         }
     }
+
+    /// The same walk, for a file whose samples cannot be read.
+    ///
+    /// The point is not that the waveform is missing — that is scripted — but that **nothing else
+    /// moves when it is**: the same pipeline runs end to end, the report is complete, the export
+    /// succeeds and the document written to disk is byte-identical to the one the run above produced.
+    /// The only substitution beyond the two panels is the waveform port; the property reader, the use
+    /// case, the flow model, the exporter and the write are all real.
+    @Test func theSamePipelineRunsAndExportsIdenticallyWhenNoWaveformCanBeProduced() async throws {
+        try await withTemporaryDirectory { directory in
+            let source = directory.appendingPathComponent("fixture.wav")
+            try writePCMFixture(to: source)
+            let hashBefore = try sha256(of: source)
+
+            @MainActor
+            func run(waveform: FakeWaveformGenerating.Outcome) async throws -> (InspectionPresentation, Data) {
+                let inspection = SourceInspectionCoordinator(
+                    chooseSource: { source },
+                    makeWaveformGenerator: { _ in FakeWaveformGenerating(waveform) }
+                )
+                let flow = ImportFlowModel(action: { onReport in await inspection.inspect(onReport: onReport) })
+                await flow.selectAndInspect()
+
+                guard case let .report(presentation) = flow.state else {
+                    throw FlowDidNotProduceAReport()
+                }
+                let destination = directory.appendingPathComponent("out-\(UUID().uuidString).json")
+                let exportCoordinator = ReportExportCoordinator(
+                    exporter: JSONReportExporter(generator: fixedGenerator, now: { fixedNow }),
+                    chooseDestination: { _ in destination }
+                )
+                let exportModel = ReportExportModel(action: { await exportCoordinator.export($0) })
+                await exportModel.export(presentation.report)
+                #expect(exportModel.phase == .succeeded)
+
+                return (presentation, try Data(contentsOf: destination))
+            }
+
+            let bucket = try #require(WaveformBucket(minimum: -0.5, maximum: 0.5))
+            let envelope = try #require(
+                WaveformEnvelope(buckets: [bucket], frameCount: 8, channelCount: 1)
+            )
+            let (withWaveform, documentWithWaveform) = try await run(waveform: .success(envelope))
+            let (withoutWaveform, documentWithoutWaveform) = try await run(waveform: .absent)
+
+            // Both walks produced a real, complete report.
+            #expect(withWaveform.waveform == .available(envelope))
+            #expect(withoutWaveform.waveform == .unavailable)
+            #expect(withoutWaveform.report.properties.sampleRate == .available(44_100))
+            #expect(withoutWaveform.report.properties.channelCount == .available(1))
+
+            // The report says the same thing either way…
+            #expect(withoutWaveform.report.properties == withWaveform.report.properties)
+            #expect(withoutWaveform.report.warnings == withWaveform.report.warnings)
+            #expect(withoutWaveform.report.status == withWaveform.report.status)
+
+            // …and so does every byte written to disk.
+            #expect(documentWithoutWaveform == documentWithWaveform)
+
+            // The surface is told the truth about the absence rather than shown an empty drawing.
+            #expect(RootView.waveformPresentation(for: withoutWaveform.waveform) == .absent)
+
+            // And neither walk touched the source.
+            #expect(try sha256(of: source) == hashBefore)
+        }
+    }
+
+    private struct FlowDidNotProduceAReport: Error {}
 
     /// The wire token for a domain status, so the JSON is compared against the report rather than
     /// against a hard-coded expectation.

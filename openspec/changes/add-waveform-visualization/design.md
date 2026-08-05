@@ -191,6 +191,183 @@ every CI run. Two honest outcomes, and the change must land on one of them:
 Either way, **ADR-0015 stays `Proposed` until one of them is actually done.** No claim of MP3 support is
 made on any other basis.
 
+### 10. The acceptance fixtures, and how each criterion will be verified
+
+Group 0's criteria cannot pass before the adapter exists, but the **fixtures** they run against can be
+built and verified now, and are (`Tests/AudioInspectorKitTests/AudioFixtureSupport.swift`, with its own
+tests). Nothing in that support reduces samples or stands in for the adapter: a shadow implementation
+would make the acceptance matrix test itself.
+
+#### The format matrix, measured rather than assumed
+
+| Format | Generating API | Works on this platform | External tool | Runs in GitHub Actions | Needs a versioned binary | Status |
+| --- | --- | --- | --- | --- | --- | --- |
+| WAV PCM | `AVAudioFile(forWriting:)`, `kAudioFormatLinearPCM` | ✅ verified in-test | no | ✅ | no | **automated** |
+| AIFF PCM | idem, big-endian | ✅ verified in-test | no | ✅ | no | **automated** |
+| ALAC | idem, `kAudioFormatAppleLossless` | ✅ verified in-test | no | ✅ | no | **automated** |
+| FLAC | idem, `kAudioFormatFLAC` | ✅ verified in-test | no | ✅ | no | **automated** |
+| AAC / M4A | idem, `kAudioFormatMPEG4AAC` | ✅ verified in-test | no | ✅ | no | **automated** |
+| **MP3** | **none exists** | ❌ | FFmpeg | ❌ (CI installs none) | would have to | **manual — see below** |
+
+The five automated rows are not a claim: `AudioFixtureSupportTests` writes each one and asserts the
+sample rate, channel count and frame count it reads back.
+
+#### MP3, with the evidence upgraded from assertion to measurement
+
+Previous drafts stated that macOS has no MP3 encoder. That is now measured. `afconvert -hf` **does**
+list `'MPG3' = MPEG Layer 3` among its file formats, which is easy to misread as encoder support, but
+attempting to write one fails:
+
+```
+$ afconvert -f 'MPG3' -d '.mp3' src.aiff out.mp3
+Error: ExtAudioFileSetProperty ('cfmt') failed ('fmt?')
+```
+
+CoreAudio **decodes** MP3 and does not **encode** it, so `AVAudioFile(forWriting:)` has no encoder to
+reach either. The four options in order, and where each lands:
+
+1. **Native reproducible generation** — impossible, per the measurement above.
+2. **A small versioned fixture** — would put an audio binary in the repository, against
+   `docs/testing-strategy.md`, and needs provenance, licence and explicit approval. **Not taken, not
+   proposed.**
+3. **Optional local generation, explicitly outside CI** — FFmpeg is already a declared dev/test-only
+   dependency (ADR-0003) and CI installs none, so a gated test skips on **every** CI run. Viable as
+   **local evidence that is not CI coverage**, and must be labelled so.
+4. **Reproducible manual validation** — version, exact command, parameters, SHA-256, observed result.
+
+**Task 0.6 keeps options 3 and 4 open and is not closed by this session.** No coverage of MP3 is
+claimed anywhere, and FFmpeg becomes neither a production nor a CI dependency.
+
+#### The `frameLength` test, defined precisely
+
+The regression to make impossible is *consuming `frameCapacity` as if it were audio*. The test cannot
+be written yet — there is no adapter to call — so what it will observe is fixed here instead:
+
+- **What it observes:** the envelope the adapter returns. Nothing about buffers, no private bytes, and
+  **no hash from the spike report**. Those hashes are evidence about one SDK on one machine; treating
+  them as a contract would pin the product to an implementation detail of Apple's decoder.
+- **How it proves only `frameLength` contributed:** the same file is read at several chunk sizes and the
+  envelopes must be **identical**. A reader that consumed the capacity cannot satisfy this, because the
+  surplus region differs with the capacity — the spike measured exactly that, and measured that regions
+  of equal length are byte-identical while regions of different length are not.
+- **How it reuses the AAC case:** AAC is the format where the surplus is not stale caller data but
+  content produced by the read path, so it is the one case where a capacity-sized read yields a
+  *different* envelope rather than merely an unstable one. The AAC row is therefore the sharp end of
+  this criterion, which is why task 0.5 doubles as the regression test for 0.11.
+- **Why the fixture size matters:** the frame count is prime
+  (`framesWithShortFinalChunkAtAnyChunkSize`), so every chunk size above one leaves a short final
+  chunk. With 44 100 frames, capacities 1, 2, 3 and 7 divide evenly and the surplus region never even
+  exists — the test would pass while proving nothing.
+- **Why it fails if the adapter walks the full capacity:** the last chunk's surplus contributes samples
+  that are a function of the capacity, so at least two of the chunk sizes disagree.
+
+#### The adapter must verify the processing format before it reads a single sample
+
+The spike measured `processingFormat` as `'lpcm'` float32 **planar** for all five formats it could
+write. That is a measurement, not an API guarantee, and the difference matters more than it looks.
+
+`AVAudioBuffer.h:143-150` is explicit about both layouts:
+
+> The returned pointer is to `format.channelCount` pointers to float. Each of these pointers is to
+> **"frameLength" valid samples**, which are spaced by **"stride"** samples. […] If `format.interleaved`
+> is false […] the pointers will be to separate chunks of memory. "stride" is 1. **If
+> `format.interleaved` is true, then the pointers will refer into the same chunk of interleaved
+> samples, each offset by 1 frame. "stride" is the number of interleaved channels.**
+
+So on an interleaved buffer, `floatChannelData[c]` does **not** address one channel's contiguous run.
+Building `UnsafeBufferPointer(start: floatChannelData[c], count: frameLength)` over it would read
+`frameLength` samples belonging to **every** channel, covering only `frameLength / channelCount` real
+frames — and the reduction would accept it in silence:
+
+- every value is a finite `Float`, so `nonFiniteSample` does not fire;
+- `startFrame + count <= totalFrameCount` still holds, so `frameRangeOutOfBounds` does not fire;
+- every bucket receives samples, so `incompleteCoverage` does not fire.
+
+**A wrong envelope with no error anywhere.** The accumulator cannot detect it by construction: it
+receives exactly the shape it expects. This is therefore an obligation of the adapter, and the only
+place it can be caught.
+
+**The rule for group 3:** before reading, the adapter verifies that the processing format is native
+deinterleaved float — `AVAudioFormat.isStandard`, which `AVAudioFormat.h:168-169` documents as
+*"whether the format is deinterleaved native-endian float"* — and, where it adds certainty,
+`!isInterleaved` and `stride == 1`. If the format does not qualify, it **fails in a controlled way and
+reads nothing**. It never assumes planar because five formats happened to be, and it never constructs
+a contiguous buffer pointer over interleaved data. Note that the buffer's format is not the adapter's
+to choose: `AVAudioFile.h:111-113` requires a read buffer whose format *"must match the file's
+processing format"*, so verifying is the only available move.
+
+**The error code for that refusal is deliberately not defined yet.** It belongs with the adapter's own
+error mapping (task 3.6), where every failure it can produce is designed together; inventing one now,
+with no producer, would be the speculative abstraction this change keeps refusing elsewhere.
+
+#### Chunks, EOF and cancellation
+
+The harness that runs one adapter at several chunk sizes needs the adapter's own signature, so it is
+**not** written now — an abstraction over an API that does not exist would be fiction. What the
+acceptance must demonstrate is fixed: identical envelopes across chunk sizes; the short final chunk
+included; the loop bounded by `framePosition < length` rather than by watching for a zero-length read;
+total frames consumed equal to the declared length; cancellation observed at a chunk boundary with no
+envelope presented as complete; no file left open; and the source byte-identical afterwards.
+
+The source-integrity helper is deliberately **not** added yet: before the adapter, "writing a fixture
+does not modify it" is vacuous, and a helper whose only user is a vacuous test is dead code. It arrives
+with the test that needs it.
+
+#### Memory and timing
+
+No benchmark with an absolute threshold on a shared runner. What the suite will assert is what it can
+genuinely observe: that reading is chunked, that the full decoded track is never retained, and that the
+envelope never exceeds the bucket cap regardless of the file's length — a bound that is a property of
+the output, not of the machine. **No claim about resident memory is made from `swift test`.** Any
+figure comes from a measured run and is labelled as such. A timing helper, if one is added, is
+diagnostic output, never a gate.
+
+### 11. Measured: the chunk size, and where the loop runs
+
+Two things the design left open are now measured against the production adapter rather than reasoned
+about. Both measurements are **diagnostics**, taken with a throwaway harness outside the repository;
+neither is a gate, and no timing assertion enters the suite.
+
+#### The chunk size stays at 4 096
+
+Fixture: 300 s of 44 100 Hz stereo LPCM — 13 230 000 frames, 50 MiB. Release build, one pass each.
+
+| Chunk (frames) | Time | Reads | Buckets | Read buffer | Accumulator + result |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 512 | 0.174 s | 25 840 | 2 048 | 4 KiB | 32 KiB |
+| 1 024 | 0.166 s | 12 920 | 2 048 | 8 KiB | 32 KiB |
+| **4 096** | **0.162 s** | **3 230** | **2 048** | **32 KiB** | **32 KiB** |
+| 8 192 | 0.159 s | 1 615 | 2 048 | 64 KiB | 32 KiB |
+| 16 384 | 0.157 s | 808 | 2 048 | 128 KiB | 32 KiB |
+| 65 536 | 0.157 s | 202 | 2 048 | 512 KiB | 32 KiB |
+
+A 128-fold change in chunk size moves the total by **11 %**, and the curve is flat from 4 096 onwards:
+the cost is decoding, not per-read overhead. In a debug build the whole range collapses to
+0.65–0.68 s, flatter still. **4 096 is kept**: it is within 3 % of the best time at a sixteenth of the
+buffer, and buying that 3 % would cost 512 KiB per read.
+
+Memory is what the design claimed: **the read buffer plus 32 KiB, independent of the file.** Five
+minutes of audio and ten seconds of audio reduce through the same 32 KiB buffer into the same 2 048
+buckets. At 4 096 frames the algorithmic footprint is about **64 KiB against a 50 MiB file**.
+
+#### The loop does not run on the main actor
+
+`makeWaveform` carries no isolation annotation, on a type with none, conforming to a protocol with
+none, in a package that builds in Swift 6 language mode with **no** upcoming feature enabled — so it
+does not inherit its caller's actor. That is observed, not assumed: the adapter's existing `resolveURL`
+seam reports from inside the body, and reports that it is not on the main thread when called from a
+`@MainActor` test.
+
+The tests were then checked against a **negative control**: annotating the method and the reading loop
+`@MainActor` and running them again. All three failed — the executor probe saw the main thread, the
+main actor could no longer interleave its own work, and, most tellingly, the cancellation test came
+back with a **complete envelope** because the request could not be delivered while the loop held the
+actor. The control was reverted; the production source is unchanged.
+
+That control also located the executor precisely: annotating only `makeWaveform` was not enough,
+because the loop lives in a separate nonisolated `async` function and leaves the actor on its own. **The
+executor is that function's, not the entry point's** — worth knowing before anything wires this up.
+
 ## Risks / Trade-offs
 
 - **`frameCapacity` is the natural, efficient-looking implementation, and it is the wrong one.**
@@ -220,7 +397,8 @@ tests.
 
 ## Open Questions
 
-1. **The chunk size**, chosen from the group-0 measurements rather than from a round number.
+1. ~~**The chunk size**, chosen from the group-0 measurements rather than from a round number.~~
+   **Answered in §11:** measured across six sizes on a five-minute file, 4 096 is kept.
 2. **Whether MP3 exposes a usable `length`** — unknown, and the only formats measured are the five the
    spike could write.
 3. **Whether the secondary technical detail beside the drawing adds value** — a density question left to

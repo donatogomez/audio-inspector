@@ -17,47 +17,70 @@
 
 ---
 
-**Focus:** `add-waveform-visualization` is **open, fully specified and its design is integrated in
-`main`; nothing is implemented.** The four artifacts and ADR-0015 in `Proposed` are on `main`,
-`openspec validate --all --strict` is green, and 3 of 57 tasks are done — all three of them the
-contract itself. **Group 0 has not been run and no functional code exists**; implementation continues
-on `feature/add-waveform-visualization`.
+**Focus:** `add-waveform-visualization`, on `feature/add-waveform-visualization`. The port, the
+`AVAudioFile` adapter, the wiring and now the **static presentation** are implemented; the waveform is
+drawn inside the report and the four gates plus the Xcode build are green. What is left is the MP3
+evidence gap, the adapter's own test rows, and the manual validation.
 
-**Status:** Unlike every earlier attempt at this slice, the decoding strategy is not a hypothesis. The
-spike is integrated and **reproducible** — a clean rebuild from `main` of
-`Spike/validate-native-pcm-decoding` regenerates every SHA-256 recorded in
-`docs/spikes/2026-08-05-native-pcm-decoding-validation.md` — so ADR-0015 cites measurements instead of
-asserting them.
+**Status:** The drawing is one filled `Path` of one rectangle per bucket, not a continuous outline —
+an outline interpolates between one bucket's extremes and the next's, drawing a value that was never
+measured. The geometry is a pure mapper outside the `Canvas`, because a renderer closure cannot be
+asserted and everything worth guaranteeing about it is arithmetic. **The visual clamp to `[-1, 1]`
+applies to the coordinate it returns, never to the bucket it came from**; the envelope keeps values as
+read.
 
-`AVAudioFile` opens and fully decodes
-WAV, AIFF, ALAC, FLAC and AAC to one uniform processing format — `'lpcm'` float32, planar — with the
-frames read matching the declared `length` exactly in all five. Multichannel keeps channel identity and
-order, and native float PCM round-trips values beyond ±1 untouched, so neither clipping nor
-normalisation happens on the way in.
+`FeatureAnalysis` cannot see `FeatureImport`'s `WaveformState` — features depend on Domain and never on
+each other — so it declares its own `WaveformPresentation` over the domain envelope and `RootView`
+translates. That seam is the only place the two vocabularies meet, and it is pinned by a test.
 
-The finding that changes how code must be written is smaller and sharper: **the buffer region past
-`frameLength` is never safe.** For four formats it holds whatever the caller left there; for AAC it is
-overwritten with content that is deterministic, content-derived, and about 1 % of the signal's level —
-so a reader that took `frameCapacity` frames would draw something plausible and wrong, consistently,
-and only for some files. Reading also cannot stop by watching for a zero-length read: past the end,
-`read(into:)` throws a bare error carrying no `NSError`, indistinguishable from a real failure. The
-rules that follow are `framePosition < length` to bound the loop and `frameLength` to bound the data.
+**MP3 is closed, as local evidence only.** The production adapter decoded an FFmpeg-encoded stereo MP3
+into an envelope identical at five chunk sizes, with the source byte-identical afterwards; the
+measurements are in ADR-0015. **CI installs no FFmpeg, so that suite skips there and the skip is not
+coverage** — the skip message says so, and the skip path was verified against a negative control rather
+than assumed. MP3 also turned out to be the only format that exercises the `readFailed` path: LAME's
+Xing header declares a duration a truncated file no longer has, and the adapter refuses rather than
+half-drawing it.
 
-**The one thing the spike could not do is MP3**, because macOS has no MP3 encoder and the spike wrote
-its own fixtures. It is a target format and the waveform must decode it, so it is now group 0's
-mandatory evidence gap — verified against the **production** adapter, never by extending the spike and
-never asserted from `afconvert`, FFmpeg or documentation. **ADR-0015 stays `Proposed` until that case
-is resolved** and the manual validation is done.
+**Group 7 is 7 of 10, and the three that are open are open for two concrete reasons.** The waveform's
+own accessibility — single element, honest label, contrast in both appearances, nothing carried by
+colour alone — passed, and so did the inherited checks on identifiers and colour. What did not happen:
+**no mechanism was found to enlarge the app's type**, so 7.5 and 7.8 were only ever seen at the normal
+size; and **interactive VoiceOver reached only the two actions**, so 7.7's traversal of the report was
+never observed. Accessibility Inspector showed the tree is complete, which is not the same thing.
 
-**Next step:** Implement group 0's acceptance matrix and groups 2 and 3 — the domain port and the
-`AVAudioFile` adapter. Nothing else is started.
+**Two of them need a decision rather than another attempt.** 7.5 and 7.8 ask for the system's largest
+text sizes, and **macOS has no such thing for this app** — measured twice over: the preview canvas
+offers only colour-scheme variants for a macOS destination, and `.dynamicTypeSize` has no effect on
+macOS (identical rendered size from `.large` to `.accessibility5`). The criterion has no referent on
+this platform, so it is either reworded to what macOS can exercise, or recorded as not evaluable under
+the project's own rule for criteria that cannot be evaluated.
 
-**Why:** Everything later — levels, loudness, spectra — reads samples through this seam. Building it
-under a min/max reduction means a defect in the seam cannot hide behind a defect in the maths.
+7.7 **failed and is now parked.** VoiceOver reaches only the two focusable controls and will not enter
+the report's contents, while Accessibility Inspector reads the tree fine. One cause was tested and ruled
+out — declaring the content an accessibility container changed nothing and was reverted rather than
+kept. Whether the rest is a defect or a property of the testing environment is not established, and
+**no more VoiceOver work belongs to this slice**: the traversal covers the whole report, most of which
+predates the waveform, so this change should not be held open by it. It is carried as a known,
+documented gap for a dedicated accessibility change.
 
-**Open questions / threads:** Three are left to group 0's measurements rather than guessed: the chunk
-size, whether MP3 exposes a usable `length`, and whether a secondary technical detail beside the drawing
-adds value. The reduction lives in Media, and what would overturn that is a second consumer of the same
+**The change is finished as far as this branch can take it.** Groups 0 and 2–6 are closed, group 8's
+gates and scope check are green: 366 tests in 39 suites, and `Package.swift`, the entitlements, the JSON
+exporter, the `schemaVersion` 1 contract, `InspectionReport`, the property reader and CI are all
+byte-identical to `main`, with `AudioInspectorAnalysis` still empty.
+
+**ADR-0015 stays `Proposed`**, decided from what was actually done: task 1.4 requires group 7's manual
+validation performed, and three of its checks are not — 7.5 and 7.8 have no referent on macOS, 7.7 is
+parked. It is archived with that verification debt declared, exactly as `improve-report-presentation`
+was archived before it.
+
+**Next step:** merge. `openspec archive` runs *after implemented **and merged*** (`CONTRIBUTING.md`), and
+this branch has never been pushed, so archiving here would promote the deltas into specs `main` has not
+seen. Nothing is left to build.
+
+**Open questions / threads:** Whether MP3 exposes a usable `length` is still unknown. Whether a
+secondary technical detail beside the drawing adds value was answered by building it — the channel
+count is named because "the extremes across all channels" is incomplete without it, and nothing else
+was added. The reduction lives in Media, and what would overturn that is a second consumer of the same
 decoded stream — the first level metric or the first FFT makes a chunked-decode port a real seam.
 
 **The report's manual accessibility validation is still open and still not done.** It was deliberately

@@ -23,24 +23,19 @@ func withTemporaryDirectory<T>(
 /// Writes a tiny deterministic PCM WAV: 44 100 Hz, mono, 16-bit, 0.1 s of a low-amplitude 440 Hz
 /// sine — non-trivial but small. The bytes are a pure function of these parameters, so the same call
 /// always produces the same file.
+///
+/// Expressed through `AudioFixtureSupport` so there is one fixture writer rather than two. The
+/// parameters below are exactly the ones this helper has always used; its callers are unaffected.
 func writePCMFixture(to url: URL) throws {
-    let settings: [String: Any] = [
-        AVFormatIDKey: kAudioFormatLinearPCM,
-        AVSampleRateKey: 44_100.0,
-        AVNumberOfChannelsKey: 1,
-        AVLinearPCMBitDepthKey: 16,
-        AVLinearPCMIsFloatKey: false,
-        AVLinearPCMIsBigEndianKey: false,
-    ]
-    let file = try AVAudioFile(forWriting: url, settings: settings)
-    guard let buffer = AVAudioPCMBuffer(pcmFormat: file.processingFormat, frameCapacity: 4_410) else {
-        throw CocoaError(.fileWriteUnknown)
-    }
-    buffer.frameLength = 4_410
-    if let channel = buffer.floatChannelData?[0] {
-        for frame in 0 ..< Int(buffer.frameLength) {
-            channel[frame] = 0.1 * sin(2.0 * .pi * 440.0 * Float(frame) / 44_100.0)
-        }
-    }
-    try file.write(from: buffer)
+    try writeAudioFixture(
+        AudioFixtureSpec(
+            name: "pcm-fixture",
+            format: .wav,
+            signal: .sine(frequency: 440, amplitude: 0.1),
+            sampleRate: 44_100,
+            channels: 1,
+            frames: 4_410
+        ),
+        to: url
+    )
 }
