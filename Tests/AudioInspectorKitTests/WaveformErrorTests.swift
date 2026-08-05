@@ -1,4 +1,5 @@
 import AudioInspectorDomain
+import AudioInspectorTesting
 import Testing
 
 // The waveform error space, and the boundary that matters most: cancellation is something the user
@@ -89,5 +90,42 @@ struct WaveformErrorTests {
         case (.success, .failure): break
         default: Issue.record("absence and cancellation collapsed into the same kind of outcome")
         }
+    }
+}
+
+@Suite("Testing support — waveform generator fake")
+struct FakeWaveformGeneratingTests {
+    private func reference() -> AudioFileReference {
+        AudioFileReference(
+            displayName: "fixture", fileExtension: nil, sizeBytes: nil, modifiedAt: nil,
+            source: .userSelectedLocalFile(displayName: "fixture", locationDisclosure: .omitted)
+        )
+    }
+
+    @Test("the fake replays an envelope and records the call")
+    func replaysAnEnvelope() async throws {
+        let envelope = try #require(WaveformEnvelope.empty(channelCount: 2))
+        let fake = FakeWaveformGenerating(succeedingWith: envelope)
+
+        let produced = try await fake.makeWaveform(for: reference())
+
+        #expect(produced == envelope)
+        #expect(await fake.callCount == 1)
+        #expect(await fake.lastFile?.displayName == "fixture")
+    }
+
+    @Test("the fake can script an absence, which is not a failure")
+    func replaysAnAbsence() async throws {
+        let fake = FakeWaveformGenerating(.absent)
+        #expect(try await fake.makeWaveform(for: reference()) == nil)
+        #expect(await fake.callCount == 1)
+    }
+
+    @Test("the fake can script a cancellation, which is not an absence")
+    func replaysACancellation() async throws {
+        let fake = FakeWaveformGenerating(failingWith: WaveformError(code: .cancelled, message: "Cancelled."))
+
+        let error = await #expect(throws: WaveformError.self) { try await fake.makeWaveform(for: reference()) }
+        #expect(error?.code == .cancelled)
     }
 }

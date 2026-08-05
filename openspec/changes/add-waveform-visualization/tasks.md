@@ -18,12 +18,12 @@ Boundaries no task may cross: `AVAudioFile` and every Apple media type stay insi
 Every criterion is an automated test against the production adapter unless it says otherwise. A case
 that cannot be produced is recorded as **not tested** — never inferred from a neighbouring format.
 
-- [ ] 0.1 **WAV** — a generated fixture decodes; frames consumed equal the declared length; the envelope
+- [x] 0.1 **WAV** — a generated fixture decodes; frames consumed equal the declared length; the envelope
       spans the file.
-- [ ] 0.2 **AIFF** — same criteria as 0.1.
-- [ ] 0.3 **ALAC** — same criteria as 0.1.
-- [ ] 0.4 **FLAC** — same criteria as 0.1.
-- [ ] 0.5 **AAC / M4A** — same criteria as 0.1. The spike observed modifications past `frameLength` for
+- [x] 0.2 **AIFF** — same criteria as 0.1.
+- [x] 0.3 **ALAC** — same criteria as 0.1.
+- [x] 0.4 **FLAC** — same criteria as 0.1.
+- [x] 0.5 **AAC / M4A** — same criteria as 0.1. The spike observed modifications past `frameLength` for
       this codec, so this case is also the regression test for criterion 0.11.
 - [ ] 0.6 **MP3 — the evidence gap this slice must close.** macOS has no MP3 encoder, so the fixture
       comes from FFmpeg (dev/test-only, ADR-0003). Verify decoding **with the production adapter**;
@@ -32,19 +32,19 @@ that cannot be produced is recorded as **not tested** — never inferred from a 
       be automated at all, document precisely why and perform a reproducible manual validation
       recording FFmpeg version, exact command, parameters, SHA-256 and observed result. **ADR-0015 stays
       `Proposed` until one of these two is actually done.**
-- [ ] 0.7 **Corrupt / truncated file** — fails in a way the caller can handle: no crash, no hang,
+- [x] 0.7 **Corrupt / truncated file** — fails in a way the caller can handle: no crash, no hang,
       bounded resources, and the outcome is a stated absence rather than a fabricated envelope.
 - [ ] 0.8 **Long file** — completes within a sane time and its envelope spans the file; used to fix the
       chunk size left open in `design.md`.
-- [ ] 0.9 **Chunked reading** — the same file read at several chunk sizes yields **identical** buckets.
-- [ ] 0.10 **EOF** — the loop is bounded by `framePosition < length`; a read past the end is never
+- [x] 0.9 **Chunked reading** — the same file read at several chunk sizes yields **identical** buckets.
+- [x] 0.10 **EOF** — the loop is bounded by `framePosition < length`; a read past the end is never
       relied upon, and the bare error the spike observed is never treated as data.
-- [ ] 0.11 **Strict `frameLength`** — only the frames a read reports as valid contribute. Asserted twice:
+- [x] 0.11 **Strict `frameLength`** — only the frames a read reports as valid contribute. Asserted twice:
       identical buckets across chunk sizes (0.9), and an unchanged envelope for a file whose final chunk
       is short regardless of what the buffer's tail holds.
-- [ ] 0.12 **Cancellation** — a cancelled read stops at the next chunk boundary, produces no envelope
+- [x] 0.12 **Cancellation** — a cancelled read stops at the next chunk boundary, produces no envelope
       presented as complete, and leaves no file open.
-- [ ] 0.13 **Bounded memory** — assert what the suite can genuinely observe: the read is chunked and the
+- [x] 0.13 **Bounded memory** — assert what the suite can genuinely observe: the read is chunked and the
       full decoded track is never retained. Do **not** claim to measure resident memory in `swift test`;
       any figure quoted comes from a measured run and is labelled as such.
 
@@ -76,26 +76,26 @@ that cannot be produced is recorded as **not tested** — never inferred from a 
 
 ## 3. The Media adapter
 
-- [ ] 3.1 Implement the port in `AudioInspectorMedia` with `AVAudioFile`, resolving the `URL` through
+- [x] 3.1 Implement the port in `AudioInspectorMedia` with `AVAudioFile`, resolving the `URL` through
       the constructor seam exactly as `AVFoundationAudioFilePropertyReader` does (ADR-0010). A fresh
       adapter per operation; no shared state, no registry.
-- [ ] 3.2 Read in fixed-size chunks with a reused buffer, folding each chunk into the buckets it spans,
+- [x] 3.2 Read in fixed-size chunks with a reused buffer, folding each chunk into the buckets it spans,
       in a single pass. The decoded track is never held in full, and bucket boundaries never depend on
       chunk boundaries.
-- [ ] 3.3 **Consume exactly the reported frame count; never the buffer's capacity.** One place in the
+- [x] 3.3 **Consume exactly the reported frame count; never the buffer's capacity.** One place in the
       code reads a buffer, and it takes its bound from there. The reason is written beside it: the
       surplus is deterministic, content-derived audio the API declined to report, so including it would
       draw something plausible and wrong.
-- [ ] 3.4 Confine each `AVAudioFile` to the task that opens it and never share an instance — the
+- [x] 3.4 Confine each `AVAudioFile` to the task that opens it and never share an instance — the
       `NS_SWIFT_SENDABLE` annotation removes the compiler's objection, not the mutable read cursor. No
       `@unchecked Sendable`, no `DispatchQueue`, no lock.
-- [ ] 3.5 Bound the loop with `framePosition < length` and honour `Task.isCancelled` at chunk
+- [x] 3.5 Bound the loop with `framePosition < length` and honour `Task.isCancelled` at chunk
       boundaries.
-- [ ] 3.6 Catch every Apple error and translate it into the domain's waveform error space, classified by
+- [x] 3.6 Catch every Apple error and translate it into the domain's waveform error space, classified by
       **scope** and never by SDK numeric code. No `NSError`, `AVError`, `OSStatus` or Apple user-info
       string escapes the adapter.
-- [ ] 3.7 Confirm the adapter only reads: nothing writes, renames, moves or truncates the file.
-- [ ] 3.8 Add the port fake to `AudioInspectorTesting` so use-case and feature tests need no real file.
+- [x] 3.7 Confirm the adapter only reads: nothing writes, renames, moves or truncates the file.
+- [x] 3.8 Add the port fake to `AudioInspectorTesting` so use-case and feature tests need no real file.
 
 ## 4. Wiring, the access window and the flow state
 
