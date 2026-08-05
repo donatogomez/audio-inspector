@@ -80,11 +80,19 @@ enum AudioFixtureSignal {
     case oppositePolarity(frequency: Double, amplitude: Float)
     /// A single non-zero frame at `frameIndex`, silence everywhere else.
     case impulse(amplitude: Float, frameIndex: Int)
+    /// A different frequency in each channel, cycling if there are more channels than frequencies.
+    /// Unlike `sine`, the channels are not copies of one another, so a codec that folded them together
+    /// would not reproduce the source — useful where the encoder is outside our control.
+    case perChannelSine(frequencies: [Double], amplitude: Float)
 
     func sample(channel: Int, frame: Int, sampleRate: Double) -> Float {
         switch self {
         case .silence:
             0
+        case let .perChannelSine(frequencies, amplitude):
+            amplitude * Float(sin(
+                2.0 * Double.pi * frequencies[channel % frequencies.count] * Double(frame) / sampleRate
+            ))
         case let .sine(frequency, amplitude):
             amplitude * Float(sin(2.0 * Double.pi * frequency * Double(frame) / sampleRate))
         case let .oppositePolarity(frequency, amplitude):
