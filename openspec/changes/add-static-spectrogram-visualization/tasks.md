@@ -50,27 +50,52 @@ property reader and the JSON exporter are not touched.
 
 ## 2. The decoding seam and the domain models
 
-- [ ] 2.1 Add `AudioDecoding` to `AudioInspectorDomain/Ports/` — a `Sendable` protocol taking
+- [x] 2.1 Add `AudioDecoding` to `AudioInspectorDomain/Ports/` — a `Sendable` protocol taking
       `AudioFileReference` and yielding PCM in bounded, cancellable chunks with per-channel samples. No
       `AVAudioFile`, `AVAudioPCMBuffer`, `AVAudioFormat`, `NSError` or `OSStatus` in its signature.
       **Decide its exact shape here** — closure fold, `AsyncSequence`, or scoped accessor — from how
       cancellation and the security-scoped window compose (design.md, open question 1).
-- [ ] 2.2 Add the spectrogram value type: `Sendable`, `Equatable`, carrying columns × bands of dBFS
+      **Shape decided: a synchronous, non-escaping callback inside one `async` call.** An
+      `AsyncSequence` was rejected on the security-scoped window, not on taste — it would let a consumer
+      iterate after `SourceInspectionCoordinator`'s `defer` has closed access, a fault visible only
+      under the sandbox and only sometimes. The chosen shape finishes the read before the call returns.
+- [x] 2.2 Add the spectrogram value type: `Sendable`, `Equatable`, carrying columns × bands of dBFS
       plus what the axes need. It holds no view size, no normalisation factor and no URL, and is **not**
       `Codable` — it never enters the `schemaVersion` 1 export.
-- [ ] 2.3 Implement the column and band arithmetic as pure domain code, unit-testable with no file and
+- [x] 2.3 Implement the column and band arithmetic as pure domain code, unit-testable with no file and
       no framework: at most 1024 × 512, the frame→column mapping a function of the file alone.
-- [ ] 2.4 Give the spectrogram its own error space, **disjoint** from `InspectionError`,
+- [x] 2.4 Give the spectrogram its own error space, **disjoint** from `InspectionError`,
       `PropertyFailure` and `WaveformError`. Represent an unusable frame count as an **absence**, not an
       error, and cancellation as its own outcome.
-- [ ] 2.5 **Reject non-finite samples at the boundary**, as `WaveformBucket` does. The spike measured a
+      **Done in substance, with the name deliberately different, and that deviation is the point.** The
+      space created is `AudioDecodingError`, not `SpectrogramError`: what can fail in this group is
+      *decoding*, and a spectrogram error space would have no producer until group 5. Disjointness is
+      asserted by test against `WaveformErrorCode`; an unusable frame count is the port's `nil`; and
+      cancellation is its own code, deliberately not `nil`. If group 5 turns out to need faults that are
+      about the analysis rather than the read, that space is added then, with a producer in front of it.
+- [x] 2.5 **Reject non-finite samples at the boundary**, as `WaveformBucket` does. The spike measured a
       single NaN silently collapsing 184 cells to the floor; the clamp must not be what hides them.
-- [ ] 2.6 Decide whether a zero-frame file yields an empty model or no model, mirroring how
+      `PCMChunk` cannot represent one: the refusal carries a stable code rather than a bare `nil`,
+      because a ragged chunk, a negative frame and a `NaN` are different faults and only the code says
+      which.
+- [x] 2.6 Decide whether a zero-frame file yields an empty model or no model, mirroring how
       `WaveformEnvelope` settled it (design.md, open question 3).
-- [ ] 2.7 Decide whether a separate `SpectrogramGenerating` port is warranted or whether `AudioDecoding`
+      **Decided: a valid model with zero columns.** A file with a readable header and no audio is a
+      complete answer, and `nil` stays reserved for "the frame count could not be established" — two
+      genuinely different things to tell a user. The spike's `max(1, …)` produced one invented column at
+      the floor; `SpectrogramGridMapping` cannot.
+- [x] 2.7 Decide whether a separate `SpectrogramGenerating` port is warranted or whether `AudioDecoding`
       plus a pure Analysis function is the whole seam (design.md, open question 2). Introducing a port
       with one consumer "because the architecture map names it" is the speculative abstraction this
       project refuses.
+      **Decided: not created.** It would have exactly one implementer and one consumer, and composing
+      decode → fold → finish is orchestration, which is the composition root's job — `AudioInspectorApp`
+      already depends on `AudioInspectorAnalysis`.
+      **Reversal criterion, to be applied in group 5:** introduce it if the real composition turns out
+      to hold non-trivial logic that does not belong in the composition root — anything beyond "ask for
+      chunks, hand them to the fold, take the result". The known cost of not having it is that flow
+      tests cannot script a spectrogram in one line the way `FakeWaveformGenerating` does; the injected
+      opaque action that `SourceInspectionAction` already establishes covers that without a domain port.
 
 ## 3. The Media adapter for PCM chunks
 
