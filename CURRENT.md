@@ -39,8 +39,10 @@ mandatory evidence gap — verified against the **production** adapter, never by
 never asserted from `afconvert`, FFmpeg or documentation. **ADR-0015 stays `Proposed` until that case
 is resolved** and the manual validation is done. No claim of MP3 support exists anywhere.
 
-**Next step:** Close 0.6 (MP3), then group 6's remaining test rows, then group 7's accessibility pass
-over the finished surface.
+**Next step:** Close 0.6 (MP3) — it is now the only thing standing between the change and group 7.
+Group 6 is done except 6.3, which **cannot** close without it: 6.3's own clause requires the
+FFmpeg-dependent case to be gated and excluded from coverage, and that clause is 0.6's option 3. Twelve
+of the thirteen matrix rows are covered against the production adapter; MP3 has no test at all.
 
 **Why:** The presentation was built before MP3 deliberately: group 7's accessibility validation is a
 single pass over the whole report *including* the waveform, so the surface had to stop moving first.

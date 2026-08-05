@@ -125,16 +125,19 @@ that cannot be produced is recorded as **not tested** — never inferred from a 
 
 ## 6. Tests
 
-- [ ] 6.1 Domain unit tests for the bucket arithmetic: the 2048 cap, a file shorter than the cap
+- [x] 6.1 Domain unit tests for the bucket arithmetic: the 2048 cap, a file shorter than the cap
       producing no empty bucket, and the integer frame→bucket mapping.
-- [ ] 6.2 Envelope honesty: two channels in opposing polarity do not cancel; two files at clearly
+- [x] 6.2 Envelope honesty: two channels in opposing polarity do not cancel; two files at clearly
       different levels yield proportionally different envelopes with no per-file normalisation; sample
       values beyond `[-1, 1]` are preserved rather than clamped.
 - [ ] 6.3 Adapter integration over the group-0 matrix, one test per row, with the FFmpeg-dependent case
-      gated and **not** counted as coverage when it is skipped.
-- [ ] 6.4 The report is unaffected: a file whose samples cannot be read yields the same properties,
+      gated and **not** counted as coverage when it is skipped. **Blocked on 0.6, not on this task's own
+      work:** twelve of the thirteen rows are covered against the production adapter, and the thirteenth
+      — MP3 — has no test at all, gated or otherwise, because no MP3 fixture can be produced yet. The
+      clause about gating *is* 0.6's option 3, so this task cannot close before 0.6 does.
+- [x] 6.4 The report is unaffected: a file whose samples cannot be read yields the same properties,
       warnings and status as today, and the exported JSON is identical with and without a waveform.
-- [ ] 6.5 End-to-end: the existing flow test still walks the same pipeline, with a waveform present in
+- [x] 6.5 End-to-end: the existing flow test still walks the same pipeline, with a waveform present in
       one case and absent in the other. **No existing assertion is removed or weakened.**
 - [x] 6.6 Presentation tests over the model: the accessible label composition, and that no judging
       vocabulary appears anywhere in the waveform surface.
