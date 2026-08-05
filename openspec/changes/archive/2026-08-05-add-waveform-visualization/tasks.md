@@ -216,8 +216,12 @@ Nothing below may be marked done without actually performing it.
 
 - [x] 8.1 Four gates green — `./Scripts/check-boundaries.sh`,
       `swift build -Xswiftc -warnings-as-errors`, `swift test`,
-      `OPENSPEC_TELEMETRY=0 openspec validate --all --strict` — plus the Xcode app build. 366 tests in
-      39 suites.
+      `OPENSPEC_TELEMETRY=0 openspec validate --all --strict` — plus the Xcode app build. **365 tests in
+      39 suites**, which is the count the slice actually shipped. These gates first ran green at 366;
+      CI then failed one of them — an execution test asserting an ordering the scheduler does not
+      guarantee — and it was removed rather than repaired, since every available repair would have
+      asserted less than nothing. The guarantee it aimed at is observed directly and deterministically
+      by the test beside it.
 - [x] 8.2 Confirm the diff's scope: no new dependency, entitlements unchanged, the JSON exporter and the
       `schemaVersion` 1 contract byte-identical, `InspectionReport` and the property reader untouched,
       and `AudioInspectorAnalysis` still empty. Verified against `main`: `Package.swift`,
