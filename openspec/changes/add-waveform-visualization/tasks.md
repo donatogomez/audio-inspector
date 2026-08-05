@@ -62,16 +62,16 @@ that cannot be produced is recorded as **not tested** — never inferred from a 
 
 ## 2. The domain port and the envelope value type
 
-- [ ] 2.1 Add `WaveformGenerating` to `AudioInspectorDomain/Ports/` — a small `Sendable` protocol taking
+- [x] 2.1 Add `WaveformGenerating` to `AudioInspectorDomain/Ports/` — a small `Sendable` protocol taking
       `AudioFileReference` and returning the envelope value type, with a typed `throws` in the domain's
       own error space. No `AVAudioFile`, `AVAudioPCMBuffer`, `AVAudioFormat`, `NSError` or `OSStatus`
       appears in its signature.
-- [ ] 2.2 Add the envelope value type: `Sendable`, `Equatable`, carrying buckets of minimum and maximum.
+- [x] 2.2 Add the envelope value type: `Sendable`, `Equatable`, carrying buckets of minimum and maximum.
       It holds no view width, no normalisation factor and no URL. Its documentation states that it is a
       **combined envelope across all channels** and is **not** a mono mix or a downmix.
-- [ ] 2.3 Implement the bucket arithmetic as pure domain code: `bucketCount = min(2048, frameCount)` and
+- [x] 2.3 Implement the bucket arithmetic as pure domain code: `bucketCount = min(2048, frameCount)` and
       the integer frame→bucket mapping, unit-testable with no file and no framework.
-- [ ] 2.4 Give the waveform its own error space, **disjoint** from `InspectionError` and
+- [x] 2.4 Give the waveform its own error space, **disjoint** from `InspectionError` and
       `PropertyFailure`. Represent "no usable frame count" as an **absence outcome**, not an error.
 
 ## 3. The Media adapter
