@@ -17,38 +17,48 @@
 
 ---
 
-**Focus:** None in progress. Report presentation is **closed and integrated**; no change is open.
+**Focus:** Closing the **native PCM decoding spike** and publishing it as its own small PR, so the
+waveform slice can be specified against evidence that exists in the repository rather than in a
+conversation. The spike is finished for its purpose; the waveform change is not open yet.
 
-**Status:** The report reads as a report rather than as the implementation behind it. Internal
-vocabulary no longer reaches the screen: the presentation state is a closed type of its own, warnings
-render from their message and kind, and container and codec are named with the exact token kept beside
-them. Values are formatted for reading against a pinned locale, always preserving the precise figure.
-There is a hero header and grouped properties instead of a settings form, exporting is a toolbar
-action, colour is limited to the state of the reading, and each row is one coherent element for an
-assistive reader. The inspection itself behaves exactly as before.
+**Status:** The spike answered the question it was built for. `AVAudioFile` opens and fully decodes
+WAV, AIFF, ALAC, FLAC and AAC to one uniform processing format — `'lpcm'` float32, planar — with the
+frames read matching the declared `length` exactly in all five. Multichannel keeps channel identity and
+order, and native float PCM round-trips values beyond ±1 untouched, so neither clipping nor
+normalisation happens on the way in.
 
-Its manual accessibility validation remains **deliberately deferred, not done**: VoiceOver, system text
-sizes, contrast, and confirming nothing depends on colour alone. Those need a person at a keyboard, so
-they were left open and named rather than recorded as evidence that does not exist.
+The finding that changes how code must be written is smaller and sharper: **the buffer region past
+`frameLength` is never safe.** For four formats it holds whatever the caller left there; for AAC it is
+overwritten with content that is deterministic, content-derived, and about 1 % of the signal's level —
+so a reader that took `frameCapacity` frames would draw something plausible and wrong, consistently,
+and only for some files. Reading also cannot stop by watching for a zero-length read: past the end,
+`read(into:)` throws a bare error carrying no `NSError`, indistinguishable from a real failure. The
+rules that follow are `framePosition < length` to bound the loop and `frameLength` to bound the data.
 
-**Next step:** Research and design a **static waveform** — reading samples and drawing them once, with
-no interaction — as its own change, starting from investigation rather than from code. It is the
-thinnest slice that turns the app into something that examines the signal instead of only its
-metadata, and it builds the sample-reading path that everything later depends on.
+MP3 remains **manual, not CI coverage** — macOS has no MP3 encoder and CI installs no FFmpeg, so a
+gated test would skip on every run. Damaged files, cancellation, memory and isolation were **not**
+exercised: they belong to the waveform slice's own tests, where they are cheaper to assert against real
+code than against a throwaway package.
 
-**Why:** The product's own premise is to examine the signal, and so far nothing reads a single sample.
-Starting with a still drawing keeps the arithmetic trivial while proving decoding, bounded memory,
-progress and cancellation — the same seam-first order that made the earlier slices work.
+**Next step:** Open `add-waveform-visualization` on a branch from `main` once this PR lands. It needs a
+`MODIFIED` delta scoping the accepted no-DSP requirement, which today forbids a waveform outright, a new
+`waveform-visualization` capability, and **ADR-0015** in `Proposed` covering the three hard-to-reverse
+decisions: `AVAudioFile` over `AVAssetReader`, the `frameLength` invariant, and the reduction living in
+Media. ADR-0003 is referenced, never edited.
 
-**Open questions / threads:** **Not started:** waveform, spectrogram, playback, zoom, editing, and the
-per-property explanations. Each needs its own change — the visual ones because reading samples is a
-different kind of work, the explanations because new prose can drift from describing into judging
-quality and so carries its own normative requirement.
+**Why:** ADR-0003 adopted native-first but recorded its own sufficiency as an open hypothesis pending a
+decoding spike. That hypothesis is now answered for decoding-to-an-envelope, and the answer is written
+down where an ADR can cite it. Everything later — levels, loudness, spectra — reads samples through the
+seam this evidence describes.
 
-Known risks carried forward from the presentation work: the pinned `en_US` locale means formatting does
-not follow the user's region; warning text originates in the domain yet is swept by a presentation
-test; an unmapped wire key would fall back to its raw name; and `Choose another file…` still sits at
-the foot of the window while exporting lives in the toolbar.
+**Open questions / threads:** The reduction lives in Media, and what would overturn that is a second
+consumer of the same decoded stream: the first level metric or the first FFT makes a chunked-decode port
+a real seam. Whether a buffer-shaped type ever belongs in the pure domain is deliberately unanswered.
+
+Still not started, each needing its own change: waveform, spectrogram, playback, zoom, editing, and the
+per-property explanations. Carried forward from the presentation work: its manual accessibility checks
+remain deliberately deferred, the pinned `en_US` locale does not follow the user's region, and
+`Choose another file…` still sits at the foot of the window while exporting lives in the toolbar.
 
 ---
-_Last touched: 2026-08-04. Overwrite freely; empty is fine._
+_Last touched: 2026-08-05. Overwrite freely; empty is fine._
