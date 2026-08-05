@@ -17,16 +17,16 @@
 
 ---
 
-**Focus:** None in progress. The **native PCM decoding spike is integrated and closed**; no OpenSpec
-change is open and the waveform itself has not been started — no branch, no change, no code.
+**Focus:** `add-waveform-visualization` is **open and fully specified; nothing is implemented.** The
+four artifacts are written and `openspec validate --all --strict` is green, ADR-0015 exists in
+`Proposed`, and 3 of 57 tasks are done — all three of them the contract itself. Design work only, on
+`docs/add-waveform-visualization-design`. No functional code.
 
-**Status:** The spike answered the question it was built for, and its evidence now lives in the
-repository rather than in a conversation: the report is `docs/spikes/2026-08-05-native-pcm-decoding-validation.md`
-and the package that produced it is `Spike/validate-native-pcm-decoding/`. It is **reproducible** — a
-clean rebuild from `main` regenerates every recorded SHA-256 exactly, which is what makes the findings
-citable by an ADR instead of merely asserted. The package is throwaway by design and its deletion
-criterion is written into the report: it goes once ADR-0015 exists and the waveform slice's own tests
-cover these observations.
+**Status:** Unlike every earlier attempt at this slice, the decoding strategy is not a hypothesis. The
+spike is integrated and **reproducible** — a clean rebuild from `main` of
+`Spike/validate-native-pcm-decoding` regenerates every SHA-256 recorded in
+`docs/spikes/2026-08-05-native-pcm-decoding-validation.md` — so ADR-0015 cites measurements instead of
+asserting them.
 
 `AVAudioFile` opens and fully decodes
 WAV, AIFF, ALAC, FLAC and AAC to one uniform processing format — `'lpcm'` float32, planar — with the
@@ -42,30 +42,33 @@ and only for some files. Reading also cannot stop by watching for a zero-length 
 `read(into:)` throws a bare error carrying no `NSError`, indistinguishable from a real failure. The
 rules that follow are `framePosition < length` to bound the loop and `frameLength` to bound the data.
 
-MP3 remains **manual, not CI coverage** — macOS has no MP3 encoder and CI installs no FFmpeg, so a
-gated test would skip on every run. Damaged files, cancellation, memory and isolation were **not**
-exercised: they belong to the waveform slice's own tests, where they are cheaper to assert against real
-code than against a throwaway package.
+**The one thing the spike could not do is MP3**, because macOS has no MP3 encoder and the spike wrote
+its own fixtures. It is a target format and the waveform must decode it, so it is now group 0's
+mandatory evidence gap — verified against the **production** adapter, never by extending the spike and
+never asserted from `afconvert`, FFmpeg or documentation. **ADR-0015 stays `Proposed` until that case
+is resolved** and the manual validation is done.
 
-**Next step:** Open `add-waveform-visualization` on a branch from `main`. It needs a `MODIFIED` delta
-scoping the accepted no-DSP requirement — which today forbids a waveform outright, in so many words — a
-new `waveform-visualization` capability, and **ADR-0015** in `Proposed` covering the three
-hard-to-reverse decisions: `AVAudioFile` over `AVAssetReader`, the `frameLength` invariant, and the
-reduction living in Media. ADR-0003 is referenced, never edited.
+**Next step:** Implement group 0's acceptance matrix and groups 2 and 3 — the domain port and the
+`AVAudioFile` adapter. Nothing else is started.
 
-**Why:** ADR-0003 adopted native-first but recorded its own sufficiency as an open hypothesis pending a
-decoding spike. That hypothesis is now answered for decoding-to-an-envelope, and the answer is written
-down where an ADR can cite it. Everything later — levels, loudness, spectra — reads samples through the
-seam this evidence describes.
+**Why:** Everything later — levels, loudness, spectra — reads samples through this seam. Building it
+under a min/max reduction means a defect in the seam cannot hide behind a defect in the maths.
 
-**Open questions / threads:** The reduction lives in Media, and what would overturn that is a second
-consumer of the same decoded stream: the first level metric or the first FFT makes a chunked-decode port
-a real seam. Whether a buffer-shaped type ever belongs in the pure domain is deliberately unanswered.
+**Open questions / threads:** Three are left to group 0's measurements rather than guessed: the chunk
+size, whether MP3 exposes a usable `length`, and whether a secondary technical detail beside the drawing
+adds value. The reduction lives in Media, and what would overturn that is a second consumer of the same
+decoded stream — the first level metric or the first FFT makes a chunked-decode port a real seam.
 
-Still not started, each needing its own change: waveform, spectrogram, playback, zoom, editing, and the
-per-property explanations. Carried forward from the presentation work: its manual accessibility checks
-remain deliberately deferred, the pinned `en_US` locale does not follow the user's region, and
-`Choose another file…` still sits at the foot of the window while exporting lives in the toolbar.
+**The report's manual accessibility validation is still open and still not done.** It was deliberately
+deferred when `improve-report-presentation` was archived and is now **scoped into group 7** of this
+slice, to be performed once over the finished surface including the waveform, rather than twice over a
+moving one. Nothing about it is marked done and no evidence for it exists.
+
+Still not started, each needing its own change: spectrogram, playback, zoom, editing, and the
+per-property explanations. Also carried forward and deliberately **not** mixed into this slice: the drag
+sources never exercised — iCloud files, aliases, symlinks, app bundles and Mail file promises — open
+against ADR-0014. Plus the pinned `en_US` locale not following the user's region, and
+`Choose another file…` still at the foot of the window while exporting lives in the toolbar.
 
 ---
 _Last touched: 2026-08-05. Overwrite freely; empty is fine._
