@@ -191,6 +191,98 @@ every CI run. Two honest outcomes, and the change must land on one of them:
 Either way, **ADR-0015 stays `Proposed` until one of them is actually done.** No claim of MP3 support is
 made on any other basis.
 
+### 10. The acceptance fixtures, and how each criterion will be verified
+
+Group 0's criteria cannot pass before the adapter exists, but the **fixtures** they run against can be
+built and verified now, and are (`Tests/AudioInspectorKitTests/AudioFixtureSupport.swift`, with its own
+tests). Nothing in that support reduces samples or stands in for the adapter: a shadow implementation
+would make the acceptance matrix test itself.
+
+#### The format matrix, measured rather than assumed
+
+| Format | Generating API | Works on this platform | External tool | Runs in GitHub Actions | Needs a versioned binary | Status |
+| --- | --- | --- | --- | --- | --- | --- |
+| WAV PCM | `AVAudioFile(forWriting:)`, `kAudioFormatLinearPCM` | ✅ verified in-test | no | ✅ | no | **automated** |
+| AIFF PCM | idem, big-endian | ✅ verified in-test | no | ✅ | no | **automated** |
+| ALAC | idem, `kAudioFormatAppleLossless` | ✅ verified in-test | no | ✅ | no | **automated** |
+| FLAC | idem, `kAudioFormatFLAC` | ✅ verified in-test | no | ✅ | no | **automated** |
+| AAC / M4A | idem, `kAudioFormatMPEG4AAC` | ✅ verified in-test | no | ✅ | no | **automated** |
+| **MP3** | **none exists** | ❌ | FFmpeg | ❌ (CI installs none) | would have to | **manual — see below** |
+
+The five automated rows are not a claim: `AudioFixtureSupportTests` writes each one and asserts the
+sample rate, channel count and frame count it reads back.
+
+#### MP3, with the evidence upgraded from assertion to measurement
+
+Previous drafts stated that macOS has no MP3 encoder. That is now measured. `afconvert -hf` **does**
+list `'MPG3' = MPEG Layer 3` among its file formats, which is easy to misread as encoder support, but
+attempting to write one fails:
+
+```
+$ afconvert -f 'MPG3' -d '.mp3' src.aiff out.mp3
+Error: ExtAudioFileSetProperty ('cfmt') failed ('fmt?')
+```
+
+CoreAudio **decodes** MP3 and does not **encode** it, so `AVAudioFile(forWriting:)` has no encoder to
+reach either. The four options in order, and where each lands:
+
+1. **Native reproducible generation** — impossible, per the measurement above.
+2. **A small versioned fixture** — would put an audio binary in the repository, against
+   `docs/testing-strategy.md`, and needs provenance, licence and explicit approval. **Not taken, not
+   proposed.**
+3. **Optional local generation, explicitly outside CI** — FFmpeg is already a declared dev/test-only
+   dependency (ADR-0003) and CI installs none, so a gated test skips on **every** CI run. Viable as
+   **local evidence that is not CI coverage**, and must be labelled so.
+4. **Reproducible manual validation** — version, exact command, parameters, SHA-256, observed result.
+
+**Task 0.6 keeps options 3 and 4 open and is not closed by this session.** No coverage of MP3 is
+claimed anywhere, and FFmpeg becomes neither a production nor a CI dependency.
+
+#### The `frameLength` test, defined precisely
+
+The regression to make impossible is *consuming `frameCapacity` as if it were audio*. The test cannot
+be written yet — there is no adapter to call — so what it will observe is fixed here instead:
+
+- **What it observes:** the envelope the adapter returns. Nothing about buffers, no private bytes, and
+  **no hash from the spike report**. Those hashes are evidence about one SDK on one machine; treating
+  them as a contract would pin the product to an implementation detail of Apple's decoder.
+- **How it proves only `frameLength` contributed:** the same file is read at several chunk sizes and the
+  envelopes must be **identical**. A reader that consumed the capacity cannot satisfy this, because the
+  surplus region differs with the capacity — the spike measured exactly that, and measured that regions
+  of equal length are byte-identical while regions of different length are not.
+- **How it reuses the AAC case:** AAC is the format where the surplus is not stale caller data but
+  content produced by the read path, so it is the one case where a capacity-sized read yields a
+  *different* envelope rather than merely an unstable one. The AAC row is therefore the sharp end of
+  this criterion, which is why task 0.5 doubles as the regression test for 0.11.
+- **Why the fixture size matters:** the frame count is prime
+  (`framesWithShortFinalChunkAtAnyChunkSize`), so every chunk size above one leaves a short final
+  chunk. With 44 100 frames, capacities 1, 2, 3 and 7 divide evenly and the surplus region never even
+  exists — the test would pass while proving nothing.
+- **Why it fails if the adapter walks the full capacity:** the last chunk's surplus contributes samples
+  that are a function of the capacity, so at least two of the chunk sizes disagree.
+
+#### Chunks, EOF and cancellation
+
+The harness that runs one adapter at several chunk sizes needs the adapter's own signature, so it is
+**not** written now — an abstraction over an API that does not exist would be fiction. What the
+acceptance must demonstrate is fixed: identical envelopes across chunk sizes; the short final chunk
+included; the loop bounded by `framePosition < length` rather than by watching for a zero-length read;
+total frames consumed equal to the declared length; cancellation observed at a chunk boundary with no
+envelope presented as complete; no file left open; and the source byte-identical afterwards.
+
+The source-integrity helper is deliberately **not** added yet: before the adapter, "writing a fixture
+does not modify it" is vacuous, and a helper whose only user is a vacuous test is dead code. It arrives
+with the test that needs it.
+
+#### Memory and timing
+
+No benchmark with an absolute threshold on a shared runner. What the suite will assert is what it can
+genuinely observe: that reading is chunked, that the full decoded track is never retained, and that the
+envelope never exceeds the bucket cap regardless of the file's length — a bound that is a property of
+the output, not of the machine. **No claim about resident memory is made from `swift test`.** Any
+figure comes from a measured run and is labelled as such. A timing helper, if one is added, is
+diagnostic output, never a gate.
+
 ## Risks / Trade-offs
 
 - **`frameCapacity` is the natural, efficient-looking implementation, and it is the wrong one.**
