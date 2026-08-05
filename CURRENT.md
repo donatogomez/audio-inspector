@@ -41,13 +41,28 @@ than assumed. MP3 also turned out to be the only format that exercises the `read
 Xing header declares a duration a truncated file no longer has, and the adapter refuses rather than
 half-drawing it.
 
-**Next step:** Group 7 — the accessibility pass over the whole report including the waveform, then 7.10
-recording it in `docs/manual-validation-mvp.md`. It is the **only** remaining promotion criterion for
-ADR-0015 (task 1.4), and the last group before 8's closure.
+**Group 7 is 7 of 10, and the three that are open are open for two concrete reasons.** The waveform's
+own accessibility — single element, honest label, contrast in both appearances, nothing carried by
+colour alone — passed, and so did the inherited checks on identifiers and colour. What did not happen:
+**no mechanism was found to enlarge the app's type**, so 7.5 and 7.8 were only ever seen at the normal
+size; and **interactive VoiceOver reached only the two actions**, so 7.7's traversal of the report was
+never observed. Accessibility Inspector showed the tree is complete, which is not the same thing.
 
-**Why:** Group 7 was deliberately kept last: it is a single pass over the finished surface rather than
-two over a moving one, and it also carries the accessibility checks inherited from
-`improve-report-presentation`, which are still not done and are not marked anywhere.
+**Two of them need a decision rather than another attempt.** 7.5 and 7.8 ask for the system's largest
+text sizes, and **macOS has no such thing for this app** — measured twice over: the preview canvas
+offers only colour-scheme variants for a macOS destination, and `.dynamicTypeSize` has no effect on
+macOS (identical rendered size from `.large` to `.accessibility5`). The criterion has no referent on
+this platform, so it is either reworded to what macOS can exercise, or recorded as not evaluable under
+the project's own rule for criteria that cannot be evaluated.
+
+7.7 is different: it **failed**, and may be a real defect. VoiceOver reaches only the two focusable
+controls and will not enter the report's `ScrollView`, while Accessibility Inspector reads the tree
+fine. A discriminating check and a minimal fix are written up; **no code has been changed on that
+evidence**, because a tree that inspects correctly and does not traverse needs the cause confirmed
+before anything is edited.
+
+**Why it matters:** these three are the **only** thing keeping ADR-0015 at `Proposed` (task 1.4). Group
+0 is closed, MP3 included. Group 8 must not start before they resolve.
 
 **Open questions / threads:** Whether MP3 exposes a usable `length` is still unknown. Whether a
 secondary technical detail beside the drawing adds value was answered by building it — the channel

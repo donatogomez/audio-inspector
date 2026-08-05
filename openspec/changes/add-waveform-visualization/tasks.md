@@ -158,27 +158,51 @@ Nothing below may be marked done without actually performing it.
 
 **The waveform's own checks:**
 
-- [ ] 7.1 Expose the waveform as a single accessibility element with a composed label that says what it
+- [x] 7.1 Expose the waveform as a single accessibility element with a composed label that says what it
       is and not what it looks like.
-- [ ] 7.2 VoiceOver: the waveform is announced as an amplitude envelope of the file, with no
+- [x] 7.2 VoiceOver: the waveform is announced as an amplitude envelope of the file, with no
       characterisation of the audio; an absent waveform is announced as unavailable.
-- [ ] 7.3 Confirm every meaning the drawing conveys has a textual alternative, and that no meaning
+- [x] 7.3 Confirm every meaning the drawing conveys has a textual alternative, and that no meaning
       depends on colour alone.
-- [ ] 7.4 Contrast: the drawing and its surrounding text remain distinguishable in light and dark
+- [x] 7.4 Contrast: the drawing and its surrounding text remain distinguishable in light and dark
       appearance, and against the report's background.
 - [ ] 7.5 Accessibility text sizes: the waveform's label and its surroundings stay legible and nothing is
-      clipped at the system's largest sizes.
+      clipped at the system's largest sizes. **NOT RUN — and, as written, not executable on macOS.**
+      The layout was reviewed at the normal text size with no clipping or overlap, which is not what
+      this asks. Two routes were tried and **both are dead ends, measured rather than assumed**:
+      Xcode 26.6's preview canvas offers only *Color Scheme Variants* for a macOS destination — there
+      are no Dynamic Type variants — and `.dynamicTypeSize(…)` has **no effect** on macOS: the same
+      `.callout` + `.caption` pair renders at an identical 68×30 pt from `.large` through
+      `.accessibility5`. macOS exposes no system-wide Dynamic Type for a SwiftUI app to adopt, so
+      *"the system's largest sizes"* has no referent on this platform. **This needs a decision, not more
+      attempts** — see 7.8.
 
 **The report's inherited checks, repeated over the finished surface:**
 
-- [ ] 7.6 Confirm by eye that no underscore code, enum name, wire key, raw UTI or bare FourCC appears
-      anywhere on the report (inherited `improve-report-presentation` 9.1).
+- [x] 7.6 Confirm by eye that no underscore code, enum name, wire key, raw UTI or bare FourCC appears
+      anywhere on the report (inherited `improve-report-presentation` 9.1). Read as *no internal
+      identifier is what a reader takes for the value*: the type identifier and the codec token do
+      appear as **secondary detail** beneath the translated name, which is the accepted behaviour of
+      `improve-report-presentation` and is pinned by `namingAContainerPreservesItsIdentifier`.
 - [ ] 7.7 VoiceOver over the whole report: each property reads as one coherent element, warnings and
       status are announced, and the export action is reachable in a sensible order (inherited 9.2).
+      **FAIL — attempted, and the behaviour was not obtained.** Accessibility Inspector reads the tree
+      correctly, including the waveform's composed label, but an inspected tree is not a walked one.
+      Interactive VoiceOver reached only `Export JSON…` and `Choose another file…` — the two focusable
+      controls — and would not enter the report's `ScrollView`, across `VO-→`, `VO-Shift-↓`, `Tab`,
+      window interaction and scroll-area interaction. None of this task's three clauses was observed.
+      **This may be a real defect in the accessible traversal rather than a limitation of the pass**;
+      the discriminating check and the minimal fix are written up but **not applied** — no code has
+      been changed on this evidence.
 - [ ] 7.8 Accessibility text sizes across the whole report: legible, nothing clipped (inherited 7.4 and
-      9.3).
-- [ ] 7.9 Confirm no colour carries meaning on its own anywhere on the report (inherited 7.4 and 9.4).
-- [ ] 7.10 Record the result in `docs/manual-validation-mvp.md` as a durable statement, without per-run
+      9.3). **NOT RUN, for the same measured reason as 7.5.** The report was reviewed at the normal text
+      size only; nothing was clipped or overlapping there, which is worth knowing and is not what this
+      task asks. Since macOS provides no mechanism to enlarge this app's type, the criterion as written
+      cannot be satisfied on this platform. The project's own rule applies — *a criterion that cannot be
+      evaluated is recorded as not evaluated, never as passed* — so this stays open pending a decision
+      on whether to reword it to what macOS can actually exercise, or to close it as not evaluable.
+- [x] 7.9 Confirm no colour carries meaning on its own anywhere on the report (inherited 7.4 and 9.4).
+- [x] 7.10 Record the result in `docs/manual-validation-mvp.md` as a durable statement, without per-run
       details, and state plainly which of the inherited checks were performed and which were not.
 
 ## 8. Gates and closure

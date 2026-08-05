@@ -30,6 +30,47 @@ cancellation unaffected; and no sandbox or security-scope anomaly. The sources l
 iCloud files, aliases, symlinks, app bundles and Mail file promises — were **not** exercised and remain
 open (ADR-0014).
 
+The **accessibility** validation of the report surface, including the waveform, has been **partially**
+completed on a sandboxed Debug build (change `add-waveform-visualization`, group 7). It was performed
+once over the finished surface rather than twice over a moving one, which is why it was deferred from
+`improve-report-presentation`.
+
+**Performed and passing:** the waveform is exposed to VoiceOver as a **single** element whose composed
+label states what the drawing is — an amplitude envelope of the whole file, with the number of channels
+combined — and announces no characterisation of the audio; individual buckets are never announced. The
+states the surface can show announce the state they display, an absent waveform included. Every meaning
+the drawing carries is also available as text. The drawing, its centre line and the surrounding text
+stay distinguishable from the report's background in **both** light and dark appearance. No colour
+carries meaning on its own anywhere on the report: amplitude does not change colour, and no colour is
+used to express anything about the audio. Read over the whole report, no internal identifier appears as
+a value — no underscored code, enum case name, wire key or bare token. The type identifier and the
+codec token do appear as **secondary detail** beneath their translated names, which is the accepted
+behaviour of `improve-report-presentation` and exists so a readable summary never hides the exact datum.
+
+**Not completed, and not to be cited as done:**
+
+- **Accessibility text sizes**, over the waveform and over the whole report alike. The layout was
+  reviewed at the normal text size and showed no clipping, overlap or lost controls — but the system's
+  largest sizes were never exercised, because **macOS provides no way to exercise them for this
+  application**. That is measured, not assumed: the preview canvas offers only colour-scheme variants
+  for a macOS destination, and SwiftUI's dynamic-type modifier has no effect on macOS — the same text
+  renders at an identical size from the default scale through the largest accessibility scale. macOS
+  exposes no system-wide Dynamic Type for a SwiftUI application to adopt, so the criterion as written
+  has no referent on this platform. Following this project's own rule — *a criterion that cannot be
+  evaluated is recorded as not evaluated, never as passed* — it is recorded here as **not evaluable as
+  written**, pending a decision on whether to reword it to what the platform can exercise. This covers
+  the inherited check `improve-report-presentation` 9.3 / 7.4, which therefore also remains open.
+- **The VoiceOver traversal of the whole report.** Accessibility Inspector reads the tree correctly,
+  including the waveform's composed label, but an inspected tree is not a walked one: with interactive
+  VoiceOver the traversal reached only the export action and the file-picking action — the two focusable
+  controls — and would not enter the report's scrolling area. The properties, warnings and status were
+  therefore never observed being read aloud, and the reading order was never confirmed. **This is
+  recorded as a failure rather than as an omission, and may be a real defect in the accessible
+  traversal.** It is the inherited check `improve-report-presentation` 9.2, still open.
+
+The inherited check `improve-report-presentation` 9.1 (no internal identifier on screen) and 9.4 (no
+meaning carried by colour alone) **were** performed, and are recorded above.
+
 Re-run this runbook whenever the selection, drag & drop, export, routing, sandbox or entitlement
 behaviour changes.
 
