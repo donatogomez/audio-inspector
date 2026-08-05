@@ -55,14 +55,19 @@ macOS (identical rendered size from `.large` to `.accessibility5`). The criterio
 this platform, so it is either reworded to what macOS can exercise, or recorded as not evaluable under
 the project's own rule for criteria that cannot be evaluated.
 
-7.7 is different: it **failed**, and may be a real defect. VoiceOver reaches only the two focusable
-controls and will not enter the report's `ScrollView`, while Accessibility Inspector reads the tree
-fine. A discriminating check and a minimal fix are written up; **no code has been changed on that
-evidence**, because a tree that inspects correctly and does not traverse needs the cause confirmed
-before anything is edited.
+7.7 **failed and is now parked.** VoiceOver reaches only the two focusable controls and will not enter
+the report's contents, while Accessibility Inspector reads the tree fine. One cause was tested and ruled
+out — declaring the content an accessibility container changed nothing and was reverted rather than
+kept. Whether the rest is a defect or a property of the testing environment is not established, and
+**no more VoiceOver work belongs to this slice**: the traversal covers the whole report, most of which
+predates the waveform, so this change should not be held open by it. It is carried as a known,
+documented gap for a dedicated accessibility change.
 
-**Why it matters:** these three are the **only** thing keeping ADR-0015 at `Proposed` (task 1.4). Group
-0 is closed, MP3 included. Group 8 must not start before they resolve.
+**What this means for the change:** ADR-0015 stays `Proposed` — task 1.4 requires group 7's manual
+validation done, and it is not. Group 0 is closed, MP3 included; groups 2–6 are closed. What remains is
+a decision about how to finish: close group 8 and archive with the verification debt declared, as
+`improve-report-presentation` was archived before it, or hold the change open. **That decision has not
+been made and group 8 has not started.**
 
 **Open questions / threads:** Whether MP3 exposes a usable `length` is still unknown. Whether a
 secondary technical detail beside the drawing adds value was answered by building it — the channel

@@ -186,14 +186,21 @@ Nothing below may be marked done without actually performing it.
       `improve-report-presentation` and is pinned by `namingAContainerPreservesItsIdentifier`.
 - [ ] 7.7 VoiceOver over the whole report: each property reads as one coherent element, warnings and
       status are announced, and the export action is reachable in a sensible order (inherited 9.2).
-      **FAIL — attempted, and the behaviour was not obtained.** Accessibility Inspector reads the tree
-      correctly, including the waveform's composed label, but an inspected tree is not a walked one.
-      Interactive VoiceOver reached only `Export JSON…` and `Choose another file…` — the two focusable
-      controls — and would not enter the report's `ScrollView`, across `VO-→`, `VO-Shift-↓`, `Tab`,
-      window interaction and scroll-area interaction. None of this task's three clauses was observed.
-      **This may be a real defect in the accessible traversal rather than a limitation of the pass**;
-      the discriminating check and the minimal fix are written up but **not applied** — no code has
-      been changed on this evidence.
+      **FAIL — manual validation not completed, and investigation deliberately deferred out of this
+      change.** Accessibility Inspector reads the tree correctly, including the waveform's composed
+      label, but an inspected tree is not a walked one. Across four passes, interactive VoiceOver
+      reached only `Export JSON…` and `Choose another file…` — the two focusable controls, which are
+      exactly what lies *outside* the report's `ScrollView` — and would not enter the report's contents,
+      through `VO-→`, `VO-Shift-↓`, `Tab`, window interaction and scroll-area interaction. None of this
+      task's three clauses was observed.
+      **One cause was tested and ruled out:** declaring the content an accessibility container
+      (`.accessibilityElement(children: .contain)`) did not change the behaviour on a rebuilt app, and
+      was reverted rather than left in place (5dee231, reverted by 756f942). The cause is therefore
+      **not** a missing accessibility container.
+      **No further VoiceOver work belongs to this slice.** This change did not introduce the behaviour —
+      the traversal covers the whole report, most of which predates it — and it should not be held open
+      by it. It is carried as a known, documented gap, to be picked up by a dedicated accessibility
+      change where it can be diagnosed properly.
 - [ ] 7.8 Accessibility text sizes across the whole report: legible, nothing clipped (inherited 7.4 and
       9.3). **NOT RUN, for the same measured reason as 7.5.** The report was reviewed at the normal text
       size only; nothing was clipped or overlapping there, which is worth knowing and is not what this

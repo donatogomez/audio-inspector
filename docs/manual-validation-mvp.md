@@ -60,13 +60,18 @@ behaviour of `improve-report-presentation` and exists so a readable summary neve
   evaluated is recorded as not evaluated, never as passed* — it is recorded here as **not evaluable as
   written**, pending a decision on whether to reword it to what the platform can exercise. This covers
   the inherited check `improve-report-presentation` 9.3 / 7.4, which therefore also remains open.
-- **The VoiceOver traversal of the whole report.** Accessibility Inspector reads the tree correctly,
-  including the waveform's composed label, but an inspected tree is not a walked one: with interactive
-  VoiceOver the traversal reached only the export action and the file-picking action — the two focusable
-  controls — and would not enter the report's scrolling area. The properties, warnings and status were
-  therefore never observed being read aloud, and the reading order was never confirmed. **This is
-  recorded as a failure rather than as an omission, and may be a real defect in the accessible
-  traversal.** It is the inherited check `improve-report-presentation` 9.2, still open.
+- **The VoiceOver traversal of the whole report — a known gap, pending investigation.** Accessibility
+  Inspector reads the tree correctly, including the waveform's composed label, but an inspected tree is
+  not a walked one: across several passes, interactive VoiceOver reached only the export action and the
+  file-picking action — the two focusable controls, which are exactly what lies outside the report's
+  scrolling area — and would not enter the report's contents. The properties, warnings and status were
+  therefore never observed being read aloud, and the reading order was never confirmed. **Recorded as a
+  failure rather than as an omission.** One candidate cause was tested and ruled out: declaring the
+  report's content an accessibility container changed nothing, and was reverted rather than kept.
+  Whether the remainder is a defect in the surface or a property of the testing environment is **not
+  established**, and diagnosing it belongs to a dedicated accessibility change rather than to the
+  waveform slice, which did not introduce the behaviour. This is the inherited check
+  `improve-report-presentation` 9.2, still open.
 
 The inherited check `improve-report-presentation` 9.1 (no internal identifier on screen) and 9.4 (no
 meaning carried by colour alone) **were** performed, and are recorded above.
