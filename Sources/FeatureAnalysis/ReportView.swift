@@ -36,6 +36,15 @@ public struct ReportView: View {
             }
             .padding(24)
             .frame(maxWidth: .infinity, alignment: .leading)
+            // Declares the report as an accessibility **container**, so an assistive reader can enter
+            // it and walk the sections. Without it, the only elements reachable in the window were the
+            // two focusable controls — the export action in the toolbar and `Choose another file…` in
+            // the composition root — which is precisely everything *outside* this scroll view.
+            //
+            // `.contain` and not `.combine` or `.ignore`: the children stay individual elements, so the
+            // hero, the waveform and each property row are announced exactly as they were. This adds a
+            // way in; it changes no label.
+            .accessibilityElement(children: .contain)
         }
         // The export is an action, not a row of the report. `.toolbar` from here attaches it to the
         // window without moving `ReportExportModel` out of this view, so no ownership changes.
