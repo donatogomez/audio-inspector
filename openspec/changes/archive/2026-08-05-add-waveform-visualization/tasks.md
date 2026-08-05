@@ -225,11 +225,11 @@ Nothing below may be marked done without actually performing it.
       `AVFoundationAudioFilePropertyReader`, `AudioFilePropertyReading` and `.github/` are all
       **unchanged**, `AudioInspectorAnalysis` still holds only its empty enum, and the promoted specs
       under `openspec/specs/` were not hand-edited.
-- [ ] 8.3 Decide ADR-0015's status from what was actually done (see 1.4), update `CURRENT.md`, and
+- [x] 8.3 Decide ADR-0015's status from what was actually done (see 1.4), update `CURRENT.md`, and
       archive through `openspec archive` without editing the promoted specs by hand.
-      **Two of the three are done; the archive is not, and deliberately so.** ADR-0015's status was
-      decided from what was actually done and **stays `Proposed`**: task 1.4 requires group 7's manual
-      validation performed, and 7.5, 7.7 and 7.8 are not. `CURRENT.md` is updated. The archive waits
-      because `CONTRIBUTING.md` states it runs **after implemented *and merged***, and this branch is
-      not merged — archiving here would promote the deltas into the specs on a branch `main` has never
-      seen. **The remaining step is a merge, not more work on the slice.**
+      ADR-0015's status was decided from what was actually done and **stays `Proposed`**: task 1.4
+      requires group 7's manual validation performed, and 7.5, 7.7 and 7.8 are not. `CURRENT.md` is
+      updated. The archive ran **after the merge**, as `CONTRIBUTING.md` requires, and the specs were
+      promoted by the tool — `waveform-visualization` created, `audio-file-inspection` updated — with no
+      canonical spec edited by hand. The tool warned about the five incomplete tasks and was allowed to
+      continue deliberately: they are declared debt, not oversights, and they stay unmarked here.

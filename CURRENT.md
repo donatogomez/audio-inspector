@@ -16,83 +16,31 @@
 >   session protocol in `CLAUDE.md`).
 
 ---
+**Focus:** none. `add-waveform-visualization` is implemented, merged and archived, and its specs are
+promoted. There is **no functional work outstanding** in that slice: the waveform is drawn inside the
+report, read through the native sample seam, and nothing about it is half-built.
 
-**Focus:** `add-waveform-visualization`, on `feature/add-waveform-visualization`. The port, the
-`AVAudioFile` adapter, the wiring and now the **static presentation** are implemented; the waveform is
-drawn inside the report and the four gates plus the Xcode build are green. What is left is the MP3
-evidence gap, the adapter's own test rows, and the manual validation.
+**Carried forward — verification, not implementation.** The manual accessibility validation of the
+report surface is **not complete**, and it is the reason **ADR-0015 stays `Proposed`**:
 
-**Status:** The drawing is one filled `Path` of one rectangle per bucket, not a continuous outline —
-an outline interpolates between one bucket's extremes and the next's, drawing a value that was never
-measured. The geometry is a pure mapper outside the `Canvas`, because a renderer closure cannot be
-asserted and everything worth guaranteeing about it is arithmetic. **The visual clamp to `[-1, 1]`
-applies to the coordinate it returns, never to the bucket it came from**; the envelope keeps values as
-read.
+- the accessibility **text sizes**, over the waveform and over the whole report, were never exercised
+  at the system's largest sizes — macOS offers no system-wide Dynamic Type for a SwiftUI app to adopt,
+  so the criterion as written has no referent on this platform and needs rewording or retiring;
+- the **VoiceOver traversal** of the report failed: the tree reads correctly under inspection but the
+  contents could not be walked. One cause was tested and ruled out; whether the rest is a defect or a
+  property of the test environment is not established. It covers the whole report, most of which
+  predates the waveform, so it belongs to a dedicated accessibility change rather than to that slice.
 
-`FeatureAnalysis` cannot see `FeatureImport`'s `WaveformState` — features depend on Domain and never on
-each other — so it declares its own `WaveformPresentation` over the domain envelope and `RootView`
-translates. That seam is the only place the two vocabularies meet, and it is pinned by a test.
+**Next step:** undecided. Nothing is in progress, and the next slice is a product choice — the
+accessibility change that would take the traversal, or the first real analysis on top of the sample
+seam that now exists.
 
-**MP3 is closed, as local evidence only.** The production adapter decoded an FFmpeg-encoded stereo MP3
-into an envelope identical at five chunk sizes, with the source byte-identical afterwards; the
-measurements are in ADR-0015. **CI installs no FFmpeg, so that suite skips there and the skip is not
-coverage** — the skip message says so, and the skip path was verified against a negative control rather
-than assumed. MP3 also turned out to be the only format that exercises the `readFailed` path: LAME's
-Xing header declares a duration a truncated file no longer has, and the adapter refuses rather than
-half-drawing it.
-
-**Group 7 is 7 of 10, and the three that are open are open for two concrete reasons.** The waveform's
-own accessibility — single element, honest label, contrast in both appearances, nothing carried by
-colour alone — passed, and so did the inherited checks on identifiers and colour. What did not happen:
-**no mechanism was found to enlarge the app's type**, so 7.5 and 7.8 were only ever seen at the normal
-size; and **interactive VoiceOver reached only the two actions**, so 7.7's traversal of the report was
-never observed. Accessibility Inspector showed the tree is complete, which is not the same thing.
-
-**Two of them need a decision rather than another attempt.** 7.5 and 7.8 ask for the system's largest
-text sizes, and **macOS has no such thing for this app** — measured twice over: the preview canvas
-offers only colour-scheme variants for a macOS destination, and `.dynamicTypeSize` has no effect on
-macOS (identical rendered size from `.large` to `.accessibility5`). The criterion has no referent on
-this platform, so it is either reworded to what macOS can exercise, or recorded as not evaluable under
-the project's own rule for criteria that cannot be evaluated.
-
-7.7 **failed and is now parked.** VoiceOver reaches only the two focusable controls and will not enter
-the report's contents, while Accessibility Inspector reads the tree fine. One cause was tested and ruled
-out — declaring the content an accessibility container changed nothing and was reverted rather than
-kept. Whether the rest is a defect or a property of the testing environment is not established, and
-**no more VoiceOver work belongs to this slice**: the traversal covers the whole report, most of which
-predates the waveform, so this change should not be held open by it. It is carried as a known,
-documented gap for a dedicated accessibility change.
-
-**The change is finished as far as this branch can take it.** Groups 0 and 2–6 are closed, group 8's
-gates and scope check are green: 366 tests in 39 suites, and `Package.swift`, the entitlements, the JSON
-exporter, the `schemaVersion` 1 contract, `InspectionReport`, the property reader and CI are all
-byte-identical to `main`, with `AudioInspectorAnalysis` still empty.
-
-**ADR-0015 stays `Proposed`**, decided from what was actually done: task 1.4 requires group 7's manual
-validation performed, and three of its checks are not — 7.5 and 7.8 have no referent on macOS, 7.7 is
-parked. It is archived with that verification debt declared, exactly as `improve-report-presentation`
-was archived before it.
-
-**Next step:** merge. `openspec archive` runs *after implemented **and merged*** (`CONTRIBUTING.md`), and
-this branch has never been pushed, so archiving here would promote the deltas into specs `main` has not
-seen. Nothing is left to build.
-
-**Open questions / threads:** Whether MP3 exposes a usable `length` is still unknown. Whether a
-secondary technical detail beside the drawing adds value was answered by building it — the channel
-count is named because "the extremes across all channels" is incomplete without it, and nothing else
-was added. The reduction lives in Media, and what would overturn that is a second consumer of the same
-decoded stream — the first level metric or the first FFT makes a chunked-decode port a real seam.
-
-**The report's manual accessibility validation is still open and still not done.** It was deliberately
-deferred when `improve-report-presentation` was archived and is now **scoped into group 7** of this
-slice, to be performed once over the finished surface including the waveform, rather than twice over a
-moving one. Nothing about it is marked done and no evidence for it exists.
-
-Still not started, each needing its own change: spectrogram, playback, zoom, editing, and the
-per-property explanations. Also carried forward and deliberately **not** mixed into this slice: the drag
-sources never exercised — iCloud files, aliases, symlinks, app bundles and Mail file promises — open
-against ADR-0014. Plus the pinned `en_US` locale not following the user's region, and
-`Choose another file…` still at the foot of the window while exporting lives in the toolbar.
+**Open threads, unchanged:** the reduction lives in Media, and what would overturn that is a second
+consumer of the same decoded stream — the first level metric or the first FFT makes a chunked-decode
+port a real seam. MP3 is verified locally only, never in CI. The drag sources never exercised — iCloud
+files, aliases, symlinks, app bundles and Mail file promises — remain open against ADR-0014. The
+pinned `en_US` locale still does not follow the user's region, and `Choose another file…` still sits at
+the foot of the window while exporting lives in the toolbar.
 
 ---
 _Last touched: 2026-08-05. Overwrite freely; empty is fine._

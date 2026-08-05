@@ -95,7 +95,14 @@ any path or URL.
 The system SHALL read only metadata-level technical properties that do not require sample
 processing: container/type, duration, sample rate, channel count, bit depth (only when reliably
 determinable), codec/encoding (only when reliably determinable), and bitrate (declared and/or
-estimated). It MUST NOT perform any DSP (no decoding-for-analysis, FFT, loudness, waveform, etc.).
+estimated). **The extraction of these properties** MUST NOT process samples: no technical property may
+be derived from decoded audio, and in particular none may be derived from a spectral transform, a
+loudness measure, or a waveform.
+
+This prohibition governs **how the technical properties are obtained**, not what the system as a whole
+may do. Reading samples for a purpose other than deriving a technical property is outside its scope,
+and any such reading MUST NOT alter which properties are reported, their values, their states, the
+warnings, or the global inspection status.
 
 #### Scenario: Properties read from a well-formed file
 
@@ -108,6 +115,13 @@ estimated). It MUST NOT perform any DSP (no decoding-for-analysis, FFT, loudness
 - **WHEN** bitrate information is available
 - **THEN** the system reports a declared bitrate and an estimated bitrate as **separate** fields,
   never conflating the two
+
+#### Scenario: Sample processing elsewhere does not reach the properties
+
+- **WHEN** the same file is inspected once with sample processing performed for another purpose and
+  once without it
+- **THEN** the technical properties, their states, the warnings and the global inspection status are
+  identical in both cases
 
 ### Requirement: Represent each property's availability and certainty explicitly
 
