@@ -33,19 +33,21 @@ read.
 each other — so it declares its own `WaveformPresentation` over the domain envelope and `RootView`
 translates. That seam is the only place the two vocabularies meet, and it is pinned by a test.
 
-**The one thing the spike could not do is MP3**, because macOS has no MP3 encoder and the spike wrote
-its own fixtures. It is a target format and the waveform must decode it, so it remains group 0's
-mandatory evidence gap — verified against the **production** adapter, never by extending the spike and
-never asserted from `afconvert`, FFmpeg or documentation. **ADR-0015 stays `Proposed` until that case
-is resolved** and the manual validation is done. No claim of MP3 support exists anywhere.
+**MP3 is closed, as local evidence only.** The production adapter decoded an FFmpeg-encoded stereo MP3
+into an envelope identical at five chunk sizes, with the source byte-identical afterwards; the
+measurements are in ADR-0015. **CI installs no FFmpeg, so that suite skips there and the skip is not
+coverage** — the skip message says so, and the skip path was verified against a negative control rather
+than assumed. MP3 also turned out to be the only format that exercises the `readFailed` path: LAME's
+Xing header declares a duration a truncated file no longer has, and the adapter refuses rather than
+half-drawing it.
 
-**Next step:** Close 0.6 (MP3) — it is now the only thing standing between the change and group 7.
-Group 6 is done except 6.3, which **cannot** close without it: 6.3's own clause requires the
-FFmpeg-dependent case to be gated and excluded from coverage, and that clause is 0.6's option 3. Twelve
-of the thirteen matrix rows are covered against the production adapter; MP3 has no test at all.
+**Next step:** Group 7 — the accessibility pass over the whole report including the waveform, then 7.10
+recording it in `docs/manual-validation-mvp.md`. It is the **only** remaining promotion criterion for
+ADR-0015 (task 1.4), and the last group before 8's closure.
 
-**Why:** The presentation was built before MP3 deliberately: group 7's accessibility validation is a
-single pass over the whole report *including* the waveform, so the surface had to stop moving first.
+**Why:** Group 7 was deliberately kept last: it is a single pass over the finished surface rather than
+two over a moving one, and it also carries the accessibility checks inherited from
+`improve-report-presentation`, which are still not done and are not marked anywhere.
 
 **Open questions / threads:** Whether MP3 exposes a usable `length` is still unknown. Whether a
 secondary technical detail beside the drawing adds value was answered by building it — the channel

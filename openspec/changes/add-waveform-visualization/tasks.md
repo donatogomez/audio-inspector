@@ -25,13 +25,18 @@ that cannot be produced is recorded as **not tested** — never inferred from a 
 - [x] 0.4 **FLAC** — same criteria as 0.1.
 - [x] 0.5 **AAC / M4A** — same criteria as 0.1. The spike observed modifications past `frameLength` for
       this codec, so this case is also the regression test for criterion 0.11.
-- [ ] 0.6 **MP3 — the evidence gap this slice must close.** macOS has no MP3 encoder, so the fixture
+- [x] 0.6 **MP3 — the evidence gap this slice must close.** macOS has no MP3 encoder, so the fixture
       comes from FFmpeg (dev/test-only, ADR-0003). Verify decoding **with the production adapter**;
       never assert support from `afconvert`, FFmpeg or documentation. CI installs no FFmpeg, so a gated
       test is **local evidence, explicitly not CI coverage** and must be labelled as such. If it cannot
       be automated at all, document precisely why and perform a reproducible manual validation
       recording FFmpeg version, exact command, parameters, SHA-256 and observed result. **ADR-0015 stays
       `Proposed` until one of these two is actually done.**
+      **Closed by option 3** — `MP3WaveformEvidenceTests`, gated on FFmpeg and **run** on 2026-08-05
+      with FFmpeg 8.1.2 (`libmp3lame`): the production adapter decoded a 44 101-frame stereo MP3 into
+      2048 buckets, identical at five chunk sizes, with the source byte-identical afterwards. **This is
+      local evidence and not CI coverage** — CI installs no FFmpeg and the suite skips there. ADR-0015
+      stays `Proposed`: 1.4 also requires group 7.
 - [x] 0.7 **Corrupt / truncated file** — fails in a way the caller can handle: no crash, no hang,
       bounded resources, and the outcome is a stated absence rather than a fabricated envelope.
 - [x] 0.8 **Long file** — completes within a sane time and its envelope spans the file; used to fix the
@@ -130,11 +135,11 @@ that cannot be produced is recorded as **not tested** — never inferred from a 
 - [x] 6.2 Envelope honesty: two channels in opposing polarity do not cancel; two files at clearly
       different levels yield proportionally different envelopes with no per-file normalisation; sample
       values beyond `[-1, 1]` are preserved rather than clamped.
-- [ ] 6.3 Adapter integration over the group-0 matrix, one test per row, with the FFmpeg-dependent case
-      gated and **not** counted as coverage when it is skipped. **Blocked on 0.6, not on this task's own
-      work:** twelve of the thirteen rows are covered against the production adapter, and the thirteenth
-      — MP3 — has no test at all, gated or otherwise, because no MP3 fixture can be produced yet. The
-      clause about gating *is* 0.6's option 3, so this task cannot close before 0.6 does.
+- [x] 6.3 Adapter integration over the group-0 matrix, one test per row, with the FFmpeg-dependent case
+      gated and **not** counted as coverage when it is skipped. All thirteen rows are now covered
+      against the production adapter. The MP3 row is gated on FFmpeg; its skip message states that a
+      skipped run is not evidence of MP3 support, and the skip path was verified against a negative
+      control rather than assumed.
 - [x] 6.4 The report is unaffected: a file whose samples cannot be read yields the same properties,
       warnings and status as today, and the exported JSON is identical with and without a waveform.
 - [x] 6.5 End-to-end: the existing flow test still walks the same pipeline, with a waveform present in

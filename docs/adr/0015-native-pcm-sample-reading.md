@@ -122,6 +122,9 @@ frames per read, and perform the reduction in `AudioInspectorMedia`.** Concretel
 
 - **MP3 is unverified at the time of writing.** macOS cannot encode MP3, so the spike could not produce
   a fixture, and no claim of MP3 support is made here. This is the specific reason the ADR is Proposed.
+  **Resolved on 2026-08-05, as local evidence only** — see *MP3, measured against the production
+  adapter* below. The ADR stays `Proposed`: its second promotion criterion, the manual accessibility
+  validation, has not been performed.
 - **The `frameLength` rule is easy to break and hard to notice.** The wrong implementation is the
   natural-looking one, and its output is plausible. It costs three separate test enforcements.
 - **The reduction sits outside Analysis**, which will require a move once a second consumer appears.
@@ -138,6 +141,45 @@ frames per read, and perform the reduction in `AudioInspectorMedia`.** Concretel
   and error translation confined to `AudioInspectorMedia`, `frameLength` respected everywhere.
 - ADR-0003's hypothesis is **partially** resolved — decoding to an amplitude envelope, for five formats,
   on one SDK. Loudness, spectral analysis and MP3 are not covered by this evidence.
+
+## MP3, measured against the production adapter
+
+Added after the decision, as **evidence**, not as a change to it. Recorded here because the Negative
+consequence above ("MP3 is unverified") would otherwise stay false in the repository.
+
+**What was run:** `MP3WaveformEvidenceTests`, gated on FFmpeg being installed, executed on 2026-08-05
+with **FFmpeg 8.1.2** (`libmp3lame`) on macOS 15 / arm64. A deterministic stereo source — 44 101 frames
+at 44 100 Hz, 440 Hz and 660 Hz, amplitude 0.5 — is written by the project's own fixture writer and
+encoded with `-c:a libmp3lame -b:a 192k -ar 44100 -ac 2 -map_metadata -1`. FFmpeg **only encodes**;
+every assertion is about what `AVFoundationWaveformGenerator` did with the file.
+
+| Observation | Result | Confidence |
+| --- | --- | --- |
+| Opens with `AVAudioFile` | yes | observed |
+| `processingFormat` | `'lpcm'` float32, 44 100 Hz, 2 ch, **planar**, `isStandard` — identical to the other five | observed |
+| Declared `length` vs source frames | 44 101 vs 44 101 — no encoder delay or padding surfaced | observed, **encoder-dependent** |
+| Envelope | 2048 buckets, all extremes finite and ordered, signal present at ±0.3 | observed |
+| Chunk-size independence | identical envelope at 1, 3, 127, 1 152 and 4 096 frames | observed |
+| Source after reading | byte-identical, same size | observed |
+
+Three behaviours MP3 has that no other format in the matrix does, recorded rather than corrected:
+
+- **A damaged file resynchronises.** MP3 is a stream of self-delimiting frames with no global header to
+  lose, so overwriting the first 4 KiB does not stop the decoder: it resumes at the next frame boundary,
+  reports a shorter `length`, and the adapter describes *that* shorter file. Where WAV fails to open,
+  MP3 succeeds with less audio.
+- **A truncated file still opens, and lies about its length.** LAME writes a Xing/Info header carrying
+  the original duration, and CoreAudio believes it — so a file truncated to 2 000 bytes reports the full
+  44 100 frames. The adapter reads while `framePosition < length`, finds the frames absent and refuses.
+  **This is the format that exercises the `readFailed` path**, which until now had no producer among the
+  natively-writable formats.
+- **Only a file that is not audio at all is refused at the door.**
+
+**Scope of this evidence.** One machine, one SDK, one encoder build. CI installs no FFmpeg, so the suite
+**skips there and that skip is not coverage** — the skip message says so itself. Guaranteeing MP3
+against regressions in CI would require committing a fixture (amending `docs/testing-strategy.md`) or
+installing FFmpeg in CI (promoting a dev-only dependency, in tension with ADR-0003). **Neither is
+proposed.**
 
 ## Follow-ups
 

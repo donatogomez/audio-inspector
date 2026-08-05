@@ -119,6 +119,13 @@ shasum -a 256 /tmp/spike-fixture.private.mp3
 To be recorded here when run: **FFmpeg version · exact commands · encoder and parameters ·
 SHA-256 of the produced file · the observed result of reading it with `AVAudioFile`.**
 
+> **Not run in this form.** The MP3 case was closed later, against the **production adapter** rather
+> than by hand against `AVAudioFile` — change `add-waveform-visualization`, task 0.6, closed by its
+> option 3: an FFmpeg-gated test (`MP3WaveformEvidenceTests`) that skips wherever FFmpeg is absent. The
+> measurements, including three behaviours specific to MP3 that this spike never saw, are recorded in
+> **ADR-0015 → *MP3, measured against the production adapter***. The warning below still holds in full:
+> that evidence is local, it is **not** CI coverage, and nothing may cite it as such.
+
 > **This is a manual observation on one machine. It is NOT CI coverage, it is NOT part of
 > `swift test`, and no later document may cite it as either.** If MP3 support must be guaranteed
 > against regressions, that requires a separate, approved decision — committing a small synthetic
