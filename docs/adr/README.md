@@ -24,3 +24,4 @@ disguise. Copy `0000-adr-template.md` for new ones.
 | [0013](0013-user-selected-file-access.md) | Read-write access to user-selected files (inspection + export) | Accepted |
 | [0014](0014-drag-and-drop-file-access.md) | Drag & drop as a second explicit user-selection mechanism | Accepted |
 | [0015](0015-native-pcm-sample-reading.md) | Native PCM sample reading (`AVAudioFile`, bounded by `frameLength`) | Proposed (pending the MP3 case and manual validation) |
+| [0016](0016-shared-pcm-seam-and-stft-spectrogram.md) | Shared chunked PCM decoding seam and the STFT spectrogram model | Proposed (pending the format matrix and manual validation) |
