@@ -17,10 +17,11 @@
 
 ---
 
-**Focus:** `add-waveform-visualization` is **open and fully specified; nothing is implemented.** The
-four artifacts are written and `openspec validate --all --strict` is green, ADR-0015 exists in
-`Proposed`, and 3 of 57 tasks are done — all three of them the contract itself. Design work only, on
-`docs/add-waveform-visualization-design`. No functional code.
+**Focus:** `add-waveform-visualization` is **open, fully specified and its design is integrated in
+`main`; nothing is implemented.** The four artifacts and ADR-0015 in `Proposed` are on `main`,
+`openspec validate --all --strict` is green, and 3 of 57 tasks are done — all three of them the
+contract itself. **Group 0 has not been run and no functional code exists**; implementation continues
+on `feature/add-waveform-visualization`.
 
 **Status:** Unlike every earlier attempt at this slice, the decoding strategy is not a hypothesis. The
 spike is integrated and **reproducible** — a clean rebuild from `main` of
