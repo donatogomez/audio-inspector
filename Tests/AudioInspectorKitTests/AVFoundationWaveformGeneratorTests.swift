@@ -95,6 +95,79 @@ struct AVFoundationWaveformGeneratorTests {
         }
     }
 
+    // MARK: Envelope honesty, over real files (6.2)
+
+    /// No per-file normalisation, asserted where it could actually be introduced: the adapter.
+    ///
+    /// The domain reduction is already proved not to normalise, but that proof is about arithmetic over
+    /// arrays. Normalisation is exactly the kind of thing an adapter adds later "so quiet files look
+    /// right", and the moment it does, amplitude stops being comparable between files and the drawing
+    /// becomes a statement about the recording. Two files, same signal, an eightfold level difference,
+    /// and the envelopes must differ by that factor — neither scaled to its own peak.
+    @Test("two files at different levels yield proportionally different envelopes")
+    func levelIsPreservedAcrossFiles() async throws {
+        try await withTemporaryDirectory { directory in
+            let quiet = try writeFloatPCMFixture(
+                AudioFixtureSpec(
+                    name: "quiet", format: .wav, signal: .sine(frequency: 440, amplitude: 0.1),
+                    channels: 2, frames: 8_820
+                ),
+                in: directory
+            )
+            let loud = try writeFloatPCMFixture(
+                AudioFixtureSpec(
+                    name: "loud", format: .wav, signal: .sine(frequency: 440, amplitude: 0.8),
+                    channels: 2, frames: 8_820
+                ),
+                in: directory
+            )
+
+            let quietEnvelope = try #require(await generator(for: quiet).makeWaveform(for: reference()))
+            let loudEnvelope = try #require(await generator(for: loud).makeWaveform(for: reference()))
+
+            #expect(quietEnvelope.buckets.count == loudEnvelope.buckets.count)
+            // Peak-normalised envelopes would be identical here. They must not be.
+            #expect(quietEnvelope != loudEnvelope)
+
+            for (quiet, loud) in zip(quietEnvelope.buckets, loudEnvelope.buckets) {
+                #expect(abs(loud.maximum - quiet.maximum * 8) < 1e-5)
+                #expect(abs(loud.minimum - quiet.minimum * 8) < 1e-5)
+            }
+            // And the quiet file stayed quiet: nothing lifted it towards full scale.
+            #expect(quietEnvelope.buckets.allSatisfy { $0.maximum <= 0.11 })
+            #expect(loudEnvelope.buckets.contains { $0.maximum > 0.7 })
+        }
+    }
+
+    /// A sample beyond `[-1, 1]` reaches the envelope as it was written. Limiting it is a concern of
+    /// drawing, which has edges; the data has none, and clamping here would quietly understate a file
+    /// that genuinely exceeds full scale.
+    ///
+    /// Written as float PCM because an integer container cannot hold such a value in the first place —
+    /// see `writeFloatPCMFixture`.
+    @Test("samples beyond the nominal range survive the read unclamped")
+    func samplesBeyondTheNominalRangeArePreserved() async throws {
+        try await withTemporaryDirectory { directory in
+            let url = try writeFloatPCMFixture(
+                AudioFixtureSpec(
+                    name: "beyond-full-scale", format: .wav,
+                    signal: .sine(frequency: 440, amplitude: 1.5),
+                    channels: 2, frames: 8_820
+                ),
+                in: directory
+            )
+
+            let envelope = try #require(await generator(for: url).makeWaveform(for: reference()))
+
+            let peak = try #require(envelope.buckets.map(\.maximum).max())
+            let trough = try #require(envelope.buckets.map(\.minimum).min())
+            #expect(peak > 1, "a value above full scale was clamped on the way in")
+            #expect(trough < -1)
+            #expect(abs(peak - 1.5) < 1e-3)
+            #expect(abs(trough + 1.5) < 1e-3)
+        }
+    }
+
     // MARK: Chunking, the short final chunk and the frameLength invariant (0.9, 0.11)
 
     /// The regression this suite exists for. A reader that walked `frameCapacity` would pick up the

@@ -155,10 +155,36 @@ func writeAudioFixture(_ spec: AudioFixtureSpec, in directory: URL) throws -> UR
 
 /// Writes `spec` at exactly `url`, for callers that already own the destination.
 func writeAudioFixture(_ spec: AudioFixtureSpec, to url: URL) throws {
-    let file = try AVAudioFile(
-        forWriting: url,
-        settings: spec.format.settings(sampleRate: spec.sampleRate, channels: spec.channels)
-    )
+    try writeAudioFixture(spec, to: url, settings: spec.format.settings(sampleRate: spec.sampleRate, channels: spec.channels))
+}
+
+/// Writes `spec` as **32-bit float PCM**, whatever `spec.format` says, and returns the URL.
+///
+/// It exists for one criterion the integer formats cannot express: a sample beyond the nominal
+/// `[-1, 1]`. A 16-bit integer container has no representation for one, so the value is limited on the
+/// way in and a test written over it would assert the writer's clipping rather than the reduction's
+/// honesty. Native float PCM round-trips such values exactly — the spike measured `-1.5 … +1.5` with a
+/// maximum absolute error of 0.0.
+///
+/// It is deliberately **not** a case of `AudioFixtureFormat`: that enum is the group-0 acceptance
+/// matrix, one row per format the product claims to decode, and adding a row to it would silently
+/// change what the matrix asserts. This is a fixture for a property, not a format the product supports.
+@discardableResult
+func writeFloatPCMFixture(_ spec: AudioFixtureSpec, in directory: URL) throws -> URL {
+    let url = directory.appendingPathComponent("\(spec.name).wav")
+    try writeAudioFixture(spec, to: url, settings: [
+        AVFormatIDKey: kAudioFormatLinearPCM,
+        AVSampleRateKey: spec.sampleRate,
+        AVNumberOfChannelsKey: Int(spec.channels),
+        AVLinearPCMBitDepthKey: 32,
+        AVLinearPCMIsFloatKey: true,
+        AVLinearPCMIsBigEndianKey: false,
+    ])
+    return url
+}
+
+private func writeAudioFixture(_ spec: AudioFixtureSpec, to url: URL, settings: [String: Any]) throws {
+    let file = try AVAudioFile(forWriting: url, settings: settings)
     let format = file.processingFormat
 
     guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: fixtureWriteChunk) else {
