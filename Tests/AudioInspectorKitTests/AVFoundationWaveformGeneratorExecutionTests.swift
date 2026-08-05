@@ -14,13 +14,6 @@ import Testing
 // `AsyncStream` reports the moment the body begins — with no production change, no lock, no polling
 // and no sleep.
 
-/// Ordered record of events, all appended from the main actor so the order is well defined.
-@MainActor
-private final class OrderLog {
-    private(set) var entries: [String] = []
-    func append(_ entry: String) { entries.append(entry) }
-}
-
 @MainActor
 @Suite("Media — waveform generation execution")
 struct AVFoundationWaveformGeneratorExecutionTests {
@@ -80,48 +73,27 @@ struct AVFoundationWaveformGeneratorExecutionTests {
         }
     }
 
-    // MARK: Gate B — the main actor stays responsive
+    // MARK: Gate B — deliberately absent: main-actor responsiveness has no deterministic observation
 
-    /// If the read ran on the main actor it would hold it for its whole duration: there is no
-    /// suspension point inside the loop, so nothing else could be serviced until it finished.
-    ///
-    /// Both entries below are appended **on the main actor**, so their order is decided by whether the
-    /// main actor was free while the generation was still working — not by any duration. A blocking
-    /// adapter produces the opposite order, so the assertion cannot pass for the wrong reason.
-    @Test("a long generation leaves the main actor free to do other work")
-    func doesNotBlockTheMainActor() async throws {
-        try await withTemporaryDirectory { directory in
-            let url = try writeLongFixture(in: directory)
-            let log = OrderLog()
-            let (started, continuation) = AsyncStream<Void>.makeStream()
-
-            let generator = AVFoundationWaveformGenerator(
-                chunkFrames: 1_024,
-                resolveURL: { _ in
-                    continuation.yield()
-                    continuation.finish()
-                    return url
-                }
-            )
-
-            let task = Task {
-                let envelope = try await generator.makeWaveform(for: reference())
-                log.append("generation finished")
-                return envelope
-            }
-
-            // Suspends the main actor until the adapter's body has begun.
-            for await _ in started { break }
-
-            // Reached only while the generation is still in flight — unless it holds the main actor.
-            log.append("main actor work")
-
-            let envelope = try #require(await task.value)
-
-            #expect(log.entries == ["main actor work", "generation finished"])
-            #expect(envelope.frameCount == Int(Self.longFixtureFrames), "and the result is still complete")
-        }
-    }
+    // There was a test here asserting that a long generation leaves the main actor free, by starting
+    // the work, waiting for the body to signal that it had begun, appending an entry from the main
+    // actor, and requiring that entry to precede the generation's own.
+    //
+    // **It was a race, and CI won it.** The order it asserted holds only when the main actor is
+    // resumed before the generation finishes, which nothing guarantees: on a shared runner the
+    // generation completed first and the entries arrived reversed — with the main actor free the whole
+    // time. Its own comment claimed the order depended on availability "not on any duration", and that
+    // was simply wrong.
+    //
+    // It is removed rather than repaired. Every repair available would have been dishonest: a longer
+    // fixture only widens the race, accepting either order asserts nothing, and observing the loop from
+    // outside would mean cutting a seam into production purely to keep a test.
+    //
+    // **Nothing is lost.** Gate A observes the executor directly — it asks the body, from inside it,
+    // whether it is on the main thread — and a body that is not on the main actor cannot block it. The
+    // responsiveness this test tried to demonstrate is a consequence of Gate A's result, not an
+    // independent property, and Gate A is deterministic. That the envelope is complete for a long file
+    // is covered several times over by the acceptance matrix.
 
     // MARK: Gate C — cancellation requested while the work is under way
 
