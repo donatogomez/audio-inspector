@@ -99,15 +99,15 @@ that cannot be produced is recorded as **not tested** — never inferred from a 
 
 ## 4. Wiring, the access window and the flow state
 
-- [ ] 4.1 Produce the waveform inside `SourceInspectionCoordinator.inspect(_:)`, within the existing
+- [x] 4.1 Produce the waveform inside `SourceInspectionCoordinator.inspect(_:)`, within the existing
       security-scoped window — it closes on return (ADR-0010), so a lazy produce-on-appear is not
       possible. Properties first, samples second; a global inspection failure skips the sample read.
-- [ ] 4.2 Confirm nothing changes in the sandbox story: no bookmark, no retained URL, no new
+- [x] 4.2 Confirm nothing changes in the sandbox story: no bookmark, no retained URL, no new
       entitlement, nothing persisted.
-- [ ] 4.3 Carry the waveform **beside** the report through the coordinator's outcome and
+- [x] 4.3 Carry the waveform **beside** the report through the coordinator's outcome and
       `ImportFlowModel.State.report`, with absence as a first-class value. `InspectionReport`,
       `TechnicalProperties` and `Property` are untouched.
-- [ ] 4.4 Confirm boundary rule 10 still holds: no feature module gains a `URL` or an AppKit import.
+- [x] 4.4 Confirm boundary rule 10 still holds: no feature module gains a `URL` or an AppKit import.
 
 ## 5. Presentation
 
