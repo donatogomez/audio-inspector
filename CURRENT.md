@@ -17,47 +17,38 @@
 
 ---
 
-**Focus:** `add-waveform-visualization` is **open, fully specified and its design is integrated in
-`main`; nothing is implemented.** The four artifacts and ADR-0015 in `Proposed` are on `main`,
-`openspec validate --all --strict` is green, and 3 of 57 tasks are done — all three of them the
-contract itself. **Group 0 has not been run and no functional code exists**; implementation continues
-on `feature/add-waveform-visualization`.
+**Focus:** `add-waveform-visualization`, on `feature/add-waveform-visualization`. The port, the
+`AVAudioFile` adapter, the wiring and now the **static presentation** are implemented; the waveform is
+drawn inside the report and the four gates plus the Xcode build are green. What is left is the MP3
+evidence gap, the adapter's own test rows, and the manual validation.
 
-**Status:** Unlike every earlier attempt at this slice, the decoding strategy is not a hypothesis. The
-spike is integrated and **reproducible** — a clean rebuild from `main` of
-`Spike/validate-native-pcm-decoding` regenerates every SHA-256 recorded in
-`docs/spikes/2026-08-05-native-pcm-decoding-validation.md` — so ADR-0015 cites measurements instead of
-asserting them.
+**Status:** The drawing is one filled `Path` of one rectangle per bucket, not a continuous outline —
+an outline interpolates between one bucket's extremes and the next's, drawing a value that was never
+measured. The geometry is a pure mapper outside the `Canvas`, because a renderer closure cannot be
+asserted and everything worth guaranteeing about it is arithmetic. **The visual clamp to `[-1, 1]`
+applies to the coordinate it returns, never to the bucket it came from**; the envelope keeps values as
+read.
 
-`AVAudioFile` opens and fully decodes
-WAV, AIFF, ALAC, FLAC and AAC to one uniform processing format — `'lpcm'` float32, planar — with the
-frames read matching the declared `length` exactly in all five. Multichannel keeps channel identity and
-order, and native float PCM round-trips values beyond ±1 untouched, so neither clipping nor
-normalisation happens on the way in.
-
-The finding that changes how code must be written is smaller and sharper: **the buffer region past
-`frameLength` is never safe.** For four formats it holds whatever the caller left there; for AAC it is
-overwritten with content that is deterministic, content-derived, and about 1 % of the signal's level —
-so a reader that took `frameCapacity` frames would draw something plausible and wrong, consistently,
-and only for some files. Reading also cannot stop by watching for a zero-length read: past the end,
-`read(into:)` throws a bare error carrying no `NSError`, indistinguishable from a real failure. The
-rules that follow are `framePosition < length` to bound the loop and `frameLength` to bound the data.
+`FeatureAnalysis` cannot see `FeatureImport`'s `WaveformState` — features depend on Domain and never on
+each other — so it declares its own `WaveformPresentation` over the domain envelope and `RootView`
+translates. That seam is the only place the two vocabularies meet, and it is pinned by a test.
 
 **The one thing the spike could not do is MP3**, because macOS has no MP3 encoder and the spike wrote
-its own fixtures. It is a target format and the waveform must decode it, so it is now group 0's
+its own fixtures. It is a target format and the waveform must decode it, so it remains group 0's
 mandatory evidence gap — verified against the **production** adapter, never by extending the spike and
 never asserted from `afconvert`, FFmpeg or documentation. **ADR-0015 stays `Proposed` until that case
-is resolved** and the manual validation is done.
+is resolved** and the manual validation is done. No claim of MP3 support exists anywhere.
 
-**Next step:** Implement group 0's acceptance matrix and groups 2 and 3 — the domain port and the
-`AVAudioFile` adapter. Nothing else is started.
+**Next step:** Close 0.6 (MP3), then group 6's remaining test rows, then group 7's accessibility pass
+over the finished surface.
 
-**Why:** Everything later — levels, loudness, spectra — reads samples through this seam. Building it
-under a min/max reduction means a defect in the seam cannot hide behind a defect in the maths.
+**Why:** The presentation was built before MP3 deliberately: group 7's accessibility validation is a
+single pass over the whole report *including* the waveform, so the surface had to stop moving first.
 
-**Open questions / threads:** Three are left to group 0's measurements rather than guessed: the chunk
-size, whether MP3 exposes a usable `length`, and whether a secondary technical detail beside the drawing
-adds value. The reduction lives in Media, and what would overturn that is a second consumer of the same
+**Open questions / threads:** Whether MP3 exposes a usable `length` is still unknown. Whether a
+secondary technical detail beside the drawing adds value was answered by building it — the channel
+count is named because "the extremes across all channels" is incomplete without it, and nothing else
+was added. The reduction lives in Media, and what would overturn that is a second consumer of the same
 decoded stream — the first level metric or the first FFT makes a chunked-decode port a real seam.
 
 **The report's manual accessibility validation is still open and still not done.** It was deliberately

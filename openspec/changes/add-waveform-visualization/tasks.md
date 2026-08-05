@@ -111,16 +111,16 @@ that cannot be produced is recorded as **not tested** — never inferred from a 
 
 ## 5. Presentation
 
-- [ ] 5.1 Draw the envelope in `FeatureAnalysis` with SwiftUI from the bucket values — no bitmap, no
+- [x] 5.1 Draw the envelope in `FeatureAnalysis` with SwiftUI from the bucket values — no bitmap, no
       image file, no dependency. The view maps buckets onto the width it has; the domain type stays
       view-independent and resizing never decodes again.
-- [ ] 5.2 No interaction: no playback, zoom, scrubbing, selection or cursor; pointer and scroll activity
+- [x] 5.2 No interaction: no playback, zoom, scrubbing, selection or cursor; pointer and scroll activity
       leave the drawing and its data unchanged.
-- [ ] 5.3 The label states only what the drawing **is** — an amplitude envelope of the whole file — and
+- [x] 5.3 The label states only what the drawing **is** — an amplitude envelope of the whole file — and
       never characterises the signal as loud, quiet, clipped, compressed, dynamic, healthy or damaged,
       and never presents it as a measurement or as evidence about bit depth, encoding or integrity.
-- [ ] 5.4 State an absent waveform in words rather than showing an empty area.
-- [ ] 5.5 Keep colour tied to the state of the reading, never to the audio, consistent with the report
+- [x] 5.4 State an absent waveform in words rather than showing an empty area.
+- [x] 5.5 Keep colour tied to the state of the reading, never to the audio, consistent with the report
       surface already shipped.
 
 ## 6. Tests
@@ -136,7 +136,7 @@ that cannot be produced is recorded as **not tested** — never inferred from a 
       warnings and status as today, and the exported JSON is identical with and without a waveform.
 - [ ] 6.5 End-to-end: the existing flow test still walks the same pipeline, with a waveform present in
       one case and absent in the other. **No existing assertion is removed or weakened.**
-- [ ] 6.6 Presentation tests over the model: the accessible label composition, and that no judging
+- [x] 6.6 Presentation tests over the model: the accessible label composition, and that no judging
       vocabulary appears anywhere in the waveform surface.
 
 ## 7. Accessibility and manual validation

@@ -15,7 +15,9 @@ struct WaveformSection: View {
                 WaveformDrawing(envelope: envelope)
             }
             if let headline = text.headline {
-                Text(headline).font(.callout)
+                Text(headline)
+                    .font(.callout)
+                    .foregroundStyle(headlineStyle)
             }
             if let detail = text.detail {
                 Text(detail).font(.caption).foregroundStyle(.secondary)
@@ -26,6 +28,21 @@ struct WaveformSection: View {
         // shapes announced in sequence would be worse than silence.
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(text.accessibilityLabel)
+    }
+
+    /// Colour follows the state of the **reading**, and never the audio: waiting and having nothing to
+    /// draw are ordinary outcomes and recede, while a statement that producing the drawing did not
+    /// succeed is read at full weight.
+    ///
+    /// No alerting colour, deliberately. The report reserves red for a property of the file that could
+    /// not be read, as a caption beside the row it belongs to; a full-width red heading here would read
+    /// as an alarm about the file, which is the one thing a failure to draw does not mean. Nothing
+    /// depends on this either way — the label carries the whole meaning.
+    private var headlineStyle: HierarchicalShapeStyle {
+        switch presentation {
+        case .loading, .envelope, .absent: .secondary
+        case .failed: .primary
+        }
     }
 }
 
