@@ -11,10 +11,16 @@ import SwiftUI
 /// only the transient export phase. No AppKit, no `URL`, no filesystem.
 public struct ReportView: View {
     private let report: InspectionReport
+    private let waveform: WaveformPresentation
     @State private var exportModel: ReportExportModel
 
-    public init(report: InspectionReport, export: @escaping ReportExportAction) {
+    public init(
+        report: InspectionReport,
+        waveform: WaveformPresentation,
+        export: @escaping ReportExportAction
+    ) {
         self.report = report
+        self.waveform = waveform
         _exportModel = State(initialValue: ReportExportModel(action: export))
     }
 
@@ -22,6 +28,7 @@ public struct ReportView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 heroHeader
+                waveformSection
                 propertiesSection
                 warningsSection
                 statusSection
@@ -56,6 +63,21 @@ public struct ReportView: View {
             }
         }
         .accessibilityElement(children: .combine)
+    }
+
+    // MARK: - Waveform — a view of the whole file, at the same altitude as the header
+
+    /// Placed directly under the summary and above the detail, because it answers the same
+    /// glance-level question the header does: what is in this file, at a glance. Below the eight
+    /// property rows it would sit under a scroll for no reason.
+    ///
+    /// It is a section like any other, and it is present in **every** state — including when there is
+    /// nothing to draw — so an unavailable waveform is a sentence rather than a gap the reader has to
+    /// interpret.
+    private var waveformSection: some View {
+        ReportSection(WaveformCopy.title) {
+            WaveformSection(presentation: waveform)
+        }
     }
 
     // MARK: - File identity (safe metadata only — never a location)
@@ -166,7 +188,7 @@ public struct ReportView: View {
 
 /// A titled block of the report. Replaces `Form` + `.formStyle(.grouped)`, whose grouped-inset look is
 /// the idiom of a Preferences pane rather than of a document being examined.
-private struct ReportSection<Content: View>: View {
+struct ReportSection<Content: View>: View {
     private let title: String
     private let content: Content
 
@@ -263,7 +285,22 @@ private extension InspectionReport {
     }
 }
 
+private extension WaveformPresentation {
+    /// A decaying tone, so the canvas shows something with a shape rather than a solid block.
+    static var preview: WaveformPresentation {
+        let buckets = (0 ..< 2_048).compactMap { index -> WaveformBucket? in
+            let phase = Float(index) / 2_048
+            let peak = (1 - phase) * abs(sin(phase * 24))
+            return WaveformBucket(minimum: -peak, maximum: peak)
+        }
+        guard let envelope = WaveformEnvelope(buckets: buckets, frameCount: 13_230_000, channelCount: 2) else {
+            return .absent
+        }
+        return .envelope(envelope)
+    }
+}
+
 #Preview {
-    ReportView(report: .preview, export: { _ in .succeeded })
+    ReportView(report: .preview, waveform: .preview, export: { _ in .succeeded })
 }
 #endif

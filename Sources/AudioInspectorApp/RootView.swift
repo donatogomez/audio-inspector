@@ -64,11 +64,33 @@ public struct RootView: View {
         }
     }
 
+    /// Translates the flow's waveform state into the report surface's own.
+    ///
+    /// The two enums are deliberately separate types rather than one shared one: `FeatureImport` and
+    /// `FeatureAnalysis` depend on `AudioInspectorDomain` and never on each other, so the module that
+    /// obtains an envelope and the module that draws one cannot see each other's vocabulary. Joining
+    /// them is the composition root's job, and this is the whole of it.
+    ///
+    /// It is total by construction — every state the flow can hold has exactly one presentation, and
+    /// none is invented — which is why it is a plain function with no default case.
+    static func waveformPresentation(for state: WaveformState) -> WaveformPresentation {
+        switch state {
+        case .loading: .loading
+        case let .available(envelope): .envelope(envelope)
+        case .unavailable: .absent
+        case let .failed(message): .failed(message: message)
+        }
+    }
+
     /// The inspected report plus the way back to picking another file. `ReportView` is used exactly as
     /// group 5 shipped it — the export action is passed straight through, unchanged.
     private func reportSurface(_ presentation: InspectionPresentation) -> some View {
         VStack(spacing: 0) {
-            ReportView(report: presentation.report, export: export)
+            ReportView(
+                report: presentation.report,
+                waveform: Self.waveformPresentation(for: presentation.waveform),
+                export: export
+            )
             Divider()
             HStack {
                 Spacer()
