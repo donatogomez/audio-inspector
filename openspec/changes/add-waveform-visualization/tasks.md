@@ -214,11 +214,22 @@ Nothing below may be marked done without actually performing it.
 
 ## 8. Gates and closure
 
-- [ ] 8.1 Four gates green — `./Scripts/check-boundaries.sh`,
+- [x] 8.1 Four gates green — `./Scripts/check-boundaries.sh`,
       `swift build -Xswiftc -warnings-as-errors`, `swift test`,
-      `OPENSPEC_TELEMETRY=0 openspec validate --all --strict` — plus the Xcode app build.
-- [ ] 8.2 Confirm the diff's scope: no new dependency, entitlements unchanged, the JSON exporter and the
+      `OPENSPEC_TELEMETRY=0 openspec validate --all --strict` — plus the Xcode app build. 366 tests in
+      39 suites.
+- [x] 8.2 Confirm the diff's scope: no new dependency, entitlements unchanged, the JSON exporter and the
       `schemaVersion` 1 contract byte-identical, `InspectionReport` and the property reader untouched,
-      and `AudioInspectorAnalysis` still empty.
+      and `AudioInspectorAnalysis` still empty. Verified against `main`: `Package.swift`,
+      `Package.resolved`, the entitlements, `Sources/AudioInspectorApp/Export/`, `InspectionReport`,
+      `AVFoundationAudioFilePropertyReader`, `AudioFilePropertyReading` and `.github/` are all
+      **unchanged**, `AudioInspectorAnalysis` still holds only its empty enum, and the promoted specs
+      under `openspec/specs/` were not hand-edited.
 - [ ] 8.3 Decide ADR-0015's status from what was actually done (see 1.4), update `CURRENT.md`, and
       archive through `openspec archive` without editing the promoted specs by hand.
+      **Two of the three are done; the archive is not, and deliberately so.** ADR-0015's status was
+      decided from what was actually done and **stays `Proposed`**: task 1.4 requires group 7's manual
+      validation performed, and 7.5, 7.7 and 7.8 are not. `CURRENT.md` is updated. The archive waits
+      because `CONTRIBUTING.md` states it runs **after implemented *and merged***, and this branch is
+      not merged — archiving here would promote the deltas into the specs on a branch `main` has never
+      seen. **The remaining step is a merge, not more work on the slice.**

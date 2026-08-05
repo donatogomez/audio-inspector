@@ -63,11 +63,19 @@ kept. Whether the rest is a defect or a property of the testing environment is n
 predates the waveform, so this change should not be held open by it. It is carried as a known,
 documented gap for a dedicated accessibility change.
 
-**What this means for the change:** ADR-0015 stays `Proposed` — task 1.4 requires group 7's manual
-validation done, and it is not. Group 0 is closed, MP3 included; groups 2–6 are closed. What remains is
-a decision about how to finish: close group 8 and archive with the verification debt declared, as
-`improve-report-presentation` was archived before it, or hold the change open. **That decision has not
-been made and group 8 has not started.**
+**The change is finished as far as this branch can take it.** Groups 0 and 2–6 are closed, group 8's
+gates and scope check are green: 366 tests in 39 suites, and `Package.swift`, the entitlements, the JSON
+exporter, the `schemaVersion` 1 contract, `InspectionReport`, the property reader and CI are all
+byte-identical to `main`, with `AudioInspectorAnalysis` still empty.
+
+**ADR-0015 stays `Proposed`**, decided from what was actually done: task 1.4 requires group 7's manual
+validation performed, and three of its checks are not — 7.5 and 7.8 have no referent on macOS, 7.7 is
+parked. It is archived with that verification debt declared, exactly as `improve-report-presentation`
+was archived before it.
+
+**Next step:** merge. `openspec archive` runs *after implemented **and merged*** (`CONTRIBUTING.md`), and
+this branch has never been pushed, so archiving here would promote the deltas into specs `main` has not
+seen. Nothing is left to build.
 
 **Open questions / threads:** Whether MP3 exposes a usable `length` is still unknown. Whether a
 secondary technical detail beside the drawing adds value was answered by building it — the channel
