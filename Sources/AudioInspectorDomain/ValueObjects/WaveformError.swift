@@ -26,6 +26,20 @@ public extension WaveformErrorCode {
     /// The envelope was finished before every slice of the file had been seen, so some buckets would
     /// describe nothing. Producing them anyway would invent silence the file may not contain.
     static let incompleteCoverage = WaveformErrorCode(rawValue: "waveform_incomplete_coverage")
+    /// The operation was cancelled before the whole file had been read.
+    ///
+    /// **It says nothing about the file.** Cancellation is something the caller did, not a defect,
+    /// an unsupported format or a failure to read — and it must not be reported to the user as one.
+    ///
+    /// It is deliberately an error rather than a `nil` result, because `nil` from
+    /// `WaveformGenerating` means the file itself offered nothing to size an envelope against. A user
+    /// who cancels has not learnt anything about their file, and collapsing the two would tell them
+    /// they had.
+    ///
+    /// It is equally deliberately its own code rather than a reuse of `invalidConfiguration` or
+    /// `incompleteCoverage`: both of those describe a fault that did not occur, and a stable code that
+    /// lies is worse than no code at all.
+    static let cancelled = WaveformErrorCode(rawValue: "waveform_cancelled")
 }
 
 /// A waveform failure: a stable `code` (the identity, for automated processing) plus a descriptive
