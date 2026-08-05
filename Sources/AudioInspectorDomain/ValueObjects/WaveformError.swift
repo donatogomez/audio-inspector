@@ -40,6 +40,23 @@ public extension WaveformErrorCode {
     /// `incompleteCoverage`: both of those describe a fault that did not occur, and a stable code that
     /// lies is worse than no code at all.
     static let cancelled = WaveformErrorCode(rawValue: "waveform_cancelled")
+
+    // MARK: Produced by an adapter that reads a real file
+    //
+    // Declared here rather than in infrastructure because the code space is the domain's — an adapter
+    // maps its platform failures onto these and never invents its own, exactly as the inspection
+    // errors work (ADR-0011).
+
+    /// No accessible location was supplied for the file, so nothing could be opened.
+    static let fileAccessDenied = WaveformErrorCode(rawValue: "waveform_file_access_denied")
+    /// The file could not be opened for reading.
+    static let fileOpenFailed = WaveformErrorCode(rawValue: "waveform_file_open_failed")
+    /// The file opened, but its decoded form is not a layout the envelope can be built from — for
+    /// example interleaved samples, or something other than native float. Distinct from a read
+    /// failure: nothing went wrong, the shape is simply not one that can be reduced correctly.
+    static let unsupportedProcessingFormat = WaveformErrorCode(rawValue: "waveform_unsupported_processing_format")
+    /// The file opened but could not be read through to the end it declared.
+    static let readFailed = WaveformErrorCode(rawValue: "waveform_read_failed")
 }
 
 /// A waveform failure: a stable `code` (the identity, for automated processing) plus a descriptive
