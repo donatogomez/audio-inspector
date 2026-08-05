@@ -17,11 +17,18 @@
 
 ---
 
-**Focus:** Closing the **native PCM decoding spike** and publishing it as its own small PR, so the
-waveform slice can be specified against evidence that exists in the repository rather than in a
-conversation. The spike is finished for its purpose; the waveform change is not open yet.
+**Focus:** None in progress. The **native PCM decoding spike is integrated and closed**; no OpenSpec
+change is open and the waveform itself has not been started — no branch, no change, no code.
 
-**Status:** The spike answered the question it was built for. `AVAudioFile` opens and fully decodes
+**Status:** The spike answered the question it was built for, and its evidence now lives in the
+repository rather than in a conversation: the report is `docs/spikes/2026-08-05-native-pcm-decoding-validation.md`
+and the package that produced it is `Spike/validate-native-pcm-decoding/`. It is **reproducible** — a
+clean rebuild from `main` regenerates every recorded SHA-256 exactly, which is what makes the findings
+citable by an ADR instead of merely asserted. The package is throwaway by design and its deletion
+criterion is written into the report: it goes once ADR-0015 exists and the waveform slice's own tests
+cover these observations.
+
+`AVAudioFile` opens and fully decodes
 WAV, AIFF, ALAC, FLAC and AAC to one uniform processing format — `'lpcm'` float32, planar — with the
 frames read matching the declared `length` exactly in all five. Multichannel keeps channel identity and
 order, and native float PCM round-trips values beyond ±1 untouched, so neither clipping nor
@@ -40,11 +47,11 @@ gated test would skip on every run. Damaged files, cancellation, memory and isol
 exercised: they belong to the waveform slice's own tests, where they are cheaper to assert against real
 code than against a throwaway package.
 
-**Next step:** Open `add-waveform-visualization` on a branch from `main` once this PR lands. It needs a
-`MODIFIED` delta scoping the accepted no-DSP requirement, which today forbids a waveform outright, a new
-`waveform-visualization` capability, and **ADR-0015** in `Proposed` covering the three hard-to-reverse
-decisions: `AVAudioFile` over `AVAssetReader`, the `frameLength` invariant, and the reduction living in
-Media. ADR-0003 is referenced, never edited.
+**Next step:** Open `add-waveform-visualization` on a branch from `main`. It needs a `MODIFIED` delta
+scoping the accepted no-DSP requirement — which today forbids a waveform outright, in so many words — a
+new `waveform-visualization` capability, and **ADR-0015** in `Proposed` covering the three
+hard-to-reverse decisions: `AVAudioFile` over `AVAssetReader`, the `frameLength` invariant, and the
+reduction living in Media. ADR-0003 is referenced, never edited.
 
 **Why:** ADR-0003 adopted native-first but recorded its own sufficiency as an open hypothesis pending a
 decoding spike. That hypothesis is now answered for decoding-to-an-envelope, and the answer is written
