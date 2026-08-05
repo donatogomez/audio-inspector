@@ -34,7 +34,7 @@ that cannot be produced is recorded as **not tested** — never inferred from a 
       `Proposed` until one of these two is actually done.**
 - [x] 0.7 **Corrupt / truncated file** — fails in a way the caller can handle: no crash, no hang,
       bounded resources, and the outcome is a stated absence rather than a fabricated envelope.
-- [ ] 0.8 **Long file** — completes within a sane time and its envelope spans the file; used to fix the
+- [x] 0.8 **Long file** — completes within a sane time and its envelope spans the file; used to fix the
       chunk size left open in `design.md`.
 - [x] 0.9 **Chunked reading** — the same file read at several chunk sizes yields **identical** buckets.
 - [x] 0.10 **EOF** — the loop is bounded by `framePosition < length`; a read past the end is never

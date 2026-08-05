@@ -322,6 +322,52 @@ the output, not of the machine. **No claim about resident memory is made from `s
 figure comes from a measured run and is labelled as such. A timing helper, if one is added, is
 diagnostic output, never a gate.
 
+### 11. Measured: the chunk size, and where the loop runs
+
+Two things the design left open are now measured against the production adapter rather than reasoned
+about. Both measurements are **diagnostics**, taken with a throwaway harness outside the repository;
+neither is a gate, and no timing assertion enters the suite.
+
+#### The chunk size stays at 4 096
+
+Fixture: 300 s of 44 100 Hz stereo LPCM — 13 230 000 frames, 50 MiB. Release build, one pass each.
+
+| Chunk (frames) | Time | Reads | Buckets | Read buffer | Accumulator + result |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 512 | 0.174 s | 25 840 | 2 048 | 4 KiB | 32 KiB |
+| 1 024 | 0.166 s | 12 920 | 2 048 | 8 KiB | 32 KiB |
+| **4 096** | **0.162 s** | **3 230** | **2 048** | **32 KiB** | **32 KiB** |
+| 8 192 | 0.159 s | 1 615 | 2 048 | 64 KiB | 32 KiB |
+| 16 384 | 0.157 s | 808 | 2 048 | 128 KiB | 32 KiB |
+| 65 536 | 0.157 s | 202 | 2 048 | 512 KiB | 32 KiB |
+
+A 128-fold change in chunk size moves the total by **11 %**, and the curve is flat from 4 096 onwards:
+the cost is decoding, not per-read overhead. In a debug build the whole range collapses to
+0.65–0.68 s, flatter still. **4 096 is kept**: it is within 3 % of the best time at a sixteenth of the
+buffer, and buying that 3 % would cost 512 KiB per read.
+
+Memory is what the design claimed: **the read buffer plus 32 KiB, independent of the file.** Five
+minutes of audio and ten seconds of audio reduce through the same 32 KiB buffer into the same 2 048
+buckets. At 4 096 frames the algorithmic footprint is about **64 KiB against a 50 MiB file**.
+
+#### The loop does not run on the main actor
+
+`makeWaveform` carries no isolation annotation, on a type with none, conforming to a protocol with
+none, in a package that builds in Swift 6 language mode with **no** upcoming feature enabled — so it
+does not inherit its caller's actor. That is observed, not assumed: the adapter's existing `resolveURL`
+seam reports from inside the body, and reports that it is not on the main thread when called from a
+`@MainActor` test.
+
+The tests were then checked against a **negative control**: annotating the method and the reading loop
+`@MainActor` and running them again. All three failed — the executor probe saw the main thread, the
+main actor could no longer interleave its own work, and, most tellingly, the cancellation test came
+back with a **complete envelope** because the request could not be delivered while the loop held the
+actor. The control was reverted; the production source is unchanged.
+
+That control also located the executor precisely: annotating only `makeWaveform` was not enough,
+because the loop lives in a separate nonisolated `async` function and leaves the actor on its own. **The
+executor is that function's, not the entry point's** — worth knowing before anything wires this up.
+
 ## Risks / Trade-offs
 
 - **`frameCapacity` is the natural, efficient-looking implementation, and it is the wrong one.**
@@ -351,7 +397,8 @@ tests.
 
 ## Open Questions
 
-1. **The chunk size**, chosen from the group-0 measurements rather than from a round number.
+1. ~~**The chunk size**, chosen from the group-0 measurements rather than from a round number.~~
+   **Answered in §11:** measured across six sizes on a five-minute file, 4 096 is kept.
 2. **Whether MP3 exposes a usable `length`** — unknown, and the only formats measured are the five the
    spike could write.
 3. **Whether the secondary technical detail beside the drawing adds value** — a density question left to
