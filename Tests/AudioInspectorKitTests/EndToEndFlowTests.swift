@@ -53,12 +53,13 @@ struct EndToEndFlowTests {
 
             // 2–6. Selection seam → coordinator (mapper + real reader + use case) → flow model.
             let inspection = SourceInspectionCoordinator(chooseSource: { source })
-            let flow = ImportFlowModel(action: { await inspection.inspect() })
+            let flow = ImportFlowModel(action: { onReport in await inspection.inspect(onReport: onReport) })
             await flow.selectAndInspect()
 
-            guard case let .report(report) = flow.state else {
+            guard case let .report(presentation) = flow.state else {
                 Issue.record("expected the flow to end in .report, got \(flow.state)"); return
             }
+let report = presentation.report
 
             // The report describes the selected file, with no location anywhere in it.
             #expect(report.file.displayName == "fixture.wav")
@@ -102,8 +103,9 @@ struct EndToEndFlowTests {
             #expect(exportModel.phase == .succeeded)
             #expect(suggestedName == "fixture-inspection.json")
 
-            // Exporting neither recalculates nor mutates the report the UI holds.
-            #expect(flow.state == .report(report))
+            // Exporting neither recalculates nor mutates the report the UI holds, and it leaves
+            // whatever became of the waveform beside it untouched.
+            #expect(flow.state == .report(presentation))
 
             // 11. Read the bytes back and decode them with `Codable` only.
             let json = try JSONDecoder().decode(JSONValue.self, from: Data(contentsOf: destination))

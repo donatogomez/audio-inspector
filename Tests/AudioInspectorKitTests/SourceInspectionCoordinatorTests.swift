@@ -49,7 +49,7 @@ struct SourceInspectionCoordinatorTests {
             makeReader: { _ in UnreachableReader() }
         )
 
-        #expect(await coordinator.inspect() == .cancelled)
+        #expect(await coordinator.inspect(onReport: { _ in }) == .cancelled)
     }
 
     // MARK: - Preparation failure
@@ -60,7 +60,7 @@ struct SourceInspectionCoordinatorTests {
             makeReader: { _ in UnreachableReader() }
         )
 
-        #expect(await coordinator.inspect() == .preparationFailed)
+        #expect(await coordinator.inspect(onReport: { _ in }) == .preparationFailed)
     }
 
     // MARK: - Success
@@ -81,10 +81,10 @@ struct SourceInspectionCoordinatorTests {
                         )
                     }
                 )
-                outcome = await coordinator.inspect()
+                outcome = await coordinator.inspect(onReport: { _ in })
             }
 
-            guard case let .inspected(report) = outcome else {
+            guard case let .inspected(report, _) = outcome else {
                 Issue.record("expected an inspected outcome, got \(String(describing: outcome))"); return
             }
             // The report is built from the selected file's own metadata.
@@ -108,7 +108,7 @@ struct SourceInspectionCoordinatorTests {
                 makeReader: { _ in FailingReader(error: error) }
             )
 
-            guard case let .inspected(report) = await coordinator.inspect() else {
+            guard case let .inspected(report, _) = await coordinator.inspect(onReport: { _ in }) else {
                 Issue.record("a global failure must still be an inspected report"); return
             }
             #expect(report.status == .failed(error))
@@ -126,7 +126,7 @@ struct SourceInspectionCoordinatorTests {
             // Default `makeReader` → the real AVFoundation reader, resolving this URL.
             let coordinator = SourceInspectionCoordinator(chooseSource: { url })
 
-            guard case let .inspected(report) = await coordinator.inspect() else {
+            guard case let .inspected(report, _) = await coordinator.inspect(onReport: { _ in }) else {
                 Issue.record("expected an inspected outcome"); return
             }
             #expect(report.file.displayName == "fixture.wav")

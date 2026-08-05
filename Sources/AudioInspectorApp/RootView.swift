@@ -30,8 +30,8 @@ public struct RootView: View {
             switch flow.state {
             case .idle, .working, .failed:
                 ImportFlowView(model: flow)
-            case let .report(report):
-                reportSurface(report)
+            case let .report(presentation):
+                reportSurface(presentation)
             }
         }
         .frame(minWidth: 720, minHeight: 480)
@@ -66,9 +66,9 @@ public struct RootView: View {
 
     /// The inspected report plus the way back to picking another file. `ReportView` is used exactly as
     /// group 5 shipped it — the export action is passed straight through, unchanged.
-    private func reportSurface(_ report: InspectionReport) -> some View {
+    private func reportSurface(_ presentation: InspectionPresentation) -> some View {
         VStack(spacing: 0) {
-            ReportView(report: report, export: export)
+            ReportView(report: presentation.report, export: export)
             Divider()
             HStack {
                 Spacer()

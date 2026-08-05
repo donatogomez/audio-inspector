@@ -11,15 +11,24 @@ import AudioInspectorDomain
 public enum SourceInspectionOutcome: Sendable, Equatable {
     /// The user dismissed the picker — **not** an error.
     case cancelled
-    /// A file was inspected; the report carries the outcome, including a global failure.
-    case inspected(InspectionReport)
+    /// A file was inspected; the report carries the outcome, including a global failure. The waveform
+    /// travels **beside** it, and whatever became of it never changes the report.
+    case inspected(InspectionReport, waveform: WaveformOutcome)
     /// The selection could not be turned into an inspectable file at all.
     case preparationFailed
 }
 
+/// Receives the inspection's report the moment it exists, before the waveform is generated.
+///
+/// It exists so the report is not held hostage by an optional extra: reading samples takes longer than
+/// reading metadata, and the report is complete without it. Called at most once per operation, on the
+/// main actor.
+public typealias InspectionReportHandler = @MainActor (InspectionReport) -> Void
+
 /// The action the import feature receives as an injected dependency from the composition root.
 ///
-/// `@MainActor` (it drives a native panel) and `async` (it awaits the user's choice and the
-/// inspection). The Feature calls it and reacts to the returned outcome; it never learns how the file
-/// is chosen, accessed, or read.
-public typealias SourceInspectionAction = @MainActor () async -> SourceInspectionOutcome
+/// `@MainActor` (it drives a native panel) and `async` (it awaits the user's choice, the inspection and
+/// then the waveform). It hands the report back through the given handler as soon as the inspection is
+/// done, and returns the complete outcome when the waveform has settled too. The Feature never learns
+/// how the file is chosen, accessed, or read.
+public typealias SourceInspectionAction = @MainActor (InspectionReportHandler) async -> SourceInspectionOutcome
