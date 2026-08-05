@@ -16,9 +16,10 @@
 >   session protocol in `CLAUDE.md`).
 
 ---
-**Focus:** `add-static-spectrogram-visualization` — the contract is open, **no production code exists
-yet**. Group 0 is done and versioned: a reproducible spike measured every constant before a single
-requirement was written, and three of its findings changed the design rather than confirming it.
+**Focus:** `add-static-spectrogram-visualization` — the contract and the evidence behind it are
+**integrated**; **no production code exists yet**. Group 0 is closed: a spike that anyone can re-run
+measured every constant before a single requirement was written, and three of its findings changed the
+design rather than confirming it.
 
 **Why this slice matters beyond the drawing:** it executes the reversal condition ADR-0015 wrote for
 itself. The first FFT is the second consumer of the decoded stream, so `AudioDecoding` becomes a real
@@ -46,8 +47,9 @@ or none.
 
 **Carried forward, unchanged:** the waveform's accessibility debt (text sizes not evaluable on macOS as
 written; the VoiceOver traversal failed and is parked for a dedicated change) keeps **ADR-0015 at
-`Proposed``**. **ADR-0016 is also `Proposed`**, pending its own format matrix and manual validation. The
+`Proposed`**. **ADR-0016 is also `Proposed`**, pending its own format matrix and manual validation. The
 waveform's migration onto the shared seam is planned as the **last, conditional** group of this slice,
 with an explicit stop rule that permits deferring it honestly.
+
 ---
-_Last touched: 2026-08-05. Overwrite freely; empty is fine._
+_Last touched: 2026-08-06. Overwrite freely; empty is fine._
