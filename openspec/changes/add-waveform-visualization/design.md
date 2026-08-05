@@ -261,6 +261,45 @@ be written yet — there is no adapter to call — so what it will observe is fi
 - **Why it fails if the adapter walks the full capacity:** the last chunk's surplus contributes samples
   that are a function of the capacity, so at least two of the chunk sizes disagree.
 
+#### The adapter must verify the processing format before it reads a single sample
+
+The spike measured `processingFormat` as `'lpcm'` float32 **planar** for all five formats it could
+write. That is a measurement, not an API guarantee, and the difference matters more than it looks.
+
+`AVAudioBuffer.h:143-150` is explicit about both layouts:
+
+> The returned pointer is to `format.channelCount` pointers to float. Each of these pointers is to
+> **"frameLength" valid samples**, which are spaced by **"stride"** samples. […] If `format.interleaved`
+> is false […] the pointers will be to separate chunks of memory. "stride" is 1. **If
+> `format.interleaved` is true, then the pointers will refer into the same chunk of interleaved
+> samples, each offset by 1 frame. "stride" is the number of interleaved channels.**
+
+So on an interleaved buffer, `floatChannelData[c]` does **not** address one channel's contiguous run.
+Building `UnsafeBufferPointer(start: floatChannelData[c], count: frameLength)` over it would read
+`frameLength` samples belonging to **every** channel, covering only `frameLength / channelCount` real
+frames — and the reduction would accept it in silence:
+
+- every value is a finite `Float`, so `nonFiniteSample` does not fire;
+- `startFrame + count <= totalFrameCount` still holds, so `frameRangeOutOfBounds` does not fire;
+- every bucket receives samples, so `incompleteCoverage` does not fire.
+
+**A wrong envelope with no error anywhere.** The accumulator cannot detect it by construction: it
+receives exactly the shape it expects. This is therefore an obligation of the adapter, and the only
+place it can be caught.
+
+**The rule for group 3:** before reading, the adapter verifies that the processing format is native
+deinterleaved float — `AVAudioFormat.isStandard`, which `AVAudioFormat.h:168-169` documents as
+*"whether the format is deinterleaved native-endian float"* — and, where it adds certainty,
+`!isInterleaved` and `stride == 1`. If the format does not qualify, it **fails in a controlled way and
+reads nothing**. It never assumes planar because five formats happened to be, and it never constructs
+a contiguous buffer pointer over interleaved data. Note that the buffer's format is not the adapter's
+to choose: `AVAudioFile.h:111-113` requires a read buffer whose format *"must match the file's
+processing format"*, so verifying is the only available move.
+
+**The error code for that refusal is deliberately not defined yet.** It belongs with the adapter's own
+error mapping (task 3.6), where every failure it can produce is designed together; inventing one now,
+with no producer, would be the speculative abstraction this change keeps refusing elsewhere.
+
 #### Chunks, EOF and cancellation
 
 The harness that runs one adapter at several chunk sizes needs the adapter's own signature, so it is

@@ -67,12 +67,24 @@ frames per read, and perform the reduction in `AudioInspectorMedia`.** Concretel
    measured, so end-of-file is not distinguishable from a genuine failure by the error value. A
    "read until it stops" loop is not implementable against this API.
 
-5. **The port belongs to the domain and no Apple type crosses it** (ADR-0011). The adapter translates
+5. **The processing format is verified, never assumed.** Before reading a sample, the adapter checks
+   that the format is native deinterleaved float (`AVAudioFormat.isStandard`, documented as *"whether
+   the format is deinterleaved native-endian float"*), and fails in a controlled way if it is not.
+   This is not defensive habit: `AVAudioBuffer.h:143-150` states that on an **interleaved** buffer the
+   per-channel pointers *"refer into the same chunk of interleaved samples, each offset by 1 frame"*,
+   with `stride` equal to the channel count. Treating such a pointer as one channel's contiguous run
+   would read samples from every channel, cover a fraction of the frames, and produce a **wrong
+   envelope while tripping none of the reduction's invariants** — every value is finite, the frame
+   range still fits, and every bucket still receives samples. The spike measured planar for the five
+   formats it could write; a measurement over five files is not an API guarantee, and this is the one
+   place the mistake can be caught.
+
+6. **The port belongs to the domain and no Apple type crosses it** (ADR-0011). The adapter translates
    platform shapes and errors into domain values, classifying by **scope**, never by SDK numeric code.
    The `URL` reaches the adapter through its constructor seam, because the domain reference carries no
    location (ADR-0010).
 
-6. **The reduction lives in `AudioInspectorMedia`, not `AudioInspectorAnalysis`.** A per-bucket minimum
+7. **The reduction lives in `AudioInspectorMedia`, not `AudioInspectorAnalysis`.** A per-bucket minimum
    and maximum is a fold performed *while reading*, inseparable from the read, not a transform over a
    buffer. `AudioInspectorAnalysis` stays empty because no real seam has appeared yet (ADR-0005,
    principle #12) — **not** because work was hidden elsewhere.
@@ -131,7 +143,7 @@ frames per read, and perform the reduction in `AudioInspectorMedia`.** Concretel
 
 - **Promotion criteria** (see Status): group 0 of `add-waveform-visualization` passing with MP3 resolved,
   plus the manual validation in group 7. Until then this ADR asserts a direction, not a proven result.
-- **What overturns decision 6:** the first level metric or the first FFT needs the same decoded stream.
+- **What overturns decision 7:** the first level metric or the first FFT needs the same decoded stream.
   At that point the chunked-decode port becomes a real seam, `AudioDecoding` is introduced, and the
   reduction moves to `AudioInspectorAnalysis` behind it. That change should be a move, not a rewrite.
 - **`Spike/validate-native-pcm-decoding` is deleted** once this ADR is Accepted and the slice's own tests

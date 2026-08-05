@@ -8,9 +8,27 @@
 /// Samples arrive as any `Collection<Float>`, so a reader can hand over a channel's slice of a buffer
 /// without copying it and without this type ever learning what a buffer is.
 ///
-/// A run is offered per channel, with the absolute frame its first sample sits at. Bucket boundaries
-/// come from `WaveformBucketMapping`, which is a function of the file alone, so **the same file
-/// yields the same envelope whatever chunk sizes the runs are cut into**.
+/// A run is offered per channel, with the absolute frame its first sample sits at.
+///
+/// ## Order does not matter — this is a contract, not an accident
+///
+/// The envelope is **independent of the order in which runs arrive**: of the channel order, of the
+/// chunk order, and of the chunk size. A caller may feed one whole channel at a time, or interleave
+/// the channels chunk by chunk, or hand over single frames, and get the identical result. That holds
+/// because each run carries the absolute frame its samples start at, bucket boundaries come from
+/// `WaveformBucketMapping` — a function of the file alone — and a minimum and a maximum are a
+/// commutative fold.
+///
+/// A reader may therefore choose whatever order suits the API it reads from. The guarantee holds
+/// **provided that**:
+///
+/// - every valid sample is supplied exactly once — a sample offered twice is harmless to a min/max
+///   but a sample offered *instead of* another is not, and this type cannot tell the difference;
+/// - the channel index is valid;
+/// - the frame range of each run is correct and absolute, not relative to the chunk;
+/// - the file is covered completely before `finished()` is called.
+///
+/// Those four are checked or enforced: the first three by `accumulate`, the last by `finished()`.
 public struct WaveformEnvelopeAccumulator: Sendable {
     private let mapping: WaveformBucketMapping
     private let channelCount: Int
