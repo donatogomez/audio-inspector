@@ -72,8 +72,10 @@ public struct RootView: View {
     /// them is the composition root's job, and this is the whole of it.
     ///
     /// It is total by construction — every state the flow can hold has exactly one presentation, and
-    /// none is invented — which is why it is a plain function with no default case.
-    static func waveformPresentation(for state: WaveformState) -> WaveformPresentation {
+    /// none is invented — which is why it is a plain function with no default case. `nonisolated`
+    /// because it reads nothing and touches nothing: `View` puts it on the main actor by inference,
+    /// and there is no reason for a pure mapping between two value types to need one.
+    nonisolated static func waveformPresentation(for state: WaveformState) -> WaveformPresentation {
         switch state {
         case .loading: .loading
         case let .available(envelope): .envelope(envelope)
