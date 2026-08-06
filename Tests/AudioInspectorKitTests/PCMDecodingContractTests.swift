@@ -266,11 +266,13 @@ struct AudioDecodingPortTests {
 
     @Test("a fault comes back as a typed error, not as nil")
     func faultIsAnError() async {
-        let decoder = StubDecoder(outcome: .failure(AudioDecodingError(code: .incompleteCoverage, message: "short")))
+        let decoder = StubDecoder(outcome: .failure(
+            AudioDecodingError(code: .invalidStreamDescription, message: "impossible stream")
+        ))
         let error = await #expect(throws: AudioDecodingError.self) {
             try await decoder.decode(reference(), chunkFrames: 4_096) { _ in .continue }
         }
-        #expect(error?.code == .incompleteCoverage)
+        #expect(error?.code == .invalidStreamDescription)
     }
 
     /// Cancellation is an error rather than `nil`, so a cancelled read can never be mistaken for a file
@@ -329,8 +331,6 @@ struct AudioDecodingErrorTests {
             AudioDecodingErrorCode.invalidStreamDescription.rawValue,
             AudioDecodingErrorCode.invalidChunk.rawValue,
             AudioDecodingErrorCode.nonFiniteSample.rawValue,
-            AudioDecodingErrorCode.frameRangeOutOfBounds.rawValue,
-            AudioDecodingErrorCode.incompleteCoverage.rawValue,
             AudioDecodingErrorCode.cancelled.rawValue,
         ]
         let waveform: Set<String> = [
@@ -342,26 +342,7 @@ struct AudioDecodingErrorTests {
             WaveformErrorCode.readFailed.rawValue,
         ]
         #expect(decoding.isDisjoint(with: waveform))
-        #expect(decoding.count == 6, "every code is distinct from its siblings")
-    }
-
-    /// No `fileOpenFailed`, no `readFailed`: no adapter exists to raise them yet, and a stable code
-    /// with no producer promises behaviour nobody has written.
-    @Test("no code exists for a failure this layer cannot yet produce")
-    func noSpeculativeCodes() {
-        let declared = [
-            AudioDecodingErrorCode.invalidStreamDescription.rawValue,
-            AudioDecodingErrorCode.invalidChunk.rawValue,
-            AudioDecodingErrorCode.nonFiniteSample.rawValue,
-            AudioDecodingErrorCode.frameRangeOutOfBounds.rawValue,
-            AudioDecodingErrorCode.incompleteCoverage.rawValue,
-            AudioDecodingErrorCode.cancelled.rawValue,
-        ]
-        for code in declared {
-            #expect(!code.contains("open"))
-            #expect(!code.contains("access"))
-            #expect(!code.contains("unsupported"))
-        }
+        #expect(decoding.count == 4, "every code is distinct from its siblings")
     }
 
     @Test("the code is the identity and the message is not")
@@ -376,7 +357,7 @@ struct AudioDecodingErrorTests {
     /// nothing about their file, and reporting it as `nil` would say the file offered nothing.
     @Test("cancellation has its own code, distinct from every fault")
     func cancellationIsItsOwnOutcome() {
-        #expect(AudioDecodingErrorCode.cancelled != .incompleteCoverage)
+        #expect(AudioDecodingErrorCode.cancelled != .invalidStreamDescription)
         #expect(AudioDecodingErrorCode.cancelled != .invalidChunk)
         #expect(AudioDecodingErrorCode.cancelled.rawValue.contains("cancelled"))
     }

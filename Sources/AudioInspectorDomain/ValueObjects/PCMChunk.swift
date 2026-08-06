@@ -83,9 +83,16 @@ public struct PCMChunk: Sendable, Equatable {
     ///
     /// Checked by whoever owns both — the chunk cannot know which stream it belongs to, and a type that
     /// guessed would be wrong the first time a caller reused it.
+    ///
+    /// The end frame is computed with reporting arithmetic rather than `+`. This method exists to answer
+    /// a question about values it does not trust, and a chunk starting near `Int.max` is one the
+    /// initialiser accepts — so a plain sum would abort the process on exactly the input the check was
+    /// asked about. An end that cannot be represented cannot fit any stream, so it answers `false`.
     public func fits(_ stream: PCMStreamDescription) -> Bool {
-        channels.count == stream.channelCount
-            && startFrame + frameCount <= stream.frameCount
+        guard channels.count == stream.channelCount else { return false }
+        let (endFrame, overflowed) = startFrame.addingReportingOverflow(frameCount)
+        guard !overflowed else { return false }
+        return endFrame <= stream.frameCount
     }
 }
 

@@ -5,10 +5,13 @@
 /// visualisation — and collapsing it into one of theirs would tell a caller something untrue about what
 /// failed. The `rawValue` is the identity; the message is not. Grows additively via static members.
 ///
-/// **Only faults this layer can actually produce are named.** There is no `fileOpenFailed` or
-/// `readFailed` here: no adapter exists yet to raise them, and a code with no producer is a promise
-/// about behaviour nobody has written. They are added with the adapter that can throw them, exactly as
-/// the waveform's own codes were.
+/// **Only faults something already requires are named.** Two are produced here, by `PCMChunk`; two are
+/// required by a contract this layer states — the description a caller must turn into an error, and the
+/// cancellation the port promises never to report as an absence. Nothing else is declared: there is no
+/// `fileOpenFailed`, no `readFailed`, no `frameRangeOutOfBounds` and no `incompleteCoverage`, because a
+/// code with no producer and no contract behind it is a promise about behaviour nobody has written.
+/// Each is added with the code that can throw it, exactly as the waveform's own codes were — its
+/// adapter's codes arrived in the same commit as the adapter.
 public struct AudioDecodingErrorCode: RawRepresentable, Sendable, Equatable, Hashable {
     public let rawValue: String
 
@@ -32,10 +35,6 @@ public extension AudioDecodingErrorCode {
     /// of energy* rather than as a fault. A value that is not a number is not audio, and quietly
     /// turning it into silence would fabricate the result.
     static let nonFiniteSample = AudioDecodingErrorCode(rawValue: "decoding_non_finite_sample")
-    /// A chunk falls outside the frame range the stream declared.
-    static let frameRangeOutOfBounds = AudioDecodingErrorCode(rawValue: "decoding_frame_range_out_of_bounds")
-    /// The stream ended before every frame it declared had been delivered.
-    static let incompleteCoverage = AudioDecodingErrorCode(rawValue: "decoding_incomplete_coverage")
     /// The operation was cancelled before the whole file had been read.
     ///
     /// **It says nothing about the file.** Cancellation is something the caller did, not a defect or a

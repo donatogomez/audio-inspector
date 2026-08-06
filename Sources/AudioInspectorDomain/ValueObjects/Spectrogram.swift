@@ -36,7 +36,8 @@ public struct Spectrogram: Sendable, Equatable {
     public let values: [Float]
     /// Columns of time, oldest first. **Zero is valid**, and is what a file with no audio produces.
     public let columnCount: Int
-    /// Bands of frequency, lowest first, linear from 0 Hz to `nyquist`.
+    /// Bands of frequency, lowest first, linear from 0 Hz to `nyquist`. **Zero only when there are no
+    /// columns**: a column with nothing to describe its spectrum is not a column.
     public let bandCount: Int
     /// The stream this was derived from. Present because a band index means nothing without it.
     public let sampleRate: Double
@@ -66,6 +67,11 @@ public struct Spectrogram: Sendable, Equatable {
         guard sampleRate.isFinite, sampleRate > 0 else { return nil }
         guard frameCount >= 0, channelCount >= 1 else { return nil }
         guard values.count == columnCount * bandCount else { return nil }
+        // Columns of nothing are not a spectrogram. A column exists to say what the file's spectrum was
+        // during that slice of time, so one with no band to say it in describes nothing — and the empty
+        // grid it produces would be indistinguishable from the model of a file with no audio. The empty
+        // model stays `0 × 0`: no band is invented to make it well-formed.
+        guard columnCount == 0 || bandCount > 0 else { return nil }
         // Finite and at or above the floor. A value below it would mean the producer skipped the floor
         // it is required to apply, and a non-finite one would mean a sample slipped past the boundary
         // that exists to refuse it.
