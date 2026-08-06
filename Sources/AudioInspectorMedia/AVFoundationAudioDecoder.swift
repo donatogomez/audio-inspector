@@ -57,7 +57,7 @@ public struct AVFoundationAudioDecoder: AudioDecoding {
     public func decode(
         _ file: AudioFileReference,
         chunkFrames: Int,
-        receive: (PCMChunk) -> PCMChunkDisposition
+        receive: (PCMStreamDescription, PCMChunk) -> PCMChunkDisposition
     ) async throws(AudioDecodingError) -> PCMStreamDescription? {
         guard chunkFrames > 0 else {
             throw AudioDecodingError(
@@ -185,7 +185,7 @@ private extension AVFoundationAudioDecoder {
         _ audioFile: AVAudioFile,
         stream: PCMStreamDescription,
         chunkFrames: Int,
-        receive: (PCMChunk) -> PCMChunkDisposition
+        receive: (PCMStreamDescription, PCMChunk) -> PCMChunkDisposition
     ) async throws(AudioDecodingError) {
         let format = audioFile.processingFormat
         // The hint is bounded before it becomes an allocation, and the clamp is what makes the
@@ -281,7 +281,7 @@ private extension AVFoundationAudioDecoder {
             }
 
             framesDelivered += valid
-            if receive(chunk) == .stop { return }
+            if receive(stream, chunk) == .stop { return }
         }
 
         // Coverage is only a promise when the read was allowed to finish. A consumer that answered

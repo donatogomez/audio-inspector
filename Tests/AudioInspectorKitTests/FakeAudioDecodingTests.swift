@@ -34,7 +34,7 @@ struct FakeAudioDecodingTests {
         let fake = FakeAudioDecoding(streaming: description, chunks: scripted)
 
         var seen: [Int] = []
-        let produced = try await fake.decode(reference(), chunkFrames: 2) { chunk in
+        let produced = try await fake.decode(reference(), chunkFrames: 2) { _, chunk in
             seen.append(chunk.startFrame)
             return .continue
         }
@@ -50,7 +50,7 @@ struct FakeAudioDecodingTests {
         let fake = FakeAudioDecoding(streaming: try stream(), chunks: try chunks(count: 3))
 
         var frames = 0
-        _ = try await fake.decode(reference(), chunkFrames: 2) { chunk in
+        _ = try await fake.decode(reference(), chunkFrames: 2) { _, chunk in
             frames += chunk.frameCount
             return .continue
         }
@@ -63,7 +63,7 @@ struct FakeAudioDecodingTests {
         let fake = FakeAudioDecoding(.absent)
 
         var called = false
-        let produced = try await fake.decode(reference(), chunkFrames: 4_096) { _ in
+        let produced = try await fake.decode(reference(), chunkFrames: 4_096) { _, _ in
             called = true
             return .continue
         }
@@ -77,7 +77,7 @@ struct FakeAudioDecodingTests {
         let description = try stream(frameCount: 0)
         let fake = FakeAudioDecoding(streaming: description, chunks: [])
 
-        let produced = try await fake.decode(reference(), chunkFrames: 4_096) { _ in .continue }
+        let produced = try await fake.decode(reference(), chunkFrames: 4_096) { _, _ in .continue }
 
         #expect(produced != nil, "zero frames is an answer, not an absence")
         #expect(produced?.frameCount == 0)
@@ -88,7 +88,7 @@ struct FakeAudioDecodingTests {
         let fake = FakeAudioDecoding(failingWith: AudioDecodingError(code: .readFailed, message: "short"))
 
         let error = await #expect(throws: AudioDecodingError.self) {
-            try await fake.decode(reference(), chunkFrames: 4_096) { _ in .continue }
+            try await fake.decode(reference(), chunkFrames: 4_096) { _, _ in .continue }
         }
         #expect(error?.code == .readFailed)
     }
@@ -100,7 +100,7 @@ struct FakeAudioDecodingTests {
         let fake = FakeAudioDecoding(failingWith: AudioDecodingError(code: .cancelled, message: "cancelled"))
 
         let error = await #expect(throws: AudioDecodingError.self) {
-            try await fake.decode(reference(), chunkFrames: 4_096) { _ in .continue }
+            try await fake.decode(reference(), chunkFrames: 4_096) { _, _ in .continue }
         }
         #expect(error?.code == .cancelled)
     }
@@ -111,7 +111,7 @@ struct FakeAudioDecodingTests {
         let fake = FakeAudioDecoding(streaming: description, chunks: try chunks(count: 5))
 
         var seen = 0
-        let produced = try await fake.decode(reference(), chunkFrames: 2) { _ in
+        let produced = try await fake.decode(reference(), chunkFrames: 2) { _, _ in
             seen += 1
             return seen == 2 ? .stop : .continue
         }
@@ -126,8 +126,8 @@ struct FakeAudioDecodingTests {
         let fake = FakeAudioDecoding(streaming: try stream(), chunks: try chunks(count: 3))
         let file = reference()
 
-        _ = try await fake.decode(file, chunkFrames: 512) { _ in .continue }
-        _ = try await fake.decode(file, chunkFrames: 1_024) { _ in .continue }
+        _ = try await fake.decode(file, chunkFrames: 512) { _, _ in .continue }
+        _ = try await fake.decode(file, chunkFrames: 1_024) { _, _ in .continue }
 
         #expect(await fake.spy.callCount == 2)
         #expect(await fake.spy.lastChunkFrames == 1_024)

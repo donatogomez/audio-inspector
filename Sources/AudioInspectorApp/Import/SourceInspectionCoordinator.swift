@@ -21,10 +21,20 @@ struct SourceInspectionCoordinator {
     typealias ReaderFactory = @Sendable (URL) -> any AudioFilePropertyReading
     /// Builds the port implementation that produces the waveform for the file at `url`.
     typealias WaveformGeneratorFactory = @Sendable (URL) -> any WaveformGenerating
+    /// Builds the port implementation that decodes PCM for the file at `url`.
+    typealias DecoderFactory = @Sendable (URL) -> any AudioDecoding
+    /// Receives the spectrogram once its generation has settled.
+    ///
+    /// Optional on purpose, and the switch that decides whether the work happens at all: until group 6
+    /// carries the spectrogram beside the report, nothing consumes it, and generating a model only to
+    /// drop it would be minutes of transform for nothing. A caller that wants one asks for one.
+    typealias SpectrogramHandler = @MainActor (SpectrogramOutcome) -> Void
 
     private let chooseSource: SourceProvider
     private let makeReader: ReaderFactory
     private let makeWaveformGenerator: WaveformGeneratorFactory
+    private let makeDecoder: DecoderFactory
+    private let onSpectrogram: SpectrogramHandler?
 
     /// - Parameters:
     ///   - chooseSource: how a destination file is obtained (the native open panel in production).
@@ -43,11 +53,17 @@ struct SourceInspectionCoordinator {
         },
         makeWaveformGenerator: @escaping WaveformGeneratorFactory = { url in
             AVFoundationWaveformGenerator(resolveURL: { _ in url })
-        }
+        },
+        makeDecoder: @escaping DecoderFactory = { url in
+            AVFoundationAudioDecoder(resolveURL: { _ in url })
+        },
+        onSpectrogram: SpectrogramHandler? = nil
     ) {
         self.chooseSource = chooseSource
         self.makeReader = makeReader
         self.makeWaveformGenerator = makeWaveformGenerator
+        self.makeDecoder = makeDecoder
+        self.onSpectrogram = onSpectrogram
     }
 
     /// The panel path: ask for a file, then inspect it.
@@ -91,13 +107,33 @@ struct SourceInspectionCoordinator {
         let report = await useCase.execute(file: reference)
         onReport(report)
 
-        // Nothing could be read at all, so there is nothing to read samples from either. The report
-        // stands; the waveform is simply absent.
+        // Nothing could be read at all, so there is nothing to read samples from either. **Neither**
+        // sample read starts: the report stands, and both visualisations are simply absent.
         if case .failed = report.status {
+            onSpectrogram?(.unavailable)
             return .inspected(report, waveform: .unavailable)
         }
 
-        return .inspected(report, waveform: await waveform(for: reference, at: url))
+        let waveformOutcome = await waveform(for: reference, at: url)
+        // The spectrogram is its **own** operation, run inside this same window: a separate decode, a
+        // fresh accumulator, and no state shared with the waveform. Sequential here is not the same as
+        // coupled — neither can cancel or fail the other, which is what ADR-0016 decision 15 requires.
+        // Group 9 may or may not move the waveform onto the shared seam; until then two reads is a
+        // declared cost, not an oversight.
+        if let onSpectrogram {
+            onSpectrogram(await spectrogram(for: reference, at: url))
+        }
+        return .inspected(report, waveform: waveformOutcome)
+    }
+
+    /// Produces the spectrogram inside the window the caller already holds.
+    ///
+    /// The `defer` that releases the scope runs when `inspect` returns, and this is awaited before
+    /// that — so the decoder can open the file for as long as the read takes, and nothing survives the
+    /// window (ADR-0010). A fresh decoder and a fresh accumulator per operation: nothing is retained
+    /// between two inspections.
+    private func spectrogram(for reference: AudioFileReference, at url: URL) async -> SpectrogramOutcome {
+        await SpectrogramGeneration(decoder: makeDecoder(url)).run(for: reference)
     }
 
     /// Produces the waveform and translates its outcome, keeping the three meanings apart.

@@ -77,7 +77,7 @@ public struct FakeAudioDecoding: AudioDecoding {
     public func decode(
         _ file: AudioFileReference,
         chunkFrames: Int,
-        receive: (PCMChunk) -> PCMChunkDisposition
+        receive: (PCMStreamDescription, PCMChunk) -> PCMChunkDisposition
     ) async throws(AudioDecodingError) -> PCMStreamDescription? {
         // Awaited **before** the callback is entered, so the whole delivery below stays synchronous
         // and the fake's timing matches the real adapter's: chunks arrive one after another, and the
@@ -89,7 +89,7 @@ public struct FakeAudioDecoding: AudioDecoding {
             var delivered = 0
             for chunk in chunks {
                 delivered += 1
-                if receive(chunk) == .stop { break }
+                if receive(stream, chunk) == .stop { break }
             }
             await spy.recordDelivery(delivered)
             return stream

@@ -49,7 +49,7 @@ struct AVFoundationAudioDecoderTests {
         stoppingAfter stopAfter: Int? = nil
     ) async throws -> (stream: PCMStreamDescription?, collected: Collected) {
         var collected = Collected()
-        let stream = try await decoder(for: url).decode(reference(), chunkFrames: chunkFrames) { chunk in
+        let stream = try await decoder(for: url).decode(reference(), chunkFrames: chunkFrames) { _, chunk in
             collected.chunks.append(chunk)
             if let stopAfter, collected.chunks.count >= stopAfter { return .stop }
             return .continue
@@ -274,11 +274,39 @@ struct AVFoundationAudioDecoderTests {
         }
     }
 
+    /// A consumer that sizes anything needs the stream's shape **before** the first sample, not after
+    /// the last. The description arrives with every chunk, is the same value each time, and is the same
+    /// one `decode` returns — so no consumer has to buffer the file or read it twice to learn it.
+    @Test("every chunk arrives with the stream it came from")
+    func everyChunkCarriesItsStream() async throws {
+        try await withTemporaryDirectory { directory in
+            let url = try writeAudioFixture(
+                AudioFixtureSpec(
+                    name: "described", format: .wav, signal: .sine(frequency: 440, amplitude: 0.5),
+                    channels: 2, frames: 9_000
+                ),
+                in: directory
+            )
+
+            var seen: [PCMStreamDescription] = []
+            let returned = try await decoder(for: url).decode(reference(), chunkFrames: 1_024) { stream, _ in
+                seen.append(stream)
+                return .continue
+            }
+
+            let description = try #require(returned)
+            #expect(seen.count == 9, "9 000 frames at 1 024 per chunk")
+            #expect(seen.allSatisfy { $0 == description }, "the description changed between chunks")
+            #expect(description.frameCount == 9_000)
+            #expect(description.channelCount == 2)
+        }
+    }
+
     @Test("a missing location is refused before anything is opened")
     func unresolvableReferenceIsAnError() async {
         let decoder = AVFoundationAudioDecoder()
         let error = await #expect(throws: AudioDecodingError.self) {
-            try await decoder.decode(reference(), chunkFrames: 4_096) { _ in .continue }
+            try await decoder.decode(reference(), chunkFrames: 4_096) { _, _ in .continue }
         }
         #expect(error?.code == .fileAccessDenied)
     }
@@ -292,7 +320,7 @@ struct AVFoundationAudioDecoderTests {
             )
 
             let error = await #expect(throws: AudioDecodingError.self) {
-                try await decoder(for: url).decode(reference(), chunkFrames: chunkFrames) { _ in .continue }
+                try await decoder(for: url).decode(reference(), chunkFrames: chunkFrames) { _, _ in .continue }
             }
             #expect(error?.code == .invalidConfiguration)
         }
@@ -304,7 +332,7 @@ struct AVFoundationAudioDecoderTests {
             let url = try writeEmptyFixture(named: "empty", format: .wav, in: directory)
 
             let error = await #expect(throws: AudioDecodingError.self) {
-                try await decoder(for: url).decode(reference(), chunkFrames: 4_096) { _ in .continue }
+                try await decoder(for: url).decode(reference(), chunkFrames: 4_096) { _, _ in .continue }
             }
             #expect(error?.code == .fileOpenFailed)
         }
@@ -320,7 +348,7 @@ struct AVFoundationAudioDecoderTests {
             try corruptFixture(at: url, replacingBytesIn: 0 ..< 32, with: 0xFF)
 
             let error = await #expect(throws: AudioDecodingError.self) {
-                try await decoder(for: url).decode(reference(), chunkFrames: 4_096) { _ in .continue }
+                try await decoder(for: url).decode(reference(), chunkFrames: 4_096) { _, _ in .continue }
             }
             #expect(error?.code == .fileOpenFailed)
         }
@@ -354,7 +382,7 @@ struct AVFoundationAudioDecoderTests {
             try Data("this is not audio, it is text".utf8).write(to: url)
 
             let error = await #expect(throws: AudioDecodingError.self) {
-                try await decoder(for: url).decode(reference(), chunkFrames: 4_096) { _ in .continue }
+                try await decoder(for: url).decode(reference(), chunkFrames: 4_096) { _, _ in .continue }
             }
             #expect(error?.code == .fileOpenFailed)
         }
@@ -418,7 +446,7 @@ struct AVFoundationAudioDecoderTests {
             let decoder = decoder(for: url)
             let file = reference()
             let task = Task {
-                try await decoder.decode(file, chunkFrames: 128) { _ in .continue }
+                try await decoder.decode(file, chunkFrames: 128) { _, _ in .continue }
             }
             task.cancel()
 

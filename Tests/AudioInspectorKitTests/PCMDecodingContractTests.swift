@@ -261,11 +261,11 @@ private struct StubDecoder: AudioDecoding {
     func decode(
         _ file: AudioFileReference,
         chunkFrames: Int,
-        receive: (PCMChunk) -> PCMChunkDisposition
+        receive: (PCMStreamDescription, PCMChunk) -> PCMChunkDisposition
     ) async throws(AudioDecodingError) -> PCMStreamDescription? {
         switch outcome {
         case let .stream(description, chunks):
-            for chunk in chunks where receive(chunk) == .stop {
+            for chunk in chunks where receive(description, chunk) == .stop {
                 return description
             }
             return description
@@ -292,7 +292,7 @@ struct AudioDecodingPortTests {
     func aStreamIsDescribed() async throws {
         let description = try #require(PCMStreamDescription(sampleRate: 44_100, channelCount: 2, frameCount: 1_000))
         let decoder = StubDecoder(outcome: .stream(description, chunks: []))
-        let result = try await decoder.decode(reference(), chunkFrames: 4_096) { _ in .continue }
+        let result = try await decoder.decode(reference(), chunkFrames: 4_096) { _, _ in .continue }
         #expect(result == description)
     }
 
@@ -301,7 +301,7 @@ struct AudioDecodingPortTests {
     func zeroFramesIsADescription() async throws {
         let description = try #require(PCMStreamDescription(sampleRate: 44_100, channelCount: 1, frameCount: 0))
         let decoder = StubDecoder(outcome: .stream(description, chunks: []))
-        let result = try await decoder.decode(reference(), chunkFrames: 4_096) { _ in .continue }
+        let result = try await decoder.decode(reference(), chunkFrames: 4_096) { _, _ in .continue }
         #expect(result?.frameCount == 0)
         #expect(result != nil, "a zero-frame file is not the same as an unusable frame count")
     }
@@ -309,7 +309,7 @@ struct AudioDecodingPortTests {
     @Test("an unusable frame count comes back as nil, not as an error")
     func unusableFrameCountIsNil() async throws {
         let decoder = StubDecoder(outcome: .unusableFrameCount)
-        let result = try await decoder.decode(reference(), chunkFrames: 4_096) { _ in .continue }
+        let result = try await decoder.decode(reference(), chunkFrames: 4_096) { _, _ in .continue }
         #expect(result == nil)
     }
 
@@ -319,7 +319,7 @@ struct AudioDecodingPortTests {
             AudioDecodingError(code: .invalidStreamDescription, message: "impossible stream")
         ))
         let error = await #expect(throws: AudioDecodingError.self) {
-            try await decoder.decode(reference(), chunkFrames: 4_096) { _ in .continue }
+            try await decoder.decode(reference(), chunkFrames: 4_096) { _, _ in .continue }
         }
         #expect(error?.code == .invalidStreamDescription)
     }
@@ -330,7 +330,7 @@ struct AudioDecodingPortTests {
     func cancellationIsNotAbsence() async {
         let decoder = StubDecoder(outcome: .failure(AudioDecodingError(code: .cancelled, message: "cancelled")))
         let error = await #expect(throws: AudioDecodingError.self) {
-            try await decoder.decode(reference(), chunkFrames: 4_096) { _ in .continue }
+            try await decoder.decode(reference(), chunkFrames: 4_096) { _, _ in .continue }
         }
         #expect(error?.code == .cancelled)
     }
@@ -344,7 +344,7 @@ struct AudioDecodingPortTests {
         // The callback is synchronous and non-escaping, so it can mutate a local directly — no actor,
         // no lock, and nothing to await. That is the whole point of the shape.
         var seen: [Int] = []
-        _ = try await decoder.decode(reference(), chunkFrames: 1) { chunk in
+        _ = try await decoder.decode(reference(), chunkFrames: 1) { _, chunk in
             seen.append(chunk.startFrame)
             return .continue
         }
@@ -360,7 +360,7 @@ struct AudioDecodingPortTests {
         let decoder = StubDecoder(outcome: .stream(description, chunks: chunks))
 
         var seen: [Int] = []
-        let result = try await decoder.decode(reference(), chunkFrames: 1) { chunk in
+        let result = try await decoder.decode(reference(), chunkFrames: 1) { _, chunk in
             seen.append(chunk.startFrame)
             return .stop
         }
