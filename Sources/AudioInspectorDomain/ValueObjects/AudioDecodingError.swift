@@ -5,13 +5,13 @@
 /// visualisation — and collapsing it into one of theirs would tell a caller something untrue about what
 /// failed. The `rawValue` is the identity; the message is not. Grows additively via static members.
 ///
-/// **Only faults something already requires are named.** Two are produced here, by `PCMChunk`; two are
+/// **Only faults something already requires are named.** Two are produced by `PCMChunk`, two are
 /// required by a contract this layer states — the description a caller must turn into an error, and the
-/// cancellation the port promises never to report as an absence. Nothing else is declared: there is no
-/// `fileOpenFailed`, no `readFailed`, no `frameRangeOutOfBounds` and no `incompleteCoverage`, because a
-/// code with no producer and no contract behind it is a promise about behaviour nobody has written.
-/// Each is added with the code that can throw it, exactly as the waveform's own codes were — its
-/// adapter's codes arrived in the same commit as the adapter.
+/// cancellation the port promises never to report as an absence — and five arrived with the branches in
+/// the native adapter that throw them. Nothing else is declared: there is still no
+/// `frameRangeOutOfBounds` and no `incompleteCoverage`, because a code with no producer and no contract
+/// behind it is a promise about behaviour nobody has written. A reader that overruns or falls short of
+/// the length its file declares is reported as `readFailed`, which is what actually happened.
 public struct AudioDecodingErrorCode: RawRepresentable, Sendable, Equatable, Hashable {
     public let rawValue: String
 
@@ -45,6 +45,26 @@ public extension AudioDecodingErrorCode {
     /// file, and collapsing the two would tell them they had — the same distinction `WaveformErrorCode`
     /// draws for the same reason.
     static let cancelled = AudioDecodingErrorCode(rawValue: "decoding_cancelled")
+
+    // MARK: Produced by an adapter that reads a real file
+    //
+    // Declared here rather than in infrastructure because the code space is the domain's — an adapter
+    // maps its platform failures onto these and never invents its own, exactly as the inspection and
+    // waveform errors work (ADR-0011). Each arrived with the branch that throws it.
+
+    /// A decode was asked for a chunk size no read can use — zero frames, or fewer.
+    static let invalidConfiguration = AudioDecodingErrorCode(rawValue: "decoding_invalid_configuration")
+    /// No accessible location was supplied for the file, so nothing could be opened.
+    static let fileAccessDenied = AudioDecodingErrorCode(rawValue: "decoding_file_access_denied")
+    /// The file could not be opened for reading.
+    static let fileOpenFailed = AudioDecodingErrorCode(rawValue: "decoding_file_open_failed")
+    /// The file opened, but its decoded form is not a layout chunks can be copied from — for example
+    /// interleaved samples, or something other than native float. Distinct from a read failure: nothing
+    /// went wrong, the shape is simply not one that can be handed over one channel at a time.
+    static let unsupportedProcessingFormat = AudioDecodingErrorCode(rawValue: "decoding_unsupported_processing_format")
+    /// The file opened but could not be read through to the end it declared — it failed mid-read,
+    /// stopped producing frames early, or produced more than it promised.
+    static let readFailed = AudioDecodingErrorCode(rawValue: "decoding_read_failed")
 }
 
 /// A decoding failure: a stable `code` (the identity, for automated processing) plus a descriptive

@@ -380,6 +380,11 @@ struct AudioDecodingErrorTests {
         (.invalidChunk, "decoding_invalid_chunk"),
         (.nonFiniteSample, "decoding_non_finite_sample"),
         (.cancelled, "decoding_cancelled"),
+        (.invalidConfiguration, "decoding_invalid_configuration"),
+        (.fileAccessDenied, "decoding_file_access_denied"),
+        (.fileOpenFailed, "decoding_file_open_failed"),
+        (.unsupportedProcessingFormat, "decoding_unsupported_processing_format"),
+        (.readFailed, "decoding_read_failed"),
     ]
 
     @Test("each code has its stable raw value", arguments: allCodes)
@@ -443,6 +448,10 @@ struct AudioDecodingErrorTests {
     func similarlyNamedCodesStayApart() {
         #expect(AudioDecodingErrorCode.nonFiniteSample.rawValue != WaveformErrorCode.nonFiniteSample.rawValue)
         #expect(AudioDecodingErrorCode.cancelled.rawValue != WaveformErrorCode.cancelled.rawValue)
+        #expect(AudioDecodingErrorCode.readFailed.rawValue != WaveformErrorCode.readFailed.rawValue)
+        #expect(AudioDecodingErrorCode.fileOpenFailed.rawValue != WaveformErrorCode.fileOpenFailed.rawValue)
+        #expect(AudioDecodingErrorCode.fileOpenFailed.rawValue != InspectionErrorCode.fileOpenFailed.rawValue)
+        #expect(AudioDecodingErrorCode.fileAccessDenied.rawValue != InspectionErrorCode.fileAccessDenied.rawValue)
     }
 
     @Test("the code is the identity and the message is not")
