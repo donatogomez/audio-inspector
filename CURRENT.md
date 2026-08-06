@@ -19,13 +19,21 @@
 **Focus:** `add-static-spectrogram-visualization` — the contract, the evidence behind it and **the whole
 domain contract** are integrated; the previous documentation snapshot is published. Group 0 is closed: a
 spike that anyone can re-run measured every constant before a single requirement was written, and three
-of its findings changed the design rather than confirming it. **Groups 2 and 3 are complete**: the
+of its findings changed the design rather than confirming it. **Groups 2, 3 and 4 are complete**: the
 domain holds `AudioDecoding`, `PCMStreamDescription`, `PCMChunk`, `PCMChunkDisposition`,
 `AudioDecodingError`, `SpectrogramGridMapping` and `Spectrogram`; `AVFoundationAudioDecoder` implements
-the port over real files with a fake beside it in `AudioInspectorTesting`. **No production STFT, no
-wiring and no drawing** — `AudioInspectorAnalysis` is still empty.
+the port over real files with a fake beside it in `AudioInspectorTesting`; and
+`AudioInspectorAnalysis` holds the **STFT accumulator**, its first real contents. **No wiring and no
+drawing** — nothing yet composes a decode into a model outside a test.
 
-**What the decoder's negative control taught, worth carrying into group 4:** clamping a read with
+**Two things group 4 settled that the spike had not.** vDSP packs **DC and Nyquist into the same
+element** of a real-to-complex transform, so energy at Nyquist was landing in the *bass*; both ends are
+now unpacked into their own bins and the frequency axis reaches Nyquist literally. And discarding the
+incomplete final window means a clip **shorter than one window** has audio and no complete window — it
+now yields a valid spectrogram of **zero columns**, where the previous contract could not represent it
+at all. Neither escape the spike used was taken: no invented column, no padded window.
+
+**What the decoder's negative control taught, still worth carrying forward:** clamping a read with
 `min(frameLength, remaining)` makes the `frameLength` invariant *unobservable*, because a short read
 only ever happens on the final read — so the clamp hides the one case that would expose a wrong bound.
 The loop consumes exactly what a read reports and refuses anything beyond the declared length instead.
@@ -59,10 +67,10 @@ measured limits — scalloping loss and an edge uncertainty of about one reduced
 Automatic detection of lossy origin is a **separate future change**, and must carry evidence,
 alternative explanations and confidence rather than a verdict.
 
-**Next step:** group 4 — the STFT and the reduction in `AudioInspectorAnalysis`, the module's first real
-contents, behind a seam that now exists. Not started. One `vDSP.DiscreteFourierTransform` setup per
-operation, confined; Accelerate reaches no further than this module and no Accelerate type crosses a
-port.
+**Next step:** group 5 — the production operation, `decode → accumulate → finish`, inside the security
+scoped window the inspection already owns. Not started. A fresh accumulator per operation, its own
+cancellation independent of the waveform's, and absence, failure and cancellation kept apart. Whether
+`SpectrogramGenerating` is warranted is answered by writing that composition, not before it.
 
 **Carried forward, unchanged:** the waveform's accessibility debt (text sizes not evaluable on macOS as
 written; the VoiceOver traversal failed and is parked for a dedicated change) keeps **ADR-0015 at
