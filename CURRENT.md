@@ -25,9 +25,14 @@ domain holds `AudioDecoding`, `PCMStreamDescription`, `PCMChunk`, `PCMChunkDispo
 the port over real files with a fake beside it in `AudioInspectorTesting`; `AudioInspectorAnalysis`
 holds the **STFT accumulator**, its first real contents; and `SpectrogramGeneration` composes
 **decode → accumulate → finish** inside the security-scoped window the inspection already owns,
-yielding *available*, *unavailable*, *failed* or *cancelled*. The waveform and the spectrogram are
-still entirely independent operations. **No drawing and no spectrogram interface** — the result reaches
-nothing beyond the composition root.
+yielding *available*, *unavailable*, *failed* or *cancelled*. **Group 6** carries that result **beside**
+the report: report, waveform and spectrogram travel as three parallel values, delivered progressively
+through one `InspectionUpdate` channel so whichever visualisation settles first is shown first and
+neither waits on the other. Every update is guarded by the operation identity, so a result from a
+replaced operation reaches nothing. The spectrogram's visible states are *loading*, *available*,
+*unavailable* and *failed* — **cancellation settles into none of them**, because a generation the user
+replaced must never be shown as a limitation of their file. The waveform and the spectrogram remain
+entirely independent operations. **No drawing, no palette and no legend** — nothing renders it yet.
 
 **What group 5 forced on the seam.** The accumulator needs the stream's shape *before* the first chunk,
 and the port only returned it after the whole decode. Buffering, decoding twice and taking the frame
@@ -75,10 +80,10 @@ measured limits — scalloping loss and an edge uncertainty of about one reduced
 Automatic detection of lossy origin is a **separate future change**, and must carry evidence,
 alternative explanations and confidence rather than a verdict.
 
-**Next step:** group 6 — carry the result **beside** the report as a first-class value, so absence,
-failure and cancellation each mean what they say. Not started. Stale results are discarded by operation
-identity exactly as the waveform's already are, the report stays independent of whatever became of the
-spectrogram, and no feature module gains a `URL` or an AppKit import. Still no drawing.
+**Next step:** group 7 — the static presentation. Not started. Time horizontal, frequency linear to the
+file's own Nyquist and never cropped, energy as a perceptual ramp with a numeric dBFS legend, and every
+non-drawn state said in words. It interprets nothing: the drawing shows where energy stops and says
+nothing about what that means.
 
 **Carried forward, unchanged:** the waveform's accessibility debt (text sizes not evaluable on macOS as
 written; the VoiceOver traversal failed and is parked for a dedicated change) keeps **ADR-0015 at
