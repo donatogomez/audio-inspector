@@ -64,15 +64,15 @@ property reader and the JSON exporter are not touched.
       `Codable` — it never enters the `schemaVersion` 1 export.
 - [x] 2.3 Implement the column and band arithmetic as pure domain code, unit-testable with no file and
       no framework: at most 1024 × 512, the frame→column mapping a function of the file alone.
-- [x] 2.4 Give the spectrogram its own error space, **disjoint** from `InspectionError`,
-      `PropertyFailure` and `WaveformError`. Represent an unusable frame count as an **absence**, not an
+- [x] 2.4 Give the **shared PCM decoding** its own error space, **disjoint** from `InspectionError`,
+      `PropertyFailure` and `WaveformError`. It belongs to `AudioDecoding` and is shared by every
+      consumer of the seam, because what fails is the read and a fault there says nothing about the
+      visualisation that asked for it. Represent an unusable frame count as an **absence**, not an
       error, and cancellation as its own outcome.
-      **Done in substance, with the name deliberately different, and that deviation is the point.** The
-      space created is `AudioDecodingError`, not `SpectrogramError`: what can fail in this group is
-      *decoding*, and a spectrogram error space would have no producer until group 5. Disjointness is
-      asserted by test against `WaveformErrorCode`; an unusable frame count is the port's `nil`; and
-      cancellation is its own code, deliberately not `nil`. If group 5 turns out to need faults that are
-      about the analysis rather than the read, that space is added then, with a producer in front of it.
+      **Only faults something already requires are named.** Two are produced here by `PCMChunk`, two are
+      required by a contract this group states — the description a caller turns into an error, and the
+      cancellation the port promises never to report as an absence. Nothing speculative: the adapter's
+      codes arrive with the adapter in group 3, as the waveform's did.
 - [x] 2.5 **Reject non-finite samples at the boundary**, as `WaveformBucket` does. The spike measured a
       single NaN silently collapsing 184 cells to the floor; the clamp must not be what hides them.
       `PCMChunk` cannot represent one: the refusal carries a stable code rather than a bare `nil`,
