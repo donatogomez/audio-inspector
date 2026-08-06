@@ -36,6 +36,14 @@
 ///   (`AudioDecodingErrorCode.cancelled`). Cancellation is deliberately **not** `nil`: it is something
 ///   the caller did, and reporting it as an absence would tell them their file lacks something it does
 ///   not.
+/// ## The description arrives *with* the first chunk, not only at the end
+///
+/// `decode` still returns the description, because a file with no audio delivers no chunk and must
+/// still be described. But every chunk is handed over **together with** it, and that is not
+/// convenience: a consumer that sizes anything — a grid, a reduction, a buffer — needs the stream's
+/// shape *before* it sees the first sample, and returning it only at the end would leave that consumer
+/// buffering the whole file or reading it twice. Passing it alongside each chunk also makes the mistake
+/// unrepresentable: there is no way to receive audio without knowing what stream it came from.
 public protocol AudioDecoding: Sendable {
     /// Decodes `file` once, calling `receive` with each chunk before the next is read.
     ///
@@ -44,13 +52,14 @@ public protocol AudioDecoding: Sendable {
     ///   - chunkFrames: how many frames to read at a time. A hint, not a contract: an implementation may
     ///     deliver fewer at the end of the file, and **the result of any correct consumer must not
     ///     depend on this value**.
-    ///   - receive: called on the decoding task, synchronously, once per chunk in file order. Returning
-    ///     `.stop` ends the read normally rather than as a failure.
+    ///   - receive: called on the decoding task, synchronously, once per chunk in file order, with the
+    ///     stream the chunk came from. The description is the same value on every call and the same one
+    ///     `decode` returns. Returning `.stop` ends the read normally rather than as a failure.
     /// - Returns: what the stream turned out to be, or `nil` when its total frame count is unusable.
     /// - Throws: `AudioDecodingError`, including on cancellation.
     func decode(
         _ file: AudioFileReference,
         chunkFrames: Int,
-        receive: (PCMChunk) -> PCMChunkDisposition
+        receive: (PCMStreamDescription, PCMChunk) -> PCMChunkDisposition
     ) async throws(AudioDecodingError) -> PCMStreamDescription?
 }

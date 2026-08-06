@@ -44,7 +44,7 @@ private func decodeCollecting(
     chunkFrames: Int,
     into sink: ChunkSink
 ) async throws(AudioDecodingError) -> PCMStreamDescription? {
-    try await decoder.decode(file, chunkFrames: chunkFrames) { chunk in
+    try await decoder.decode(file, chunkFrames: chunkFrames) { _, chunk in
         sink.receive(chunk)
         return .continue
     }
@@ -60,7 +60,7 @@ private func decodeDiscarding(
     file: AudioFileReference,
     chunkFrames: Int
 ) async throws(AudioDecodingError) -> PCMStreamDescription? {
-    try await decoder.decode(file, chunkFrames: chunkFrames) { _ in .continue }
+    try await decoder.decode(file, chunkFrames: chunkFrames) { _, _ in .continue }
 }
 
 @MainActor

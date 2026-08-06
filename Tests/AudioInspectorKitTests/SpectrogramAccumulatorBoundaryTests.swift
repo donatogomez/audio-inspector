@@ -56,7 +56,7 @@ struct SpectrogramAccumulationCancellationTests {
                 frameCount: description.frameCount
             )
             var cancelled = false
-            _ = try await decoder.decode(file, chunkFrames: 512) { chunk in
+            _ = try await decoder.decode(file, chunkFrames: 512) { _, chunk in
                 if Task.isCancelled {
                     cancelled = true
                     return .stop
@@ -85,7 +85,7 @@ struct SpectrogramAccumulationCancellationTests {
             channelCount: description.channelCount,
             frameCount: description.frameCount
         ))
-        _ = try await decoder.decode(reference(), chunkFrames: 512) { chunk in
+        _ = try await decoder.decode(reference(), chunkFrames: 512) { _, chunk in
             accumulator.accumulate(chunk)
             return .continue
         }
@@ -110,7 +110,7 @@ struct SpectrogramAccumulationCancellationTests {
             frameCount: description.frameCount
         ))
         var seen = 0
-        _ = try await decoder.decode(reference(), chunkFrames: 512) { chunk in
+        _ = try await decoder.decode(reference(), chunkFrames: 512) { _, chunk in
             seen += 1
             accumulator.accumulate(chunk)
             return seen >= 8 ? .stop : .continue
