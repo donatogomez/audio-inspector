@@ -16,10 +16,29 @@
 >   session protocol in `CLAUDE.md`).
 
 ---
-**Focus:** `add-static-spectrogram-visualization` — the contract and the evidence behind it are
-**integrated**; **no production code exists yet**. Group 0 is closed: a spike that anyone can re-run
-measured every constant before a single requirement was written, and three of its findings changed the
-design rather than confirming it.
+**Focus:** `add-static-spectrogram-visualization` — the contract, the evidence behind it and **the whole
+domain contract** are integrated; the previous documentation snapshot is published. Group 0 is closed: a
+spike that anyone can re-run measured every constant before a single requirement was written, and three
+of its findings changed the design rather than confirming it. **Groups 2 and 3 are complete**: the
+domain holds `AudioDecoding`, `PCMStreamDescription`, `PCMChunk`, `PCMChunkDisposition`,
+`AudioDecodingError`, `SpectrogramGridMapping` and `Spectrogram`; `AVFoundationAudioDecoder` implements
+the port over real files with a fake beside it in `AudioInspectorTesting`. **No production STFT, no
+wiring and no drawing** — `AudioInspectorAnalysis` is still empty.
+
+**What the decoder's negative control taught, worth carrying into group 4:** clamping a read with
+`min(frameLength, remaining)` makes the `frameLength` invariant *unobservable*, because a short read
+only ever happens on the final read — so the clamp hides the one case that would expose a wrong bound.
+The loop consumes exactly what a read reports and refuses anything beyond the declared length instead.
+The same trap is worth watching for anywhere a second bound looks like prudence.
+
+**The three questions group 2 was left to answer, answered.** The port hands each chunk to a
+**synchronous, non-escaping callback without `@Sendable`**, inside one `async` call: an `AsyncSequence`
+would let a consumer iterate after the security-scoped window had closed, and marking the callback
+`@Sendable` would forbid the plain local accumulator every consumer of it needs. A file with no audio
+yields a **valid, empty spectrogram** — `nil` stays reserved for a frame count that could not be
+established, which is a different thing to tell a user. **`SpectrogramGenerating` was not created**:
+composing decode → fold → finish is orchestration, and it is reconsidered in group 5 only if that
+composition turns out to hold logic that does not belong in the composition root.
 
 **Why this slice matters beyond the drawing:** it executes the reversal condition ADR-0015 wrote for
 itself. The first FFT is the second consumer of the decoded stream, so `AudioDecoding` becomes a real
@@ -40,10 +59,10 @@ measured limits — scalloping loss and an edge uncertainty of about one reduced
 Automatic detection of lossy origin is a **separate future change**, and must carry evidence,
 alternative explanations and confidence rather than a verdict.
 
-**Next step:** group 2 — the `AudioDecoding` port and the domain models. Three questions are
-deliberately left to it rather than guessed now: the port's exact shape, whether a separate
-`SpectrogramGenerating` port is warranted at all, and whether a zero-frame file yields an empty model
-or none.
+**Next step:** group 4 — the STFT and the reduction in `AudioInspectorAnalysis`, the module's first real
+contents, behind a seam that now exists. Not started. One `vDSP.DiscreteFourierTransform` setup per
+operation, confined; Accelerate reaches no further than this module and no Accelerate type crosses a
+port.
 
 **Carried forward, unchanged:** the waveform's accessibility debt (text sizes not evaluable on macOS as
 written; the VoiceOver traversal failed and is parked for a dedicated change) keeps **ADR-0015 at
