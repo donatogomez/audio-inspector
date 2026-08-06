@@ -99,20 +99,48 @@ property reader and the JSON exporter are not touched.
 
 ## 3. The Media adapter for PCM chunks
 
-- [ ] 3.1 Implement `AudioDecoding` in `AudioInspectorMedia` with `AVAudioFile`, resolving the `URL`
+- [x] 3.1 Implement `AudioDecoding` in `AudioInspectorMedia` with `AVAudioFile`, resolving the `URL`
       through the constructor seam exactly as the existing adapters do (ADR-0010). A fresh adapter per
       operation; no shared state, no registry.
-- [ ] 3.2 **Consume exactly the reported frame count; never the buffer's capacity.** The reason is
+      `AVFoundationAudioDecoder` is a `Sendable` struct holding only the resolver — the file, the buffer
+      and every pointer are created inside `decode` and die with it, so there is nothing to share and
+      nothing to register.
+- [x] 3.2 **Consume exactly the reported frame count; never the buffer's capacity.** The reason is
       written beside it, as it is in the waveform adapter.
-- [ ] 3.3 Verify the processing format before reading a sample — native deinterleaved float — and fail
+      **The obvious way to write this is wrong, and it was measured.** Clamping with
+      `min(frameLength, remaining)` makes the invariant unobservable: a short read only ever happens on
+      the *final* read (zero short non-final reads across WAV, AAC and FLAC at seven capacities), so on
+      every other read the two bounds are equal and on the last the clamp hides the difference —
+      substituting `frameCapacity` left all 465 tests green. The loop now consumes exactly what the read
+      reported and refuses anything beyond the declared length, which makes the wrong bound fail 14
+      tests across all five formats.
+- [x] 3.3 Verify the processing format before reading a sample — native deinterleaved float — and fail
       in a controlled way if it does not qualify, never constructing a contiguous pointer over
       interleaved data.
-- [ ] 3.4 Bound the loop with `framePosition < length` and honour `Task.isCancelled` at chunk
+      Channel count, `commonFormat`, `isInterleaved`, `isStandard` and the buffer's own `stride`, all
+      before the first read. This is the one fault the domain boundary cannot catch: interleaved samples
+      copied as a contiguous run satisfy **every** invariant `PCMChunk` has while describing the wrong
+      frames.
+- [x] 3.4 Bound the loop with `framePosition < length` and honour `Task.isCancelled` at chunk
       boundaries. Confine each `AVAudioFile` to the task that opens it.
-- [ ] 3.5 Catch every Apple error and translate it into the domain's error space, classified by
+      Cancellation is observed at every boundary and arrives as `cancelled`, never as an absence or as
+      a fault of the file. Proved twice: cancelled before starting, and cancelled strictly after the
+      body has signalled that it began — plus a third gate showing one cancelled decode leaves another
+      running to completion (ADR-0016 decision 15).
+- [x] 3.5 Catch every Apple error and translate it into the domain's error space, classified by
       **scope** and never by SDK numeric code.
-- [ ] 3.6 Confirm the adapter only reads: nothing writes, renames, moves or truncates the file.
-- [ ] 3.7 Add the port fake to `AudioInspectorTesting` so Analysis and feature tests need no real file.
+      Five codes arrived with the branches that throw them: `invalidConfiguration`, `fileAccessDenied`,
+      `fileOpenFailed`, `unsupportedProcessingFormat` and `readFailed`; `invalidStreamDescription`
+      finally has a producer. Still no `frameRangeOutOfBounds` and no `incompleteCoverage` — a reader
+      that overruns or falls short of its declared length is `readFailed`, which is what happened.
+- [x] 3.6 Confirm the adapter only reads: nothing writes, renames, moves or truncates the file.
+      Asserted over a real decode: the file is byte-identical by SHA-256, its modification date is
+      unchanged, and the directory holds exactly the same entries afterwards.
+- [x] 3.7 Add the port fake to `AudioInspectorTesting` so Analysis and feature tests need no real file.
+      `FakeAudioDecoding` is a `Sendable` struct, not an actor like its two siblings: an actor-isolated
+      `decode` could not accept the port's non-`Sendable`, non-escaping callback. Its spy is a separate
+      actor, awaited before the callback is entered, so the delivery stays synchronous and the fake's
+      timing matches the adapter's rather than merely its signature.
 
 ## 4. STFT and reduction in Analysis
 
