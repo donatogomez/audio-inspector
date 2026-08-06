@@ -99,6 +99,22 @@ enum HumanFormat {
         "\(bits.formatted(.number.locale(locale)))-bit"
     }
 
+    /// A frequency on an axis: `0` → `0 Hz`; `2000` → `2 kHz`; `22050` → `22.05 kHz`.
+    ///
+    /// Below a kilohertz the value is given in Hz, because `0.5 kHz` reads worse than `500 Hz` and the
+    /// bottom of a frequency axis is where small numbers live. Two decimals for the same reason
+    /// `sampleRate` uses them: at one, `22050 Hz` would round to `22 kHz` and misstate the top of the
+    /// axis a reader checks the file's rate against.
+    static func frequency(_ hertz: Double) -> String {
+        guard hertz.isFinite, hertz >= 0 else { return "—" }
+        guard hertz >= 1_000 else {
+            return "\(hertz.formatted(.number.precision(.fractionLength(0 ... 0)).locale(locale))) Hz"
+        }
+        let kilohertz = (hertz / 1_000)
+            .formatted(.number.precision(.fractionLength(0 ... 2)).locale(locale))
+        return "\(kilohertz) kHz"
+    }
+
     // MARK: - Shared
 
     /// Divides and drops trailing zeros, so `48000/1000` reads `48` and `44100/1000` reads `44.1`.

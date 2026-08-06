@@ -84,6 +84,21 @@ public struct RootView: View {
         }
     }
 
+    /// Translates the flow's spectrogram state into the report surface's own, for the reason and in
+    /// the shape `waveformPresentation` already establishes: the two feature modules never see each
+    /// other's vocabulary, and joining them is the composition root's job.
+    ///
+    /// Total by construction, with no default case — every state the flow can hold has exactly one
+    /// presentation, and none is invented.
+    nonisolated static func spectrogramPresentation(for state: SpectrogramState) -> SpectrogramPresentation {
+        switch state {
+        case .loading: .loading
+        case let .available(model): .model(model)
+        case .unavailable: .absent
+        case let .failed(message): .failed(message: message)
+        }
+    }
+
     /// The inspected report plus the way back to picking another file. `ReportView` is used exactly as
     /// group 5 shipped it — the export action is passed straight through, unchanged.
     private func reportSurface(_ presentation: InspectionPresentation) -> some View {
@@ -91,6 +106,7 @@ public struct RootView: View {
             ReportView(
                 report: presentation.report,
                 waveform: Self.waveformPresentation(for: presentation.waveform),
+                spectrogram: Self.spectrogramPresentation(for: presentation.spectrogram),
                 export: export
             )
             Divider()
