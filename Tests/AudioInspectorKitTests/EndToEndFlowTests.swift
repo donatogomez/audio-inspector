@@ -54,7 +54,7 @@ struct EndToEndFlowTests {
 
             // 2–6. Selection seam → coordinator (mapper + real reader + use case) → flow model.
             let inspection = SourceInspectionCoordinator(chooseSource: { source })
-            let flow = ImportFlowModel(action: { onReport in await inspection.inspect(onReport: onReport) })
+            let flow = ImportFlowModel(action: { onUpdate in await inspection.inspect(onUpdate: onUpdate) })
             await flow.selectAndInspect()
 
                         guard case let .report(presentation) = flow.state else {
@@ -189,7 +189,7 @@ struct EndToEndFlowTests {
                     chooseSource: { source },
                     makeWaveformGenerator: { _ in FakeWaveformGenerating(waveform) }
                 )
-                let flow = ImportFlowModel(action: { onReport in await inspection.inspect(onReport: onReport) })
+                let flow = ImportFlowModel(action: { onUpdate in await inspection.inspect(onUpdate: onUpdate) })
                 await flow.selectAndInspect()
 
                 guard case let .report(presentation) = flow.state else {

@@ -231,10 +231,28 @@ property reader and the JSON exporter are not touched.
 
 ## 6. Wiring and progressive state
 
-- [ ] 6.1 Carry the spectrogram **beside** the report, with absence, failure and cancellation as
+- [x] 6.1 Carry the spectrogram **beside** the report, with absence, failure and cancellation as
       first-class values. `InspectionReport`, `TechnicalProperties` and `Property` are untouched.
-- [ ] 6.2 Discard stale results by operation identity, as the waveform already does.
-- [ ] 6.3 Confirm boundary rule 10 still holds: no feature module gains a `URL` or an AppKit import.
+      `SpectrogramOutcome` moves into `FeatureImport` beside `WaveformOutcome`, and `SpectrogramState`
+      adds the one case an outcome does not have — `loading`. **Cancellation settles into nothing**:
+      `SpectrogramState(.cancelled)` is `nil`, so a result from an operation the user replaced is never
+      rendered as an absence of energy in their file. `InspectionPresentation` carries all three side by
+      side, and the report, its warnings, its status and the `schemaVersion` 1 export are untouched.
+      **Delivery is progressive, through one channel.** `InspectionUpdate` has a case per part and the
+      flow model applies each to its own field, so whichever visualisation settles first is shown first
+      and neither waits on the other — asserted in both orders. A third visualisation later means a new
+      case, not a new parameter threaded through every call site.
+- [x] 6.2 Discard stale results by operation identity, as the waveform already does.
+      The same counter, now guarding **every** update rather than only the final outcome: a late report,
+      waveform or spectrogram from a superseded operation is dropped before it is applied. The accepted
+      re-entrancy rule is unchanged and now restated for two visualisations — during the inspection the
+      state is `.working` and a second selection is ignored; once the report exists the inspection is
+      over, only visualisations are pending, and a new selection supersedes them.
+- [x] 6.3 Confirm boundary rule 10 still holds: no feature module gains a `URL` or an AppKit import.
+      Re-checked by test now that the spectrogram crossed into a feature module: neither `FeatureImport`
+      nor `FeatureAnalysis` imports AppKit, a media framework, Accelerate or the other feature, and
+      neither mentions `URL` in any line of code. The composition root still translates between their
+      vocabularies, exactly as it does for the waveform.
 
 ## 7. Presentation
 

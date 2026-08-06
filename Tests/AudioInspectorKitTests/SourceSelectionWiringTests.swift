@@ -36,7 +36,7 @@ struct SourceSelectionWiringTests {
         try Data("definitely not audio".utf8).write(to: url)
 
         let coordinator = SourceInspectionCoordinator(chooseSource: { url })
-        let model = ImportFlowModel(action: { onReport in await coordinator.inspect(onReport: onReport) })
+        let model = ImportFlowModel(action: { onUpdate in await coordinator.inspect(onUpdate: onUpdate) })
 
         await model.selectAndInspect()
 

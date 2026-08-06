@@ -23,18 +23,11 @@ struct SourceInspectionCoordinator {
     typealias WaveformGeneratorFactory = @Sendable (URL) -> any WaveformGenerating
     /// Builds the port implementation that decodes PCM for the file at `url`.
     typealias DecoderFactory = @Sendable (URL) -> any AudioDecoding
-    /// Receives the spectrogram once its generation has settled.
-    ///
-    /// Optional on purpose, and the switch that decides whether the work happens at all: until group 6
-    /// carries the spectrogram beside the report, nothing consumes it, and generating a model only to
-    /// drop it would be minutes of transform for nothing. A caller that wants one asks for one.
-    typealias SpectrogramHandler = @MainActor (SpectrogramOutcome) -> Void
 
     private let chooseSource: SourceProvider
     private let makeReader: ReaderFactory
     private let makeWaveformGenerator: WaveformGeneratorFactory
     private let makeDecoder: DecoderFactory
-    private let onSpectrogram: SpectrogramHandler?
 
     /// - Parameters:
     ///   - chooseSource: how a destination file is obtained (the native open panel in production).
@@ -56,22 +49,20 @@ struct SourceInspectionCoordinator {
         },
         makeDecoder: @escaping DecoderFactory = { url in
             AVFoundationAudioDecoder(resolveURL: { _ in url })
-        },
-        onSpectrogram: SpectrogramHandler? = nil
+        }
     ) {
         self.chooseSource = chooseSource
         self.makeReader = makeReader
         self.makeWaveformGenerator = makeWaveformGenerator
         self.makeDecoder = makeDecoder
-        self.onSpectrogram = onSpectrogram
     }
 
     /// The panel path: ask for a file, then inspect it.
-    func inspect(onReport: InspectionReportHandler) async -> SourceInspectionOutcome {
+    func inspect(onUpdate: InspectionUpdateHandler) async -> SourceInspectionOutcome {
         guard let url = await chooseSource() else {
             return .cancelled // dismissing the panel is neutral, never an error
         }
-        return await inspect(url, onReport: onReport)
+        return await inspect(url, onUpdate: onUpdate)
     }
 
     /// The shared body, and the **only** owner of the `isFileURL` guard, the security scope, the
@@ -83,12 +74,13 @@ struct SourceInspectionCoordinator {
     ///
     /// The order is deliberate. The report is complete on its own and metadata is far quicker to read
     /// than samples, so holding it back until the waveform is done would delay everything that already
-    /// works for the sake of something optional. `onReport` fires the moment it exists.
+    /// works for the sake of something optional. `onUpdate(.report(_:))` fires the moment it exists,
+    /// and each visualisation follows as it settles.
     ///
     /// The scope is acquired once and released once, covering the mapper, the property reader, the use
-    /// case **and** the waveform: the `defer` below runs only after the sample read has finished, so
-    /// the generator never needs a scope of its own (ADR-0010).
-    func inspect(_ url: URL, onReport: InspectionReportHandler) async -> SourceInspectionOutcome {
+    /// case **and both visualisations**: the `defer` below runs only after the last sample read has
+    /// finished, so neither the generator nor the decoder needs a scope of its own (ADR-0010).
+    func inspect(_ url: URL, onUpdate: InspectionUpdateHandler) async -> SourceInspectionOutcome {
         // Filenames and paths are untrusted input: anything that is not a file cannot be inspected.
         guard url.isFileURL else {
             return .preparationFailed
@@ -105,25 +97,29 @@ struct SourceInspectionCoordinator {
         let useCase = InspectAudioFileUseCase(reader: makeReader(url))
         // `execute` never throws: a global read failure comes back as a report with `.failed` status.
         let report = await useCase.execute(file: reference)
-        onReport(report)
+        onUpdate(.report(report))
 
         // Nothing could be read at all, so there is nothing to read samples from either. **Neither**
         // sample read starts: the report stands, and both visualisations are simply absent.
         if case .failed = report.status {
-            onSpectrogram?(.unavailable)
-            return .inspected(report, waveform: .unavailable)
+            onUpdate(.waveform(.unavailable))
+            onUpdate(.spectrogram(.unavailable))
+            return .inspected(report, waveform: .unavailable, spectrogram: .unavailable)
         }
 
-        let waveformOutcome = await waveform(for: reference, at: url)
-        // The spectrogram is its **own** operation, run inside this same window: a separate decode, a
-        // fresh accumulator, and no state shared with the waveform. Sequential here is not the same as
+        // Each visualisation is reported the moment it settles, so whichever finishes first is shown
+        // first and neither waits on the other. They are separate operations over separate ports: a
+        // separate decode, a fresh accumulator, and no shared state. Sequential is not the same as
         // coupled — neither can cancel or fail the other, which is what ADR-0016 decision 15 requires.
         // Group 9 may or may not move the waveform onto the shared seam; until then two reads is a
         // declared cost, not an oversight.
-        if let onSpectrogram {
-            onSpectrogram(await spectrogram(for: reference, at: url))
-        }
-        return .inspected(report, waveform: waveformOutcome)
+        let waveformOutcome = await waveform(for: reference, at: url)
+        onUpdate(.waveform(waveformOutcome))
+
+        let spectrogramOutcome = await spectrogram(for: reference, at: url)
+        onUpdate(.spectrogram(spectrogramOutcome))
+
+        return .inspected(report, waveform: waveformOutcome, spectrogram: spectrogramOutcome)
     }
 
     /// Produces the spectrogram inside the window the caller already holds.
