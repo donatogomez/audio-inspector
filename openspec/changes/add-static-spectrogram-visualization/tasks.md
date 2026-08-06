@@ -198,13 +198,36 @@ property reader and the JSON exporter are not touched.
 
 ## 5. Generation and orchestration
 
-- [ ] 5.1 Produce the spectrogram inside the existing security-scoped window, as its **own operation**
+- [x] 5.1 Produce the spectrogram inside the existing security-scoped window, as its **own operation**
       with its **own cancellation**, independent of the waveform's.
-- [ ] 5.2 Confirm nothing changes in the sandbox story: no bookmark, no retained URL, no new
+      `SpectrogramGeneration` composes decode → accumulate → finish; `SourceInspectionCoordinator` runs
+      it inside the window it already holds, awaited before the `defer` that releases it. A fresh
+      decoder and a fresh accumulator per operation, sharing nothing with the waveform. Proved with the
+      **real** decoder over a real file, and by the outcome settling before `inspect` returns.
+      **This required a correction to the group 3 contract.** The accumulator needs the stream's shape
+      *before* the first chunk — `frameCount` sizes the grid — and the port only returned the
+      description after the decode had finished. Every alternative was worse: buffering the file
+      destroys bounded memory, decoding twice is the double read the adapter avoids, and deciding the
+      grid at the end would hold ~1.2 GB for an hour of audio. The description now travels **with each
+      chunk**, which also makes it impossible to receive audio without knowing what stream it came from.
+- [x] 5.2 Confirm nothing changes in the sandbox story: no bookmark, no retained URL, no new
       entitlement, nothing persisted.
-- [ ] 5.3 Order the work so the report is delivered first, then the visualisations; a global inspection
+      The generation opens nothing: no `URL`, no scope, no bookmark. It receives a decoder the
+      composition root built, and the composition root is still the only place a `URL` exists. No
+      entitlement, plist or persisted value is touched, and a real generation leaves the source
+      byte-identical with no file created beside it.
+- [x] 5.3 Order the work so the report is delivered first, then the visualisations; a global inspection
       failure skips the sample reads entirely.
-- [ ] 5.4 Confirm cancelling one visualisation does not cancel the other.
+      `onReport` still fires the moment the report exists, before either visualisation. A global failure
+      now skips **both** sample reads — previously only the waveform's was guarded — asserted with two
+      scripted spies recording zero calls each. A preparation failure starts neither.
+- [x] 5.4 Confirm cancelling one visualisation does not cancel the other.
+      Asserted in both directions and for both failure modes: a cancelled or failed spectrogram leaves
+      the waveform's envelope and the report intact, and a cancelled or failed waveform still yields a
+      spectrogram. Neither degrades the inspection status, and no warning about a visualisation reaches
+      the report (ADR-0016 decision 14).
+      **Two separate PCM reads exist for now**, which is the declared cost of not coupling them; moving
+      the waveform onto the shared seam is group 9's conditional work, not this group's.
 
 ## 6. Wiring and progressive state
 
