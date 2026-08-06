@@ -144,21 +144,57 @@ property reader and the JSON exporter are not touched.
 
 ## 4. STFT and reduction in Analysis
 
-- [ ] 4.1 Implement the STFT in `AudioInspectorAnalysis` with `vDSP.DiscreteFourierTransform`
+- [x] 4.1 Implement the STFT in `AudioInspectorAnalysis` with `vDSP.DiscreteFourierTransform`
       (`.complexReal`), FFT 2048, hop 512, Hann denormalised. **One setup per operation, reused for
       every frame of every channel** — recreating it per frame costs 10×.
-- [ ] 4.2 Scale magnitude by `1 / windowSum` to absolute dBFS, reference 1.0, 20·log10, floor −120.
+      `SpectrogramAccumulator` holds the setup as a `let` initialised once; the source contains exactly
+      one `DiscreteFourierTransform(` call, so reuse is structural rather than a promise.
+      **One deviation from the spike, measured before taking it.** The spike used `fftSize / 2` bins and
+      took the magnitude of element 0, but vDSP packs **DC into `real[0]` and Nyquist into
+      `imaginary[0]`** — so that element sums the two ends of the spectrum. Measured: DC at 0.5 with
+      Nyquist at 0.5 read **+3.01 dBFS in the lowest bin**, and Nyquist alone lit the *lowest* bin at
+      −0.00 dBFS. For an instrument whose subject is where high-frequency energy stops, energy at
+      Nyquist appearing in the bass is the wrong failure. Both are unpacked into their own bins
+      (`binCount = fftSize / 2 + 1`) and halved onto the common scale; the spike's three exact tone
+      readings are unchanged, and the axis now reaches Nyquist literally, as design.md §5 requires.
+- [x] 4.2 Scale magnitude by `1 / windowSum` to absolute dBFS, reference 1.0, 20·log10, floor −120.
       **No normalisation of any kind.**
-- [ ] 4.3 Transform each channel **separately** and combine by **maximum per bin, in the frequency
+      Pinned by tones on a bin at three amplitudes reading 0.00, −6.02 and −20.00 dBFS — `2 / windowSum`
+      reads every one 6 dB high. Silence sits at the floor; two signals 20 dB apart stay 20 dB apart;
+      1.5 reads +3.52 dBFS unclamped, exactly as the spike measured.
+- [x] 4.3 Transform each channel **separately** and combine by **maximum per bin, in the frequency
       domain**. Never combine samples before transforming. The result is a **combined** spectrogram: not
       a mono mix, not a downmix, and not named as one in code, tests or UI.
-- [ ] 4.4 Process channels **sequentially**, sharing the one setup. No per-channel parallelism.
-- [ ] 4.5 Reduce by **maximum** in both axes, never by mean.
-- [ ] 4.6 **Discard the final incomplete window**; never zero-pad. Write the reason beside it.
-- [ ] 4.7 Confine the transform setup: created and consumed inside one `nonisolated async` operation, no
+      Four properties asserted over real models: two channels carrying different tones both read −6.02
+      with no third band lit, opposite polarity does not cancel, a tone in one channel alone survives,
+      and left-only equals right-only.
+- [x] 4.4 Process channels **sequentially**, sharing the one setup. No per-channel parallelism.
+      A plain `for channel in 0 ..< channelCount` loop. The accumulator's source contains no `Task`, no
+      task group, no `async` and no `await`.
+- [x] 4.5 Reduce by **maximum** in both axes, never by mean.
+      A 20 ms transient inside four seconds of silence survives above −9 dBFS; the mean buried the same
+      case by 8.74 dB in the spike. In the frequency axis, a lone loud bin still reads −6.02 rather than
+      being halved by the quiet bin folded into its band.
+- [x] 4.6 **Discard the final incomplete window**; never zero-pad. Write the reason beside it.
+      Ten complete windows plus 511 further frames still yield ten columns, and a file shorter than one
+      window yields none — with the file's real length still reported.
+      **This exposed a defect in the group 2 contract, corrected here.** `Spectrogram` required
+      `(frameCount == 0) == (columnCount == 0)`, which assumed frames imply columns. Discarding the
+      incomplete window breaks that: a file of 1–2047 frames (up to 46 ms) has audio and no complete
+      window, and was **not representable at all**. The invariant is now `columnCount == 0 ||
+      frameCount > 0` — columns still require frames, nothing is invented, and neither of the two
+      escapes the spike used (an invented column, a padded window) was taken.
+- [x] 4.7 Confine the transform setup: created and consumed inside one `nonisolated async` operation, no
       `@unchecked Sendable`, no stored property of a `Sendable` type, no global cache.
-- [ ] 4.8 Confirm no Accelerate type appears in any signature Analysis exposes; `DSPSplitComplex`,
+      Enforced by the compiler rather than by convention: requiring `Sendable` of the accumulator fails
+      with *"does not conform to the 'Sendable' protocol"*, and storing it in a `Sendable` struct fails
+      with *"stored property has non-Sendable type"*. No `@unchecked Sendable`, no `static var`, no
+      cache and no `DispatchQueue` anywhere in the module.
+- [x] 4.8 Confirm no Accelerate type appears in any signature Analysis exposes; `DSPSplitComplex`,
       `vDSP.*` and the setup stay inside.
+      Demonstrated by compilation: the test suites import `AudioInspectorAnalysis` **without**
+      `@testable` and without importing Accelerate, yet build the accumulator, feed it and read the
+      model. An Accelerate type in any exposed signature would stop them compiling.
 
 ## 5. Generation and orchestration
 

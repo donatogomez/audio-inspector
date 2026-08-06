@@ -195,16 +195,29 @@ struct SpectrogramTests {
         #expect(model.value(column: 0, band: 0) == nil)
     }
 
-    @Test("columns without frames, or frames without columns, are not representable")
-    func emptinessMustAgreeWithTheFrameCount() {
+    @Test("a column for a file with no frames is not representable")
+    func columnsRequireFrames() {
         #expect(Spectrogram(
             values: grid(columns: 1, bands: 4), columnCount: 1, bandCount: 4,
             sampleRate: 44_100, frameCount: 0, channelCount: 1
-        ) == nil, "a column for a file with no frames")
-        #expect(Spectrogram(
+        ) == nil)
+    }
+
+    /// The converse is **not** an invariant, and treating it as one left a real file unrepresentable.
+    /// A file shorter than one analysis window has frames and yields no complete window, so it has
+    /// audio and no columns — the honest answer, and the only alternatives would be to invent a column
+    /// or to pad the window.
+    @Test(
+        "a file shorter than one analysis window has frames and no columns",
+        arguments: [1, 512, 2_047]
+    )
+    func framesWithoutColumnsAreRepresentable(frameCount: Int) throws {
+        let model = try #require(Spectrogram(
             values: [], columnCount: 0, bandCount: 0,
-            sampleRate: 44_100, frameCount: 44_100, channelCount: 1
-        ) == nil, "frames with nothing describing them")
+            sampleRate: 44_100, frameCount: frameCount, channelCount: 1
+        ))
+        #expect(model.columnCount == 0)
+        #expect(model.frameCount == frameCount, "the file's real length is still stated")
     }
 
     /// A column exists to say what the spectrum was during a slice of time. One with no band to say it

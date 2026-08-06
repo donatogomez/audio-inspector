@@ -34,7 +34,8 @@ public struct Spectrogram: Sendable, Equatable {
 
     /// dBFS in row-major order: `column * bandCount + band`.
     public let values: [Float]
-    /// Columns of time, oldest first. **Zero is valid**, and is what a file with no audio produces.
+    /// Columns of time, oldest first. **Zero is valid**, and means no complete analysis window could be
+    /// formed — either because the file holds no audio, or because it is shorter than one window.
     public let columnCount: Int
     /// Bands of frequency, lowest first, linear from 0 Hz to `nyquist`. **Zero only when there are no
     /// columns**: a column with nothing to describe its spectrum is not a column.
@@ -76,9 +77,13 @@ public struct Spectrogram: Sendable, Equatable {
         // it is required to apply, and a non-finite one would mean a sample slipped past the boundary
         // that exists to refuse it.
         guard values.allSatisfy({ $0.isFinite && $0 >= Self.floorDecibels }) else { return nil }
-        // A file with no audio has no columns; columns without frames would describe audio that is not
-        // there.
-        guard (frameCount == 0) == (columnCount == 0) else { return nil }
+        // Columns without frames would describe audio that is not there. The converse is **not** an
+        // invariant, and assuming it was is a mistake this type made until an analysis proved otherwise:
+        // a file shorter than one analysis window has real frames and yields no complete window, so it
+        // honestly has audio and no columns. Requiring a column for it would leave a 46 ms file
+        // unrepresentable, and the only ways out would be to invent a column or to pad the window —
+        // both refused, and both measured as wrong.
+        guard columnCount == 0 || frameCount > 0 else { return nil }
 
         self.values = values
         self.columnCount = columnCount
