@@ -19,12 +19,20 @@
 **Focus:** `add-static-spectrogram-visualization` — the contract, the evidence behind it and **the whole
 domain contract** are integrated; the previous documentation snapshot is published. Group 0 is closed: a
 spike that anyone can re-run measured every constant before a single requirement was written, and three
-of its findings changed the design rather than confirming it. **Groups 2, 3 and 4 are complete**: the
+of its findings changed the design rather than confirming it. **Groups 2 to 5 are complete**: the
 domain holds `AudioDecoding`, `PCMStreamDescription`, `PCMChunk`, `PCMChunkDisposition`,
 `AudioDecodingError`, `SpectrogramGridMapping` and `Spectrogram`; `AVFoundationAudioDecoder` implements
-the port over real files with a fake beside it in `AudioInspectorTesting`; and
-`AudioInspectorAnalysis` holds the **STFT accumulator**, its first real contents. **No wiring and no
-drawing** — nothing yet composes a decode into a model outside a test.
+the port over real files with a fake beside it in `AudioInspectorTesting`; `AudioInspectorAnalysis`
+holds the **STFT accumulator**, its first real contents; and `SpectrogramGeneration` composes
+**decode → accumulate → finish** inside the security-scoped window the inspection already owns,
+yielding *available*, *unavailable*, *failed* or *cancelled*. The waveform and the spectrogram are
+still entirely independent operations. **No drawing and no spectrogram interface** — the result reaches
+nothing beyond the composition root.
+
+**What group 5 forced on the seam.** The accumulator needs the stream's shape *before* the first chunk,
+and the port only returned it after the whole decode. Buffering, decoding twice and taking the frame
+count from the report were all worse, so the description now travels **with each chunk** — which also
+makes it impossible to receive audio without knowing what stream it came from.
 
 **Two things group 4 settled that the spike had not.** vDSP packs **DC and Nyquist into the same
 element** of a real-to-complex transform, so energy at Nyquist was landing in the *bass*; both ends are
@@ -67,10 +75,10 @@ measured limits — scalloping loss and an edge uncertainty of about one reduced
 Automatic detection of lossy origin is a **separate future change**, and must carry evidence,
 alternative explanations and confidence rather than a verdict.
 
-**Next step:** group 5 — the production operation, `decode → accumulate → finish`, inside the security
-scoped window the inspection already owns. Not started. A fresh accumulator per operation, its own
-cancellation independent of the waveform's, and absence, failure and cancellation kept apart. Whether
-`SpectrogramGenerating` is warranted is answered by writing that composition, not before it.
+**Next step:** group 6 — carry the result **beside** the report as a first-class value, so absence,
+failure and cancellation each mean what they say. Not started. Stale results are discarded by operation
+identity exactly as the waveform's already are, the report stays independent of whatever became of the
+spectrogram, and no feature module gains a `URL` or an AppKit import. Still no drawing.
 
 **Carried forward, unchanged:** the waveform's accessibility debt (text sizes not evaluable on macOS as
 written; the VoiceOver traversal failed and is parked for a dedicated change) keeps **ADR-0015 at
