@@ -243,13 +243,20 @@ private extension AVFoundationAudioDecoder {
                 )
             }
 
-            let usable = min(valid, stream.frameCount - framesDelivered)
             var channels: [[Float]] = []
             channels.reserveCapacity(channelCount)
             for channel in 0 ..< channelCount {
-                // Exactly `usable` frames, copied. The chunk owns its samples, so no pointer outlives
-                // this iteration and no consumer inherits a lifetime to respect.
-                channels.append(Array(UnsafeBufferPointer(start: channelData[channel], count: usable)))
+                // Exactly the frames the read reported, copied — **not** `min(valid, remaining)`. That
+                // clamp is the obvious way to write this loop and it is a mistake: it silently discards
+                // anything a decoder hands over beyond the declared length, so a file that over-reads
+                // and a file that reads correctly become the same result. It also makes the bound below
+                // unreachable, which is how a wrong bound stops being observable at all — measured, not
+                // theorised: with the clamp in place, replacing `frameLength` with `frameCapacity`
+                // changes nothing this suite can see.
+                //
+                // The chunk owns its samples, so no pointer outlives this iteration and no consumer
+                // inherits a lifetime to respect.
+                channels.append(Array(UnsafeBufferPointer(start: channelData[channel], count: valid)))
             }
 
             // The domain decides whether this is a possible run of audio — finiteness included. There
@@ -262,6 +269,10 @@ private extension AVFoundationAudioDecoder {
             // these do — equal channels, a non-negative start, finite samples. What is wrong is the
             // relationship between two things only this loop holds at once, so it is reported as what
             // it is: the file did not read the way it declared itself.
+            //
+            // This is also the bound that makes `frameLength` observable. Consume the buffer's capacity
+            // instead and the final read overruns the declared length, which arrives here rather than
+            // being quietly trimmed away.
             guard chunk.fits(stream) else {
                 throw AudioDecodingError(
                     code: .readFailed,
@@ -269,7 +280,7 @@ private extension AVFoundationAudioDecoder {
                 )
             }
 
-            framesDelivered += usable
+            framesDelivered += valid
             if receive(chunk) == .stop { return }
         }
 
