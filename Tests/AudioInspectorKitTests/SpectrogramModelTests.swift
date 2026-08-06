@@ -207,6 +207,39 @@ struct SpectrogramTests {
         ) == nil, "frames with nothing describing them")
     }
 
+    /// A column exists to say what the spectrum was during a slice of time. One with no band to say it
+    /// in describes nothing, and the empty grid it produces would be indistinguishable from the model of
+    /// a file with no audio — two answers that must never arrive as the same value.
+    @Test("columns with no bands are not representable", arguments: [1, 2, 1_024])
+    func refusesColumnsWithoutBands(columnCount: Int) {
+        #expect(Spectrogram(
+            values: [], columnCount: columnCount, bandCount: 0,
+            sampleRate: 44_100, frameCount: 1_000, channelCount: 1
+        ) == nil)
+    }
+
+    /// The smallest model that says something: one moment, one band. The floor for what the invariant
+    /// allows, and it must stay allowed.
+    @Test("one column and one band is a valid model")
+    func oneColumnOneBandIsValid() throws {
+        let model = try #require(Spectrogram(
+            values: [-42], columnCount: 1, bandCount: 1,
+            sampleRate: 44_100, frameCount: 1_000, channelCount: 1
+        ))
+        #expect(model.value(column: 0, band: 0) == -42)
+        #expect(model.frequency(ofBand: 0) == 11_025)
+    }
+
+    /// The empty model is the *only* place a zero band count belongs, and it stays `0 × 0`: no band is
+    /// invented to make it well-formed.
+    @Test("the empty model has no bands and needs none")
+    func emptyModelInventsNoBand() throws {
+        let model = try #require(Spectrogram.empty(sampleRate: 44_100, channelCount: 1))
+        #expect(model.columnCount == 0)
+        #expect(model.bandCount == 0)
+        #expect(model.values.isEmpty)
+    }
+
     @Test("the grid must match the dimensions it claims")
     func refusesIncoherentDimensions() {
         #expect(Spectrogram(

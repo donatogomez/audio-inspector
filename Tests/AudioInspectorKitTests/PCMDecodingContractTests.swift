@@ -172,6 +172,55 @@ struct PCMChunkTests {
         #expect(!(try PCMChunk(startFrame: 0, channels: [[0.1]]).fits(stream)), "wrong channel count")
     }
 
+    /// The exact boundary, from both sides. A chunk ending on the stream's last frame fits; one frame
+    /// more does not.
+    @Test("the last frame of the stream is inside it, and the next one is not")
+    func fitsAtTheExactBoundary() throws {
+        let stream = try #require(PCMStreamDescription(sampleRate: 44_100, channelCount: 1, frameCount: 1_000))
+        let samples = [Float](repeating: 0.1, count: 100)
+        #expect(try PCMChunk(startFrame: 900, channels: [samples]).fits(stream), "ends exactly at 1000")
+        #expect(!(try PCMChunk(startFrame: 901, channels: [samples]).fits(stream)), "would end at 1001")
+        #expect(try PCMChunk(startFrame: 1_000, channels: [[]]).fits(stream), "an empty run at the end")
+    }
+
+    /// `fits(_:)` answers a question about values it does not trust, and the initialiser accepts any
+    /// non-negative `startFrame` — so the arithmetic must survive one near `Int.max`. Before this was
+    /// hardened, the sum trapped and took the process with it on exactly the input the check was asked
+    /// about.
+    @Test(
+        "a chunk whose end frame cannot be represented does not fit, and does not abort",
+        arguments: [Int.max, .max - 1, .max / 2 + 1]
+    )
+    func fitsRefusesInsteadOfOverflowing(startFrame: Int) throws {
+        let stream = try #require(PCMStreamDescription(sampleRate: 44_100, channelCount: 1, frameCount: 1_000))
+        let chunk = try PCMChunk(startFrame: startFrame, channels: [[0.1, 0.2, 0.3]])
+        #expect(!chunk.fits(stream))
+    }
+
+    /// The one case that does not overflow but still cannot fit: a start at `Int.max` carrying nothing.
+    @Test("an empty chunk starting at the largest representable frame still does not fit")
+    func emptyChunkAtTheEndOfTheNumberLineDoesNotFit() throws {
+        let stream = try #require(PCMStreamDescription(sampleRate: 44_100, channelCount: 1, frameCount: 1_000))
+        let chunk = try PCMChunk(startFrame: .max, channels: [[]])
+        #expect(chunk.frameCount == 0, "no overflow is even possible here")
+        #expect(!chunk.fits(stream))
+    }
+
+    @Test("a chunk longer than the whole stream does not fit")
+    func aChunkLongerThanTheStreamDoesNotFit() throws {
+        let stream = try #require(PCMStreamDescription(sampleRate: 44_100, channelCount: 1, frameCount: 10))
+        let chunk = try PCMChunk(startFrame: 0, channels: [[Float](repeating: 0.1, count: 11)])
+        #expect(!chunk.fits(stream))
+    }
+
+    /// A stream with no audio admits only the empty chunk that starts where it ends.
+    @Test("nothing but an empty run fits a stream with no frames")
+    func nothingFitsAStreamWithNoFrames() throws {
+        let stream = try #require(PCMStreamDescription(sampleRate: 44_100, channelCount: 1, frameCount: 0))
+        #expect(try PCMChunk(startFrame: 0, channels: [[]]).fits(stream))
+        #expect(!(try PCMChunk(startFrame: 0, channels: [[0.1]]).fits(stream)))
+    }
+
     @Test("chunks compare by value")
     func comparesByValue() throws {
         let one = try PCMChunk(startFrame: 0, channels: [[0.1, 0.2]])
@@ -322,27 +371,78 @@ struct AudioDecodingPortTests {
 
 @Suite("Domain — audio decoding error space")
 struct AudioDecodingErrorTests {
-    /// Disjoint from every other error space in the domain. A decoding fault says nothing about a
-    /// particular visualisation, and a stable code that overlapped another's would tell a caller
-    /// something untrue about what failed.
-    @Test("its codes do not collide with the waveform's or the inspection's")
-    func codesAreDisjoint() {
-        let decoding: Set<String> = [
-            AudioDecodingErrorCode.invalidStreamDescription.rawValue,
-            AudioDecodingErrorCode.invalidChunk.rawValue,
-            AudioDecodingErrorCode.nonFiniteSample.rawValue,
-            AudioDecodingErrorCode.cancelled.rawValue,
+    /// Every code this layer defines. Listed explicitly so adding one without deciding what it means
+    /// breaks these tests rather than slipping through — the same reason `WaveformErrorTests` keeps its
+    /// own list. It pins the raw values, and it claims nothing more: the type is `RawRepresentable`, so
+    /// no test can enumerate it, and none here pretends that a speculative code could not be added.
+    private static let allCodes: [(AudioDecodingErrorCode, String)] = [
+        (.invalidStreamDescription, "decoding_invalid_stream_description"),
+        (.invalidChunk, "decoding_invalid_chunk"),
+        (.nonFiniteSample, "decoding_non_finite_sample"),
+        (.cancelled, "decoding_cancelled"),
+    ]
+
+    @Test("each code has its stable raw value", arguments: allCodes)
+    func codesAreStable(code: AudioDecodingErrorCode, rawValue: String) {
+        #expect(code.rawValue == rawValue)
+        #expect(AudioDecodingErrorCode(rawValue: rawValue) == code)
+    }
+
+    @Test("no two codes share a raw value")
+    func codesAreDistinct() {
+        let rawValues = Self.allCodes.map(\.1)
+        #expect(Set(rawValues).count == rawValues.count)
+        #expect(Set(Self.allCodes.map(\.0)).count == Self.allCodes.count)
+    }
+
+    /// Disjoint from **all three** of the domain's other error spaces, which is what task 2.4 asks for
+    /// and what only the waveform's was previously checked against. A decoding fault says nothing about
+    /// a particular visualisation, nothing about a single property and nothing about the inspection as
+    /// a whole; a stable code that overlapped any of theirs would tell a caller something untrue about
+    /// what failed.
+    ///
+    /// The prefix assertions are what make this structural rather than a coincidence of four lists: as
+    /// long as this space owns `decoding_` and no other space uses it, a future addition on either side
+    /// cannot collide.
+    @Test("its codes collide with no other error space in the domain")
+    func codesAreDisjointFromEveryOtherSpace() {
+        let decoding = Set(Self.allCodes.map(\.1))
+
+        let inspection: Set<String> = [
+            InspectionErrorCode.fileOpenFailed.rawValue,
+            InspectionErrorCode.fileUnreadable.rawValue,
+            InspectionErrorCode.fileAccessDenied.rawValue,
+        ]
+        let property: Set<String> = [
+            PropertyFailureCode.propertyReadError.rawValue,
         ]
         let waveform: Set<String> = [
             WaveformErrorCode.invalidConfiguration.rawValue,
             WaveformErrorCode.nonFiniteSample.rawValue,
+            WaveformErrorCode.channelOutOfBounds.rawValue,
             WaveformErrorCode.frameRangeOutOfBounds.rawValue,
             WaveformErrorCode.incompleteCoverage.rawValue,
             WaveformErrorCode.cancelled.rawValue,
+            WaveformErrorCode.fileAccessDenied.rawValue,
+            WaveformErrorCode.fileOpenFailed.rawValue,
+            WaveformErrorCode.unsupportedProcessingFormat.rawValue,
             WaveformErrorCode.readFailed.rawValue,
         ]
+
+        #expect(decoding.isDisjoint(with: inspection))
+        #expect(decoding.isDisjoint(with: property))
         #expect(decoding.isDisjoint(with: waveform))
-        #expect(decoding.count == 4, "every code is distinct from its siblings")
+
+        #expect(decoding.allSatisfy { $0.hasPrefix("decoding_") })
+        #expect(inspection.union(property).union(waveform).allSatisfy { !$0.hasPrefix("decoding_") })
+    }
+
+    /// The collisions that would be easiest to cause and hardest to notice: the same *word* names a
+    /// fault in two spaces, and only the prefix keeps them apart.
+    @Test("codes naming the same kind of fault in another space still differ")
+    func similarlyNamedCodesStayApart() {
+        #expect(AudioDecodingErrorCode.nonFiniteSample.rawValue != WaveformErrorCode.nonFiniteSample.rawValue)
+        #expect(AudioDecodingErrorCode.cancelled.rawValue != WaveformErrorCode.cancelled.rawValue)
     }
 
     @Test("the code is the identity and the message is not")
