@@ -89,10 +89,9 @@ public final class ImportFlowModel {
         state = .working
 
         let task = Task { [weak self] in
-            let outcome = await action { report in
-                // The report is shown the moment it exists, without waiting for the samples.
-                guard let self, operation == self.currentOperation else { return }
-                self.state = .report(InspectionPresentation(report: report, waveform: .loading))
+            let outcome = await action { update in
+                guard let self, operation == self.currentOperation else { return } // superseded: drop it
+                self.apply(update)
             }
             guard let self, operation == self.currentOperation else { return } // superseded: drop it
             self.apply(outcome, restoringOnCancellation: previous)
@@ -101,19 +100,58 @@ public final class ImportFlowModel {
         await task.value
     }
 
+    /// Applies one part of an inspection as it settles. Only ever called for the current operation —
+    /// a result belonging to a superseded one is dropped before it reaches here, which is what keeps a
+    /// slow generation from overwriting the file the user is now looking at.
+    ///
+    /// Each case touches **only** its own part: whichever visualisation finishes first is shown first,
+    /// and neither waits for nor depends on the other.
+    private func apply(_ update: InspectionUpdate) {
+        switch update {
+        case let .report(report):
+            // The report is shown the moment it exists, without waiting for any samples.
+            state = .report(InspectionPresentation(report: report, waveform: .loading, spectrogram: .loading))
+        case let .waveform(outcome):
+            guard case var .report(presentation) = state else { return }
+            // `nil` means cancelled, which cannot normally arrive here: cancelling bumps the operation
+            // number first, so such a result is stale and was already dropped. Leaving the state
+            // untouched keeps a cancelled generation from being shown as a limitation of the file.
+            guard let settled = WaveformState(outcome) else { return }
+            presentation.waveform = settled
+            state = .report(presentation)
+        case let .spectrogram(outcome):
+            guard case var .report(presentation) = state else { return }
+            guard let settled = SpectrogramState(outcome) else { return }
+            presentation.spectrogram = settled
+            state = .report(presentation)
+        }
+    }
+
     /// Settles the state once an operation has finished. Only ever called for the current operation.
     private func apply(_ outcome: SourceInspectionOutcome, restoringOnCancellation previous: State) {
         switch outcome {
-        case let .inspected(report, waveform):
-            // A waveform that failed or is absent never withholds or replaces the report.
+        case let .inspected(report, waveform, spectrogram):
+            // Neither visualisation withholds or replaces the report, whatever became of it.
             //
-            // `WaveformState(_:)` is `nil` only for a cancelled generation, which this line cannot
-            // normally see: cancelling always bumps the operation number first, so such a result is
-            // stale and was already dropped above. The fallback exists so the state stays settled
-            // rather than stuck on `loading` if that ever changes, and it is a fallback — not a claim
-            // that the file offered nothing.
-            let settled = WaveformState(waveform) ?? .unavailable
-            state = .report(InspectionPresentation(report: report, waveform: settled))
+            // The progressive handler has normally settled both already; this is the backstop for a
+            // caller that reported nothing, so the state cannot stay stuck on `loading`. `?? .unavailable`
+            // applies only to a cancelled outcome that was not dropped as stale — a fallback, not a
+            // claim that the file offered nothing.
+            let presentation = InspectionPresentation(
+                report: report,
+                waveform: WaveformState(waveform) ?? .unavailable,
+                spectrogram: SpectrogramState(spectrogram) ?? .unavailable
+            )
+            // A settled visualisation already shown must not be walked back to a fallback.
+            if case let .report(current) = state, current.report == report {
+                state = .report(InspectionPresentation(
+                    report: report,
+                    waveform: current.waveform == .loading ? presentation.waveform : current.waveform,
+                    spectrogram: current.spectrogram == .loading ? presentation.spectrogram : current.spectrogram
+                ))
+            } else {
+                state = .report(presentation)
+            }
         case .cancelled:
             state = previous // neutral: back to exactly where the user was
         case .preparationFailed:

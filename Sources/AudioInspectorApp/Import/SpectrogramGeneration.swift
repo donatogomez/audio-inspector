@@ -1,32 +1,7 @@
 import AudioInspectorAnalysis
 import AudioInspectorDomain
 import AudioInspectorMedia
-
-/// What producing a spectrogram actually yielded, once it is over.
-///
-/// Four outcomes, kept apart because they mean four different things to a user: a model, a file that
-/// offered nothing to size an analysis against, something going wrong, and the user replacing the
-/// operation. Collapsing any two would tell them something untrue — most of all cancellation, which
-/// says nothing whatever about their file.
-///
-/// It has no "still working" case: this is the *result* of a generation, and a result that has not
-/// happened yet is not a result. That distinction is the waveform's too, and is kept deliberately.
-///
-/// It lives here rather than in a feature module because nothing outside the composition root consumes
-/// it yet; carrying it beside the report is group 6's job, and moving it then will have a reason.
-enum SpectrogramOutcome: Sendable, Equatable {
-    /// The file's spectral model. A model with no columns is a complete answer for a file with no
-    /// audio, or for one shorter than a single analysis window — not an absence.
-    case available(Spectrogram)
-    /// The file exposed no usable frame count, so there was nothing to size an analysis against.
-    /// Caused by the file, and not a failure.
-    case unavailable
-    /// Producing it failed. The message is human and neutral: it names no path, no framework and no
-    /// stable code (ADR-0011).
-    case failed(message: String)
-    /// The operation was cancelled — by the user replacing it, never by the file.
-    case cancelled
-}
+import FeatureImport
 
 /// One spectrogram generation: decode → accumulate → finish, and nothing else.
 ///

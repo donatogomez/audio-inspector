@@ -2,6 +2,7 @@ import AVFoundation
 import AudioInspectorDomain
 @testable import AudioInspectorApp
 import AudioInspectorTesting
+import FeatureImport
 import Foundation
 import Testing
 
@@ -18,6 +19,11 @@ struct SpectrogramFlowTests {
     private final class OutcomeBox {
         var outcomes: [SpectrogramOutcome] = []
         var first: SpectrogramOutcome? { outcomes.first }
+
+        /// Collects only the spectrogram updates; the rest of the channel is not this suite's subject.
+        @MainActor func collect(_ update: InspectionUpdate) {
+            if case let .spectrogram(outcome) = update { outcomes.append(outcome) }
+        }
     }
 
     private func fixture(in directory: URL, frames: AVAudioFrameCount = 20_000) throws -> URL {
@@ -45,10 +51,8 @@ struct SpectrogramFlowTests {
             let url = try fixture(in: directory, frames: 20_000)
             let box = OutcomeBox()
 
-            let coordinator = SourceInspectionCoordinator(
-                onSpectrogram: { box.outcomes.append($0) }
-            )
-            _ = await coordinator.inspect(url, onReport: { _ in })
+            let coordinator = SourceInspectionCoordinator()
+            _ = await coordinator.inspect(url, onUpdate: { box.collect($0) })
 
             guard case let .available(model) = try #require(box.first) else {
                 Issue.record("the real decoder produced \(String(describing: box.first))")
@@ -69,12 +73,10 @@ struct SpectrogramFlowTests {
             let url = try fixture(in: directory, frames: 8_192)
             let box = OutcomeBox()
 
-            let coordinator = SourceInspectionCoordinator(
-                onSpectrogram: { box.outcomes.append($0) }
-            )
+            let coordinator = SourceInspectionCoordinator()
             #expect(box.outcomes.isEmpty, "nothing runs before the inspection does")
 
-            _ = await coordinator.inspect(url, onReport: { _ in })
+            _ = await coordinator.inspect(url, onUpdate: { box.collect($0) })
 
             #expect(box.outcomes.count == 1, "the operation ran exactly once")
         }
@@ -85,11 +87,9 @@ struct SpectrogramFlowTests {
     @Test("a preparation failure starts no spectrogram operation")
     func aPreparationFailureStartsNothing() async {
         let box = OutcomeBox()
-        let coordinator = SourceInspectionCoordinator(
-            onSpectrogram: { box.outcomes.append($0) }
-        )
+        let coordinator = SourceInspectionCoordinator()
 
-        let outcome = await coordinator.inspect(URL(string: "https://example.com/x.wav")!, onReport: { _ in })
+        let outcome = await coordinator.inspect(URL(string: "https://example.com/x.wav")!, onUpdate: { box.collect($0) })
 
         #expect(outcome == .preparationFailed)
         #expect(box.outcomes.isEmpty, "a spectrogram was attempted for something that is not a file")
@@ -111,12 +111,11 @@ struct SpectrogramFlowTests {
 
             let coordinator = SourceInspectionCoordinator(
                 makeWaveformGenerator: { _ in generator },
-                makeDecoder: { _ in decoder },
-                onSpectrogram: { box.outcomes.append($0) }
+                makeDecoder: { _ in decoder }
             )
-            let outcome = await coordinator.inspect(url, onReport: { _ in })
+            let outcome = await coordinator.inspect(url, onUpdate: { box.collect($0) })
 
-            guard case let .inspected(report, waveform) = outcome else {
+            guard case let .inspected(report, waveform, _) = outcome else {
                 Issue.record("expected an inspected outcome"); return
             }
             guard case .failed = report.status else {
@@ -144,12 +143,11 @@ struct SpectrogramFlowTests {
                 makeWaveformGenerator: { _ in FakeWaveformGenerating(succeedingWith: envelope) },
                 makeDecoder: { _ in
                     FakeAudioDecoding(failingWith: AudioDecodingError(code: .readFailed, message: "boom"))
-                },
-                onSpectrogram: { box.outcomes.append($0) }
+                }
             )
-            let outcome = await coordinator.inspect(url, onReport: { _ in })
+            let outcome = await coordinator.inspect(url, onUpdate: { box.collect($0) })
 
-            guard case let .inspected(report, waveform) = outcome else {
+            guard case let .inspected(report, waveform, _) = outcome else {
                 Issue.record("expected an inspected outcome"); return
             }
             if case .failed = report.status {
@@ -183,12 +181,11 @@ struct SpectrogramFlowTests {
             let coordinator = SourceInspectionCoordinator(
                 makeWaveformGenerator: { _ in
                     FakeWaveformGenerating(failingWith: WaveformError(code: .readFailed, message: "boom"))
-                },
-                onSpectrogram: { box.outcomes.append($0) }
+                }
             )
-            let outcome = await coordinator.inspect(url, onReport: { _ in })
+            let outcome = await coordinator.inspect(url, onUpdate: { box.collect($0) })
 
-            guard case let .inspected(_, waveform) = outcome else {
+            guard case let .inspected(_, waveform, _) = outcome else {
                 Issue.record("expected an inspected outcome"); return
             }
             guard case .failed = waveform else {
@@ -215,12 +212,11 @@ struct SpectrogramFlowTests {
                 makeWaveformGenerator: { _ in FakeWaveformGenerating(succeedingWith: envelope) },
                 makeDecoder: { _ in
                     FakeAudioDecoding(failingWith: AudioDecodingError(code: .cancelled, message: "cancelled"))
-                },
-                onSpectrogram: { box.outcomes.append($0) }
+                }
             )
-            let outcome = await coordinator.inspect(url, onReport: { _ in })
+            let outcome = await coordinator.inspect(url, onUpdate: { box.collect($0) })
 
-            guard case let .inspected(report, waveform) = outcome else {
+            guard case let .inspected(report, waveform, _) = outcome else {
                 Issue.record("expected an inspected outcome"); return
             }
             #expect(box.first == .cancelled)
@@ -241,12 +237,11 @@ struct SpectrogramFlowTests {
             let coordinator = SourceInspectionCoordinator(
                 makeWaveformGenerator: { _ in
                     FakeWaveformGenerating(failingWith: WaveformError(code: .cancelled, message: "cancelled"))
-                },
-                onSpectrogram: { box.outcomes.append($0) }
+                }
             )
-            let outcome = await coordinator.inspect(url, onReport: { _ in })
+            let outcome = await coordinator.inspect(url, onUpdate: { box.collect($0) })
 
-            guard case let .inspected(_, waveform) = outcome else {
+            guard case let .inspected(_, waveform, _) = outcome else {
                 Issue.record("expected an inspected outcome"); return
             }
             #expect(waveform == .cancelled)
@@ -264,11 +259,9 @@ struct SpectrogramFlowTests {
             let url = try fixture(in: directory, frames: 8_192)
             let box = OutcomeBox()
 
-            let coordinator = SourceInspectionCoordinator(
-                onSpectrogram: { box.outcomes.append($0) }
-            )
-            _ = await coordinator.inspect(url, onReport: { _ in })
-            _ = await coordinator.inspect(url, onReport: { _ in })
+            let coordinator = SourceInspectionCoordinator()
+            _ = await coordinator.inspect(url, onUpdate: { box.collect($0) })
+            _ = await coordinator.inspect(url, onUpdate: { box.collect($0) })
 
             #expect(box.outcomes.count == 2)
             #expect(box.outcomes[0] == box.outcomes[1], "two reads of one file disagreed")
@@ -285,8 +278,8 @@ struct SpectrogramFlowTests {
             let contentsBefore = try FileManager.default.contentsOfDirectory(atPath: directory.path).sorted()
             let box = OutcomeBox()
 
-            let coordinator = SourceInspectionCoordinator(onSpectrogram: { box.outcomes.append($0) })
-            _ = await coordinator.inspect(url, onReport: { _ in })
+            let coordinator = SourceInspectionCoordinator()
+            _ = await coordinator.inspect(url, onUpdate: { box.collect($0) })
 
             #expect(try Data(contentsOf: url) == before, "the source changed")
             #expect(
@@ -296,18 +289,20 @@ struct SpectrogramFlowTests {
         }
     }
 
-    /// Without a handler no generation happens at all — the switch that keeps the work from being done
-    /// for nothing until group 6 consumes it.
-    @Test("no handler means no decode is even attempted")
-    func noHandlerMeansNoWork() async throws {
+    /// Group 5 gated the generation on a handler, because nothing consumed the result. Group 6 gives it
+    /// a consumer, so the decode now always happens and its result always reaches the channel.
+    @Test("the decode runs and its result reaches the update channel")
+    func theResultIsAlwaysDelivered() async throws {
         try await withTemporaryDirectory { directory in
             let url = try fixture(in: directory)
             let decoder = FakeAudioDecoding(streaming: try stream(frames: 20_000), chunks: [])
+            let box = OutcomeBox()
 
             let coordinator = SourceInspectionCoordinator(makeDecoder: { _ in decoder })
-            _ = await coordinator.inspect(url, onReport: { _ in })
+            _ = await coordinator.inspect(url, onUpdate: { box.collect($0) })
 
-            #expect(await decoder.spy.callCount == 0, "a spectrogram was produced with nobody to receive it")
+            #expect(await decoder.spy.callCount == 1, "the spectrogram was not produced")
+            #expect(box.outcomes.count == 1, "its result never reached the channel")
         }
     }
 }

@@ -11,24 +11,39 @@ import AudioInspectorDomain
 public enum SourceInspectionOutcome: Sendable, Equatable {
     /// The user dismissed the picker — **not** an error.
     case cancelled
-    /// A file was inspected; the report carries the outcome, including a global failure. The waveform
-    /// travels **beside** it, and whatever became of it never changes the report.
-    case inspected(InspectionReport, waveform: WaveformOutcome)
+    /// A file was inspected; the report carries the outcome, including a global failure. Both
+    /// visualisations travel **beside** it, and whatever became of either never changes the report.
+    case inspected(InspectionReport, waveform: WaveformOutcome, spectrogram: SpectrogramOutcome)
     /// The selection could not be turned into an inspectable file at all.
     case preparationFailed
 }
 
-/// Receives the inspection's report the moment it exists, before the waveform is generated.
+/// One thing an inspection has finished, delivered the moment it is known.
 ///
-/// It exists so the report is not held hostage by an optional extra: reading samples takes longer than
-/// reading metadata, and the report is complete without it. Called at most once per operation, on the
-/// main actor.
-public typealias InspectionReportHandler = @MainActor (InspectionReport) -> Void
+/// A single channel rather than one handler per result, so adding a third visualisation later cannot
+/// mean a third parameter threaded through every call site. Each case updates **only** its own part of
+/// the presentation: a waveform that arrives first does not wait for the spectrogram, and neither
+/// waits for the other to fail.
+public enum InspectionUpdate: Sendable {
+    /// The report, the moment it exists — before either visualisation has been produced.
+    case report(InspectionReport)
+    /// What became of the amplitude envelope.
+    case waveform(WaveformOutcome)
+    /// What became of the spectral model.
+    case spectrogram(SpectrogramOutcome)
+}
+
+/// Receives each part of an inspection as it settles, on the main actor.
+///
+/// It exists so the report is not held hostage by optional extras: reading samples takes longer than
+/// reading metadata, and the report is complete without either visualisation. `report` arrives at most
+/// once per operation, and each visualisation at most once.
+public typealias InspectionUpdateHandler = @MainActor (InspectionUpdate) -> Void
 
 /// The action the import feature receives as an injected dependency from the composition root.
 ///
 /// `@MainActor` (it drives a native panel) and `async` (it awaits the user's choice, the inspection and
-/// then the waveform). It hands the report back through the given handler as soon as the inspection is
-/// done, and returns the complete outcome when the waveform has settled too. The Feature never learns
-/// how the file is chosen, accessed, or read.
-public typealias SourceInspectionAction = @MainActor (InspectionReportHandler) async -> SourceInspectionOutcome
+/// then the visualisations). It reports each part through the given handler as soon as that part is
+/// known, and returns the complete outcome once everything has settled. The Feature never learns how
+/// the file is chosen, accessed, or read.
+public typealias SourceInspectionAction = @MainActor (InspectionUpdateHandler) async -> SourceInspectionOutcome

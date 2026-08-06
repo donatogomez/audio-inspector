@@ -18,7 +18,7 @@ struct ImportFlowDropTests {
         private(set) var callCount = 0
         private let outcome: SourceInspectionOutcome
         init(_ outcome: SourceInspectionOutcome) { self.outcome = outcome }
-        func run(_ onReport: InspectionReportHandler) async -> SourceInspectionOutcome {
+        func run(_ onUpdate: InspectionUpdateHandler) async -> SourceInspectionOutcome {
             callCount += 1
             return outcome
         }
@@ -29,7 +29,7 @@ struct ImportFlowDropTests {
     final class ControllableAction {
         private(set) var callCount = 0
         private var continuation: CheckedContinuation<SourceInspectionOutcome, Never>?
-        func run(_ onReport: InspectionReportHandler) async -> SourceInspectionOutcome {
+        func run(_ onUpdate: InspectionUpdateHandler) async -> SourceInspectionOutcome {
             callCount += 1
             return await withCheckedContinuation { continuation = $0 }
         }
@@ -42,7 +42,7 @@ struct ImportFlowDropTests {
     /// Fails the test if it ever runs — proves a refusal starts nothing.
     @MainActor
     final class UnreachableAction {
-        func run(_ onReport: InspectionReportHandler) async -> SourceInspectionOutcome {
+        func run(_ onUpdate: InspectionUpdateHandler) async -> SourceInspectionOutcome {
             Issue.record("a rejected drop must not start an inspection")
             return .cancelled
         }
@@ -67,25 +67,25 @@ struct ImportFlowDropTests {
 
     @Test func aDroppedSourceEndsInAReportAndRunsItsActionExactlyOnce() async {
         let report = makeReport(named: "dropped.wav")
-        let action = ScriptedAction(.inspected(report, waveform: .unavailable))
+        let action = ScriptedAction(.inspected(report, waveform: .unavailable, spectrogram: .unavailable))
         let model = ImportFlowModel(action: UnreachableAction().run) // the panel must stay unused
 
         await model.inspectDroppedSource(using: action.run)
 
-        #expect(model.state == .report(InspectionPresentation(report: report, waveform: .unavailable)))
+        #expect(model.state == .report(InspectionPresentation(report: report, waveform: .unavailable, spectrogram: .unavailable)))
         #expect(action.callCount == 1)
     }
 
     @Test func aDroppedSourceReplacesAnExistingReportWhenItCompletes() async {
         let first = makeReport(named: "first.wav")
         let second = makeReport(named: "second.wav")
-        let model = ImportFlowModel(action: ScriptedAction(.inspected(first, waveform: .unavailable)).run)
+        let model = ImportFlowModel(action: ScriptedAction(.inspected(first, waveform: .unavailable, spectrogram: .unavailable)).run)
 
         await model.selectAndInspect()
-        #expect(model.state == .report(InspectionPresentation(report: first, waveform: .unavailable)))
+        #expect(model.state == .report(InspectionPresentation(report: first, waveform: .unavailable, spectrogram: .unavailable)))
 
-        await model.inspectDroppedSource(using: ScriptedAction(.inspected(second, waveform: .unavailable)).run)
-        #expect(model.state == .report(InspectionPresentation(report: second, waveform: .unavailable)))
+        await model.inspectDroppedSource(using: ScriptedAction(.inspected(second, waveform: .unavailable, spectrogram: .unavailable)).run)
+        #expect(model.state == .report(InspectionPresentation(report: second, waveform: .unavailable, spectrogram: .unavailable)))
     }
 
     @Test func aGlobalFailureFromADropStaysAReport() async {
@@ -104,10 +104,10 @@ struct ImportFlowDropTests {
         )
         let model = ImportFlowModel(action: UnreachableAction().run)
 
-        await model.inspectDroppedSource(using: ScriptedAction(.inspected(failed, waveform: .unavailable)).run)
+        await model.inspectDroppedSource(using: ScriptedAction(.inspected(failed, waveform: .unavailable, spectrogram: .unavailable)).run)
 
         // The domain models a global failure; the flow must not convert it into its own `failed`.
-        #expect(model.state == .report(InspectionPresentation(report: failed, waveform: .unavailable)))
+        #expect(model.state == .report(InspectionPresentation(report: failed, waveform: .unavailable, spectrogram: .unavailable)))
     }
 
     @Test func aDropIsIgnoredWhileAnInspectionIsInFlight() async {
@@ -122,9 +122,9 @@ struct ImportFlowDropTests {
         await model.inspectDroppedSource(using: UnreachableAction().run) // ignored
         #expect(running.callCount == 1)
 
-        running.finish(.inspected(report, waveform: .unavailable))
+        running.finish(.inspected(report, waveform: .unavailable, spectrogram: .unavailable))
         await first.value
-        #expect(model.state == .report(InspectionPresentation(report: report, waveform: .unavailable)))
+        #expect(model.state == .report(InspectionPresentation(report: report, waveform: .unavailable, spectrogram: .unavailable)))
     }
 
     // MARK: - Rejections are orthogonal to the state
@@ -142,12 +142,12 @@ struct ImportFlowDropTests {
     @Test(arguments: DropRejection.allCases)
     func aRejectionPreservesAnExistingReport(_ rejection: DropRejection) async {
         let report = makeReport(named: "kept.wav")
-        let model = ImportFlowModel(action: ScriptedAction(.inspected(report, waveform: .unavailable)).run)
+        let model = ImportFlowModel(action: ScriptedAction(.inspected(report, waveform: .unavailable, spectrogram: .unavailable)).run)
 
         await model.selectAndInspect()
         model.reject(rejection)
 
-        #expect(model.state == .report(InspectionPresentation(report: report, waveform: .unavailable))) // the report survives the refusal
+        #expect(model.state == .report(InspectionPresentation(report: report, waveform: .unavailable, spectrogram: .unavailable))) // the report survives the refusal
         #expect(model.dropRejection == rejection)
     }
 
@@ -168,14 +168,14 @@ struct ImportFlowDropTests {
         let model = ImportFlowModel(action: UnreachableAction().run)
         model.reject(.multipleItems)
 
-        await model.inspectDroppedSource(using: ScriptedAction(.inspected(report, waveform: .unavailable)).run)
+        await model.inspectDroppedSource(using: ScriptedAction(.inspected(report, waveform: .unavailable, spectrogram: .unavailable)).run)
 
         #expect(model.dropRejection == nil)
     }
 
     @Test func aValidPanelSelectionClearsThePendingRejection() async {
         let report = makeReport(named: "clip.wav")
-        let model = ImportFlowModel(action: ScriptedAction(.inspected(report, waveform: .unavailable)).run)
+        let model = ImportFlowModel(action: ScriptedAction(.inspected(report, waveform: .unavailable, spectrogram: .unavailable)).run)
         model.reject(.unsupportedItem)
 
         await model.selectAndInspect()
