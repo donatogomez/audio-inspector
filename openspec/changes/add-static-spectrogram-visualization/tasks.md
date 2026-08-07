@@ -473,6 +473,13 @@ a real 6:56 MP3 took tens of seconds to draw from an Xcode (Debug) run, and the 
 followed found two production problems worth fixing before anyone certifies the surface. Validating a
 surface that is about to change would spend a person's attention twice.
 
+**That block is now cleared, and the pass was still deferred — deliberately.** Group 12 fixed the
+performance problem and the fix was confirmed by running the application. **Manual validation deferred by
+product decision. Basic functional observation was satisfactory, but the literal validation criteria were
+not executed and therefore are not recorded as passed.** What was and was not observed is recorded
+durably in `docs/manual-validation-mvp.md`; the fixtures and the runbook are prepared and were left in
+place, so this group can be run later without rebuilding anything. Nothing below is marked.
+
 Nothing below may be marked done without actually performing it.
 
 - [ ] 10.1 VoiceOver: the spectrogram is announced as a single element describing what it is, with no

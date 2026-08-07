@@ -76,8 +76,70 @@ behaviour of `improve-report-presentation` and exists so a readable summary neve
 The inherited check `improve-report-presentation` 9.1 (no internal identifier on screen) and 9.4 (no
 meaning carried by colour alone) **were** performed, and are recorded above.
 
+The **spectrogram's** manual validation (change `add-static-spectrogram-visualization`, group 10) was
+**deliberately deferred**, and the section below states exactly what that leaves standing and what it
+does not.
+
 Re-run this runbook whenever the selection, drag & drop, export, routing, sandbox or entitlement
 behaviour changes.
+
+## The spectrogram's manual validation — deferred by product decision (2026-08-07)
+
+The exhaustive manual pass over the static spectrogram was **not executed**. This is a product decision
+to defer, taken with the surface finished and working, not an omission and not a failure. It is recorded
+here because the alternative — leaving it unsaid — would let a later reader assume the checks were made.
+
+**The performance regression that had blocked this validation is fixed.** The first attempt at this pass,
+on 2026-08-07, stopped at its first step: a real file took tens of seconds to draw. That was diagnosed,
+corrected, and the correction was verified by running the application — the same real FLAC that had been
+watched taking about thirty-three seconds now shows its spectrogram in a few seconds. The reason the pass
+was blocked no longer exists.
+
+### OBSERVED
+
+A basic functional check of the built application, and nothing more:
+
+- the spectrogram works in the real application;
+- the practical performance is substantially better, and the file that previously blocked this pass now
+  draws in a few seconds rather than tens of them;
+- the overall visual result and the revised colour ramp look satisfactory at first sight.
+
+### NOT EXECUTED
+
+The whole of group 10's literal battery — tasks **10.1 to 10.6**:
+
+- **10.1** the VoiceOver announcement and the accessibility tree;
+- **10.2** every meaning having a textual alternative, across all of the surface's states;
+- **10.3** contrast in light and dark appearance;
+- **10.4** the colour ramp viewed in greyscale;
+- **10.5** the 96 kHz and 192 kHz files and how their empty upper range reads;
+- **10.6** the by-eye sweep for a named encoder, a bitrate or a verdict.
+
+The fixtures and the step-by-step runbook prepared for this pass exist and were left in place, outside
+the repository; nothing has to be rebuilt to run it later.
+
+### What this record does and does not claim
+
+**A satisfactory first impression is not evidence that a criterion was met.** None of 10.1–10.6 is
+recorded as passed, and none may be cited as passed. They were not run.
+
+In particular, the absence of a visible defect is **not** a result for any of them: 10.4 asks for the
+ramp to be *looked at* in greyscale and no one has looked; 10.5 asks whether a mostly-empty upper range
+reads as information rather than as a drawing fault, which is a judgement no test makes; 10.1's tree was
+never opened. Some of these are partly covered by automated tests — luminance monotonicity is asserted
+every 0.25 dB, the axes are asserted to span the file's own Nyquist without cropping, and the ramp is
+asserted to carry no verdict — but the tasks as written ask for **observation**, and a test is not an
+observation.
+
+The **known VoiceOver traversal gap** recorded above, from the waveform slice, is unchanged and still
+open. It is carried forward as it stands; the spectrogram's 10.1 was not run at all, so nothing new is
+known about it either way.
+
+**Consequences, so they are not discovered later.** Group 10's tasks 10.1–10.7 stay open. Task 1.4 of the
+same change forbids moving **ADR-0016** out of `Proposed` before this validation is done, so ADR-0016
+remains `Proposed`; **ADR-0015** is independent and remains `Proposed` on its own separate criteria.
+Group 11's task 11.4 — deleting `Spike/validate-static-spectrogram/` — is gated on ADR-0016 being
+Accepted and therefore cannot be reached from here.
 
 ## What is already automated (do not re-verify by hand)
 
