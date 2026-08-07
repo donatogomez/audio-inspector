@@ -60,17 +60,67 @@ public struct PCMChunk: Sendable, Equatable {
                 message: "Channel \(index) carries \(samples.count) frames where channel 0 carries \(frameCount)."
             )
         }
+        // The finiteness check runs once per sample per channel — 52.9 M times for a ten-minute stereo
+        // file — so how it is written decides whether an unoptimised build takes seconds over it. A
+        // scalar loop was measured at **7.2 s** for that file; the screen below brings it to **0.9 s**
+        // (`docs/spikes/2026-08-07-spectrogram-performance-presentation-diagnosis.md` §I).
+        //
+        // **The semantics are unchanged**: the same code, the same message, naming the *first* offending
+        // sample in channel order.
         for (index, samples) in channels.enumerated() {
-            for (offset, sample) in samples.enumerated() where !sample.isFinite {
-                throw AudioDecodingError(
-                    code: .nonFiniteSample,
-                    message: "Frame \(startFrame + offset) of channel \(index) is not a finite value."
-                )
-            }
+            if Self.isProvablyAllFinite(samples) { continue }
+            // The screen is one-sided, so reaching here means "possibly not finite", never "definitely".
+            // Only now is the exact answer worth a scalar pass — and only a genuinely broken file pays
+            // for it.
+            guard let offset = Self.firstNonFiniteOffset(samples) else { continue }
+            throw AudioDecodingError(
+                code: .nonFiniteSample,
+                message: "Frame \(startFrame + offset) of channel \(index) is not a finite value."
+            )
         }
 
         self.startFrame = startFrame
         self.channels = channels
+    }
+
+    /// Whether every sample is **provably** finite. One-sided: `true` is a proof, `false` is a suspicion.
+    ///
+    /// Adding the samples together is the whole test. Any `NaN` propagates through every subsequent
+    /// addition, `+∞` and `−∞` propagate as themselves or become `NaN` together — so a finite total can
+    /// only come from finite parts. The converse does **not** hold: a total may overflow to infinity
+    /// from values that are each perfectly finite, which is why a `false` here sends the caller to an
+    /// exact scan rather than straight to a refusal. A check that could reject a valid file would defeat
+    /// the point of having one.
+    ///
+    /// The lanes are `SIMD8`, which the standard library provides — **no Accelerate**, because the
+    /// domain imports nothing and this file is one of the ones a boundary test asserts that about. The
+    /// loads are unaligned, since an `Array`'s buffer carries no promise of vector alignment.
+    private static func isProvablyAllFinite(_ samples: [Float]) -> Bool {
+        samples.withUnsafeBytes { raw in
+            let count = samples.count
+            var total = SIMD8<Float>()
+            var offset = 0
+            while offset + 8 <= count {
+                total += raw.loadUnaligned(fromByteOffset: offset * 4, as: SIMD8<Float>.self)
+                offset += 8
+            }
+            var remainder: Float = 0
+            while offset < count {
+                remainder += raw.loadUnaligned(fromByteOffset: offset * 4, as: Float.self)
+                offset += 1
+            }
+            return (total.sum() + remainder).isFinite
+        }
+    }
+
+    /// The first sample that is not finite, for the message. Only reached when the screen above has
+    /// already said something might be wrong.
+    private static func firstNonFiniteOffset(_ samples: [Float]) -> Int? {
+        samples.withUnsafeBufferPointer { buffer in
+            guard let base = buffer.baseAddress else { return nil }
+            for offset in 0 ..< buffer.count where !(base + offset).pointee.isFinite { return offset }
+            return nil
+        }
     }
 
     /// One channel's samples, or `nil` for a channel the chunk does not carry.
