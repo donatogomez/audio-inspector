@@ -107,13 +107,30 @@ drawing. **No axis modes, no zoom and no "audible band" crop in this slice.**
 
 ### 6. Colour
 
-A perceptual ramp built by hand, no dependency: **strictly increasing in luminance**, dark background →
-deep blue → cyan → pale yellow/white. Monotonic luminance keeps it readable in greyscale and for colour
-vision deficiency, and makes intensity read as intensity.
+A perceptual ramp built by hand, no dependency: **strictly increasing in luminance**. Monotonic
+luminance keeps it readable in greyscale and for colour vision deficiency, and makes intensity read as
+intensity.
 
-**Not Spek's palette.** Spek's ramp passes through green and red, and this project has a standing rule
-that colour never says "good" or "bad". A numeric **−120…0 dBFS legend is mandatory**: without it a
-gradient means nothing. Loading, absence and failure are said in **text**, never by colour alone.
+**Revised on 2026-08-07, after manual observation and measurement**
+(`docs/spikes/2026-08-07-spectrogram-performance-presentation-diagnosis.md`, §F). The first ramp — dark
+background → deep blue → cyan → pale yellow/white — was measured to be sound on luminance (0.023 →
+0.974, with 57 % of the range across −90…−30 dBFS) but **weak on hue travel**: four of eight sampled
+levels sat in the cyan-teal family, and between −60 and −15 dBFS the hue barely moved, so levels 45 dB
+apart could read as similar colours. The ramp now runs **near-black → indigo → blue → teal → green →
+yellow-green → near-white**, which keeps 53.8 % of the luminance range on −90…−30 dBFS while moving
+through five distinguishable hues instead of one. The first ramp is not deleted from the record: it was
+correct on the criterion it was designed against, and the criterion turned out to be incomplete.
+
+**Not Spek's palette**, and the rejection is now measured rather than argued from principle alone.
+Spek's ramp passes through green and red, and this project has a standing rule that colour never says
+"good" or "bad" — but it is also **not monotonic in luminance**: sampled with the project's own Rec. 709
+formula it rises to 0.757 at yellow, falls to 0.642 at orange and 0.399 at red, then jumps to white. A
+loud red band would read as *quieter* than a mid-level yellow one in greyscale. The rule and the
+measurement agree.
+
+A numeric **−120…0 dBFS legend is mandatory**: without it a gradient means nothing. The legend samples
+the **same** ramp function the cells use, so the two cannot drift. Loading, absence and failure are said
+in **text**, never by colour alone.
 
 ### 7. Beside the report, never inside it
 

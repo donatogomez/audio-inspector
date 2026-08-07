@@ -468,6 +468,11 @@ property reader and the JSON exporter are not touched.
 
 ## 10. Accessibility and manual validation
 
+**Blocked by group 12.** The first manual pass was started on 2026-08-07 and stopped at its first step:
+a real 6:56 MP3 took tens of seconds to draw from an Xcode (Debug) run, and the measurement that
+followed found two production problems worth fixing before anyone certifies the surface. Validating a
+surface that is about to change would spend a person's attention twice.
+
 Nothing below may be marked done without actually performing it.
 
 - [ ] 10.1 VoiceOver: the spectrogram is announced as a single element describing what it is, with no
@@ -497,3 +502,59 @@ Nothing below may be marked done without actually performing it.
       its observations — the deletion criterion written into the spike report.
 - [ ] 11.5 Decide ADR-0016's status from what was actually done (see 1.4), update `CURRENT.md`, and
       archive through `openspec archive` after merge, without editing the promoted specs by hand.
+
+## 12. Performance and presentation corrections — runs before group 10
+
+**Added on 2026-08-07, after the manual pass stopped at its first step.** A real 6:56 MP3 took tens of
+seconds to draw from an Xcode run; the diagnosis in
+`docs/spikes/2026-08-07-spectrogram-performance-presentation-diagnosis.md` measured where the cost sits
+and found two production problems plus one presentation weakness. **This group is numbered 12 and runs
+before group 10**, rather than renumbered into position, because tasks 1.4 and 9.6, ADR-0016 and
+`CURRENT.md` all name "group 10" and renumbering would silently break every one of those references.
+
+**Nothing here changes the analysis contract.** The resolution stays 1024 × 512, FFT 2048, hop 512,
+Hann, linear frequency, full Nyquist, the −120 dBFS floor, maximum in both axes and channels combined
+in the frequency domain. The measurement is explicit that shrinking the grid would not speed up the
+analysis at all — analysis cost follows the STFT window count, not the grid — while 256 bands would
+halve the 5-band worst-case cutoff margin the original spike measured at 192 kHz.
+
+**No spec delta accompanies this group.** The capability's requirements are unchanged: the drawing still
+conveys intensity by colour on a monotonic-luminance scale, still redraws without decoding or
+transforming again, and still says every non-drawn state in words. What changes is how those
+requirements are met.
+
+- [x] 12.1 Record the diagnosis as a durable, reproducible report in `docs/spikes/`, including the
+      environment, the fixtures, the Debug/Release split, the allocation counts, the absence of any
+      quadratic behaviour, the confirmation that the FFT setup is not recreated, and the explicit limit
+      that `ImageRenderer` approximates the on-screen compositor rather than measuring it.
+- [x] 12.2 Revise `design.md` §6 with the measured reason the first ramp is being replaced, keeping the
+      earlier decision visible rather than deleting it, and record in ADR-0016's alternatives that
+      Spek's ramp is **also** non-monotonic in luminance. **ADR-0016's Status stays `Proposed`** and
+      ADR-0015 is not touched.
+- [x] 12.3 Replace the per-cell `Canvas` renderer with a raster one: model → RGBA buffer at the model's
+      own resolution → `CGImage` → one image drawn without interpolation. `Spectrogram` gains no
+      CoreGraphics, the domain gains nothing, no bitmap is persisted and no dependency is added.
+- [x] 12.4 Make the raster a function of the **model**, not of the view's size, so a resize redraws
+      without rebuilding it. Prove the rebuild count with a test rather than by reading the code.
+- [x] 12.5 Remove the per-transform temporaries in `SpectrogramAccumulator.transformChannel` — the
+      even/odd split arrays and the transform's returned arrays — using preallocated buffers owned by
+      the accumulator. No allocation may scale with the STFT frame count. No `@unchecked Sendable`, no
+      global cache, no deprecated API, and the transform setup stays confined to one operation.
+- [x] 12.6 Prove the optimisation changed no value: the existing analysis suites are the contract, and
+      every one of them passes untouched. If the modern API differs in the last float, measure the
+      difference and explain it rather than widening a tolerance.
+- [x] 12.7 Adopt the measured candidate ramp, with luminance verified strictly increasing by the
+      project's own formula, the −120…0 dBFS scale unchanged, and the legend still sampling the same
+      colour function as the cells.
+- [x] 12.8 Re-measure Debug and Release after the work, with the same method as the diagnosis, and
+      record the result — including, if Debug is still slow, that it is still slow.
+- [x] 12.9 Re-audit group 10's runbook against the changed surface: which steps still hold, which must
+      be repeated, and whether the resize observation is now worth making.
+      **Outcome.** The runbook and every fixture in it stay valid — none of them describes the renderer
+      or the ramp's exact colours, only what the drawing must show. Three things change for the run:
+      **(a)** it must be performed in a **Release** build, because Debug remains ≈42 s for a
+      seven-minute file and would measure the build rather than the product; **(b)** step 8's live-resize
+      observation is now worth making and should be smooth, where before it would have measured
+      something about to be replaced; **(c)** step 9's greyscale check and step 1's "is the ramp
+      readable" both apply to a **different ramp** and must be judged fresh rather than from the earlier
+      screenshot. Task 10.4's greyscale criterion is unchanged and still the right one.
