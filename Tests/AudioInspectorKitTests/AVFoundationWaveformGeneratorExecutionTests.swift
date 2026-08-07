@@ -95,41 +95,33 @@ struct AVFoundationWaveformGeneratorExecutionTests {
     // independent property, and Gate A is deterministic. That the envelope is complete for a long file
     // is covered several times over by the acceptance matrix.
 
-    // MARK: Gate C — cancellation requested while the work is under way
+    // MARK: Gate C — deliberately absent, for the same reason Gate B was
 
-    /// Distinct from the cancellation test in the acceptance matrix, which cancels a task **before it
-    /// starts**: there the flag is already set when the first boundary is reached, so it only proves
-    /// the adapter refuses to begin. Here the cancellation is requested strictly **after** the body has
-    /// begun executing, which is what a user pressing cancel actually does.
-    ///
-    /// What is observed: the body started, cancellation was requested afterwards from another task, and
-    /// the result is `cancelled` rather than an envelope. What is **inferred, not observed**: that at
-    /// least one chunk had been read by then. Between the resolver signalling and the first read there
-    /// is no suspension point, so the body cannot be parked in between — but the suite cannot see the
-    /// chunk counter, and this test does not pretend otherwise.
-    @Test("cancelling after the read has begun returns cancelled, not an envelope")
-    func cancellationDuringTheReadIsObserved() async throws {
-        try await withTemporaryDirectory { directory in
-            let url = try writeLongFixture(in: directory)
-            let (started, continuation) = AsyncStream<Void>.makeStream()
-
-            let generator = AVFoundationWaveformGenerator(
-                chunkFrames: 1, // many boundaries, so a later one is always reachable
-                resolveURL: { _ in
-                    continuation.yield()
-                    continuation.finish()
-                    return url
-                }
-            )
-
-            let task = Task { try await generator.makeWaveform(for: reference()) }
-
-            for await _ in started { break } // the body is now running
-            task.cancel() // requested from the main actor, strictly afterwards
-
-            let error = await #expect(throws: WaveformError.self) { try await task.value }
-            #expect(error?.code == .cancelled)
-            #expect(error?.code != .readFailed, "cancellation must not be reported as a failure of the file")
-        }
-    }
+    // There was a test here asserting that cancelling **after** the body had begun returns `cancelled`
+    // rather than an envelope. Its own doc-comment already admitted the weak point: that at least one
+    // chunk had been read was *"inferred, not observed"*. The inference was wrong.
+    //
+    // The signal is emitted from `resolveURL`, which the generator calls **before** it opens the file —
+    // before `AVAudioFile(forReading:)`, before the format check and before a single chunk is read. So
+    // it means "the body entered `makeWaveform`", never "a chunk has been read". Two orderings are both
+    // legal:
+    //
+    // 1. the body resolves the URL, opens the file and starts reading; the main actor is rescheduled,
+    //    cancels, and the next chunk boundary observes it — the test passes; or
+    // 2. the body reads the **whole** file — 882 000 frames at one frame per chunk — before the main
+    //    actor is rescheduled at all. `makeWaveform` returns an envelope, the later `cancel()` lands on
+    //    a finished task and does nothing, and the test fails.
+    //
+    // Which happens is decided by how quickly the main actor is rescheduled against how long the read
+    // takes, and nothing in the test controls either. Measured: it failed roughly one run in six of the
+    // full suite on `main`, and repeatedly took CI red.
+    //
+    // It is removed rather than repaired, exactly as Gate B above was: a longer fixture only widens the
+    // window, a threshold is a sleep with better manners, and accepting either outcome asserts nothing.
+    //
+    // **Nothing is lost.** That the loop consults cancellation at a chunk boundary is proved
+    // deterministically by the acceptance suite's own cancellation test — the flag is already set when
+    // the first boundary is reached, and there is no separate code path for a first boundary. Removing
+    // `Task.checkCancellation()` from the loop makes that test fail, which is what makes it the real
+    // guarantee rather than this one.
 }

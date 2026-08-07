@@ -4,14 +4,17 @@ import AudioInspectorMedia
 import Foundation
 import Testing
 
-// Where the decoder's read actually runs, whether it can be cancelled while it is running, and what
-// the callback's shape permits a consumer to do. All three are observed rather than argued.
+// Where the decoder's read actually runs, that two decodes cannot reach each other, and what the
+// callback's shape permits a consumer to do. All three are observed rather than argued.
 //
-// The observation seam is the adapter's **existing** production seam. `resolveURL` is called from
-// inside `decode`, before anything is opened, so a test resolver that signals through an `AsyncStream`
-// reports the moment the body begins — with no production change, no lock, no polling and no sleep.
-// Nothing here asserts an ordering between the main actor and the decode; that ordering is a race, and
-// the waveform suite already recorded what happens to tests that assert one.
+// The observation seam is the adapter's **existing** production seam: `resolveURL` is called from
+// inside `decode`, so a test resolver reports the moment the body begins — with no production change,
+// no lock, no polling and no sleep.
+//
+// **Nothing here asserts an ordering between the main actor and the decode.** That was the rule this
+// file already stated, and a cancellation test broke it anyway by inferring "a chunk has been read"
+// from a signal emitted before the file was even opened. See Gate B below for what that cost and why
+// it is gone rather than repaired.
 
 /// What a decode handed over, held in a class so the callback captures **one disconnected reference**
 /// rather than the enclosing context's variables.
@@ -124,71 +127,90 @@ struct AVFoundationAudioDecoderExecutionTests {
         }
     }
 
-    // MARK: Gate B — cancellation requested while the read is under way
+    // MARK: Gate B — deliberately absent: "cancel after the read began" has no deterministic observation
 
-    /// Distinct from the acceptance suite's cancellation test, which cancels a task **before it starts**:
-    /// there the flag is already set when the first boundary is reached, so it only proves the adapter
-    /// refuses to begin. Here cancellation is requested strictly **after** the body has begun executing,
-    /// which is what a user pressing cancel actually does.
+    // There was a test here asserting that cancelling **after** the body had begun returns `.cancelled`
+    // rather than a description. It started the decode, waited for the body to signal that it had
+    // begun, cancelled, and required `.cancelled`.
+    //
+    // **Its "no timing assumption" claim was false, and CI proved it.** The signal is emitted from
+    // `resolveURL`, which the adapter calls *before* it opens the file — before `AVAudioFile(forReading:)`,
+    // before the format check, and before a single chunk is read. So the signal means only "the body
+    // entered `decode`", never "at least one chunk has been read". Two orderings are both legal:
+    //
+    // 1. the body resolves the URL, opens the file and starts reading; the main actor is rescheduled,
+    //    cancels, and the next chunk boundary observes it — the test passes; or
+    // 2. the body resolves the URL and reads the **whole** file — 882 000 frames at one frame per
+    //    chunk — before the main actor is rescheduled at all. `decode` returns a description, the
+    //    later `cancel()` lands on a finished task and does nothing, and the test fails.
+    //
+    // Which one happens is decided by how quickly the main actor is rescheduled against how long the
+    // decode takes, and nothing in the test controls either. Run alone the decode takes ~0.5 s and the
+    // main actor wakes in microseconds, so it always passed locally; under the full suite on a shared
+    // runner it lost, on `main` as well as on this branch, and took the CI red with it.
+    //
+    // It is removed rather than repaired, exactly as the waveform suite's Gate B was and for the same
+    // reason: every repair available is dishonest. A longer fixture only widens the window, a threshold
+    // is a sleep with better manners, and accepting either outcome asserts nothing.
+    //
+    // **Nothing is lost.** That the loop consults cancellation at a chunk boundary is proved
+    // deterministically by `cancellationBeforeStarting` in the acceptance suite: the flag is already
+    // set when the first boundary is reached, so the branch under test is the same
+    // `Task.checkCancellation()` every later boundary runs — there is no separate code path for a
+    // first boundary. That a *composition* stops folding when cancelled is proved over the port fake,
+    // where delivery is scripted rather than raced.
+
+    /// Two decodes of the same file are independent operations: neither shares a decoder, a file
+    /// handle or any state with the other, so one failing cannot disturb the other's result.
     ///
-    /// No sleep, no polling and no timing assumption: the resolver signals through an `AsyncStream`, and
-    /// the cancellation is requested only once that signal has been received.
-    @Test("cancelling after the read has begun returns cancelled, not a description")
-    func cancellationDuringTheReadIsObserved() async throws {
-        try await withTemporaryDirectory { directory in
-            let url = try writeLongFixture(in: directory)
-            let (started, continuation) = AsyncStream<Void>.makeStream()
-
-            let decoder = AVFoundationAudioDecoder(resolveURL: { _ in
-                continuation.yield()
-                continuation.finish()
-                return url
-            })
-            let file = reference()
-
-            // Chunk size 1: many boundaries, so a later one is always reachable.
-            let task = Task { try await decodeDiscarding(decoder, file: file, chunkFrames: 1) }
-
-            for await _ in started { break } // the body is now running
-            task.cancel() // requested from the main actor, strictly afterwards
-
-            let error = await #expect(throws: AudioDecodingError.self) { try await task.value }
-            #expect(error?.code == .cancelled)
-            #expect(error?.code != .readFailed, "cancellation must not be reported as a failure of the file")
-        }
-    }
-
-    /// Cancelling one decode must not disturb another. ADR-0016 decision 15 makes this a property of the
-    /// seam rather than a nicety: the waveform and the spectrogram read the same file as independent
-    /// operations, and cancelling one visualisation may not cancel the other.
-    @Test("cancelling one decode leaves another running to completion")
+    /// **Failure is used as the disturbance rather than cancellation**, and that is the point. A
+    /// cancelled operation is only observably cancelled if the cancellation arrives before it finishes,
+    /// which nothing here can guarantee. A failing one fails because of its own configuration — no URL
+    /// to resolve — and is therefore deterministic. What this asserts is the same property ADR-0016
+    /// decision 15 requires: the operations do not reach each other.
+    @Test("one decode failing leaves another running to completion")
     func operationsAreIndependent() async throws {
         try await withTemporaryDirectory { directory in
             let url = try writeLongFixture(in: directory)
-            let (started, continuation) = AsyncStream<Void>.makeStream()
 
-            let signalling = AVFoundationAudioDecoder(resolveURL: { _ in
-                continuation.yield()
-                continuation.finish()
-                return url
-            })
-            let quiet = AVFoundationAudioDecoder(resolveURL: { _ in url })
+            // No resolver, so this one fails at its first step, every time.
+            let failing = AVFoundationAudioDecoder()
+            let survivor = AVFoundationAudioDecoder(resolveURL: { _ in url })
             let file = reference()
 
-            let cancelled = Task { try await decodeDiscarding(signalling, file: file, chunkFrames: 1) }
-            let survivor = Task { try await decodeDiscarding(quiet, file: file, chunkFrames: 65_536) }
+            let failed = Task { try await decodeDiscarding(failing, file: file, chunkFrames: 4_096) }
+            let succeeded = Task { try await decodeDiscarding(survivor, file: file, chunkFrames: 65_536) }
 
-            for await _ in started { break }
-            cancelled.cancel()
-
-            let error = await #expect(throws: AudioDecodingError.self) { try await cancelled.value }
-            #expect(error?.code == .cancelled)
+            let error = await #expect(throws: AudioDecodingError.self) { try await failed.value }
+            #expect(error?.code == .fileAccessDenied)
 
             // A returned description is itself the proof that the survivor read the file in full: the
             // adapter throws `readFailed` rather than returning short, so there is no state to inspect
-            // here and no accumulator to smuggle across the task boundary.
-            let description = try #require(await survivor.value)
+            // here and nothing to smuggle across the task boundary.
+            let description = try #require(await succeeded.value)
             #expect(description.frameCount == Int(Self.longFixtureFrames), "the other decode was cut short")
+        }
+    }
+
+    /// And the same in the other direction, so the result does not depend on which operation is which.
+    @Test("the survivor is unaffected whichever operation fails first")
+    func independenceIsSymmetric() async throws {
+        try await withTemporaryDirectory { directory in
+            let url = try writeLongFixture(in: directory)
+            let survivor = AVFoundationAudioDecoder(resolveURL: { _ in url })
+            let file = reference()
+
+            // Started first, and still finishes: a failure alongside it changes nothing.
+            let succeeded = Task { try await decodeDiscarding(survivor, file: file, chunkFrames: 65_536) }
+            let failed = Task {
+                try await decodeDiscarding(AVFoundationAudioDecoder(), file: file, chunkFrames: 4_096)
+            }
+
+            let description = try #require(await succeeded.value)
+            let error = await #expect(throws: AudioDecodingError.self) { try await failed.value }
+
+            #expect(description.frameCount == Int(Self.longFixtureFrames))
+            #expect(error?.code == .fileAccessDenied)
         }
     }
 
