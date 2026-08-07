@@ -147,5 +147,21 @@ does not promote it. The
 waveform's migration onto the shared seam is planned as the **last, conditional** group of this slice,
 with an explicit stop rule that permits deferring it honestly.
 
+**A second thread is open: the design of a two-file technical comparison.** Contract only — no domain,
+no surface, no code. It answers exactly one question, *which observable technical facts are the same,
+different, or not comparable between these two files*, and refuses the four it cannot answer honestly:
+same recording, derived from, more quality, which to keep.
+
+**The decision it exists to force** is that comparing two files is comparing two `Property` values, not
+two numbers. An available bit depth against a format that cannot express one is **not** a difference —
+nothing was compared, and calling it one manufactures a fact out of an absence. So the comparison is
+three-way, *not comparable* is first-class and explains which state each side was in, and no type in it
+can express an order, a winner or a score. Signal comparison, hashes, alignment and export are all
+deferred by decision, each with its reason written down.
+
+The spectrogram stays functionally finished with its manual battery still deferred, and neither ADR is
+promoted. **Next step: the domain semantics, once this design is reviewed and merged** — not before,
+because settling the semantics wrongly would poison every comparison level built on top of them.
+
 ---
 _Last touched: 2026-08-07. Overwrite freely; empty is fine._
