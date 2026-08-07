@@ -82,6 +82,11 @@ ADR-0008 defines `uncertain` as *read but not reliable*. Comparing an unreliable
 anything and reporting "same" or "different" would present an unreliable value as a comparable fact —
 the precise failure mode invariant #1 exists to prevent.
 
+**There is no exception for two `uncertain` values that happen to be equal.** Reporting that pair as
+`same` would promote two unreliable readings to a reliable agreement purely because they coincided,
+which is inference wearing the clothes of a fact. Two unreliable readings that agree are still two
+unreliable readings. The surface shows both numbers; the system asserts no relationship between them.
+
 **A deliberate and possibly surprising consequence, recorded so it is not later "fixed":**
 `estimatedBitrate` is `uncertain` by construction (ADR-0012 keeps it always-uncertain), so two files
 will essentially always compare as `incomparable` on that field. That is correct. The two estimates are

@@ -62,6 +62,13 @@ up exactly the guarantee ADR-0008 buys. So the gap has a **failable initialiser 
 `available` states** — the same device `WaveformBucket.init?` uses to refuse a bucket it could not
 describe honestly. Without that, a smaller shape would have been correct.
 
+**It carries the states and not the reasons, and that loses nothing.** `unavailable`, `unsupported` and
+`uncertain` each carry a `reason`, and `failed` carries a `PropertyFailure` with its own message — none
+of which the gap copies. It does not need to: `FileComparison` holds both reports **whole** (§9), so a
+surface that wants to say more than *"this file's format cannot express bit depth"* reads the reason
+from the property it came from. Copying them into the gap would create a second copy of a message that
+can drift from the first, which is the duplication §9 exists to avoid.
+
 **Only `available` against `available` is comparable**, `uncertain` included in the exclusion. ADR-0017
 §4 carries the argument. The consequence to expect in practice: **`estimatedBitrate` will essentially
 always be `incomparable`**, because the reader marks it `uncertain` by construction. Both numbers are
@@ -154,6 +161,12 @@ A pure value object: the two reports, plus one `PropertyComparison` per compared
 - **No score, no winner, no confidence.** Confidence belongs to inference; this states facts.
 - **No count of differences exposed as a measure.** A number of differing fields is an aggregate score
   in disguise the moment a surface renders it as one.
+- **No `allSame`, `isIdentical`, `matches` or any other boolean summary of the whole comparison.** That
+  is the same aggregate compressed to one bit, and it is the most tempting of the lot because it looks
+  like a convenience rather than a verdict. A caller that wants to know whether everything agreed reads
+  the individual outcomes; there is no single answer for the type to give, because *"every comparable
+  property agreed"* and *"the two files are the same"* are different statements and a boolean would blur
+  them.
 - **Deterministic** — the same two reports always produce the same comparison.
 - **`Sendable` and `Equatable`**, which every component type already is.
 - The two reports are **held whole rather than copied field by field**: the surface needs each file's
@@ -215,14 +228,60 @@ record.
 **Evidence comparison** — alignment, gain matching, residual, correlation, spectral difference — waits
 for the metrics it would compare to exist.
 
-## 13. Open questions
+## 13. The four questions this design opened, and how each closed
 
-1. **`fileExtension` and `sizeBytes`: shown or compared?** §4 shows them without comparing, on the
-   grounds that they are file metadata and that size differences are expected and uninformative. A
-   reasonable reviewer could want `fileExtension` compared. Decide before group 2.
-2. **Exact `Double` equality for duration** is what "no tolerance" means literally. Confirm that is
-   intended rather than "equal to the precision the reader reports".
-3. **Does the comparison surface replace the report view or sit beside it?** Affects group 4's shape,
-   not the domain.
-4. **Are A's waveform and spectrogram still shown while comparing?** They are unaffected either way
-   (§11); this is a presentation decision.
+**1. `fileExtension` and `sizeBytes`: shown or compared? — Closed: shown, never judged.**
+
+Neither takes part in `PropertyComparison`. Neither receives *same*, *different* or *incomparable*.
+Both are **presented beside each file's own facts**, because hiding them would lose real context; what
+they do not get is a verdict.
+
+The reason is that turning them into a "technical difference" adds almost no evidence while making two
+false readings easy — *smaller size = worse*, and *different extension = different audio*. Both are
+wrong, and both are the kind of wrong a comparison table invites. `container` and `codec` are the
+technical facts about the format; an extension is a filename convention.
+
+`displayName`, `modifiedAt`, `source` and `id` stay out of the comparison as §4 already sets out.
+
+**2. Exact `Double` equality for duration? — Closed: yes, literally.**
+
+Where both sides are `.available`, `==` yields `same` and `!=` yields `different`, on the `Double` the
+report already holds. No epsilon, no rounding, no milliseconds of tolerance, no conversion to frames,
+no alignment.
+
+What this compares is **the technical fact the two reports carry**. It does not answer whether the two
+represent the same recording. Two musically equivalent copies differing minutely in duration will
+report `different`, and that means neither *worse* nor *different content* — it means the declared
+durations are not the same number. Tolerances belong to the future evidence and alignment slice, where
+the question they answer can be asked out loud.
+
+**3. Does the comparison surface replace the report view or sit beside it? — Closed by derivation:
+beside it.**
+
+Not a free choice once the other decisions are in place. Two constraints settle it. The flow invariants
+(§11) require the first report to stay **visible and valid while the second file is being inspected** —
+a replacement surface would have nothing to show during exactly that window. And the capability
+requires each report to remain readable **on its own terms**, which a view showing only paired rows
+would not preserve.
+
+So the comparison is **additive**: it travels beside the report in the shape the waveform and the
+spectrogram already established, and it replaces nothing. No new pattern is introduced.
+
+**4. Are the first file's waveform and spectrogram still shown while comparing? — Closed by
+derivation: yes, nothing about the first file's presentation changes.**
+
+It follows from question 3. With the comparison beside the report, the first file's report — its
+visualisations included — stays on screen by construction. Removing them would be an *active* change to
+what an inspection shows, and nothing in this slice justifies one.
+
+**What answering it surfaced, and where that decision belongs.** The second file goes through the same
+pipeline, which also produces a waveform and a spectrogram — and this MVP shows neither, because visual
+comparison is deferred (§12). That raises a cost question this contract deliberately does not settle:
+whether the second inspection should request those visualisations at all.
+
+The **contract invariant** is what matters here and is fixed: **the comparison depends only on the two
+reports.** The pipeline already delivers report, waveform and spectrogram as three independent values,
+so a comparison can be built the moment the second report settles, without waiting for or requiring
+anything else. Whether the second inspection also *asks for* visualisations nobody displays is an
+implementation choice for group 4, to be made with its cost named — it is seconds of analysis per
+comparison — and it cannot change any guarantee above.

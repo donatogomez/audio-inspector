@@ -180,6 +180,13 @@ A result belonging to a superseded second selection SHALL NOT be shown.
 - **THEN** the superseded result is discarded, the newer one is shown, and the first report is
   unchanged throughout
 
+#### Scenario: The first file's own work is still in flight
+
+- **WHEN** a second file is chosen while work belonging to the first file has not finished
+- **THEN** that work continues and its result is still delivered to the first file's own presentation,
+  and starting, finishing, failing or cancelling the second inspection neither cancels it nor discards
+  its result
+
 ### Requirement: Present both files' facts and the comparison in words
 
 The comparison SHALL be presented so that both files' values and the outcome for each property are

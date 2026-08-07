@@ -20,9 +20,14 @@ spectrogram, the waveform and the `schemaVersion` 1 exporter are not touched.**
       of any aggregate, exact duration, declared-vs-estimated separation, and the deferral of hashes,
       signal comparison and export. It **references ADR-0008 and does not edit it**. Add its row to
       `docs/adr/README.md`.
-- [ ] 1.4 Answer design.md's open questions before group 2 begins — whether `fileExtension` and
-      `sizeBytes` are compared or only shown, and whether exact `Double` equality is the intended
-      reading of "exact" for duration. Record each answer where the decision lives, not here.
+- [x] 1.4 Answer design.md's open questions before group 2 begins, and record each answer where the
+      decision lives. **All four are closed** (design.md §13): `fileExtension` and `sizeBytes` are
+      shown but never judged; duration is exact `Double` equality; the comparison surface sits **beside**
+      the report rather than replacing it, derived from the flow invariants rather than chosen; and the
+      first file's visualisations stay exactly as they are. Closing the fourth surfaced one decision
+      that belongs to group 4 — whether the second inspection requests visualisations nobody displays —
+      and the contract invariant it cannot break is fixed: **the comparison depends only on the two
+      reports.**
 - [ ] 1.5 Move ADR-0017 out of `Proposed` **only** when the comparison exists against production code
       and its surface has been validated by a person looking at it. Not before, and never on partial
       evidence.
@@ -52,7 +57,10 @@ spectrogram, the waveform and the `schemaVersion` 1 exporter are not touched.**
 - [ ] 3.1 Add `FileComparison`: the two reports plus one `PropertyComparison` per compared field, as a
       `Sendable`, `Equatable` value object. **No lifecycle, no identity, no aggregate root, no score,
       no winner, no confidence**, and **no exposed count of differences** — a count rendered as a
-      measure is an aggregate score in disguise.
+      measure is an aggregate score in disguise. **No `allSame`, `isIdentical` or `matches` either**:
+      that is the same aggregate compressed to one bit, and it is the most tempting of the lot because
+      it looks like a convenience. *"Every comparable property agreed"* and *"the two files are the
+      same"* are different statements, and a boolean would blur them.
 - [ ] 3.2 Build it through an **initialiser on `FileComparison`**, not a use case: not `async`, not
       `throws`, not failable. **`CompareInspectionsUseCase` is deliberately not created** — there is no
       port, no I/O and no failure to orchestrate, and building one for symmetry with
@@ -85,7 +93,12 @@ spectrogram, the waveform and the `schemaVersion` 1 exporter are not touched.**
       disclosed for either file.
 - [ ] 4.5 Confirm the first file's waveform and spectrogram operations are **unaffected** by a second
       inspection starting, finishing, failing or being cancelled — they are already independent
-      operations with independent cancellation, and this must stay true.
+      operations with independent cancellation, and this must stay true. A result of the first file's
+      work still in flight when the second is chosen must still reach the first file's presentation.
+- [ ] 4.6 Decide whether the second inspection **requests** a waveform and a spectrogram at all, given
+      that this MVP displays neither. Name the cost either way — it is seconds of analysis per
+      comparison. The invariant this cannot break: **the comparison depends only on the two reports**,
+      so it is built the moment the second report settles and waits for nothing else.
 
 ## 5. Presentation
 
@@ -121,7 +134,7 @@ spectrogram, the waveform and the `schemaVersion` 1 exporter are not touched.**
 - [ ] 6.12 **No ordering exists**: assert structurally that the comparison exposes no preferred side and
       no `Comparable` conformance.
 - [ ] 6.13 **No aggregate exists**: assert that neither the comparison nor its presentation exposes a
-      score, a percentage, or a count of differences.
+      score, a percentage, a count of differences, or a boolean summary of the whole comparison.
 - [ ] 6.14 A cancelled second inspection leaves the first report identical.
 - [ ] 6.15 A globally failed second file yields a comparison that is entirely `incomparable`, with the
       first report identical.
