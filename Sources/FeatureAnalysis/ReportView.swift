@@ -12,15 +12,20 @@ import SwiftUI
 public struct ReportView: View {
     private let report: InspectionReport
     private let waveform: WaveformPresentation
+    private let spectrogram: SpectrogramPresentation
     @State private var exportModel: ReportExportModel
 
+    /// Both visualisations are **required** parameters with no default. A default would let a caller
+    /// forget one and ship a report that silently shows nothing where a state belongs.
     public init(
         report: InspectionReport,
         waveform: WaveformPresentation,
+        spectrogram: SpectrogramPresentation,
         export: @escaping ReportExportAction
     ) {
         self.report = report
         self.waveform = waveform
+        self.spectrogram = spectrogram
         _exportModel = State(initialValue: ReportExportModel(action: export))
     }
 
@@ -29,6 +34,7 @@ public struct ReportView: View {
             VStack(alignment: .leading, spacing: 24) {
                 heroHeader
                 waveformSection
+                spectrogramSection
                 propertiesSection
                 warningsSection
                 statusSection
@@ -77,6 +83,20 @@ public struct ReportView: View {
     private var waveformSection: some View {
         ReportSection(WaveformCopy.title) {
             WaveformSection(presentation: waveform)
+        }
+    }
+
+    /// Directly beneath the waveform, and above the property rows, because the two drawings answer the
+    /// same kind of question and are read together: the envelope says how loud the file is over time,
+    /// the spectrogram says where its energy sits. For the question this whole slice exists to serve —
+    /// *does this file's energy stop early?* — the spectrogram is the answer, and burying it under
+    /// eight property rows would put the evidence below a scroll.
+    ///
+    /// Present in **every** state, including when there is nothing to draw, so an absent spectrogram is
+    /// a sentence rather than a gap the reader has to interpret.
+    private var spectrogramSection: some View {
+        ReportSection(SpectrogramCopy.title) {
+            SpectrogramSection(presentation: spectrogram)
         }
     }
 
@@ -300,7 +320,31 @@ private extension WaveformPresentation {
     }
 }
 
+private extension SpectrogramPresentation {
+    /// A band-limited sweep with an abrupt edge, so the preview shows the artefact the drawing exists
+    /// to make visible rather than a solid block.
+    static var preview: SpectrogramPresentation {
+        let columns = 256
+        let bands = 128
+        let cutoffBand = bands * 3 / 4
+        let values = (0 ..< columns * bands).map { index -> Float in
+            let band = index % bands
+            guard band < cutoffBand else { return Spectrogram.floorDecibels }
+            let column = index / bands
+            let sweep = Float(column) / Float(columns)
+            return -100 + 90 * (1 - Float(band) / Float(cutoffBand)) * (0.4 + 0.6 * sweep)
+        }
+        guard let model = Spectrogram(
+            values: values, columnCount: columns, bandCount: bands,
+            sampleRate: 44_100, frameCount: 13_230_000, channelCount: 2
+        ) else {
+            return .absent
+        }
+        return .model(model)
+    }
+}
+
 #Preview {
-    ReportView(report: .preview, waveform: .preview, export: { _ in .succeeded })
+    ReportView(report: .preview, waveform: .preview, spectrogram: .preview, export: { _ in .succeeded })
 }
 #endif

@@ -256,21 +256,52 @@ property reader and the JSON exporter are not touched.
 
 ## 7. Presentation
 
-- [ ] 7.1 Draw the model in `FeatureAnalysis` with SwiftUI — no bitmap file, no dependency. Resizing
+- [x] 7.1 Draw the model in `FeatureAnalysis` with SwiftUI — no bitmap file, no dependency. Resizing
       redraws the existing model and never decodes or transforms again.
-- [ ] 7.2 Time horizontal, frequency vertical, **linear, from 0 Hz to the file's own Nyquist**, with no
+      One `Canvas`, one fill per cell, **no view per cell** — a view per cell would be up to 524 288
+      SwiftUI views for one drawing. Each cell is filled flat with no interpolation between neighbours:
+      a smoothed image would draw levels that were never measured, and across a cutoff an invented
+      gradient is precisely the wrong artefact. `SpectrogramGeometry` maps the model onto whatever size
+      it is given, so a resize re-runs only that arithmetic.
+- [x] 7.2 Time horizontal, frequency vertical, **linear, from 0 Hz to the file's own Nyquist**, with no
       cropping at any sample rate. Legible marks at 16, 18, 20, 22 and 24 kHz plus the marks the sample
       rate requires above that.
-- [ ] 7.3 A colour ramp with **strictly increasing luminance** — dark → deep blue → cyan → pale
+      Band 0 is flipped to the bottom exactly once, in the geometry rather than the renderer. The marks
+      are a **function of the file, never of the window**: a wider window shows the same marks further
+      apart, so a reader cannot change the evidence by resizing. Asserted at 22.05, 24, 48 and 96 kHz —
+      the axis always reaches Nyquist exactly, the marks stay between 4 and 14, and their spacing is
+      constant, which is what makes the axis linear rather than logarithmic.
+- [x] 7.3 A colour ramp with **strictly increasing luminance** — dark → deep blue → cyan → pale
       yellow/white — built natively, with no external library and no green-good/red-bad semantics.
-- [ ] 7.4 A **numeric legend** stating the −120…0 dBFS range. A gradient without a scale states nothing.
-- [ ] 7.5 No interaction: no playback, zoom, scrubbing, selection or cursor; pointer and scroll activity
+      Five literal stops, deterministic on any display. Luminance rises strictly at every step, so the
+      ordering survives in greyscale and under colour vision deficiency. A structural test asserts the
+      ramp is never dominantly red or green. The clamp applies to the **colour coordinate only**: a
+      value above 0 dBFS maps to the top of the ramp and `Spectrogram.values` is never written back.
+- [x] 7.4 A **numeric legend** stating the −120…0 dBFS range. A gradient without a scale states nothing.
+      Five printed ticks from −120 to 0, over swatches sampled from the same ramp the cells use, so the
+      legend cannot drift from the drawing it explains.
+- [x] 7.5 No interaction: no playback, zoom, scrubbing, selection or cursor; pointer and scroll activity
       leave the drawing and its data unchanged.
-- [ ] 7.6 The label states only what the drawing **is**, never what it implies: no "lossy", no
+      The drawing is `allowsHitTesting(false)`. There is no gesture, no cursor, no selection, no tooltip
+      and no state to change — the view holds none.
+- [x] 7.6 The label states only what the drawing **is**, never what it implies: no "lossy", no
       "transcoded", no "fake", no probable encoder or bitrate, and never presented as a measurement.
-- [ ] 7.7 State an absent or failed spectrogram in words rather than showing an empty area, and never as
+      Swept across every string every state can produce, against both a claims list and an internals
+      list. The sweep runs over **presented strings** rather than identifiers, so a technical value the
+      product deliberately shows exactly as read is not confused with an internal name leaking out. The
+      label says outright that the drawing does not, on its own, establish how the file was produced.
+- [x] 7.7 State an absent or failed spectrogram in words rather than showing an empty area, and never as
       a defect of the file.
-- [ ] 7.8 Expose it as a **single** accessibility element with a composed label saying what it is.
+      Five states, five distinct statements — including the one group 4 made representable: a file
+      shorter than one analysis window has audio and no columns, and says so. Absence, failure and
+      too-short are asserted to be three different things; failure says it is a limit of producing the
+      drawing rather than something read from the audio, and both add that the rest of the report is
+      unchanged.
+- [x] 7.8 Expose it as a **single** accessibility element with a composed label saying what it is.
+      `accessibilityElement(children: .ignore)` over the whole section, with the drawing, the axes and
+      the legend hidden beneath it. **The label is identical for 1 cell and for 524 288** — asserted —
+      and carries what the eye gets from the axes and the legend: the range to the file's own Nyquist,
+      the dBFS scale, and how many channels were combined.
 
 ## 8. The format matrix and tests
 
