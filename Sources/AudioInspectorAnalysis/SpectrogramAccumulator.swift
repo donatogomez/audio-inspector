@@ -193,9 +193,11 @@ public struct SpectrogramAccumulator {
         // three ULP, and far below anything a reader or a threshold could notice.
         //
         // It was reverted anyway, because the trade is poor. This pass is **one** sweep over the grid,
-        // not one per window: 86 ms of an unoptimised build's 36 s, or 0.2 %. Paying that keeps the whole
-        // optimisation **bit-identical** to the model it replaces, which is a far stronger claim than
-        // "different by an amount we argue is small".
+        // not one per window: 86 ms of an unoptimised build's 36 s, or 0.2 %. Paying that keeps the dB
+        // conversion **exactly what it was**, so it adds nothing to the one difference the vectorisation
+        // does introduce — the fused multiply-add in the magnitudes, measured in §J of the diagnosis at
+        // at most 1.53 × 10⁻⁵ dB on 5.5–6.4 % of cells, with the floor set identical and no cell
+        // crossing a threshold. One measured, bounded difference is a far better position than two.
         var values = [Float](repeating: Spectrogram.floorDecibels, count: peak.count)
         for index in 0 ..< peak.count {
             values[index] = max(
@@ -308,7 +310,14 @@ private extension SpectrogramAccumulator {
         // same magnitude in one pass — but not with the same last bit: measured over three real files it
         // moved 31 068 of 524 288 cells by one ULP (7.6 × 10⁻⁶ dB), because it does not evaluate
         // `re² + im²` and then take a root. Splitting it into exactly those two steps reproduces the
-        // scalar expression term for term and the result is **bit-identical**, at no measurable cost.
+        // scalar expression **term for term**, at no measurable cost, which keeps the residual
+        // difference to a single, identified cause instead of two.
+        //
+        // **That residual is real and is not claimed away.** `vDSP_zvmags` evaluates `re² + im²` with a
+        // fused multiply-add, rounding once where the scalar form rounds twice, so the vectorised value
+        // is the *more* accurate of the two and differs in the last bit or two. Measured in §J of the
+        // diagnosis: at most **1.53 × 10⁻⁵ dB** on 5.5–6.4 % of cells, the set of cells at the floor
+        // identical, and **no cell crossing** −90, −60, −40 or −20 dBFS.
         //
         // The scale is applied to the interior bins **separately** from the two ends, so the arithmetic
         // of each stays exactly what it was: an end is `abs(x) * scale * 0.5`, an interior bin is
