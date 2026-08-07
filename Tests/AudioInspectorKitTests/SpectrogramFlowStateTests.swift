@@ -358,7 +358,10 @@ struct SpectrogramFlowStateTests {
 
         let second = SteppedAction(report: report(named: "second"))
         let secondRun = Task { await model.inspectDroppedSource(using: second.run) }
-        await Task.yield()
+        // Waiting for the action to actually be invoked, rather than hoping one scheduling hop was
+        // enough: a `Task.yield()` here inferred "it started" from nothing, and lost that bet roughly
+        // one run in ten.
+        await second.waitUntilStarted()
 
         #expect(second.runCount == 1, "the second selection was refused after the report existed")
 
