@@ -180,17 +180,44 @@ struct SpectrogramColourRampTests {
         }
     }
 
-    /// No green-good, no red-bad. Asserted structurally: at no point is the ramp dominantly red or
-    /// dominantly green in the way a success/failure palette would be.
+    /// No green-good, no red-bad.
+    ///
+    /// **The criterion changed on 2026-08-07, deliberately, and it is worth saying why rather than
+    /// quietly relaxing it.** It used to refuse *any* dominantly green level as well as any dominantly
+    /// red one. The first ramp satisfied that by accident: its green was always paired with a high blue,
+    /// so it read as cyan and never tripped the check. The ramp adopted after measurement travels
+    /// through a genuinely green region around −28 dBFS, because a wider hue path is the point — the
+    /// previous ramp was measured as spending four of eight sampled levels in the cyan-teal family, so
+    /// two levels 45 dB apart could read as similar colours.
+    ///
+    /// The hazard the rule names is a **traffic light**: green meaning *fine* against red meaning
+    /// *bad*. That needs the pair. This ramp contains **no red-dominant level at any point** — its warm
+    /// end runs yellow-green → yellow → near-white — so there is nothing for a green to be the opposite
+    /// of, and green is a waypoint on the way to white rather than a verdict. What is asserted is
+    /// therefore the rule itself: no red anywhere, and never both signals present.
+    ///
+    /// Luminance monotonicity, which is what actually keeps the ramp readable, is asserted separately
+    /// and unchanged.
     @Test("the ramp carries no success or failure semantics")
     func noQualitySemantics() {
+        var sawRedDominant = false
+        var sawGreenDominant = false
+
         for level in stride(from: Float(-120), through: 0, by: 2) {
             let c = SpectrogramColourRamp.components(for: level)
             let redDominant = c.red > c.green + 0.25 && c.red > c.blue + 0.25
             let greenDominant = c.green > c.red + 0.25 && c.green > c.blue + 0.25
+            // Red is the "bad" half of the pair and the one this product never draws.
             #expect(!redDominant, "the ramp is red at \(level) dBFS")
-            #expect(!greenDominant, "the ramp is green at \(level) dBFS")
+            sawRedDominant = sawRedDominant || redDominant
+            sawGreenDominant = sawGreenDominant || greenDominant
         }
+
+        // The pairing, which is what would actually read as a judgement.
+        #expect(
+            !(sawRedDominant && sawGreenDominant),
+            "the ramp contains both a red and a green region, which reads as a verdict"
+        )
     }
 
     /// A non-finite value cannot come from the domain, but is answered for rather than left to produce
@@ -280,5 +307,106 @@ struct SpectrogramAxesTests {
     func noMarksForNothing() {
         #expect(SpectrogramAxes.timeMarks(duration: 0).isEmpty)
         #expect(SpectrogramAxes.frequencyMarks(nyquist: 0).isEmpty)
+    }
+}
+
+// MARK: - The ramp adopted on 2026-08-07
+
+/// What the measured ramp must satisfy, stated over the ramp itself rather than over a picture of it.
+///
+/// The stops changed deliberately after
+/// `docs/spikes/2026-08-07-spectrogram-performance-presentation-diagnosis.md` §F measured the previous
+/// ramp as sound on luminance and weak on hue. These tests pin the properties the decision rests on, so
+/// a later tweak that broke one would fail rather than merely look different.
+@Suite("Presentation — the spectrogram ramp's measured properties")
+struct SpectrogramRampMeasuredTests {
+
+    private func luminance(_ level: Float) -> Double { SpectrogramColourRamp.luminance(for: level) }
+
+    /// Strictly increasing across the whole scale, sampled far more finely than the stops themselves —
+    /// a reversal *between* two stops would be just as unreadable as one at a stop.
+    @Test("luminance rises at every step from the floor to full scale")
+    func luminanceRisesEverywhere() {
+        var previous = -Double.infinity
+        for step in 0 ... 480 {
+            let level = Float(-120 + Double(step) * 0.25)
+            let current = luminance(level)
+            #expect(current > previous, "luminance stalled or fell at \(level) dBFS")
+            previous = current
+        }
+    }
+
+    /// The two ends, which the legend's numbers are read against.
+    @Test("the floor is dark and full scale is light")
+    func theEndsAreCorrect() {
+        #expect(luminance(-120) < 0.05, "the floor reads \(luminance(-120))")
+        #expect(luminance(0) > 0.90, "full scale reads \(luminance(0))")
+    }
+
+    /// **The reason this ramp replaced the previous one.** Music sits between roughly −90 and −30 dBFS,
+    /// and that band must keep a large share of the luminance range — the diagnosis measured 53.8 %.
+    @Test("the band an inspector actually reads keeps most of the luminance range")
+    func theInspectionBandKeepsItsRange() {
+        let total = luminance(0) - luminance(-120)
+        let inspection = luminance(-30) - luminance(-90)
+        let share = inspection / total
+        #expect(share > 0.45, "only \(share * 100)% of the luminance covers -90…-30 dBFS")
+    }
+
+    /// **And the reason it is different from the previous one**: the hue must actually travel across the
+    /// band a reader looks at.
+    ///
+    /// **The threshold comes from measurement, and the band is deliberate.** Sampled every 15 dB, the
+    /// previous ramp's smallest chromatic step inside −90…0 dBFS was **0.0433** — a stretch where two
+    /// levels 15 dB apart looked nearly the same colour — while this ramp's smallest is **0.0803**,
+    /// with 39 % more travel overall. `0.06` sits between the two with headroom on the one adopted.
+    ///
+    /// The step from −105 to −90 dBFS is **excluded, and not because it is inconvenient**: both ramps
+    /// measure ≈0.008 there, because a colour that close to black has almost no chroma to move. That is
+    /// a property of being near the floor rather than of either ramp, and it costs nothing — there is
+    /// no energy down there to tell apart.
+    @Test("the hue travels across the band a reader actually looks at")
+    func theHueTravels() {
+        let levels: [Float] = [-90, -75, -60, -45, -30, -15, 0]
+        var previous: (red: Double, green: Double, blue: Double)?
+        for level in levels {
+            let current = SpectrogramColourRamp.components(for: level)
+            if let previous {
+                // Chromatic distance with luminance divided out, so a step that only got brighter does
+                // not count as a change of hue.
+                let sum = { (c: (red: Double, green: Double, blue: Double)) in max(c.red + c.green + c.blue, 0.0001) }
+                let a = (previous.red / sum(previous), previous.green / sum(previous))
+                let b = (current.red / sum(current), current.green / sum(current))
+                let distance = ((a.0 - b.0) * (a.0 - b.0) + (a.1 - b.1) * (a.1 - b.1)).squareRoot()
+                #expect(distance > 0.06, "the hue moved only \(distance) approaching \(level) dBFS")
+            }
+            previous = current
+        }
+    }
+
+    /// Greyscale is the check the whole monotonicity rule exists for: with hue removed, order survives.
+    @Test("order survives in greyscale")
+    func greyscalePreservesOrder() {
+        let levels: [Float] = [-120, -100, -80, -60, -40, -20, 0]
+        let luminances = levels.map(luminance)
+        #expect(luminances == luminances.sorted(), "greyscale reordered the levels")
+    }
+
+    /// The legend draws the same function the cells do, so the scale can never explain a drawing it
+    /// does not match.
+    @Test("the legend's swatches come from the ramp itself")
+    func theLegendMatchesTheCells() {
+        let stops = SpectrogramColourRamp.legendStops(count: 5)
+        let expected: [Float] = [-120, -90, -60, -30, 0]
+        for (index, level) in expected.enumerated() {
+            #expect(stops[index] == SpectrogramColourRamp.colour(for: level))
+        }
+    }
+
+    /// The scale the legend states is unchanged by any of this.
+    @Test("the visual range is still -120 to 0 dBFS")
+    func theRangeIsUnchanged() {
+        #expect(SpectrogramColourRamp.range == -120 ... 0)
+        #expect(SpectrogramCopy.legendRange == -120 ... 0)
     }
 }

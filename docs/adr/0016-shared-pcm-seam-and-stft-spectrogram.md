@@ -140,7 +140,13 @@ interprets nothing.** Concretely:
 - **Cropping the axis to the audible band at high sample rates.** Would use the canvas better. Rejected:
   the empty upper range is evidence, and hiding it would be an interpretive act.
 - **Spek's colour palette.** Familiar to the audience. Rejected: it passes through green and red, and
-  colour in this product never means good or bad.
+  colour in this product never means good or bad. **Measured on 2026-08-07 and rejected a second time
+  on independent grounds** (`docs/spikes/2026-08-07-spectrogram-performance-presentation-diagnosis.md`,
+  §F): that ramp is **not monotonic in luminance**. Sampled with this project's own Rec. 709 formula it
+  rises to 0.757 at yellow, falls to 0.642 at orange and 0.399 at red, then jumps to white — so a loud
+  red band would read as *quieter* than a mid-level yellow one in greyscale, and for a reader with
+  colour vision deficiency. The standing rule and the measurement reach the same answer for different
+  reasons, which is the strongest form this record can take.
 - **Normalising per file.** Would make every spectrogram look well-exposed. Rejected outright: it
   destroys comparability between copies, which is the user's actual task.
 

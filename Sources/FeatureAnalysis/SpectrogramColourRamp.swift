@@ -30,12 +30,35 @@ enum SpectrogramColourRamp {
     ///
     /// Written as literal components so the ramp is deterministic and needs no colour space
     /// negotiation: the same level always produces the same colour, on any display.
+    ///
+    /// ## Revised on 2026-08-07, on measurement
+    ///
+    /// The first ramp — near-black → deep blue → teal → cyan-green → pale — was **sound on luminance**
+    /// (0.023 → 0.974, with 57 % of the range spent on −90…−30 dBFS) and **weak on hue**: four of eight
+    /// sampled levels sat in the cyan-teal family, and between −60 and −15 dBFS the hue barely moved, so
+    /// two levels 45 dB apart could read as similar colours. It was correct on the criterion it was
+    /// designed against; the criterion was incomplete.
+    ///
+    /// These nine stops keep **53.8 %** of the luminance range on −90…−30 dBFS — within a few points of
+    /// the old ramp, so nothing is lost where music sits — while travelling through five separable hues:
+    /// indigo → blue → teal → green → yellow-green → near-white. Measured in
+    /// `docs/spikes/2026-08-07-spectrogram-performance-presentation-diagnosis.md` §F, and pinned by
+    /// `SpectrogramPresentationTests`.
+    ///
+    /// **Still not Spek's ramp**, and now for two independent reasons: colour in this product never says
+    /// good or bad, *and* that ramp is not monotonic in luminance — sampled with the formula below it
+    /// falls from 0.757 at yellow to 0.399 at red before jumping to white, so a loud band would read as
+    /// quieter than a mid-level one in greyscale.
     private static let stops: [(position: Double, red: Double, green: Double, blue: Double)] = [
-        (0.00, 0.020, 0.020, 0.055), // near-black, the floor
-        (0.25, 0.090, 0.130, 0.420), // deep blue
-        (0.50, 0.110, 0.450, 0.620), // teal
-        (0.75, 0.360, 0.780, 0.700), // cyan-green
-        (1.00, 0.980, 0.980, 0.900), // pale yellow-white, full scale
+        (0.00, 0.015, 0.015, 0.045), // near-black, the floor
+        (0.12, 0.055, 0.045, 0.180), // very dark indigo
+        (0.25, 0.110, 0.090, 0.380), // indigo
+        (0.40, 0.130, 0.250, 0.580), // blue
+        (0.55, 0.110, 0.450, 0.640), // teal
+        (0.70, 0.230, 0.660, 0.560), // green
+        (0.82, 0.620, 0.810, 0.380), // yellow-green
+        (0.92, 0.930, 0.880, 0.420), // warm yellow
+        (1.00, 0.995, 0.985, 0.930), // near-white, full scale
     ]
 
     /// Where a level sits on the ramp: `0` at the floor or below, `1` at full scale or above.

@@ -47,6 +47,10 @@ struct SpectrogramSection: View {
 private struct SpectrogramPlot: View {
     let model: Spectrogram
 
+    /// The model's cells, rasterised once. Held in state rather than recomputed in `body`, because
+    /// `body` runs on every layout pass and the cells do not change when the window does.
+    @State private var raster: CGImage?
+
     /// Room for the frequency labels on the left and the time labels underneath. Fixed rather than
     /// measured: the axis must not shrink until a mark is unreadable, and a wider window should show
     /// the same marks further apart rather than different ones.
@@ -63,29 +67,39 @@ private struct SpectrogramPlot: View {
             }
         }
         .frame(height: Self.plotHeight + Self.timeGutter)
+        // **The raster is a function of the model, never of the size.** `SpectrogramRaster.buffer(for:)`
+        // takes no dimensions at all, so a resize *cannot* rebuild it — and this only re-runs when the
+        // model itself changes, which happens once per inspection.
+        .task(id: model) {
+            raster = await Self.rasterise(model)
+        }
     }
 
-    /// **One `Canvas`, one fill per cell, and no view per cell.**
+    /// **One image, one draw per redraw — not one fill per cell.**
     ///
-    /// The alternative — a `View` per cell — would be up to 524 288 SwiftUI views for a single drawing,
-    /// which is not a performance nuance but a different program. Here the cost is linear in the cells
-    /// actually present, the model is walked once per redraw, and a resize re-runs only this: no decode,
-    /// no transform, no change to the model.
+    /// The first version filled a rectangle per cell inside a `Canvas`: up to 524 288 fills, measured at
+    /// **213 ms in Release and 611 ms in Debug**, and paid again on every size change because a `Canvas`
+    /// re-runs when its area does. Building this image costs **6.5 ms** and drawing it **0.1 ms** at any
+    /// width (`docs/spikes/2026-08-07-spectrogram-performance-presentation-diagnosis.md`, §D). The
+    /// change is structural rather than clever: the work now follows the model, which is fixed once
+    /// produced, instead of the window, which is not.
     ///
-    /// **Each cell is filled flat, with no interpolation between neighbours.** A smoothed image would
-    /// draw levels that were never measured, and for an instrument whose subject is *where energy
-    /// stops* an invented gradient across a cutoff is exactly the wrong artefact. Flat cells assert what
-    /// the model contains and nothing between.
+    /// **Interpolation is off, and that is load-bearing.** The image carries exactly one pixel per model
+    /// cell, and scaling it must not invent a level between two that were measured. For an instrument
+    /// whose subject is *where energy stops*, a smoothed edge would be precisely the wrong artefact —
+    /// the same reason the previous version filled each cell flat.
+    ///
+    /// Before the raster exists the area is briefly empty. The section's own words are already on
+    /// screen by then, so nothing is left unexplained.
     private var cells: some View {
-        Canvas(opaque: true) { context, size in
-            guard let geometry = SpectrogramGeometry(size: size, model: model) else { return }
-            for column in 0 ..< model.columnCount {
-                for band in 0 ..< model.bandCount {
-                    guard let value = model.value(column: column, band: band),
-                          let rect = geometry.cell(column: column, band: band)
-                    else { continue }
-                    context.fill(Path(rect), with: .color(SpectrogramColourRamp.colour(for: value)))
-                }
+        Group {
+            if let raster {
+                Image(decorative: raster, scale: 1, orientation: .up)
+                    .resizable()
+                    .interpolation(.none)
+                    .antialiased(false)
+            } else {
+                Color.clear
             }
         }
         .frame(height: Self.plotHeight)
@@ -94,6 +108,17 @@ private struct SpectrogramPlot: View {
         // Pointer and scroll activity leave the drawing and its data untouched.
         .allowsHitTesting(false)
         .accessibilityHidden(true)
+    }
+
+    /// Builds the pixels **off the main actor**, then wraps them on it.
+    ///
+    /// `nonisolated` and `async`, so it runs on the generic executor rather than inheriting the view's
+    /// isolation: the per-pixel loop is the expensive half and has no business blocking a layout pass.
+    /// The split falls exactly here because `SpectrogramRaster.Buffer` is `Sendable` and `CGImage` is
+    /// not — and wrapping bytes in one costs nothing worth moving.
+    private nonisolated static func rasterise(_ model: Spectrogram) async -> CGImage? {
+        guard let buffer = SpectrogramRaster.buffer(for: model) else { return nil }
+        return SpectrogramRaster.image(from: buffer)
     }
 
     /// 0 Hz at the bottom, the file's own Nyquist at the top, linear throughout and never cropped.

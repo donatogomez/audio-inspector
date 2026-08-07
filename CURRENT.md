@@ -101,6 +101,25 @@ by 0.0025 dB anywhere a reader can see. The container still changes nothing abou
 fixture writer changes the audio. Worth remembering before reading any future "identical" claim as a
 statement about the analysis.
 
+**Group 12 made it fast, and the reason it was slow is worth carrying.** A manual run watched a
+68 MB FLAC take **33 seconds** to draw. The cost was never the transform, the decode or the allocations:
+it was **scalar Swift loops** — the per-bin magnitude, the channel maximum, the band fold and the
+per-sample finiteness check — which an unoptimised build runs at roughly 135 ns an iteration whatever
+they contain. Moved into Accelerate and the standard library's SIMD, the same file now draws in about
+**two seconds from a development build** and **under one from an optimised one**. The drawing itself
+stopped being a per-cell fill and became a single image, so a resize costs nothing. Nothing about the
+analysis changed: same resolution, same window, same hop, same channel handling, same absolute scale —
+and the model is measurably the same, moving at most a hundred-thousandth of a decibel where a fused
+multiply-add rounds once instead of twice, with no cell crossing any threshold.
+
+The same group replaced the colour ramp, which is a separate finding and not a consequence of the speed
+work. The first ramp was measured sound on luminance and **weak on hue**: four of eight sampled levels
+sat in the cyan-teal family, so two levels 45 dB apart could read as similar colours. The ramp adopted
+runs near-black → indigo → blue → teal → green → yellow-green → near-white, keeps the same share of the
+luminance range where music sits, and stays strictly monotonic. **Colour still says nothing about good
+or bad** — it is a quantity, and the manual greyscale check in group 10 now applies to a ramp nobody has
+looked at yet.
+
 **Group 9 ran its stop rule and stopped.** The waveform is **not** migrated onto the shared seam, and
 the decision was reached by audit before a line of production code was written. Three things block it,
 and none is a matter of effort: two decoding faults — a stream that cannot exist, and a chunk that is

@@ -256,7 +256,20 @@ private extension AVFoundationAudioDecoder {
                 //
                 // The chunk owns its samples, so no pointer outlives this iteration and no consumer
                 // inherits a lifetime to respect.
-                channels.append(Array(UnsafeBufferPointer(start: channelData[channel], count: valid)))
+                //
+                // Copied through an explicit `update(from:count:)` rather than
+                // `Array(UnsafeBufferPointer(...))`: for a trivial element both are a memory copy once
+                // the optimiser has specialised the generic initialiser, but an unoptimised build does
+                // not specialise it and walks the buffer one element at a time through an iterator.
+                // This runs on every sample of every channel, so the difference is measurable in the
+                // build a developer actually runs.
+                var samples = [Float](repeating: 0, count: valid)
+                samples.withUnsafeMutableBufferPointer { destination in
+                    if let base = destination.baseAddress {
+                        base.update(from: channelData[channel], count: valid)
+                    }
+                }
+                channels.append(samples)
             }
 
             // The domain decides whether this is a possible run of audio — finiteness included. There

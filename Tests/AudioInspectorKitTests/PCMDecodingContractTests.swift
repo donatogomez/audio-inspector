@@ -144,6 +144,40 @@ struct PCMChunkTests {
         #expect(chunk.samples(ofChannel: 0) == [sample])
     }
 
+    /// **The two tests above run entirely in the scalar remainder.** The finiteness check screens whole
+    /// `SIMD8` lanes first and only falls back to a scalar pass for what is left, so a three-sample
+    /// array never enters the vector path at all. A real chunk is thousands of samples long, and the
+    /// offending one is rarely in the last seven.
+    @Test(
+        "a non-finite sample is refused wherever it sits in a long run",
+        arguments: [Float.nan, .infinity, -.infinity], [0, 7, 8, 100, 1_023]
+    )
+    func refusesNonFiniteAnywhereInALongRun(sample: Float, offset: Int) {
+        var samples = [Float](repeating: 0.25, count: 1_024)
+        samples[offset] = sample
+
+        let error = #expect(throws: AudioDecodingError.self) {
+            try PCMChunk(startFrame: 40, channels: [samples])
+        }
+        #expect(error?.code == .nonFiniteSample)
+        // The message still names the offending frame, not merely the chunk.
+        #expect(error?.message.contains("Frame \(40 + offset) ") == true)
+    }
+
+    /// **The screen is one-sided, and this is the case that proves it has to be.** Summing the samples
+    /// detects any non-finite one, but the converse does not hold: enough large finite values overflow
+    /// the total to infinity on their own. A check that refused *this* chunk would reject a valid file,
+    /// which would be far worse than the scan it saves.
+    @Test("finite samples whose total overflows are accepted, not refused as non-finite")
+    func acceptsFiniteSamplesWhoseSumOverflows() throws {
+        let samples = [Float](repeating: .greatestFiniteMagnitude, count: 64)
+        let everySampleIsFinite = samples.allSatisfy { $0.isFinite }
+        #expect(everySampleIsFinite)
+
+        let chunk = try PCMChunk(startFrame: 0, channels: [samples])
+        #expect(chunk.samples(ofChannel: 0) == samples)
+    }
+
     /// A decoder may hand over an empty run at the end of a file rather than special-casing it.
     @Test("an empty chunk is valid when its channels agree")
     func emptyChunkIsValid() throws {
