@@ -72,6 +72,22 @@ public struct SpectrogramAccumulator {
     private var windowed: [Float]
     private var magnitudes: [Float]
     private var combined: [Float]
+    /// The even and odd halves of the current window, and the transform's two outputs.
+    ///
+    /// **These four exist because they used to be allocated per transform, and it was measured.** The
+    /// previous version built `evens` and `odds` with `stride(...).map` and took the two arrays
+    /// `transform(real:imaginary:)` returns — four 1024-element arrays for every transform, which for a
+    /// seven-minute stereo file is **286 624 allocations and ≈293 M `Float`s**, roughly 32× the volume of
+    /// the PCM copy an earlier audit spent its time on
+    /// (`docs/spikes/2026-08-07-spectrogram-performance-presentation-diagnosis.md` §C). Release hid most
+    /// of it; Debug did not, and Debug is what a developer runs.
+    ///
+    /// Held here, they are allocated **once per operation** and reused for every frame of every channel,
+    /// so no allocation scales with the STFT frame count.
+    private var evens: [Float]
+    private var odds: [Float]
+    private var outputReal: [Float]
+    private var outputImaginary: [Float]
 
     /// Fails on a description no analysis can be sized against.
     public init?(sampleRate: Double, channelCount: Int, frameCount: Int) {
@@ -117,6 +133,11 @@ public struct SpectrogramAccumulator {
         windowed = [Float](repeating: 0, count: Self.fftSize)
         magnitudes = [Float](repeating: 0, count: Self.binCount)
         combined = [Float](repeating: 0, count: Self.binCount)
+        // Half-length: `.complexReal` treats the window's even and odd samples as one complex sequence.
+        evens = [Float](repeating: 0, count: Self.fftSize / 2)
+        odds = [Float](repeating: 0, count: Self.fftSize / 2)
+        outputReal = [Float](repeating: 0, count: Self.fftSize / 2)
+        outputImaginary = [Float](repeating: 0, count: Self.fftSize / 2)
     }
 
     /// Feeds one chunk of decoded audio.
@@ -215,20 +236,53 @@ private extension SpectrogramAccumulator {
 
         // `.complexReal` takes the even and odd samples as the real and imaginary halves of a
         // half-length complex sequence — the standard real-to-complex split.
-        let evens = stride(from: 0, to: Self.fftSize, by: 2).map { windowed[$0] }
-        let odds = stride(from: 1, to: Self.fftSize, by: 2).map { windowed[$0] }
-        let transformed = dft.transform(real: evens, imaginary: odds)
+        //
+        // Split with `vDSP_ctoz`, which is exactly this operation: it reads a buffer as interleaved
+        // complex pairs and writes the two halves apart. It fills buffers this type already owns, so the
+        // split costs no allocation — where `stride(...).map` built two fresh arrays every time.
+        splitWindowIntoHalves()
+
+        // The output goes into buffers this type owns too. `transform(real:imaginary:)` returns two new
+        // arrays; this overload writes into existing ones and is the same transform otherwise.
+        dft.transform(
+            inputReal: evens,
+            inputImaginary: odds,
+            outputReal: &outputReal,
+            outputImaginary: &outputImaginary
+        )
 
         // DC and Nyquist come back packed into element 0 — `real[0]` and `imaginary[0]` — so they are
         // unpacked into the first and last bins rather than summed into one. Their amplitudes carry no
         // mirrored twin, so they are halved to sit on the same scale as every other bin: measured, DC at
         // 0.5 then reads −6.02 dBFS exactly as a tone at 0.5 does.
-        magnitudes[0] = abs(transformed.real[0]) * magnitudeScale * 0.5
-        magnitudes[Self.binCount - 1] = abs(transformed.imaginary[0]) * magnitudeScale * 0.5
+        magnitudes[0] = abs(outputReal[0]) * magnitudeScale * 0.5
+        magnitudes[Self.binCount - 1] = abs(outputImaginary[0]) * magnitudeScale * 0.5
         for bin in 1 ..< Self.binCount - 1 {
-            let real = transformed.real[bin]
-            let imaginary = transformed.imaginary[bin]
+            let real = outputReal[bin]
+            let imaginary = outputImaginary[bin]
             magnitudes[bin] = (real * real + imaginary * imaginary).squareRoot() * magnitudeScale
+        }
+    }
+
+    /// Deinterleaves `windowed` into `evens` and `odds` in place.
+    ///
+    /// The pointers live only inside this call: `DSPSplitComplex` is built, used and dropped within the
+    /// nested scopes, and nothing it refers to outlives them.
+    mutating func splitWindowIntoHalves() {
+        let half = Self.fftSize / 2
+        windowed.withUnsafeBufferPointer { source in
+            guard let base = source.baseAddress else { return }
+            evens.withUnsafeMutableBufferPointer { evensBuffer in
+                odds.withUnsafeMutableBufferPointer { oddsBuffer in
+                    guard let realp = evensBuffer.baseAddress, let imagp = oddsBuffer.baseAddress else {
+                        return
+                    }
+                    var split = DSPSplitComplex(realp: realp, imagp: imagp)
+                    base.withMemoryRebound(to: DSPComplex.self, capacity: half) { interleaved in
+                        vDSP_ctoz(interleaved, 2, &split, 1, vDSP_Length(half))
+                    }
+                }
+            }
         }
     }
 
