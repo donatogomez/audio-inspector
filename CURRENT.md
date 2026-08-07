@@ -37,7 +37,15 @@ report, time horizontal, frequency linear to the file's own Nyquist and never cr
 perceptual ramp with a numeric **−120…0 dBFS** legend, every non-drawn state said in words, and an
 accessible contract on the drawing. Its isolation is demonstrated rather than asserted — the drawing
 touches neither the JSON nor the export, and a spectrogram that is absent, failed or cancelled degrades
-nothing about the inspection.
+nothing about the inspection. **Group 8 ran the whole capability against the production pipeline** —
+decoder → generation → model — over real files rather than scripted chunks: **WAV, AIFF, ALAC, FLAC and
+AAC**, each opening, describing its own stream, staying inside the caps, keeping the axis at its own
+Nyquist and leaving the source byte-identical. **MP3 is covered by local, FFmpeg-gated evidence** that CI
+skips, and a skip is stated in the test itself to be no coverage at all. A known band limit is
+**observable** — present below, gone above, in the same band whatever lossless container carries it, and
+surviving an MP3 being rewrapped as WAV — while remaining an observation and never a verdict. The
+report's isolation is confirmed once per format: a spectrogram genuinely produced changes no property,
+no warning, no status and no exported byte.
 
 **What group 5 forced on the seam.** The accumulator needs the stream's shape *before* the first chunk,
 and the port only returned it after the whole decode. Buffering, decoding twice and taking the frame
@@ -81,20 +89,30 @@ almost 9 dB. The final incomplete window is discarded rather than padded.
 
 **What it refuses to do:** say what a cutoff means. The drawing can show that energy stops and that the
 edge is abrupt; it cannot separate lossy encoding from the master or from deliberate filtering, and two
-measured limits — scalloping loss and an edge uncertainty of about one reduced band — are why.
-Automatic detection of lossy origin is a **separate future change**, and must carry evidence,
-alternative explanations and confidence rather than a verdict.
+measured limits — scalloping loss, and an edge that reads **high by up to about three reduced bands and
+never low** — are why. That second figure is group 8's, and it is wider than the spike's prose claimed;
+the spike's own table already said as much. Automatic detection of lossy origin is a **separate future
+change**, and must carry evidence, alternative explanations and confidence rather than a verdict.
 
-**Next step:** group 8 — the **format matrix and acceptance**. Not started. It runs the capability against
-the productive pipeline itself — decoder → generation → spectrogram — over the supported formats, so that
-what has been proved with fixtures and fakes is proved once against real files. Nothing about the drawing
-changes: it still interprets nothing, shows where energy stops and says nothing about what that means.
-No automatic detection of lossy origin, cutoff, authenticity or quality, and the waveform is **not** yet
-migrated onto the shared seam.
+**What group 8 corrected rather than absorbed.** Two containers written from the same specification do
+not necessarily hold the same samples: our FLAC fixture is written from a 24-bit source where WAV, AIFF
+and ALAC take 16, so its model differs — but only in the **quantisation noise floor** around −110 dBFS,
+by 0.0025 dB anywhere a reader can see. The container still changes nothing about the evidence; the
+fixture writer changes the audio. Worth remembering before reading any future "identical" claim as a
+statement about the analysis.
+
+**Next step:** group 9 — the **conditional** migration of the waveform onto the shared `AudioDecoding`
+seam. Not started, and it may not happen: it proceeds only if it preserves the waveform's public
+contract, its existing tests and its independence from the spectrogram without introducing new coupling.
+If it cannot, it is deferred to its own change and said so, and the two PCM reads stay as declared debt
+rather than being forced into one. Either way the two consumers remain **separate operations with
+separate cancellation** — the goal is removing duplicated implementation, never merging the operations.
 
 **Carried forward, unchanged:** the waveform's accessibility debt (text sizes not evaluable on macOS as
 written; the VoiceOver traversal failed and is parked for a dedicated change) keeps **ADR-0015 at
-`Proposed`**. **ADR-0016 is also `Proposed`**, pending its own format matrix and manual validation. The
+`Proposed`**. **ADR-0016 is also `Proposed`**: its format matrix has now passed, but its second
+condition — the manual validation of the resulting surface — has not been done, and partial evidence
+does not promote it. The
 waveform's migration onto the shared seam is planned as the **last, conditional** group of this slice,
 with an explicit stop rule that permits deferring it honestly.
 
