@@ -136,16 +136,31 @@ accepted cost when the seam was designed, and the property the migration was mea
 already true and already proved in both directions. Removing the duplicated *implementation* is worth
 doing; merging the *operations* never was.
 
-**Next step:** group 10 — accessibility and manual validation. The waveform's migration belongs to a
-change of its own, scoped to reconciling the two error spaces first, and nothing about it is started.
+**The spectrogram is functionally finished, and its manual validation is deliberately not.** The
+implementation and the optimisation are both complete and the surface works in the real application.
+Group 10 — the literal accessibility and by-eye battery — was **deferred by product decision** with the
+fixtures and the runbook already prepared. A basic functional check was satisfactory; that is an
+impression, not evidence, and none of 10.1–10.6 is recorded as passed. What was and was not observed is
+written down in `docs/manual-validation-mvp.md` so a later reader cannot mistake one for the other.
+
+**The debt this leaves is explicit, and it is a validation debt rather than a product one.** Nothing on
+the surface is known to be wrong; nothing about it has been certified either. The greyscale reading of
+the new ramp, the high-sample-rate files, the adverse states and the accessibility tree are all still
+unobserved.
 
 **Carried forward, unchanged:** the waveform's accessibility debt (text sizes not evaluable on macOS as
 written; the VoiceOver traversal failed and is parked for a dedicated change) keeps **ADR-0015 at
 `Proposed`**. **ADR-0016 is also `Proposed`**: its format matrix has now passed, but its second
 condition — the manual validation of the resulting surface — has not been done, and partial evidence
-does not promote it. The
-waveform's migration onto the shared seam is planned as the **last, conditional** group of this slice,
-with an explicit stop rule that permits deferring it honestly.
+does not promote it. Deferring that validation does not weaken the condition; it postpones the
+promotion. The waveform's migration onto the shared seam is planned as the **last, conditional** group
+of this slice, with an explicit stop rule that permits deferring it honestly.
+
+**Next step:** decide where the deferred battery lives. It is the only thing between this slice and
+closure, and it need not block the next piece of work — moving group 10 into a validation change of its
+own would let this one finish while keeping the debt named and owned. The waveform's migration belongs
+to a change of its own too, scoped to reconciling the two error spaces first, and nothing about it is
+started.
 
 ---
 _Last touched: 2026-08-07. Overwrite freely; empty is fine._
