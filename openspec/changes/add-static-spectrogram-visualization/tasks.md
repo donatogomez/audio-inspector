@@ -305,31 +305,101 @@ property reader and the JSON exporter are not touched.
 
 ## 8. The format matrix and tests
 
-- [ ] 8.1 Domain unit tests: the 1024 × 512 caps, the frame→column mapping, the band arithmetic, and
+- [x] 8.1 Domain unit tests: the 1024 × 512 caps, the frame→column mapping, the band arithmetic, and
       non-finite samples refused.
-- [ ] 8.2 Analysis unit tests over synthetic signals: silence at the floor, DC, tones on and between
+      Already closed by `SpectrogramModelTests` (caps, both mappings and their monotonicity, the linear
+      band arithmetic at 44.1/48/96/192 kHz, values below the floor and non-finite values refused) and
+      `PCMDecodingContractTests` (`NaN`, signalling `NaN` and both infinities refused at the chunk
+      boundary). Nothing was added: the coverage existed and was verified rather than duplicated.
+- [x] 8.2 Analysis unit tests over synthetic signals: silence at the floor, DC, tones on and between
       bins with the scalloping tolerance the spike measured (±1.42 dB), two tones, impulse, values
       beyond `[-1, 1]` preserved, and **no normalisation** between two files 20 dB apart.
-- [ ] 8.3 Cutoff tests: a brick-wall low pass at 16/18/19/20/22 kHz is located within one reduced band,
+      Silence, DC, Nyquist, the three on-bin amplitudes, values beyond full scale and the 20 dB
+      separation were already covered. Added: a tone **between** bins losing no more than Hann's
+      1.42 dB, two tones at 0.5 and 0.05 each reading their own amplitude, and an impulse lighting
+      512 of 512 bands.
+- [x] 8.3 Cutoff tests: a brick-wall low pass at 16/18/19/20/22 kHz is located within one reduced band,
       at 44.1, 48, 96 and 192 kHz.
-- [ ] 8.4 Reduction tests: a short transient survives folding, and the maximum is asserted to differ
+      **Closed with a measured correction to this task's own tolerance.** Nineteen (rate, limit) rows
+      run through the production pipeline over band-limited fixtures. The observed edge lands **at or
+      above** the limit by **+0.50 to +3.32 reduced bands**, never below — so "within one reduced band"
+      is not what the code does and was never what the spike measured either: its own table shows
+      +406…+531 Hz at 192 kHz against a 187.5 Hz band, or 2.2–2.8 bands, while its prose said "about
+      one". The bias is one-sided by construction, because the band holding the limit still carries
+      energy from below it. The assertion is therefore `−1 … +4` bands, and the property the slice was
+      actually gated on — that the five limits stay **separable from one another**, by at least 4 bands
+      at every sample rate — is asserted separately. A 22 kHz limit at 44.1 kHz is **not tested**: it is
+      not below that file's Nyquist, and the row is absent rather than silently passing.
+- [x] 8.4 Reduction tests: a short transient survives folding, and the maximum is asserted to differ
       from a mean on the same input.
-- [ ] 8.5 Channel tests: mono, identical stereo, tone in one channel only, different content per
+      **The existing transient test folded nothing** — four seconds yields 341 transform frames, below
+      the 1024-column cap, so every frame was its own column and the two strategies could not disagree.
+      That is precisely the mistake the spike made and wrote down. Lengthened to sixty seconds (5 119
+      frames, ~5 per column) and the folding is now asserted before the level is. Added: the level a
+      mean *would* have produced, derived from the model's own declared geometry rather than from a
+      second reduction, and shown to differ.
+- [x] 8.5 Channel tests: mono, identical stereo, tone in one channel only, different content per
       channel, opposite polarity — plus an assertion that **no spurious band** appears for two pure
       tones, which is the regression the time-domain control would fail.
-- [ ] 8.6 Adapter integration over the format matrix — WAV, AIFF, ALAC, FLAC, AAC — one test per row,
+      One channel only, different content per channel, opposite polarity and the no-spurious-band
+      control were already covered. Added the two missing rows: mono against identical stereo producing
+      **exactly** the same values, and a tone in one channel of 3, 6 and 8.
+- [x] 8.6 Adapter integration over the format matrix — WAV, AIFF, ALAC, FLAC, AAC — one test per row,
       with **MP3 gated on FFmpeg** and **not** counted as coverage when skipped, exactly as
       `MP3WaveformEvidenceTests` does.
-- [ ] 8.7 Container independence: the same audio as WAV and as FLAC yields **identical** models.
-- [ ] 8.8 Determinism, chunk-size independence down to one frame, strict `frameLength`, bounded memory,
+      `SpectrogramFormatMatrixTests` runs `AVFoundationAudioDecoder` → `SpectrogramGeneration` →
+      `Spectrogram` over real files, one row per format, asserting the declared stream, the caps, finite
+      values at or above the floor, the full Nyquist axis, the surviving signal and a byte-identical
+      source afterwards.
+      **The MP3 row is closed by `MP3SpectrogramEvidenceTests`**, gated on FFmpeg **and** on
+      `libmp3lame`, and **run** on 2026-08-07 with FFmpeg 8.1.2: the production pipeline turned a
+      44 101-frame stereo MP3 (CBR 192k, sha256 `f7b7662a…`, 25 748 bytes) into an 83 × 512 model,
+      identical at seven chunk sizes, with the source byte-identical afterwards. **This is local
+      evidence and NOT CI coverage** — CI installs no FFmpeg and the suite skips there. The skip path
+      was verified with a temporary negative control, which was reverted in full.
+- [x] 8.7 Container independence: the same audio as WAV and as FLAC yields **identical** models.
+      **Closed with a measured correction: WAV and FLAC are *not* bit-identical here, and the reason is
+      the fixture writer, not the spectrogram.** `AVAudioFile` writes our FLAC *from a 24-bit source*
+      while WAV, AIFF and ALAC take 16, so the two files never carried the same PCM: the decoded samples
+      differ by **1.51 × 10⁻⁵**, one 16-bit least significant bit. What that reaches in the model was
+      measured — the loudest cell agrees to **0.00004 dB**, the largest disagreement at or above
+      −60 dBFS is **0.0025 dB**, and the largest anywhere is **10.74 dB** at a cell reading **−109.3
+      dBFS** against the **−120 dBFS floor**, which is the quantisation noise floor of 16-bit storage a
+      hundred decibels below the content. So the task's substance holds and is asserted twice:
+      **WAV, AIFF and ALAC produce bit-identical models** (exact `Equatable` comparison), and FLAC
+      agrees within 0.05 dB everywhere a reader can see, with its only real disagreement confined below
+      −100 dBFS. The same band limit is also shown to survive rewrapping across all four containers.
+      `AudioFixtureFormat` was deliberately **not** changed to force FLAC to 16 bits: it is also the
+      waveform slice's acceptance matrix, and editing it would silently change what that matrix asserts.
+      AAC is compared to its source **without** any equality claim, as a lossy codec requires.
+- [x] 8.8 Determinism, chunk-size independence down to one frame, strict `frameLength`, bounded memory,
       and cancellation producing no partial model.
-- [ ] 8.9 The report is unaffected: a file whose samples cannot be read yields the same properties,
+      All five over real files, per format: identical models at 1/3/127/512/2048/4096/65 536 frames
+      (35 rows), the same file read twice producing the same model, a fixture of exactly ten complete
+      windows yielding exactly ten columns at four chunk sizes, the grid capped at 1024 × 512 for a file
+      thirty times longer, and a cancelled generation yielding `.cancelled` with no model.
+      **Memory is asserted as what the suite can honestly observe** — the model bounded by the grid and
+      the reads by the requested chunk — never as resident memory from inside `swift test`, exactly as
+      the waveform slice's task 0.13 established. No timing is asserted anywhere and no sleep was added.
+- [x] 8.9 The report is unaffected: a file whose samples cannot be read yields the same properties,
       warnings and status, and the exported JSON is **byte-identical** with and without a spectrogram.
-- [ ] 8.10 End-to-end: the existing flow test still walks the same pipeline, with a spectrogram present
+      Already closed by `SpectrogramReportIsolationTests`. Extended only where the format matrix adds a
+      guarantee it could not: for **each** of the five formats, a spectrogram genuinely produced by the
+      production decoder leaves the properties, warnings, status and every exported byte identical to a
+      run where the port reports an absence. The existing key sweep and structural assertions are not
+      duplicated.
+- [x] 8.10 End-to-end: the existing flow test still walks the same pipeline, with a spectrogram present
       in one case and absent in the other. **No existing assertion is removed or weakened.**
-- [ ] 8.11 Presentation tests over the model: the accessible label, the legend text, and that no
+      The existing walk now also asserts the spectrogram it already produced — the model's stream, its
+      geometry, its finiteness and the state the surface receives — and a second walk exports the same
+      report with a real spectrogram and with an absent one, byte for byte identical. Every assertion
+      that was there before is still there, unchanged.
+- [x] 8.11 Presentation tests over the model: the accessible label, the legend text, and that no
       interpretive vocabulary — lossy, transcoded, fake, bitrate, encoder, quality — appears anywhere on
       the spectrogram surface.
+      Closed by `SpectrogramCopyTests` from group 7, with the sweep completed: it named *lossy*,
+      *transcoded*, *fake* and *poor quality* but not the bare *quality*, *bitrate* or *encoder* this
+      task lists. All three added, and the suite still passes.
 
 ## 9. Migrating the waveform onto the shared seam — conditional
 
