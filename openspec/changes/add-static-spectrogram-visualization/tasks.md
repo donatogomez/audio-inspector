@@ -548,6 +548,17 @@ requirements are met.
       colour function as the cells.
 - [x] 12.8 Re-measure Debug and Release after the work, with the same method as the diagnosis, and
       record the result — including, if Debug is still slow, that it is still slow.
+      **It was still slow, and a second pass fixed it.** Removing allocations left an unoptimised build
+      at 42 s for seven minutes, so the inner loop was profiled stage by stage rather than reasoned
+      about. The cost was scalar Swift loops — magnitude, channel maximum, buffer clear, band fold and
+      the per-sample finiteness scan, together ≈42 of the 42 s — and moving them into Accelerate and
+      the standard library's SIMD took the whole generation to **1.8 s in Debug** and **0.9 s in
+      Release** for a ten-minute 68 MB FLAC, against the **33 s** a manual run originally observed.
+- [x] 12.10 Vectorise the analysis so the drawing arrives in seconds from the build a developer runs,
+      without touching the resolution, the transform size, the hop, the channel handling or the scale.
+      The result is not bit-identical and the difference is measured: at most **1.53 × 10⁻⁵ dB** on
+      5.5–6.4 % of cells, from fused multiply-add rounding once where the scalar form rounded twice.
+      The set of cells at the floor is unchanged and **no cell crosses any threshold**.
 - [x] 12.9 Re-audit group 10's runbook against the changed surface: which steps still hold, which must
       be repeated, and whether the resize observation is now worth making.
       **Outcome.** The runbook and every fixture in it stay valid — none of them describes the renderer

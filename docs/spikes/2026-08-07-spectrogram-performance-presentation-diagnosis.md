@@ -296,3 +296,82 @@ chunk-size independence down to one frame, the cutoff separations at 44.1/48/96/
 container matrix and the FFmpeg-gated MP3 row. No tolerance was widened and none needed to be — the
 modern `transform(inputReal:inputImaginary:outputReal:outputImaginary:)` overload is the same transform
 writing into buffers the caller owns.
+
+---
+
+## I — The hot loop, profiled
+
+The allocation work in §H bought 26 % and left Debug at ≈42 s, which was not enough. This section
+measures **where those seconds actually are**, by running each stage of the inner loop in isolation at
+the real scale for a 6:56 stereo file — 35 828 windows, 71 656 transforms — and timing the scalar form
+against a vectorised equivalent.
+
+| Stage | Iterations per file | Scalar (Debug) | Vectorised (Debug) | Ratio |
+| --- | ---: | ---: | ---: | ---: |
+| Magnitude, `sqrt(re² + im²)` | 73.3 M | **11 514 ms** | 68 ms | **169×** |
+| Channel maximum per bin | 73.4 M | **11 845 ms** | 41 ms | **291×** |
+| Clearing the combine buffer | 36.7 M | **5 299 ms** | 8 ms | **662×** |
+| Bin → band fold | 36.7 M | **6 143 ms** | see below | — |
+| `finish()`, amplitude → dB | 0.52 M | 86 ms | 1.4 ms | 62× |
+
+Those scalar figures sum to **34.9 s**, against a measured 36.0 s for the whole STFT and reduction. **The
+hypothesis is confirmed and the remainder is noise: the cost was scalar Swift loops, not allocation,
+not the transform, and not the decode.** Accelerate is precompiled, so moving this work into it helps an
+unoptimised build as much as an optimised one — which is the point, because the unoptimised build is the
+one a developer runs.
+
+A second profile, taken after the transform was vectorised, found the cost had moved:
+
+| Stage of the decode | Debug |
+| --- | ---: |
+| `AVAudioFile` read alone | 669 ms |
+| plus copying each chunk | 719 ms |
+| plus the finiteness scan | **7 906 ms** |
+
+**The per-sample finiteness scan was 7.2 s** — 52.9 M iterations for a ten-minute stereo file. Four
+formulations were measured and three made no difference at all: reading through a raw pointer, testing
+the exponent bits directly, and accumulating a sum all landed within 4 % of each other. **The cost was
+never `isFinite`; it was the loop.** An unoptimised build spends roughly 135 ns on an iteration of
+anything.
+
+What did work is a `SIMD8` screen from the **standard library** — 1 536 ms against 7 921 ms, 5.2× — and
+it is available where Accelerate is not, which matters because `PCMChunk` lives in the domain and a
+boundary test asserts that file imports nothing at all.
+
+## J — After vectorisation
+
+| | Before this work | After §H | **After §I** |
+| --- | ---: | ---: | ---: |
+| **Debug**, 6:56 MP3, whole generation | 57 470 ms | 42 316 ms | **1 419 ms** |
+| **Debug**, 10:00 FLAC (68 MB), whole generation | — | 9 709 ms | **1 841 ms** |
+| **Debug**, STFT + reduction alone | 47 758 ms | 35 988 ms | **401 ms** |
+| **Release**, 6:56 MP3, whole generation | 1 225 ms | 847 ms | **724 ms** |
+| **Release**, 10:00 FLAC (68 MB), whole generation | — | — | **916 ms** |
+
+The raster adds **440 ms in Debug** and **7 ms in Release** on top, once per model.
+
+So a ten-minute, 68 MB FLAC now produces its drawing in about **2.3 s from an unoptimised build** and
+**0.9 s from an optimised one**, where the manual observation that started this was **33 s**.
+
+### What the numbers are equal to
+
+The optimisation is **not bit-identical**, and the difference was measured rather than assumed:
+
+| | |
+| --- | --- |
+| Cells that differ | 5.5 % – 6.4 % of 524 288 |
+| Largest difference | **1.53 × 10⁻⁵ dB** (one to two ULP of a `Float` at these magnitudes) |
+| Cells at the floor | **identical set**, in all three files |
+| Cells crossing −90, −60, −40 or −20 dBFS | **zero**, in all three files |
+
+The cause is **fused multiply-add**. The vector unit evaluates `re² + im²` with a single rounding where
+the scalar form rounds twice, so the vectorised value is the *more* accurate of the two. There is no
+portable way to ask for the less accurate one, and asking would be the wrong instinct.
+
+Two things follow. It cannot move a cutoff: an edge is found by a step of tens of decibels, and this is
+seven orders of magnitude smaller. It cannot change the floor or any threshold: that was checked
+directly rather than argued, and no cell crosses one.
+
+`finish()` was **reverted to scalar** for the same reason in reverse. `vDSP_vdbcon` is 62× faster, but
+its logarithm differs in the last bit and that pass is one sweep over the grid — 86 ms of a 36 s build,
+0.2 %. Paying it keeps the dB conversion exactly what it was.
