@@ -101,12 +101,24 @@ by 0.0025 dB anywhere a reader can see. The container still changes nothing abou
 fixture writer changes the audio. Worth remembering before reading any future "identical" claim as a
 statement about the analysis.
 
-**Next step:** group 9 — the **conditional** migration of the waveform onto the shared `AudioDecoding`
-seam. Not started, and it may not happen: it proceeds only if it preserves the waveform's public
-contract, its existing tests and its independence from the spectrogram without introducing new coupling.
-If it cannot, it is deferred to its own change and said so, and the two PCM reads stay as declared debt
-rather than being forced into one. Either way the two consumers remain **separate operations with
-separate cancellation** — the goal is removing duplicated implementation, never merging the operations.
+**Group 9 ran its stop rule and stopped.** The waveform is **not** migrated onto the shared seam, and
+the decision was reached by audit before a line of production code was written. Three things block it,
+and none is a matter of effort: two decoding faults — a stream that cannot exist, and a chunk that is
+not a possible run of audio — have **no honest counterpart** in the waveform's error space, and giving
+them one would change that space, which the group forbids itself; a file with a non-positive sample
+rate, which the waveform never looks at today, would newly **fail** where it currently succeeds; and
+three existing tests drive a format check that loses its only caller through the seam, so they could
+neither pass untouched nor be kept honestly. Cost was measured and is **not** the obstacle — an owned
+per-chunk copy costs about a quarter more on the read, bounded and acceptable.
+
+**So the two PCM reads stay, as declared debt rather than as an oversight.** That was named as an
+accepted cost when the seam was designed, and the property the migration was meant to preserve — two
+**separate operations with separate cancellation**, neither able to fail or cancel the other — is
+already true and already proved in both directions. Removing the duplicated *implementation* is worth
+doing; merging the *operations* never was.
+
+**Next step:** group 10 — accessibility and manual validation. The waveform's migration belongs to a
+change of its own, scoped to reconciling the two error spaces first, and nothing about it is started.
 
 **Carried forward, unchanged:** the waveform's accessibility debt (text sizes not evaluable on macOS as
 written; the VoiceOver traversal failed and is parked for a dedicated change) keeps **ADR-0015 at
