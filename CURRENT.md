@@ -32,7 +32,12 @@ neither waits on the other. Every update is guarded by the operation identity, s
 replaced operation reaches nothing. The spectrogram's visible states are *loading*, *available*,
 *unavailable* and *failed* — **cancellation settles into none of them**, because a generation the user
 replaced must never be shown as a limitation of their file. The waveform and the spectrogram remain
-entirely independent operations. **No drawing, no palette and no legend** — nothing renders it yet.
+entirely independent operations. **Group 7 draws it**: the static spectrogram is now visible inside the
+report, time horizontal, frequency linear to the file's own Nyquist and never cropped, energy as a
+perceptual ramp with a numeric **−120…0 dBFS** legend, every non-drawn state said in words, and an
+accessible contract on the drawing. Its isolation is demonstrated rather than asserted — the drawing
+touches neither the JSON nor the export, and a spectrogram that is absent, failed or cancelled degrades
+nothing about the inspection.
 
 **What group 5 forced on the seam.** The accumulator needs the stream's shape *before* the first chunk,
 and the port only returned it after the whole decode. Buffering, decoding twice and taking the frame
@@ -80,10 +85,12 @@ measured limits — scalloping loss and an edge uncertainty of about one reduced
 Automatic detection of lossy origin is a **separate future change**, and must carry evidence,
 alternative explanations and confidence rather than a verdict.
 
-**Next step:** group 7 — the static presentation. Not started. Time horizontal, frequency linear to the
-file's own Nyquist and never cropped, energy as a perceptual ramp with a numeric dBFS legend, and every
-non-drawn state said in words. It interprets nothing: the drawing shows where energy stops and says
-nothing about what that means.
+**Next step:** group 8 — the **format matrix and acceptance**. Not started. It runs the capability against
+the productive pipeline itself — decoder → generation → spectrogram — over the supported formats, so that
+what has been proved with fixtures and fakes is proved once against real files. Nothing about the drawing
+changes: it still interprets nothing, shows where energy stops and says nothing about what that means.
+No automatic detection of lossy origin, cutoff, authenticity or quality, and the waveform is **not** yet
+migrated onto the shared seam.
 
 **Carried forward, unchanged:** the waveform's accessibility debt (text sizes not evaluable on macOS as
 written; the VoiceOver traversal failed and is parked for a dedicated change) keeps **ADR-0015 at
@@ -92,4 +99,4 @@ waveform's migration onto the shared seam is planned as the **last, conditional*
 with an explicit stop rule that permits deferring it honestly.
 
 ---
-_Last touched: 2026-08-06. Overwrite freely; empty is fine._
+_Last touched: 2026-08-07. Overwrite freely; empty is fine._
