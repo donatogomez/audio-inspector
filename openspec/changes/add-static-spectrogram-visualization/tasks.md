@@ -415,10 +415,56 @@ property reader and the JSON exporter are not touched.
 - [ ] 9.4 Confirm the envelope produced through the shared seam is **identical** to the one produced
       before the migration.
 - [ ] 9.5 Confirm no UI change and no change to the flow's states.
-- [ ] 9.6 **Stop rule.** If any of 9.2–9.5 cannot be met without coupling the consumers, weakening a
+- [x] 9.6 **Stop rule.** If any of 9.2–9.5 cannot be met without coupling the consumers, weakening a
       test, touching the UI or materially widening this slice, **stop and defer the migration to its own
       change**, recording precisely what blocked it. Two reads remaining is a declared cost, not a
       failure of this slice.
+
+      **APPLIED on 2026-08-07. The migration is deferred; 9.1–9.5 stay open because they did not
+      happen.** The audit ran before any production code was written, and three blockers are semantic
+      rather than a matter of effort:
+
+      1. **Two decoding faults have no honest waveform counterpart.** Seven of `AudioDecodingErrorCode`'s
+         nine codes have an exactly-named `WaveformErrorCode` twin, so an exhaustive translation looks
+         feasible — until `decoding_invalid_stream_description` and `decoding_invalid_chunk`, which do
+         not. `readFailed` would claim the file could not be read to the end it declared, which is a
+         different thing that did not happen; `invalidConfiguration` would blame the caller for a fault
+         in the file. Adding `waveform_invalid_stream_description` would change the waveform's error
+         space, which **9.1 forbids** — and `WaveformErrorTests` is deliberately written to break when a
+         code appears. Pinned as executable assertions in
+         `WaveformDecodingSeamMigrationTests`, so closing the gap later fails a test rather than passing
+         unnoticed.
+      2. **One case would turn a success into a failure.** `AVFoundationWaveformGenerator` never reads
+         the sample rate; `PCMStreamDescription` refuses a non-positive or non-finite one, so a file the
+         waveform currently reduces would newly fail with `invalidStreamDescription`. That is a contract
+         change, not a refactor.
+      3. **Existing waveform tests could not pass untouched, which 9.2 requires.** Three tests drive
+         `AVFoundationWaveformGenerator.verifyReducible` directly. Through the seam the adapter never
+         sees an `AVAudioFormat`, so that method loses its only caller: deleting it deletes the tests,
+         and keeping it turns three green tests into theatre over code that no longer runs. The decoder
+         already carries the identical three checks in `AVFoundationAudioDecoderRuleTests`, so the
+         coverage exists — but not where 9.2 requires it to keep passing.
+
+      **A fourth difference, recorded but not a blocker on its own:** the waveform's loop clamps each
+      read with `min(valid, frameCount - framesRead)`, silently trimming a file that over-reads past its
+      declared length; the decoder refuses the same file with `readFailed`. The decoder's behaviour is
+      the better one — the clamp is exactly the trap ADR-0015's negative control documented — but it is
+      still an observable change to a shipped adapter.
+
+      **What is not a blocker:** cost. Measured on a disposable harness outside the repository, a
+      five-minute stereo 44.1 kHz WAV at the production chunk size read in **70.7 ms** through today's
+      borrowed `UnsafeBufferPointer` and **86.9 ms** through an owned per-chunk copy — **+16.2 ms, +23 %**,
+      with 6 460 transient allocations and 26.46 M floats copied. Peak memory stays bounded by the chunk
+      either way. Modest and acceptable; it is not what stops the migration.
+
+      **Declared debt, unchanged:** the waveform and the spectrogram continue to read the file twice.
+      That was named as an accepted cost in `design.md` decision 9 and ADR-0016's alternatives, and it
+      stays one. The two remain **separate operations with separate cancellation**, which is the property
+      the migration was meant to preserve rather than create — and which `SpectrogramFlowTests` already
+      proves in both directions.
+
+      **Next step for this work:** its own change, scoped to reconciling the two error spaces first.
+      Nothing about it is started here.
 
 ## 10. Accessibility and manual validation
 
