@@ -84,11 +84,40 @@ enum AudioFixtureSignal {
     /// Unlike `sine`, the channels are not copies of one another, so a codec that folded them together
     /// would not reproduce the source — useful where the encoder is outside our control.
     case perChannelSine(frequencies: [Double], amplitude: Float)
+    /// A comb of sines from `lowest` up to `highest`, spaced by `spacing`, with the topmost component
+    /// sitting **exactly** at `highest`.
+    ///
+    /// A band-limited source with a known edge, built without filtering anything: the file simply
+    /// contains no component above `highest`, so the edge is a property of the specification rather
+    /// than of a filter this package would have to implement and then trust. The total amplitude is
+    /// divided between the components, so a dense comb stays inside full scale.
+    case bandLimitedTones(highest: Double, spacing: Double, lowest: Double, amplitude: Float)
+
+    /// The components of a `bandLimitedTones` signal, highest first.
+    var toneFrequencies: [Double] {
+        guard case let .bandLimitedTones(highest, spacing, lowest, _) = self else { return [] }
+        var frequencies: [Double] = []
+        var frequency = highest
+        while frequency >= lowest {
+            frequencies.append(frequency)
+            frequency -= spacing
+        }
+        return frequencies
+    }
 
     func sample(channel: Int, frame: Int, sampleRate: Double) -> Float {
         switch self {
         case .silence:
             0
+        case let .bandLimitedTones(_, _, _, amplitude):
+            {
+                let frequencies = toneFrequencies
+                guard !frequencies.isEmpty else { return 0 }
+                let total = frequencies.reduce(0.0) { sum, frequency in
+                    sum + sin(2.0 * Double.pi * frequency * Double(frame) / sampleRate)
+                }
+                return amplitude * Float(total) / Float(frequencies.count)
+            }()
         case let .perChannelSine(frequencies, amplitude):
             amplitude * Float(sin(
                 2.0 * Double.pi * frequencies[channel % frequencies.count] * Double(frame) / sampleRate

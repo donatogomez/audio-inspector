@@ -129,9 +129,9 @@ struct SpectrogramHonestyTests {
     /// energy stops; a cutoff is compatible with lossy encoding, with the master and with deliberate
     /// filtering, and separating those is a different capability's job.
     private static let forbiddenClaims = [
-        "fake", "fraudulent", "lossy", "transcoded", "bad quality", "poor quality", "damaged",
+        "fake", "fraudulent", "lossy", "transcoded", "quality", "bad quality", "poor quality", "damaged",
         "healthy", "authentic", "original", "suspicious", "verdict", "detected as mp3", "mp3",
-        "upscaled", "counterfeit", "genuine",
+        "upscaled", "counterfeit", "genuine", "bitrate", "encoder", "codec",
     ]
 
     /// Internal vocabulary that must never reach a reader.
