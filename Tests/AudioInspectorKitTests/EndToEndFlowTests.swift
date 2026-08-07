@@ -74,6 +74,23 @@ struct EndToEndFlowTests {
             // It reaches the surface that draws it, as the state that draws it.
             #expect(RootView.waveformPresentation(for: presentation.waveform) == .envelope(envelope))
 
+            // The spectrogram travelled the same pipeline, beside the report and beside the waveform.
+            // This run uses the production decoder and the production accumulator, so a real STFT over
+            // a real file happened inside the same access window.
+            guard case let .available(spectrogram) = presentation.spectrogram else {
+                Issue.record("expected an available spectrogram, got \(presentation.spectrogram)"); return
+            }
+            #expect(spectrogram.sampleRate == 44_100, "the model describes the file the report describes")
+            #expect(spectrogram.channelCount == 1)
+            #expect(spectrogram.frameCount > 0)
+            #expect(spectrogram.columnCount > 0)
+            #expect(spectrogram.bandCount == 512)
+            #expect(spectrogram.values.count == spectrogram.columnCount * spectrogram.bandCount)
+            #expect(spectrogram.values.allSatisfy { $0.isFinite && $0 >= Spectrogram.floorDecibels })
+            #expect(spectrogram.nyquist == 22_050)
+            // It reaches the surface that draws it, as the state that draws it.
+            #expect(RootView.spectrogramPresentation(for: presentation.spectrogram) == .model(spectrogram))
+
             // The report describes the selected file, with no location anywhere in it.
             #expect(report.file.displayName == "fixture.wav")
             #expect(report.file.fileExtension == "wav")
@@ -230,6 +247,72 @@ struct EndToEndFlowTests {
 
             // The surface is told the truth about the absence rather than shown an empty drawing.
             #expect(RootView.waveformPresentation(for: withoutWaveform.waveform) == .absent)
+
+            // And neither walk touched the source.
+            #expect(try sha256(of: source) == hashBefore)
+        }
+    }
+
+    /// The same walk again, this time for the spectrogram: **present in one run, absent in the other,
+    /// and nothing else moves.**
+    ///
+    /// The run with a spectrogram uses the **production** decoder and accumulator over a real file, so
+    /// the model is genuinely produced rather than scripted; the run without substitutes only the
+    /// decoding port. The property reader, the use case, the flow model, the exporter and the write are
+    /// real in both. Every byte written to disk must be identical, because the export has never had a
+    /// route to the spectrogram at all.
+    @Test func theSamePipelineRunsAndExportsIdenticallyWhenNoSpectrogramCanBeProduced() async throws {
+        try await withTemporaryDirectory { directory in
+            let source = directory.appendingPathComponent("fixture.wav")
+            try writePCMFixture(to: source)
+            let hashBefore = try sha256(of: source)
+
+            @MainActor
+            func run(decoder: FakeAudioDecoding?) async throws -> (InspectionPresentation, Data) {
+                let inspection = decoder.map { scripted in
+                    SourceInspectionCoordinator(chooseSource: { source }, makeDecoder: { _ in scripted })
+                } ?? SourceInspectionCoordinator(chooseSource: { source })
+                let flow = ImportFlowModel(action: { onUpdate in await inspection.inspect(onUpdate: onUpdate) })
+                await flow.selectAndInspect()
+
+                guard case let .report(presentation) = flow.state else {
+                    throw FlowDidNotProduceAReport()
+                }
+                let destination = directory.appendingPathComponent("out-\(UUID().uuidString).json")
+                let exportCoordinator = ReportExportCoordinator(
+                    exporter: JSONReportExporter(generator: fixedGenerator, now: { fixedNow }),
+                    chooseDestination: { _ in destination }
+                )
+                let exportModel = ReportExportModel(action: { await exportCoordinator.export($0) })
+                await exportModel.export(presentation.report)
+                #expect(exportModel.phase == .succeeded)
+
+                return (presentation, try Data(contentsOf: destination))
+            }
+
+            let (withSpectrogram, documentWithSpectrogram) = try await run(decoder: nil)
+            let (withoutSpectrogram, documentWithoutSpectrogram) = try await run(decoder: FakeAudioDecoding(.absent))
+
+            // Both walks produced a real, complete report — and the two really are different runs.
+            guard case let .available(model) = withSpectrogram.spectrogram else {
+                Issue.record("expected a real model, got \(withSpectrogram.spectrogram)"); return
+            }
+            #expect(model.columnCount > 0)
+            #expect(withoutSpectrogram.spectrogram == .unavailable)
+
+            // The report says the same thing either way…
+            #expect(withoutSpectrogram.report.properties == withSpectrogram.report.properties)
+            #expect(withoutSpectrogram.report.warnings == withSpectrogram.report.warnings)
+            #expect(withoutSpectrogram.report.status == withSpectrogram.report.status)
+
+            // …the waveform beside it is untouched by what the spectrogram did…
+            #expect(withoutSpectrogram.waveform == withSpectrogram.waveform)
+
+            // …and so does every byte written to disk.
+            #expect(documentWithoutSpectrogram == documentWithSpectrogram)
+
+            // The surface is told the truth about the absence rather than shown an empty drawing.
+            #expect(RootView.spectrogramPresentation(for: withoutSpectrogram.spectrogram) == .absent)
 
             // And neither walk touched the source.
             #expect(try sha256(of: source) == hashBefore)

@@ -94,6 +94,59 @@ struct SpectrogramAccumulatorScaleTests {
         #expect(abs((peak(loud).value - peak(quiet).value) - 20) < 0.05)
     }
 
+    /// **Scalloping loss — the first reason the drawing is not a measurement of level.**
+    ///
+    /// A tone placed exactly halfway between two bins reads low, because no bin is centred on it. The
+    /// spike measured −7.44 dBFS for a 0.5 tone that reads −6.02 on a bin: a loss of **1.42 dB**, which
+    /// is Hann's theoretical maximum and therefore a ceiling rather than a coincidence. Asserted as a
+    /// bounded, one-sided error: a tone off a bin may read low, never high, and never by more than the
+    /// window's own worst case.
+    @Test("a tone between two bins reads low by no more than Hann's scalloping loss")
+    func aToneBetweenBinsLosesNoMoreThanScalloping() throws {
+        let onBin = binFrequency(1_000)
+        let betweenBins = binFrequency(1_000) + (binFrequency(1_001) - binFrequency(1_000)) / 2
+
+        let centred = try model(frames: 44_100, sample: tone(onBin, amplitude: 0.5))
+        let offset = try model(frames: 44_100, sample: tone(betweenBins, amplitude: 0.5))
+
+        let loss = peak(centred).value - peak(offset).value
+        #expect(loss > 0, "the off-bin tone read \(loss) dB *above* the centred one")
+        #expect(loss <= 1.5, "the off-bin tone lost \(loss) dB, beyond Hann's 1.42 dB maximum")
+    }
+
+    /// Two tones in one signal, each on a bin, each reading its own amplitude. Neither is pulled towards
+    /// the other and neither is scaled by the presence of the other.
+    @Test("two tones at different levels each read their own amplitude")
+    func twoTonesKeepTheirOwnLevels() throws {
+        let low = binFrequency(200)
+        let high = binFrequency(800)
+        let spectrogram = try model(frames: 44_100) { _, frame in
+            sine(low, 0.5, frame) + sine(high, 0.05, frame)
+        }
+
+        let bandCount = spectrogram.bandCount
+        let lowBand = 200 * bandCount / SpectrogramAccumulator.binCount
+        let highBand = 800 * bandCount / SpectrogramAccumulator.binCount
+
+        #expect(abs(try #require(spectrogram.value(column: 0, band: lowBand)) - -6.02) < 0.2)
+        #expect(abs(try #require(spectrogram.value(column: 0, band: highBand)) - -26.02) < 0.2)
+    }
+
+    /// An impulse has a flat spectrum, so **every** band carries energy. The spike measured 512 of 512
+    /// bands above −80 dBFS; the assertion below is the property rather than the exact count, so it does
+    /// not pin one window's leakage.
+    @Test("an impulse lights the whole spectrum rather than one band")
+    func anImpulseIsBroadband() throws {
+        let spectrogram = try model(frames: 44_100) { _, frame in frame == 4_096 ? 1.0 : 0 }
+
+        let lit = (0 ..< spectrogram.bandCount).filter { band in
+            (0 ..< spectrogram.columnCount).contains { column in
+                (spectrogram.value(column: column, band: band) ?? -120) > -80
+            }
+        }
+        #expect(lit.count == spectrogram.bandCount, "only \(lit.count) of \(spectrogram.bandCount) bands lit")
+    }
+
     /// A file that exceeds full scale keeps its values above 0 dBFS. Limiting belongs to drawing, which
     /// has edges, not to the data.
     @Test("a signal beyond full scale reads above 0 dBFS, unclamped")
@@ -141,25 +194,70 @@ struct SpectrogramAccumulatorScaleTests {
 @Suite("Analysis — spectrogram reduction and channels")
 struct SpectrogramAccumulatorReductionTests {
     /// The deciding measurement of the spike: a 20 ms transient in a long silence survives the maximum
-    /// and is buried by the mean. Here the transient must remain clearly visible, which only a maximum
-    /// reduction achieves once several frames fold into one column.
+    /// and is buried by the mean.
+    ///
+    /// **The length matters, and getting it wrong is the mistake the spike itself made and wrote down.**
+    /// At four seconds this file yields 341 transform frames, fewer than the 1024-column cap, so every
+    /// frame becomes its own column and **nothing is folded at all** — the two strategies would agree
+    /// and the test would prove nothing. Sixty seconds yields 5 119 frames folding roughly five to a
+    /// column, which is the regime where the reduction is actually exercised.
     @Test("a short transient survives the reduction instead of being averaged away")
     func maximumPreservesATransient() throws {
-        let frames = 44_100 * 4 // four seconds, so many frames fold into each column
+        let frames = 44_100 * 60
         let burstStart = frames / 2
         let burstLength = 44_100 / 50 // 20 ms
         let frequency = binFrequency(700)
 
-        let spectrogram = try model(frames: frames) { _, frame in
+        let spectrogram = try model(frames: frames, chunkFrames: 65_536) { _, frame in
             guard frame >= burstStart, frame < burstStart + burstLength else { return 0 }
             return sine(frequency, 0.5, frame)
         }
 
+        // Several frames really do fold into each column, so the reduction is doing something.
+        #expect(spectrogram.columnCount == 1_024, "the file did not reach the cap, so nothing was folded")
+
         let loudest = peak(spectrogram)
-        // A mean over the frames folded into that column would drop this by roughly 9 dB (measured:
-        // 8.74). Requiring it within 3 dB of the true level rules the mean out without asserting a
-        // number this test did not measure.
+        // A mean over the frames folded into that column would drop this by roughly 9 dB (the spike
+        // measured 8.74). Requiring it within 3 dB of the true level rules the mean out without
+        // asserting a number this test did not measure.
         #expect(loudest.value > -9, "the transient read \(loudest.value) dBFS; a mean would bury it")
+    }
+
+    /// **The maximum, asserted against what a mean would have produced on the same input.**
+    ///
+    /// Nothing here re-implements the reduction. The comparison is arithmetic: when one of `n` values
+    /// folded into a cell carries amplitude `a` and the rest are silence, their mean is `a / n` — which
+    /// is `20·log10(n)` dB below the maximum, by definition. So the level a mean *would* have reported
+    /// is computed from the geometry the model itself declares, and the model is then shown to disagree
+    /// with it and to agree with the maximum instead.
+    @Test("the maximum reads a different level from a mean on the very same input")
+    func theMaximumDiffersFromAMean() throws {
+        let frames = 44_100 * 60
+        let burstStart = frames / 2
+        let burstLength = 44_100 / 50
+        let frequency = binFrequency(700)
+
+        let spectrogram = try model(frames: frames, chunkFrames: 65_536) { _, frame in
+            guard frame >= burstStart, frame < burstStart + burstLength else { return 0 }
+            return sine(frequency, 0.5, frame)
+        }
+
+        // How many transform frames fold into one column, from the file's own arithmetic.
+        let windows = (frames - SpectrogramAccumulator.fftSize) / SpectrogramAccumulator.hop + 1
+        let framesPerColumn = Double(windows) / Double(spectrogram.columnCount)
+        #expect(framesPerColumn > 2, "only \(framesPerColumn) frames per column — nothing is being folded")
+
+        let observed = peak(spectrogram).value
+        // The 20 ms burst spans fewer than half the frames of the column it lands in, so a mean over
+        // that column would sit at least `20·log10(framesPerColumn / 2)` dB lower.
+        let meanWouldLose = Float(20 * log10(framesPerColumn / 2))
+        #expect(meanWouldLose > 3, "the arithmetic gap is only \(meanWouldLose) dB — too small to separate")
+
+        // The model is at the maximum's level, not the mean's.
+        #expect(
+            observed > -6.02 - meanWouldLose / 2,
+            "the transient read \(observed) dBFS, closer to a mean than to the maximum"
+        )
     }
 
     /// Reduction by maximum in the frequency axis too: a single loud bin must not be diluted by the
@@ -170,6 +268,9 @@ struct SpectrogramAccumulatorReductionTests {
         let spectrogram = try model(frames: 44_100, sample: tone(frequency, amplitude: 0.5))
         // Two bins fold into each band. A mean would halve the amplitude — 6 dB down.
         #expect(abs(peak(spectrogram).value - -6.02) < 0.05)
+        // Stated as the comparison rather than only as the answer: a mean over the two bins folded into
+        // that band would have read −12.04 dBFS, and the model does not.
+        #expect(peak(spectrogram).value > -12.04 + 3, "the frequency axis was averaged, not maximised")
     }
 
     /// The negative control from the spike, as a property of the result. Two channels carrying
@@ -206,6 +307,37 @@ struct SpectrogramAccumulatorReductionTests {
             return sign * sine(frequency, 0.5, frame)
         }
         #expect(abs(peak(spectrogram).value - -6.02) < 0.05, "the channels cancelled to \(peak(spectrogram).value)")
+    }
+
+    /// The two rows the channel table was missing: **mono**, and **stereo whose channels are copies of
+    /// one another**. Combining by maximum per bin means duplicating a channel must change nothing at
+    /// all, so the two models are compared for exact equality apart from the channel count they record.
+    @Test("mono and identical stereo describe the same spectrum")
+    func monoAndIdenticalStereoAgree() throws {
+        let frequency = binFrequency(1_000)
+        let mono = try model(frames: 20_000, channels: 1, sample: tone(frequency, amplitude: 0.5))
+        let stereo = try model(frames: 20_000, channels: 2, sample: tone(frequency, amplitude: 0.5))
+
+        #expect(mono.channelCount == 1)
+        #expect(stereo.channelCount == 2)
+        #expect(mono.columnCount == stereo.columnCount)
+        #expect(mono.bandCount == stereo.bandCount)
+        #expect(mono.values == stereo.values, "duplicating a channel changed the spectrum")
+        // And each reads the tone's own amplitude: doubling the channels does not double the level.
+        #expect(abs(peak(mono).value - -6.02) < 0.05)
+        #expect(abs(peak(stereo).value - -6.02) < 0.05)
+    }
+
+    /// More than two channels is ordinary, and still not a mix: a tone in the fifth channel alone
+    /// survives at its own level.
+    @Test("a tone in one channel of many survives", arguments: [3, 6, 8])
+    func aToneInOneOfManyChannelsSurvives(channels: Int) throws {
+        let frequency = binFrequency(1_000)
+        let spectrogram = try model(frames: 20_000, channels: channels) { channel, frame in
+            channel == channels - 1 ? sine(frequency, 0.5, frame) : 0
+        }
+        #expect(spectrogram.channelCount == channels)
+        #expect(abs(peak(spectrogram).value - -6.02) < 0.05)
     }
 
     @Test("a tone present in one channel alone survives")
