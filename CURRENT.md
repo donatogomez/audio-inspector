@@ -112,6 +112,14 @@ analysis changed: same resolution, same window, same hop, same channel handling,
 and the model is measurably the same, moving at most a hundred-thousandth of a decibel where a fused
 multiply-add rounds once instead of twice, with no cell crossing any threshold.
 
+The same group replaced the colour ramp, which is a separate finding and not a consequence of the speed
+work. The first ramp was measured sound on luminance and **weak on hue**: four of eight sampled levels
+sat in the cyan-teal family, so two levels 45 dB apart could read as similar colours. The ramp adopted
+runs near-black → indigo → blue → teal → green → yellow-green → near-white, keeps the same share of the
+luminance range where music sits, and stays strictly monotonic. **Colour still says nothing about good
+or bad** — it is a quantity, and the manual greyscale check in group 10 now applies to a ramp nobody has
+looked at yet.
+
 **Group 9 ran its stop rule and stopped.** The waveform is **not** migrated onto the shared seam, and
 the decision was reached by audit before a line of production code was written. Three things block it,
 and none is a matter of effort: two decoding faults — a stream that cannot exist, and a chunk that is
