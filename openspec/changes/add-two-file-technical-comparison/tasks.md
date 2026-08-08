@@ -249,14 +249,27 @@ Nothing below may be marked done without actually performing it.
 
 ## 8. Gates and closure
 
-- [ ] 8.1 Four gates green — `./Scripts/check-boundaries.sh`,
+- [x] 8.1 Four gates green — `./Scripts/check-boundaries.sh`,
       `swift build -Xswiftc -warnings-as-errors`, `swift test`,
       `OPENSPEC_TELEMETRY=0 openspec validate --all --strict` — plus the Xcode app build.
-- [ ] 8.2 Confirm the diff's scope: no new dependency, entitlements unchanged, the JSON exporter and the
+      All five ran clean: boundaries respected; the build is warning-free; **757 tests in 89 suites**
+      passed; OpenSpec strict validated 5/5; and `xcodebuild` on the real `AudioInspector` scheme against
+      `App/AudioInspector.xcodeproj` succeeded.
+- [x] 8.2 Confirm the diff's scope: no new dependency, entitlements unchanged, the JSON exporter and the
       `schemaVersion` 1 contract byte-identical, `InspectionReport`, `TechnicalProperties`, `Property`,
       the property reader, the spectrogram and the waveform untouched.
-- [ ] 8.3 Confirm the domain gained **no port and no framework import**, and that the comparison is
+      Checked against `main..HEAD`: `Package.swift` is untouched (no new dependency); no `.entitlements`
+      file changed; `ReportJSONDTO.swift` is untouched, so the exporter and the v1 contract are
+      byte-identical; `InspectionReport.swift`, `TechnicalProperties.swift` and `Property.swift` are
+      untouched; no file matching the property reader, the spectrogram or the waveform appears in the
+      diff at all. `ReportView.swift`'s own five-line change only adds an optional `comparison`
+      parameter defaulting to `.none`, rendered as `ComparisonSection` — additive and inert when unused.
+- [x] 8.3 Confirm the domain gained **no port and no framework import**, and that the comparison is
       reachable with no I/O at all.
+      `PropertyComparison.swift` and `FileComparison.swift` carry no `import` at all — not even
+      `Foundation`. No `protocol` was added to the domain by this branch. Neither type's initialiser is
+      `async` or `throws`, so the comparison cannot await, fail or perform I/O — it is a pure function of
+      two already-held reports.
 - [ ] 8.4 Decide ADR-0017's status from what was actually done (see 1.5), update `CURRENT.md`, and
       archive through `openspec archive` after merge, without editing the promoted specs by hand.
 
