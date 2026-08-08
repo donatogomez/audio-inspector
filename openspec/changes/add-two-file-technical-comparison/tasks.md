@@ -226,8 +226,15 @@ Nothing below may be marked done without actually performing it.
 - [ ] 7.3 The surface remains legible in light and dark appearance.
 - [ ] 7.4 Read the whole surface by eye and confirm nothing names a preferred file, a verdict, a score,
       an encoder or a bitrate the app did not read.
-- [ ] 7.5 Record the result in `docs/manual-validation-mvp.md`, stating plainly which checks were
+- [x] 7.5 Record the result in `docs/manual-validation-mvp.md`, stating plainly which checks were
       performed and which were not.
+      **Recorded, and it states a block rather than a result.** Two macOS permissions (Screen Recording,
+      Accessibility) could not be obtained for the process running this pass, even after being granted
+      and the host restarted, so no screenshot and no UI scripting of the running app was possible. 7.1
+      and 7.2 rest on construction plus the existing test suite; 7.4 rests on an exhaustive wording scan;
+      7.3 has no substitute and was not evaluated; none of the four is marked done. See the runbook
+      section above for what was prepared, what blocked it, and how to re-run it with the permissions in
+      place.
 
 ## 8. Gates and closure
 
