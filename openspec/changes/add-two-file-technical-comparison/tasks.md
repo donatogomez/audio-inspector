@@ -42,6 +42,14 @@ spectrogram, the waveform and the `schemaVersion` 1 exporter are not touched.**
       refuses two `available` states**, so a gap that contradicts itself is unrepresentable — the
       device `WaveformBucket.init?` already uses. This is the only reason it is a type rather than two
       loose parameters, and the documentation should say so.
+      **Done as written, then superseded by something stronger — recorded rather than rewritten.** The
+      failable initialiser worked, but the rule's own caller had already proved the pair impossible and
+      needed a way past the refusal, which was a `fileprivate` unchecked initialiser whose safety rested
+      on the order of two switch branches. The gap is now **three cases that each name at least one
+      non-available side**, so `(available, available)` has no spelling: 24 constructible gaps, exactly
+      the 24 that are gaps, and the twenty-fifth does not exist rather than being refused. The failable
+      states-based initialiser survives as a convenience and still refuses the pair; the backdoor is
+      gone. Every group 2 test passed untouched across the change.
 - [x] 2.3 Add `PropertyComparison<Value>` with exactly three cases — `same(Value)`,
       `different(first:second:)`, `incomparable(ComparisonGap)` — with conditional `Sendable` and
       `Equatable` mirroring `Property`. It carries **no ordering, no delta, no ratio**, does not
@@ -54,26 +62,26 @@ spectrogram, the waveform and the `schemaVersion` 1 exporter are not touched.**
 
 ## 3. The aggregate and the pure operation
 
-- [ ] 3.1 Add `FileComparison`: the two reports plus one `PropertyComparison` per compared field, as a
+- [x] 3.1 Add `FileComparison`: the two reports plus one `PropertyComparison` per compared field, as a
       `Sendable`, `Equatable` value object. **No lifecycle, no identity, no aggregate root, no score,
       no winner, no confidence**, and **no exposed count of differences** — a count rendered as a
       measure is an aggregate score in disguise. **No `allSame`, `isIdentical` or `matches` either**:
       that is the same aggregate compressed to one bit, and it is the most tempting of the lot because
       it looks like a convenience. *"Every comparable property agreed"* and *"the two files are the
       same"* are different statements, and a boolean would blur them.
-- [ ] 3.2 Build it through an **initialiser on `FileComparison`**, not a use case: not `async`, not
+- [x] 3.2 Build it through an **initialiser on `FileComparison`**, not a use case: not `async`, not
       `throws`, not failable. **`CompareInspectionsUseCase` is deliberately not created** — there is no
       port, no I/O and no failure to orchestrate, and building one for symmetry with
       `InspectAudioFileUseCase` is the speculative abstraction this project refused when it declined
       `SpectrogramGenerating`. **Reversal criterion:** introduce one if comparison ever needs to consult
       a port, re-read a file, or fail.
-- [ ] 3.3 Compare exactly the eight fields of `TechnicalProperties` and no others. `fileExtension`,
+- [x] 3.3 Compare exactly the eight fields of `TechnicalProperties` and no others. `fileExtension`,
       `sizeBytes`, `modifiedAt`, `displayName`, `source` and `id` are not compared (see 1.4 for the
       first two). Note in the type that **there is no `format` property** — `container` and `codec` are
       separate technical facts.
-- [ ] 3.4 Keep `declaredBitrate` and `estimatedBitrate` comparable **only against their own
+- [x] 3.4 Keep `declaredBitrate` and `estimatedBitrate` comparable **only against their own
       counterpart**. A test must fail if any code path ever compares one against the other.
-- [ ] 3.5 Carry the two reports **whole** rather than copying their fields, so the surface reads each
+- [x] 3.5 Carry the two reports **whole** rather than copying their fields, so the surface reads each
       file's own facts, warnings and status from one place and no second copy can drift.
 
 ## 4. Choosing and holding a second file
@@ -133,7 +141,7 @@ already covered and marked. What stays open needs something that does not exist 
 - [x] 6.8 Every combination of the five states on each side is covered, and `(available, available)` is
       the **only** one that does not yield `incomparable`.
 - [x] 6.9 `ComparisonGap` refuses `(available, available)` — the contradiction is unrepresentable.
-- [ ] 6.10 `declaredBitrate` is never compared against `estimatedBitrate`, in either direction.
+- [x] 6.10 `declaredBitrate` is never compared against `estimatedBitrate`, in either direction.
 - [x] 6.11 Duration differing by the smallest representable amount yields `different`, with no
       tolerance anywhere in the path.
 - [ ] 6.12 **No ordering exists**: assert structurally that the comparison exposes no preferred side and
@@ -148,15 +156,24 @@ already covered and marked. What stays open needs something that does not exist 
 - [ ] 6.13 **No aggregate exists**: assert that neither the comparison nor its presentation exposes a
       score, a percentage, a count of differences, or a boolean summary of the whole comparison.
 - [ ] 6.14 A cancelled second inspection leaves the first report identical.
-- [ ] 6.15 A globally failed second file yields a comparison that is entirely `incomparable`, with the
+- [x] 6.15 A globally failed second file yields a comparison that is entirely `incomparable`, with the
       first report identical.
 - [ ] 6.16 A superseded second result never reaches the surface.
+      **Its domain half is already covered** — `Mirror` reports a struct's stored properties, so the
+      exact set of them is a real question with a real answer, and `FileComparison` is shown to store
+      the two reports and the eight comparisons and nothing else. Two halves remain: the presentation
+      does not exist yet, and `Mirror` cannot see *computed* members, so a `var allSame: Bool` added
+      later would not fail that test. The second half stays an audit of the public surface, stated as
+      such in the test file rather than dressed up as a check.
 - [ ] 6.17 The same file chosen twice compares as `same` on every comparable property, and nothing
       further is claimed.
+      **The comparison half is done**: a report compared against itself agrees on all seven comparable
+      properties, while the estimate still does not compare — which is the "nothing further is claimed"
+      half. What is open is the *choosing*, which needs the flow.
 - [ ] 6.18 **The export is unchanged**: the JSON for a file inspected alone is byte-identical to the
       JSON for the same file while a comparison is on screen, and no comparison field appears anywhere
       in it.
-- [ ] 6.19 The comparison is deterministic — the same two reports always produce the same result.
+- [x] 6.19 The comparison is deterministic — the same two reports always produce the same result.
 
 ## 7. Accessibility and manual validation
 

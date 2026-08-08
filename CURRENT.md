@@ -174,20 +174,33 @@ three-way, *not comparable* is first-class and explains which state each side wa
 can express an order, a winner or a score. Signal comparison, hashes, alignment and export are all
 deferred by decision, each with its reason written down.
 
-**Those semantics now exist in the domain**, and nothing else does: the state of one side, the gap that
-refuses the one pair which is not a gap, and the three-way comparison of a single property. Pure value
-types with no imports at all. There is **no flow, no surface and no aggregate** — comparing two whole
-reports is the next piece, not this one.
+**The domain now holds all of it and nothing more**: the state of one side, the gap, the three-way
+comparison of a single property, and the comparison of two whole reports across the eight technical
+facts. Pure value types with no imports at all. There is **no flow and no surface** — choosing a second
+file is the next piece, and none of it is started.
 
-The generic constraint is where the care went: storing a value needs nothing, and equality is required
-only where the same-or-different decision is actually made. That is also why duration needed no special
-case — a `Double` falls through the same rule as every other field, so there is nowhere for a tolerance
-to live even if someone wanted one.
+Two things are worth carrying. The generic constraint sits on the *operation*, not the type: storing a
+value needs nothing, and equality is required only where the same-or-different decision is made. That is
+also why duration needed no special case — a `Double` falls through the same rule as every other field,
+so there is nowhere for a tolerance to live even if someone wanted one.
+
+And the gap's invariant stopped being a check. It was a failable initialiser, which forced the rule's own
+caller — having already proved the pair impossible — through an unchecked back door whose safety rested
+on the order of two switch branches. Splitting the five states into *available* and the four that are
+not, and giving the gap three cases that each name a non-available side, means the contradictory pair has
+**no spelling at all**. Every existing test passed untouched across that change, which is the result
+worth having.
+
+`FileComparison` is derived, never assembled: declaring its two-report initialiser suppresses the
+memberwise one, so a comparison that contradicts its own reports cannot be written. It keeps both reports
+whole, because everything it deliberately does not judge — extension, size, warnings, status — is context
+a reader still wants, and one copy cannot drift from another.
 
 The spectrogram stays functionally finished with its manual battery still deferred, and no ADR is
 promoted — ADR-0017 included, which waits on the comparison existing against production code and on a
-person looking at the surface. **Next step: the aggregate and the pure operation over two reports** —
-still no flow and no UI.
+person looking at the surface. **Next step: choosing and holding a second file** — where the slice's one
+real risk lives, because today every new selection supersedes the previous one and a comparison needs a
+second inspection that does not.
 
 ---
 _Last touched: 2026-08-08. Overwrite freely; empty is fine._
