@@ -279,6 +279,36 @@ open despite comparable automated coverage, on the stated ground that "a test is
   promote." That has not happened, so **the change is not ready to close**, independent of whether its
   mechanical gates would pass.
 
+### Concluded (2026-08-08): deferred by decision, not resolved
+
+A third, single-purpose check of the same two permissions — done immediately before this entry, before
+touching the app again — produced the same result as the first two: `screencapture` still cannot create
+an image from the display, and `System Events` still refuses to inspect or control another application
+on this session's behalf (Automation). No fourth attempt was made: the block is now treated as settled
+rather than as something to keep re-checking.
+
+**What is true, stated once and plainly:**
+
+- The implementation is finished against production code, and its architecture is closed: nothing in
+  `Sources/AudioInspectorDomain` gained a framework import or a port, the JSON exporter is
+  byte-identical, and the whole automated matrix (group 6, including 6.12's structural audit) is
+  complete.
+- **No defect of the product was observed at any point**, in three separate attempts, because none of
+  the attempts got far enough to observe the product at all — the block sits entirely upstream of the
+  running app.
+- The manual observation itself — a person actually looking at the rendered surface, in light and dark,
+  with Accessibility Inspector and VoiceOver — **did not happen** and is not claimed to have happened.
+
+**This is recorded exactly as `add-static-spectrogram-visualization` records its own group 10**: deferred
+by decision, nothing marked, the debt named rather than hidden. Per that same change's own precedent, a
+deferred validation does not promote the ADR it gates (ADR-0016 stays `Proposed` there for the identical
+reason) and does not close the task that bundles "decide the ADR's status and archive" (its 11.5 stays
+unchecked, exactly as 8.4 stays unchecked here). Nothing in this document, in `tasks.md`, or in
+ADR-0017 has been reworded to change that outcome — the criteria that were true before this attempt are
+still true after it. The debt is a **deferred human observation**, prepared and ready to run whenever the
+two permissions above are granted to whatever process attempts it next; it is not evidence of a problem
+with the comparison itself.
+
 ## What is already automated (do not re-verify by hand)
 
 These are covered by `swift test` / `Scripts/check-boundaries.sh` and need no manual work:
