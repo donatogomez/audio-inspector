@@ -34,22 +34,22 @@ spectrogram, the waveform and the `schemaVersion` 1 exporter are not touched.**
 
 ## 2. The comparison semantics in the domain
 
-- [ ] 2.1 Add `PropertyState` — `available`, `unavailable`, `unsupported`, `uncertain`, `failed` — as
+- [x] 2.1 Add `PropertyState` — `available`, `unavailable`, `unsupported`, `uncertain`, `failed` — as
       the state of one side of a comparison. It **includes `available`** and therefore cannot be
       `WarningKind`, which deliberately excludes it; state that in the type's own documentation so the
       two are not later unified.
-- [ ] 2.2 Add `ComparisonGap`, carrying the state of each side. Its initialiser is **failable and
+- [x] 2.2 Add `ComparisonGap`, carrying the state of each side. Its initialiser is **failable and
       refuses two `available` states**, so a gap that contradicts itself is unrepresentable — the
       device `WaveformBucket.init?` already uses. This is the only reason it is a type rather than two
       loose parameters, and the documentation should say so.
-- [ ] 2.3 Add `PropertyComparison<Value>` with exactly three cases — `same(Value)`,
+- [x] 2.3 Add `PropertyComparison<Value>` with exactly three cases — `same(Value)`,
       `different(first:second:)`, `incomparable(ComparisonGap)` — with conditional `Sendable` and
       `Equatable` mirroring `Property`. It carries **no ordering, no delta, no ratio**, does not
       conform to `Comparable`, and exposes **no** accessor returning a preferred side.
-- [ ] 2.4 Implement the single rule that produces one: compare **only** `available` against
+- [x] 2.4 Implement the single rule that produces one: compare **only** `available` against
       `available`; every other combination becomes `incomparable` carrying both states. Written once,
       generic over `Value: Equatable`, so no field can drift from the rule.
-- [ ] 2.5 Confirm no comparison type is `Codable` and none can reach the exporter. They never enter the
+- [x] 2.5 Confirm no comparison type is `Codable` and none can reach the exporter. They never enter the
       `schemaVersion` 1 contract.
 
 ## 3. The aggregate and the pure operation
@@ -117,22 +117,34 @@ spectrogram, the waveform and the `schemaVersion` 1 exporter are not touched.**
 
 ## 6. The test matrix
 
-- [ ] 6.1 `available` vs `available`, equal → `same` carrying the value.
-- [ ] 6.2 `available` vs `available`, unequal → `different` carrying both values.
-- [ ] 6.3 `available` vs `unavailable` → `incomparable`, both states preserved.
-- [ ] 6.4 `unavailable` vs `unavailable` → `incomparable`, **not** `same`. Two absences are not an
+**Partly closed already, by group 2 rather than out of order.** The semantics arrived with their tests,
+so every case that is a fact about `PropertyState`, `ComparisonGap` and `PropertyComparison` alone is
+already covered and marked. What stays open needs something that does not exist yet — `FileComparison`
+(group 3) or the flow (group 4) — plus 6.12, which is only half assertable and says so.
+
+- [x] 6.1 `available` vs `available`, equal → `same` carrying the value.
+- [x] 6.2 `available` vs `available`, unequal → `different` carrying both values.
+- [x] 6.3 `available` vs `unavailable` → `incomparable`, both states preserved.
+- [x] 6.4 `unavailable` vs `unavailable` → `incomparable`, **not** `same`. Two absences are not an
       agreement.
-- [ ] 6.5 `unsupported` on either side → `incomparable`, distinguishable from absent.
-- [ ] 6.6 `uncertain` on either side → `incomparable`, even when both carry equal values.
-- [ ] 6.7 `failed` on either side → `incomparable`, distinguishable from both absent and unsupported.
-- [ ] 6.8 Every combination of the five states on each side is covered, and `(available, available)` is
+- [x] 6.5 `unsupported` on either side → `incomparable`, distinguishable from absent.
+- [x] 6.6 `uncertain` on either side → `incomparable`, even when both carry equal values.
+- [x] 6.7 `failed` on either side → `incomparable`, distinguishable from both absent and unsupported.
+- [x] 6.8 Every combination of the five states on each side is covered, and `(available, available)` is
       the **only** one that does not yield `incomparable`.
-- [ ] 6.9 `ComparisonGap` refuses `(available, available)` — the contradiction is unrepresentable.
+- [x] 6.9 `ComparisonGap` refuses `(available, available)` — the contradiction is unrepresentable.
 - [ ] 6.10 `declaredBitrate` is never compared against `estimatedBitrate`, in either direction.
-- [ ] 6.11 Duration differing by the smallest representable amount yields `different`, with no
+- [x] 6.11 Duration differing by the smallest representable amount yields `different`, with no
       tolerance anywhere in the path.
 - [ ] 6.12 **No ordering exists**: assert structurally that the comparison exposes no preferred side and
       no `Comparable` conformance.
+      **Half done, and left open deliberately.** The `Comparable` half is asserted for real — a
+      conformance is a runtime fact, and a positive control confirmed the check answers `false` for a
+      non-conforming type and `true` for a conforming one. The *no preferred side* half **cannot be
+      asserted honestly**: Swift offers no reflection over a type's members, so the only available
+      "test" would look for a hand-written string, which proves nothing and would pass against a member
+      spelled differently. It is recorded as an **audit** in the test file rather than dressed up as a
+      test, and this task stays open until group 3 shows whether there is anything better to do.
 - [ ] 6.13 **No aggregate exists**: assert that neither the comparison nor its presentation exposes a
       score, a percentage, a count of differences, or a boolean summary of the whole comparison.
 - [ ] 6.14 A cancelled second inspection leaves the first report identical.
