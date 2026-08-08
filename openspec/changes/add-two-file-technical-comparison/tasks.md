@@ -229,6 +229,18 @@ already covered and marked. What stays open needs something that does not exist 
 
 ## 7. Accessibility and manual validation
 
+**Manual validation deferred by decision, blocked rather than skipped.** The implementation is finished
+against production code and the automated matrix is complete (group 6). Three separate attempts to run
+this group against the real app were stopped before observation could begin: two macOS permissions the
+session cannot grant itself — **Screen Recording** and **Automation** toward `System Events`, for the
+process hosting the session — refused every step past launching the app, unchanged across a permission
+grant and a host restart. Structural and automated evidence stands in for parts of 7.1, 7.2 and 7.4 (see
+`docs/manual-validation-mvp.md`), but, consistently with this repository's own precedent for exactly this
+situation (`add-static-spectrogram-visualization` group 10), a test is not an observation and does not
+close a task that names the rendered surface. **No defect of the product was observed at any point.**
+What was and was not checked is recorded durably in `docs/manual-validation-mvp.md`; the fixtures and the
+scenario list are prepared and left in place, so this group can be run later without rebuilding anything.
+
 Nothing below may be marked done without actually performing it.
 
 - [ ] 7.1 Each property row is announced as a single element with the property, both values and the
