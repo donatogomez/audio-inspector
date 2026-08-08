@@ -229,36 +229,45 @@ already covered and marked. What stays open needs something that does not exist 
 
 ## 7. Accessibility and manual validation
 
-**Partly closed by a real manual pass (2026-08-08), after being blocked and deferred.** The
+**Partly closed by two real manual passes (2026-08-08), after being blocked and deferred.** The
 implementation is finished against production code and the automated matrix is complete (group 6). Three
 attempts to run this group against the real app from an automated session were stopped upstream of the
 app by two macOS permissions (Screen Recording, Automation toward `System Events`); that block was
 recorded as a deferred decision, following this repository's own precedent
-(`add-static-spectrogram-visualization` group 10). **A person then ran the comparison itself, with the
-prepared fixtures, and reported three real scenarios (same file, two distinct files, a corrupted second
-file) plus the replace/close flow.** That closes 7.2 and 7.4 on real observation. It does not touch 7.1
-or 7.3: no accessibility-tree/VoiceOver observation of this surface was performed, and no light/dark
-observation of this surface (as opposed to the spectrogram's) was reported. See
+(`add-static-spectrogram-visualization` group 10). **A person then ran the comparison itself, over two
+passes, with the prepared fixtures**: same file, two distinct files, a corrupted second file, the
+replace/close flow, and — in the second pass — light and dark appearance and a VoiceOver attempt. That
+closes 7.2, 7.3 and 7.4 on real observation. 7.1 stays open: the VoiceOver attempt reproduced this
+project's own **known, pre-existing accessibility gap** (see below) rather than reaching the comparison
+rows at all, so nothing about this task was actually observed either way. See
 `docs/manual-validation-mvp.md` for exactly what was seen.
 
 Nothing below may be marked done without actually performing it.
 
 - [ ] 7.1 Each property row is announced as a single element with the property, both values and the
       outcome, and no characterisation of either file.
-      **Still open.** This names the accessibility tree and VoiceOver, not the rendered pixels. No
-      Accessibility Inspector or VoiceOver pass over the comparison surface has been performed by anyone,
-      in any session — the automated attempts never reached the app, and the real manual pass that closed
-      7.2/7.4 observed the surface visually, which is a different claim from what this task asks.
+      **Still open — attempted, not satisfied.** VoiceOver validation was attempted. The **existing,
+      already-documented accessibility issue reproduced unchanged**: focus remains trapped on *Export
+      JSON*, exactly as recorded for the report surface in `docs/manual-validation-mvp.md` (the waveform
+      slice's known VoiceOver traversal gap, which never let VoiceOver enter the report's own content,
+      let alone a comparison beneath it). There is **no evidence this feature introduces a new
+      regression** — the trap sits upstream of the report content, so a comparison on screen could not
+      possibly change it — but there is equally no evidence *for* this task: VoiceOver never reached a
+      comparison row, so whether it announces as one element or four was not observed by anyone, in any
+      session. This project's own precedent (ADR-0015, kept `Proposed` by this identical gap) is that a
+      known, reproduced accessibility gap still leaves the task it blocks open rather than closing it by
+      exception. No further investigation is planned; the debt is the same pre-existing one, not a new
+      one, and is tracked where it already lives.
 - [x] 7.2 Every meaning has a textual alternative; nothing depends on colour, position or a symbol.
       **Closed by real observation.** A person read `Same`, `Different`, `Not comparable` and a failed
       second file's own status as words, across three real scenarios against the real app — no meaning
       was inferred from colour or a symbol in any of them. Paired with the existing exhaustive scan over
       every reachable state (`ComparisonPresentationTests`) and the source-level absence of any icon or
       symbol in `ComparisonView`.
-- [ ] 7.3 The surface remains legible in light and dark appearance.
-      **Still open.** Light and dark were checked in this same pass, but for the spectrogram, not for
-      this surface — that observation does not transfer to a different section of the report. No
-      light/dark observation of the comparison has been reported.
+- [x] 7.3 The surface remains legible in light and dark appearance.
+      **Closed by real observation (second pass, 2026-08-08).** A person viewed the comparison itself —
+      not only the spectrogram — in both light and dark appearance and reported it legible in both, with
+      correct behaviour across a continuous resize as well.
 - [x] 7.4 Read the whole surface by eye and confirm nothing names a preferred file, a verdict, a score,
       an encoder or a bitrate the app did not read.
       **Closed by real observation.** The whole surface was read by eye across the same file, two
@@ -268,11 +277,11 @@ Nothing below may be marked done without actually performing it.
       confirmed still present.
 - [x] 7.5 Record the result in `docs/manual-validation-mvp.md`, stating plainly which checks were
       performed and which were not.
-      **Recorded twice: the block, then the real pass that partly closed it.** Two macOS permissions
-      (Screen Recording, Automation) blocked every automated attempt outright; a person's later pass
-      closed 7.2 and 7.4 on real observation and left 7.1 (accessibility tree/VoiceOver, never observed)
-      and 7.3 (light/dark of this surface specifically, never observed) open. See the runbook section
-      above for the full account of both.
+      **Recorded three times: the block, the first real pass, and the second.** Two macOS permissions
+      (Screen Recording, Automation) blocked every automated attempt outright; a person's first pass
+      closed 7.2 and 7.4; a second pass closed 7.3 and attempted 7.1, reproducing this project's known
+      VoiceOver traversal gap rather than observing anything new. Only 7.1 stays open. See the runbook
+      section above for the full account of all three.
 
 ## 8. Gates and closure
 
@@ -300,10 +309,15 @@ Nothing below may be marked done without actually performing it.
 - [ ] 8.4 Decide ADR-0017's status from what was actually done (see 1.5), update `CURRENT.md`, and
       archive through `openspec archive` after merge, without editing the promoted specs by hand.
       **Decided, and it stays open.** 1.5 permits promotion only when the surface "has been validated by
-      a person looking at it. Not before, and never on partial evidence." A real pass now closes 7.2 and
-      7.4; **7.1 and 7.3 are the two tasks still blocking this** — no accessibility-tree/VoiceOver
-      observation and no light/dark observation of the comparison surface have been performed. That is
-      partial evidence by the ADR's own words, so ADR-0017 stays `Proposed` and this task is not done.
+      a person looking at it. Not before, and never on partial evidence." Two real passes now close 7.2,
+      7.3 and 7.4; **7.1 is the one task still blocking this**, and it stays open on this project's own
+      precedent rather than by a fresh judgement call: the identical known VoiceOver traversal gap that
+      keeps ADR-0015 `Proposed` was reproduced here too, and that precedent treats a reproduced,
+      pre-existing gap as leaving the task it blocks open, not as an exception that closes it. One open
+      task out of four is still partial evidence by the ADR's own words, so ADR-0017 stays `Proposed` and
+      this task is not done. Archiving is not reached — this repository does not archive a change with an
+      open, load-bearing task ahead of it (see `add-static-spectrogram-visualization`, still active on the
+      same ground).
 
 ## 9. Deferred, and named so it is not quietly dropped
 
