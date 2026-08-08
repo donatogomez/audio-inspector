@@ -227,6 +227,58 @@ an interactive VoiceOver traversal. The known VoiceOver traversal gap recorded a
 content not reached by interactive VoiceOver) was never re-checked here and its status against the
 comparison section is therefore also unknown.
 
+### Retry (2026-08-08, same day) — still blocked, and why this is not recorded as NOT EVALUABLE
+
+Before repeating the whole pass, the two capabilities above were checked again, on their own, with
+nothing rebuilt or relaunched: a single `screencapture` and a single minimal `osascript` call to `System
+Events`. Both failed again:
+
+- `screencapture -x <file>` → `could not create image from display`, unchanged from before.
+- `osascript -e 'tell application "System Events" to get name of every process whose name contains
+  "AudioInspector"'` → **a different, more specific error than last time**:
+  *"No tienes autorización para enviar eventos Apple a System Events"* (-1743). A bare
+  `tell application "System Events" to return "ping"` succeeds, so the process can address System Events
+  at all; what it cannot do is direct System Events to inspect or control another application. That is
+  **Automation** (System Settings → Privacy & Security → Automation → *this session's host process* →
+  System Events), a third, separate permission from both Screen Recording and the general Accessibility
+  toggle named in the first attempt.
+
+Per the instruction for this pass, this was checked once more and not pursued further — no third
+permission was requested mid-session, and no attempt was made to launch the app again with no way to
+observe it.
+
+**This is deliberately not filed as NOT EVALUABLE.** This document uses that label for a criterion with
+*no referent on this platform* (the Dynamic Type case above) or a repeatedly-attempted, real interaction
+that a properly-permissioned run could not get past (the waveform's VoiceOver traversal gap). Neither
+applies here: a human, or a session holding the ordinary permissions any Mac user grants an app once,
+could complete every one of 7.1–7.4 in minutes. What is missing is not a capability of the platform but
+an entitlement of the process running this pass, and it has now failed to appear across two separate
+attempts, one of them after being explicitly granted and the host restarted. Recording that as
+"unobservable" would misstate a mundane, fixable gap as a platform limit, which is exactly the confusion
+this document's own convention exists to prevent. **7.1–7.4 therefore stay open as ordinary unfinished
+work, not as a permanent or platform-level limitation.**
+
+**What was decided instead of re-attempting the permissions a third time**, reading each task's literal
+text against this repository's own precedent (the near-identical spectrogram tasks 10.2 and 10.6 stayed
+open despite comparable automated coverage, on the stated ground that "a test is not an observation"):
+
+- **7.1**, **7.2**, **7.3** and **7.4** all name the rendered, running surface — "announced," "remains
+  legible," "read... by eye" — not the source that produces it. None is closed by the structural audit
+  and the exhaustive wording scan already on record (in `ComparisonPresentationTests` and in this
+  document's earlier section); that evidence is real but is, consistently with the spectrogram's own
+  precedent, not treated as a substitute for looking. All four stay open, unchanged from the first
+  attempt.
+- **6.12** is a different kind of task — a structural audit of the domain and presentation *types*, not
+  of the rendered surface — and is closed separately, in `tasks.md`, on the strength of a completed
+  review of the full public surface of `PropertyComparison`, `ComparisonGap`, `FileComparison`,
+  `ComparisonRowDisplay`, `ComparisonFormatter` and `ComparisonView`: no accessor anywhere returns a
+  preferred side. See that task for the exact wording.
+- Group 8's tasks 8.1–8.3 (the four gates, the diff's scope, the domain's isolation) do not depend on
+  7.1–7.4 at all and could run today; **8.4 does** — deciding ADR-0017's status from 1.5 and archiving —
+  because ADR-0017's own Status line requires "a person looking at it," which "partial evidence does not
+  promote." That has not happened, so **the change is not ready to close**, independent of whether its
+  mechanical gates would pass.
+
 ## What is already automated (do not re-verify by hand)
 
 These are covered by `swift test` / `Scripts/check-boundaries.sh` and need no manual work:
