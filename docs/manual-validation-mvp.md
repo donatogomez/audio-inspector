@@ -141,6 +141,92 @@ remains `Proposed`; **ADR-0015** is independent and remains `Proposed` on its ow
 Group 11's task 11.4 — deleting `Spike/validate-static-spectrogram/` — is gated on ADR-0016 being
 Accepted and therefore cannot be reached from here.
 
+## The two-file technical comparison's manual validation — blocked by environment permissions (2026-08-08)
+
+Change `add-two-file-technical-comparison`, group 7. **No item of group 7 is recorded as passed by
+observation.** The attempt is recorded here so a later reader does not have to repeat the same blocked
+path before finding a working one.
+
+### What was prepared
+
+Four real fixtures were generated with `AVFoundation` (the same technique `AudioFixtureSupport.swift`
+uses for tests) for the minimum set of scenarios: `a.wav` (44.1 kHz/16-bit PCM, the primary file and its
+own second file for the SAME case), `b.aiff` (48 kHz/16-bit PCM, big-endian — a clear DIFFERENT case),
+`c.m4a` (AAC — lossy, so bit depth reads INCOMPARABLE against either PCM file, and doubles as the file to
+replace B with), and `broken.wav` (a `.wav` extension over bytes that are not a WAV file, to fail a
+second inspection outright). None of these entered the repository.
+
+The real app was built and run: `xcodebuild -project App/AudioInspector.xcodeproj -scheme AudioInspector
+-configuration Debug -destination 'platform=macOS' build`, then launched from
+`DerivedData/.../Debug/AudioInspector.app`. `System Events` could see the running process, so the app
+itself launched correctly.
+
+### What blocked the pass
+
+Two separate macOS permissions, neither grantable by this session itself (see this project's own rule:
+modifying security/privacy settings is not something to do unattended), stopped every subsequent step:
+
+- **Screen Recording** — `screencapture` failed with `could not create image from display` for the
+  process hosting this session, before and after the permission was added and the host app restarted.
+  No screenshot of the running app was obtained.
+- **Accessibility** — `osascript`/`System Events` failed with *"osascript no tiene permitido el acceso de
+  ayuda"* (error -1719) on anything beyond listing process names — reading the window's accessibility
+  tree, clicking a button, or sending a keystroke were all refused. No UI scripting, and therefore no
+  driving of the file picker, no click on *Compare with another file…*, and no VoiceOver interaction, was
+  possible.
+
+Both were tried again after the permission was granted and the host app was restarted, with no change.
+Diagnosing further (a different TCC identity than the one granted, a process that cannot self-inspect its
+own permission state, or something else) was not pursued past this point, in keeping with this pass's
+own instruction not to turn an environment limitation into an investigation.
+
+### What stands in for observation, and its limit
+
+With no way to drive or photograph the running app, group 7 falls back to what the source and the
+existing test suite can show — which is real evidence, but is not the observation the tasks ask for:
+
+- **7.1** (each row announced as one element) is true **by construction**: every comparison row in
+  `ComparisonView.comparedRows` carries `.accessibilityElement(children: .ignore)` plus a single
+  `.accessibilityLabel(row.accessibilityLabel)`, a standard SwiftUI mechanism whose behaviour does not
+  vary at runtime. `ComparisonPresentationTests` pins the label's exact text — property, both files'
+  values, then the outcome, with the incomparable reason included — for a normal row and an incomparable
+  one. What is missing is a live reading of the rendered tree confirming this app, today, exposes what
+  the modifier promises; unlike the waveform's own validation (above), which recorded this as directly
+  observed, this one could not be.
+- **7.2** (no meaning carried by colour, position or a symbol alone) is supported by a source read: every
+  `ComparisonOutcomeDisplay` case carries real text (`Same`, `Different`, or the stated reason), the only
+  colour distinction is `.secondary` vs `.primary` on already-worded text (never a bespoke hue standing
+  for a meaning), and no icon or symbol appears anywhere in `ComparisonView`. Actual contrast and legibility
+  were not seen.
+- **7.3** (legible in light and dark) has no automated substitute and was not evaluated at all — this one
+  is purely visual and the blocked permissions removed the only way to check it.
+- **7.4** (an eye-read for a preferred file, a verdict, a score, an unread encoder or bitrate) is
+  substituted by `ComparisonPresentationTests.noOutcomeUsesForbiddenWording`, which scans every one of the
+  25 reachable state pairings plus the fixed copy against a forbidden-word list, and by a source-literal
+  scan of every string in `ComparisonPresentation.swift`, `ComparisonView.swift` and the comparison
+  controls in `RootView.swift` against a second list (`recommended`, `original`, `source`, `derived`,
+  `fake`, `transcode`, `winner`, `loser`, `same file`, `identical file`, and others) — clean. This is
+  exhaustive over everything the vocabulary *can* render, which is stronger than a sampled by-eye pass,
+  but it is a string scan, not the eye-read the task names.
+- **7.5** is satisfied by this section: the result is recorded plainly, including everything that was
+  not checked.
+
+**Consequence.** Per this task list's own rule — "nothing below may be marked done without actually
+performing it" — 7.1 through 7.4 stay open. Only 7.5 is marked done. ADR-0017 stays `Proposed`: its own
+promotion criterion names a person having looked at the surface, which did not happen here.
+
+### Re-running this pass
+
+Grant both **Screen Recording** and **Accessibility** to the process that will run the shell commands
+(System Settings → Privacy & Security), confirm with `screencapture` and
+`osascript -e 'tell application "System Events" to tell process "AudioInspector" to get entire contents
+of window 1'` that both succeed, then rebuild the app and repeat: SAME (`a.wav` against itself),
+DIFFERENT (`a.wav` vs `b.aiff`), INCOMPARABLE (`a.wav` vs `c.m4a`, bit depth), FAILED (`broken.wav`),
+replace B→C, close, light/dark, narrow/wide window, Accessibility Inspector on one row of each kind, and
+an interactive VoiceOver traversal. The known VoiceOver traversal gap recorded above (the report's own
+content not reached by interactive VoiceOver) was never re-checked here and its status against the
+comparison section is therefore also unknown.
+
 ## What is already automated (do not re-verify by hand)
 
 These are covered by `swift test` / `Scripts/check-boundaries.sh` and need no manual work:
