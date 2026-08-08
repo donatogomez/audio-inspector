@@ -86,27 +86,58 @@ spectrogram, the waveform and the `schemaVersion` 1 exporter are not touched.**
 
 ## 4. Choosing and holding a second file
 
-- [ ] 4.1 Add the second-file selection from an open report, reusing the **existing** selection path and
+- [x] 4.1 Add the second-file selection from an open report, reusing the **existing** selection path and
       the **existing** inspection pipeline unchanged. No multiple selection, no two-file drop, no
       dedicated two-slot mode, no batch.
-- [ ] 4.2 **Change what a new selection means, deliberately and in one place.** Today every selection
+- [x] 4.2 **Change what a new selection means, deliberately and in one place.** Today every selection
       supersedes the previous one through a single operation identity; a comparison needs a second
       inspection that does **not** supersede the first. Give the second inspection its **own** operation
       identity, disjoint from the first's, so a stale second result can be dropped without touching the
       first report. This is the one real change to the flow's semantics and the main risk in the slice.
-- [ ] 4.3 Carry the comparison **beside** the report, in the shape the waveform and spectrogram already
+- [x] 4.3 Carry the comparison **beside** the report, in the shape the waveform and spectrogram already
       established — never inside `InspectionReport`.
-- [ ] 4.4 Hold each file's access for **its own inspection only** (ADR-0010): two sequential windows,
+- [x] 4.4 Hold each file's access for **its own inspection only** (ADR-0010): two sequential windows,
       each released by its own `defer`, nothing retained across them, no bookmark, no location
       disclosed for either file.
-- [ ] 4.5 Confirm the first file's waveform and spectrogram operations are **unaffected** by a second
+      **Satisfied by not changing the thing that guarantees it.** `SourceInspectionCoordinator` is
+      untouched: it is a struct owning no state, so the second file runs the identical path — its own
+      `startAccessingSecurityScopedResource`, its own `defer`, its own reader, generator and decoder
+      built fresh from the factories. Nothing is retained across the two, no bookmark is created, and
+      the flow never sees a `URL`.
+      **One case is not sequential, and it is recorded rather than hidden.** A comparison may begin
+      while the first file's visualisations are still being produced — which invariant 4.5 *requires*,
+      since that work must still land. Both scopes are then briefly open at once. That is a consequence
+      of 4.5 rather than a choice, and it is safe: each scope is per-file, acquired and balanced by its
+      own inspection's `defer`, and neither can outlive its call. Blocking a comparison until the first
+      file's analysis finished would trade a real delay for a property nothing needs.
+- [x] 4.5 Confirm the first file's waveform and spectrogram operations are **unaffected** by a second
       inspection starting, finishing, failing or being cancelled — they are already independent
       operations with independent cancellation, and this must stay true. A result of the first file's
       work still in flight when the second is chosen must still reach the first file's presentation.
-- [ ] 4.6 Decide whether the second inspection **requests** a waveform and a spectrogram at all, given
+- [x] 4.6 Decide whether the second inspection **requests** a waveform and a spectrogram at all, given
       that this MVP displays neither. Name the cost either way — it is seconds of analysis per
       comparison. The invariant this cannot break: **the comparison depends only on the two reports**,
       so it is built the moment the second report settles and waits for nothing else.
+      **Decided: the second file runs the same pipeline, unchanged, and its visualisations are
+      discarded.** The evidence, rather than the preference:
+      **(a) A report-only mode cannot be expressed honestly today.** `SourceInspectionOutcome.inspected`
+      requires a `WaveformOutcome` and a `SpectrogramOutcome`, and neither has a case meaning *not
+      asked for*. The nearest, `.unavailable`, means *the file offered nothing* — so a report-only path
+      would have to state something false about the second file in order to save time. Adding a case
+      would change two outcome types, both matching state types, the presentation, and the tests that
+      exist specifically to keep those meanings apart (`WaveformErrorTests` pins three distinct
+      outcomes; `SpectrogramCopyTests` pins that absence, failure and too-short are three different
+      statements). That is a wide change to shared contracts for a saving nobody can currently see.
+      **(b) The cost is real, bounded, and off the critical path.** Group 12 measured a whole
+      spectrogram generation at **0.9 s in Release** for a ten-minute 68 MB file, with the waveform's
+      own read on top — so roughly one to two seconds of work per comparison on a large file, less on a
+      typical track. None of it delays anything: the comparison is built from the second **report**, so
+      it is on screen before either visualisation starts.
+      **(c) The next slice needs them.** `add-two-file-visual-comparison` will draw exactly these two
+      models. Adding a report-only mode now and removing it then is churn in both directions.
+      **Reversal criterion:** revisit if a comparison is ever performed over many files, or if the
+      visual slice is abandoned — at which point the honest fix is a *requested-parts* concept in the
+      outcome, not a silent `.unavailable`.
 
 ## 5. Presentation
 
@@ -155,17 +186,17 @@ already covered and marked. What stays open needs something that does not exist 
       test, and this task stays open until group 3 shows whether there is anything better to do.
 - [ ] 6.13 **No aggregate exists**: assert that neither the comparison nor its presentation exposes a
       score, a percentage, a count of differences, or a boolean summary of the whole comparison.
-- [ ] 6.14 A cancelled second inspection leaves the first report identical.
+- [x] 6.14 A cancelled second inspection leaves the first report identical.
 - [x] 6.15 A globally failed second file yields a comparison that is entirely `incomparable`, with the
       first report identical.
-- [ ] 6.16 A superseded second result never reaches the surface.
+- [x] 6.16 A superseded second result never reaches the surface.
       **Its domain half is already covered** — `Mirror` reports a struct's stored properties, so the
       exact set of them is a real question with a real answer, and `FileComparison` is shown to store
       the two reports and the eight comparisons and nothing else. Two halves remain: the presentation
       does not exist yet, and `Mirror` cannot see *computed* members, so a `var allSame: Bool` added
       later would not fail that test. The second half stays an audit of the public surface, stated as
       such in the test file rather than dressed up as a check.
-- [ ] 6.17 The same file chosen twice compares as `same` on every comparable property, and nothing
+- [x] 6.17 The same file chosen twice compares as `same` on every comparable property, and nothing
       further is claimed.
       **The comparison half is done**: a report compared against itself agrees on all seven comparable
       properties, while the estimate still does not compare — which is the "nothing further is claimed"

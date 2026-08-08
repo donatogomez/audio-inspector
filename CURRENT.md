@@ -196,11 +196,25 @@ memberwise one, so a comparison that contradicts its own reports cannot be writt
 whole, because everything it deliberately does not judge — extension, size, warnings, status — is context
 a reader still wants, and one copy cannot drift from another.
 
+**The second-file flow now exists too, and it was the risky part.** The flow held one operation number,
+so every new selection cancelled the last and dropped whatever was still in flight; a comparison needs a
+second inspection that does *not* supersede the first. It now has its own task and its own number,
+disjoint from the primary one — a waveform still being produced for the file on screen still lands while
+a whole comparison begins and settles. The relationship runs one way only: a comparison never touches the
+report, and a new primary inspection ends the comparison, because its left-hand side is being replaced.
+
+The comparison is built the moment the second **report** exists, before that file's visualisations. Those
+are still produced, and discarded: expressing *"not asked for"* would need a new case in two outcome
+types that three slices depend on, to save work that is already off the critical path — and the visual
+comparison slice will want exactly those models. That is written down with its reversal criterion rather
+than left as an omission.
+
+**There is still no presentation.** Nothing draws a comparison; the flow exposes it and stops.
+
 The spectrogram stays functionally finished with its manual battery still deferred, and no ADR is
 promoted — ADR-0017 included, which waits on the comparison existing against production code and on a
-person looking at the surface. **Next step: choosing and holding a second file** — where the slice's one
-real risk lives, because today every new selection supersedes the previous one and a comparison needs a
-second inspection that does not.
+person looking at the surface. **Next step: the presentation** — both files' facts and each outcome
+stated in words, with `incomparable` reading as a sentence rather than a blank cell.
 
 ---
 _Last touched: 2026-08-08. Overwrite freely; empty is fine._
