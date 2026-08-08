@@ -389,6 +389,44 @@ stays `Proposed`.** 8.4 stays open for the same reason, unchanged: it still need
 remaining gap prevents. Nothing in the ADR, `tasks.md`, or this document has been reworded to close that
 gap; only what was actually observed has been recorded.
 
+### A second real pass closes light/dark and attempts VoiceOver (2026-08-08)
+
+The same person returned to close the gap the first pass explicitly left standing.
+
+**Light and dark: PASS.** The comparison itself — not only the spectrogram — was viewed in both
+appearances and reported legible in both: rows, values, the outcome column, secondary text and the
+*Compare with another file…* / *Close comparison* controls.
+
+**Resize: PASS.** Reported correct, consistent with the first pass's report for the spectrogram and with
+this surface using the same `Grid`-based layout throughout.
+
+**VoiceOver: attempted, and it reproduced this project's own known accessibility gap rather than
+observing anything new.** Recorded exactly as reported:
+
+> VoiceOver validation attempted. Existing accessibility issue reproduced unchanged (focus remains
+> trapped on *Export JSON*). No evidence that the comparison UI introduces a new accessibility
+> regression.
+
+This is not a new finding. It is the same **known VoiceOver traversal gap** recorded earlier in this
+document for the report surface (the waveform slice): "interactive VoiceOver reached only the export
+action and the file-picking action... and would not enter the report's contents." A comparison renders
+*inside* that same report content, below the properties — so if VoiceOver's focus never gets past the two
+controls outside the scrolling area, it was never going to reach a comparison row either, regardless of
+anything this change does. That is exactly why there is no evidence of a *new* regression: the trap sits
+upstream of anywhere this feature's own accessibility contract could be exercised.
+
+**It is also, for the same reason, not evidence that the contract is met.** 7.1 asks whether a comparison
+row announces as one element naming the property, both values and the outcome. VoiceOver never reached a
+row, so that question was not answered either way — not "answered and fine despite the bug," but
+genuinely unobserved. This project already has a precedent for exactly this situation: the identical gap
+is why **ADR-0015 stays `Proposed`**, not an exception that let it promote. Applying that same standard
+here rather than a new one: **7.1 stays open, and ADR-0017 stays `Proposed`** on the strength of one
+remaining, unobserved criterion — not four.
+
+**What this closes:** 7.3, on the light/dark evidence above. **What stays open, and why:** 7.1 — attempted
+and blocked by a pre-existing, already-documented gap, not by anything new; tracked as the same debt, not
+a fresh one. Nothing about 7.2 or 7.4, closed in the first pass, changes here.
+
 ## What is already automated (do not re-verify by hand)
 
 These are covered by `swift test` / `Scripts/check-boundaries.sh` and need no manual work:
