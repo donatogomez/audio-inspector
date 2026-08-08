@@ -209,12 +209,27 @@ types that three slices depend on, to save work that is already off the critical
 comparison slice will want exactly those models. That is written down with its reversal criterion rather
 than left as an omission.
 
-**There is still no presentation.** Nothing draws a comparison; the flow exposes it and stops.
+**And it is now visible.** *Compare with another file…* sits beside the existing way to pick one; the
+comparison appears inside the report, after that file's own properties, and renders nothing at all when
+none is asked for. Eight technical facts, both files' values, and what comparing them established **in
+words** — same, different, or a sentence naming what each side actually was.
+
+Two choices carry most of the honesty. Both sides go through the report's **own** formatter, so a value
+reads identically in a comparison and in a report — and the numbers stay on screen when nothing could be
+compared: two uncertain estimates show both figures, both labelled unreliable, while the surface declines
+to call them the same or different. And extension, size, status and warnings appear per file with **no
+outcome column at all**, so none can appear; the reason they are unjudged is stated rather than left as
+an omission.
+
+There is **no score, no count, no winner and no direction** anywhere — not *higher*, not *improved*. The
+section says in its own words that it does not establish which file is better, or whether the two hold
+the same recording.
 
 The spectrogram stays functionally finished with its manual battery still deferred, and no ADR is
 promoted — ADR-0017 included, which waits on the comparison existing against production code and on a
-person looking at the surface. **Next step: the presentation** — both files' facts and each outcome
-stated in words, with `incomparable` reading as a sentence rather than a blank cell.
+person looking at the surface. **Next step: the remaining test matrix and the accessibility pass** — the
+export's byte-identity under a comparison is the one behaviour still unpinned, and the ordering check
+stays half-assertable because Swift offers no reflection over a type's members.
 
 ---
 _Last touched: 2026-08-08. Overwrite freely; empty is fine._
