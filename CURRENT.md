@@ -162,6 +162,13 @@ own would let this one finish while keeping the debt named and owned. The wavefo
 to a change of its own too, scoped to reconciling the two error spaces first, and nothing about it is
 started.
 
+**Update (2026-08-08): part of that deferred battery was actually run.** A person confirmed 10.3
+(light/dark contrast) by real observation. **10.4 (the colour ramp's greyscale monotonicity) was also run,
+and it failed**: the intensity stops reading clearly enough in greyscale, a real product observation
+distinct from the automated luminance-monotonicity test, which still passes. ADR-0016 stays `Proposed`;
+this is a real, named defect now, not just missing observation, and fixing the ramp is a separate piece of
+work from this session.
+
 **A second thread is open: the design of a two-file technical comparison.** Contract only — no domain,
 no surface, no code. It answers exactly one question, *which observable technical facts are the same,
 different, or not comparable between these two files*, and refuses the four it cannot answer honestly:
@@ -289,11 +296,27 @@ identical reason, and its own 11.5 stays unchecked exactly as 8.4 stays unchecke
 this debt prevents, and archiving a change with an open, load-bearing task ahead of it is not something
 this repository's own convention does.
 
-**Next step, whenever someone chooses to take it:** grant Screen Recording and Automation to whatever
-process will run the pass, confirm both directly, then run the prepared scenario list in
-`docs/manual-validation-mvp.md` — the fixtures and the four cases (same, different, incomparable, failed)
-are ready and untouched. Until then, this change sits exactly where
-`add-static-spectrogram-visualization` sits: functionally finished, honestly not yet closable.
+**A person then ran the comparison for real (2026-08-08), and part of the deferred debt closes on that
+evidence.** Three scenarios against the real app with the prepared fixtures — the same FLAC against
+itself, two distinct FLACs, and a second file that is not really audio — plus the replace/close flow, all
+behaved exactly as specified: no invented difference, no invented failure state, no forbidden word, the
+first report never disturbed, the surface's own denial that it ranks the files still present. **This
+closes 7.2 and 7.4** on real observation, not on the structural/automated evidence that stood in for them
+before.
+
+**7.1 and 7.3 do not close on this evidence, and the reason is specific to each.** 7.1 asks about the
+accessibility tree and VoiceOver — nothing in the new pass touched that, because it is a visual/functional
+observation, not an accessibility one. 7.3 asks about light and dark — light and dark **were** checked in
+this same session, but for the spectrogram, not for the comparison surface; that observation belongs to a
+different section of the report and does not transfer. **Two of four is still partial evidence** by
+ADR-0017's own words ("partial evidence does not promote it"), so **ADR-0017 stays `Proposed`** and 8.4
+stays open for exactly that reason — named now as 7.1 and 7.3 specifically, not as "group 7 in general."
+
+**Next step, whenever someone chooses to take it:** either get Screen Recording and Automation working
+for an automated session, or have a person spend a few more minutes with Accessibility Inspector/VoiceOver
+and a light/dark toggle on the same running app and fixtures — nothing else is needed to close 7.1 and
+7.3 and, with them, 8.4. No merge, no push, no `openspec archive` follows from this session: the same two
+tasks that blocked the change before this evidence still block it now, just by a much smaller margin.
 
 ---
 _Last touched: 2026-08-08. Overwrite freely; empty is fine._
