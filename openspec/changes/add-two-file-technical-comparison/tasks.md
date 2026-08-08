@@ -192,10 +192,6 @@ already covered and marked. What stays open needs something that does not exist 
       test, and this task stays open until group 3 shows whether there is anything better to do.
 - [x] 6.13 **No aggregate exists**: assert that neither the comparison nor its presentation exposes a
       score, a percentage, a count of differences, or a boolean summary of the whole comparison.
-- [x] 6.14 A cancelled second inspection leaves the first report identical.
-- [x] 6.15 A globally failed second file yields a comparison that is entirely `incomparable`, with the
-      first report identical.
-- [x] 6.16 A superseded second result never reaches the surface.
       **Both halves are now covered.** `Mirror` reports a struct's stored properties, so
       `FileComparison` is shown to store the two reports and the eight comparisons and nothing else. On
       the presentation side the formatter is shown to produce exactly eight rows with no ninth
@@ -204,12 +200,18 @@ already covered and marked. What stays open needs something that does not exist 
       **One residual, stated rather than glossed:** `Mirror` cannot see *computed* members, so a
       `var allSame: Bool` added later would not fail these. That is narrower than 6.12's gap — a stored
       aggregate and aggregate wording are both detectable — but it is not nothing.
+- [x] 6.14 A cancelled second inspection leaves the first report identical.
+- [x] 6.15 A globally failed second file yields a comparison that is entirely `incomparable`, with the
+      first report identical.
+- [x] 6.16 A superseded second result never reaches the surface.
 - [x] 6.17 The same file chosen twice compares as `same` on every comparable property, and nothing
       further is claimed.
-      **The comparison half is done**: a report compared against itself agrees on all seven comparable
-      properties, while the estimate still does not compare — which is the "nothing further is claimed"
-      half. What is open is the *choosing*, which needs the flow.
-- [ ] 6.18 **The export is unchanged**: the JSON for a file inspected alone is byte-identical to the
+      Covered in both halves: a report compared against itself agrees on all seven comparable
+      properties while the estimate still does not compare, and the flow exercises the *choosing* —
+      selecting the same file as the second one yields exactly that comparison. Nothing in any row or
+      any piece of copy claims the two selections are one file, which is the "nothing further is
+      claimed" half.
+- [x] 6.18 **The export is unchanged**: the JSON for a file inspected alone is byte-identical to the
       JSON for the same file while a comparison is on screen, and no comparison field appears anywhere
       in it.
 - [x] 6.19 The comparison is deterministic — the same two reports always produce the same result.
