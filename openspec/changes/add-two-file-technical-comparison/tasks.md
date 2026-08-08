@@ -229,35 +229,50 @@ already covered and marked. What stays open needs something that does not exist 
 
 ## 7. Accessibility and manual validation
 
-**Manual validation deferred by decision, blocked rather than skipped.** The implementation is finished
-against production code and the automated matrix is complete (group 6). Three separate attempts to run
-this group against the real app were stopped before observation could begin: two macOS permissions the
-session cannot grant itself — **Screen Recording** and **Automation** toward `System Events`, for the
-process hosting the session — refused every step past launching the app, unchanged across a permission
-grant and a host restart. Structural and automated evidence stands in for parts of 7.1, 7.2 and 7.4 (see
-`docs/manual-validation-mvp.md`), but, consistently with this repository's own precedent for exactly this
-situation (`add-static-spectrogram-visualization` group 10), a test is not an observation and does not
-close a task that names the rendered surface. **No defect of the product was observed at any point.**
-What was and was not checked is recorded durably in `docs/manual-validation-mvp.md`; the fixtures and the
-scenario list are prepared and left in place, so this group can be run later without rebuilding anything.
+**Partly closed by a real manual pass (2026-08-08), after being blocked and deferred.** The
+implementation is finished against production code and the automated matrix is complete (group 6). Three
+attempts to run this group against the real app from an automated session were stopped upstream of the
+app by two macOS permissions (Screen Recording, Automation toward `System Events`); that block was
+recorded as a deferred decision, following this repository's own precedent
+(`add-static-spectrogram-visualization` group 10). **A person then ran the comparison itself, with the
+prepared fixtures, and reported three real scenarios (same file, two distinct files, a corrupted second
+file) plus the replace/close flow.** That closes 7.2 and 7.4 on real observation. It does not touch 7.1
+or 7.3: no accessibility-tree/VoiceOver observation of this surface was performed, and no light/dark
+observation of this surface (as opposed to the spectrogram's) was reported. See
+`docs/manual-validation-mvp.md` for exactly what was seen.
 
 Nothing below may be marked done without actually performing it.
 
 - [ ] 7.1 Each property row is announced as a single element with the property, both values and the
       outcome, and no characterisation of either file.
-- [ ] 7.2 Every meaning has a textual alternative; nothing depends on colour, position or a symbol.
+      **Still open.** This names the accessibility tree and VoiceOver, not the rendered pixels. No
+      Accessibility Inspector or VoiceOver pass over the comparison surface has been performed by anyone,
+      in any session — the automated attempts never reached the app, and the real manual pass that closed
+      7.2/7.4 observed the surface visually, which is a different claim from what this task asks.
+- [x] 7.2 Every meaning has a textual alternative; nothing depends on colour, position or a symbol.
+      **Closed by real observation.** A person read `Same`, `Different`, `Not comparable` and a failed
+      second file's own status as words, across three real scenarios against the real app — no meaning
+      was inferred from colour or a symbol in any of them. Paired with the existing exhaustive scan over
+      every reachable state (`ComparisonPresentationTests`) and the source-level absence of any icon or
+      symbol in `ComparisonView`.
 - [ ] 7.3 The surface remains legible in light and dark appearance.
-- [ ] 7.4 Read the whole surface by eye and confirm nothing names a preferred file, a verdict, a score,
+      **Still open.** Light and dark were checked in this same pass, but for the spectrogram, not for
+      this surface — that observation does not transfer to a different section of the report. No
+      light/dark observation of the comparison has been reported.
+- [x] 7.4 Read the whole surface by eye and confirm nothing names a preferred file, a verdict, a score,
       an encoder or a bitrate the app did not read.
+      **Closed by real observation.** The whole surface was read by eye across the same file, two
+      distinct files, and a corrupted second file, plus the replace/close flow; none of `better`, `worse`,
+      `winner`, `loser`, `original`, `copy`, `source`, `derived`, `fake`, `transcode` or similar appeared,
+      and the subtitle's denial that the comparison ranks the files or claims the same recording was
+      confirmed still present.
 - [x] 7.5 Record the result in `docs/manual-validation-mvp.md`, stating plainly which checks were
       performed and which were not.
-      **Recorded, and it states a block rather than a result.** Two macOS permissions (Screen Recording,
-      Accessibility) could not be obtained for the process running this pass, even after being granted
-      and the host restarted, so no screenshot and no UI scripting of the running app was possible. 7.1
-      and 7.2 rest on construction plus the existing test suite; 7.4 rests on an exhaustive wording scan;
-      7.3 has no substitute and was not evaluated; none of the four is marked done. See the runbook
-      section above for what was prepared, what blocked it, and how to re-run it with the permissions in
-      place.
+      **Recorded twice: the block, then the real pass that partly closed it.** Two macOS permissions
+      (Screen Recording, Automation) blocked every automated attempt outright; a person's later pass
+      closed 7.2 and 7.4 on real observation and left 7.1 (accessibility tree/VoiceOver, never observed)
+      and 7.3 (light/dark of this surface specifically, never observed) open. See the runbook section
+      above for the full account of both.
 
 ## 8. Gates and closure
 
@@ -284,6 +299,11 @@ Nothing below may be marked done without actually performing it.
       two already-held reports.
 - [ ] 8.4 Decide ADR-0017's status from what was actually done (see 1.5), update `CURRENT.md`, and
       archive through `openspec archive` after merge, without editing the promoted specs by hand.
+      **Decided, and it stays open.** 1.5 permits promotion only when the surface "has been validated by
+      a person looking at it. Not before, and never on partial evidence." A real pass now closes 7.2 and
+      7.4; **7.1 and 7.3 are the two tasks still blocking this** — no accessibility-tree/VoiceOver
+      observation and no light/dark observation of the comparison surface have been performed. That is
+      partial evidence by the ADR's own words, so ADR-0017 stays `Proposed` and this task is not done.
 
 ## 9. Deferred, and named so it is not quietly dropped
 
