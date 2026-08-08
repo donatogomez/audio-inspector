@@ -235,7 +235,24 @@ comparison-shaped key.
 **What is left in the test matrix is exactly 6.12's ordering half** — that no accessor prefers either
 side. That stays a permanent audit rather than a test, because Swift offers no reflection over a type's
 methods or computed properties; the `Comparable` half of the same task is a genuine, passing runtime
-check. **Next step: group 7, accessibility and manual validation.**
+check.
+
+**Group 7 was attempted and blocked, not skipped.** Four real fixtures were built and the actual app
+(`App/AudioInspector.xcodeproj`) was compiled and launched to run the SAME/DIFFERENT/INCOMPARABLE/failed/
+replace/close pass by hand. Two macOS permissions the session cannot grant itself — Screen Recording and
+Accessibility, for the process hosting the session — refused every step past launching the app, even
+after being granted once and the host restarted: no screenshot, no UI scripting, no VoiceOver. Only 7.5
+is closed, by recording that block plainly in `docs/manual-validation-mvp.md`; 7.1 and 7.2 rest on
+construction plus the existing test suite rather than on observation, 7.4 rests on an exhaustive wording
+scan rather than an eye-read, and 7.3 has no substitute at all. None of the four is marked done. ADR-0017
+stays `Proposed` — its own promotion criterion names a person having looked at the surface, and that has
+not happened yet.
+
+**Next step: re-run group 7.** Grant Screen Recording and Accessibility to whatever process will run the
+shell commands, confirm both with a plain `screencapture` and a `System Events` query before starting,
+then repeat the pass — the fixtures and the exact scenario list are written down at the end of the new
+section in `docs/manual-validation-mvp.md`. Group 8 (gates and closure) has not been started and should
+not be, until group 7 has something observed to close.
 
 ---
 _Last touched: 2026-08-08. Overwrite freely; empty is fine._
