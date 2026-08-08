@@ -227,9 +227,15 @@ the same recording.
 
 The spectrogram stays functionally finished with its manual battery still deferred, and no ADR is
 promoted — ADR-0017 included, which waits on the comparison existing against production code and on a
-person looking at the surface. **Next step: the remaining test matrix and the accessibility pass** — the
-export's byte-identity under a comparison is the one behaviour still unpinned, and the ordering check
-stays half-assertable because Swift offers no reflection over a type's members.
+person looking at the surface. **The export's byte-identity under a comparison is now pinned**: the
+exporter's own signature takes only an `InspectionReport`, and six tests confirm the *flow* honours that
+— a comparison, however it settles, changes not one byte of the first file's JSON and introduces no
+comparison-shaped key.
+
+**What is left in the test matrix is exactly 6.12's ordering half** — that no accessor prefers either
+side. That stays a permanent audit rather than a test, because Swift offers no reflection over a type's
+methods or computed properties; the `Comparable` half of the same task is a genuine, passing runtime
+check. **Next step: group 7, accessibility and manual validation.**
 
 ---
 _Last touched: 2026-08-08. Overwrite freely; empty is fine._
