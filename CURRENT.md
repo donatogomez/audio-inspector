@@ -174,9 +174,20 @@ three-way, *not comparable* is first-class and explains which state each side wa
 can express an order, a winner or a score. Signal comparison, hashes, alignment and export are all
 deferred by decision, each with its reason written down.
 
-The spectrogram stays functionally finished with its manual battery still deferred, and neither ADR is
-promoted. **Next step: the domain semantics, once this design is reviewed and merged** — not before,
-because settling the semantics wrongly would poison every comparison level built on top of them.
+**Those semantics now exist in the domain**, and nothing else does: the state of one side, the gap that
+refuses the one pair which is not a gap, and the three-way comparison of a single property. Pure value
+types with no imports at all. There is **no flow, no surface and no aggregate** — comparing two whole
+reports is the next piece, not this one.
+
+The generic constraint is where the care went: storing a value needs nothing, and equality is required
+only where the same-or-different decision is actually made. That is also why duration needed no special
+case — a `Double` falls through the same rule as every other field, so there is nowhere for a tolerance
+to live even if someone wanted one.
+
+The spectrogram stays functionally finished with its manual battery still deferred, and no ADR is
+promoted — ADR-0017 included, which waits on the comparison existing against production code and on a
+person looking at the surface. **Next step: the aggregate and the pure operation over two reports** —
+still no flow and no UI.
 
 ---
-_Last touched: 2026-08-07. Overwrite freely; empty is fine._
+_Last touched: 2026-08-08. Overwrite freely; empty is fine._
