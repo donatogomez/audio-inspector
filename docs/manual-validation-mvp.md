@@ -141,6 +141,292 @@ remains `Proposed`; **ADR-0015** is independent and remains `Proposed` on its ow
 Group 11's task 11.4 — deleting `Spike/validate-static-spectrogram/` — is gated on ADR-0016 being
 Accepted and therefore cannot be reached from here.
 
+### A real manual pass, in part (2026-08-08)
+
+A person ran part of group 10's battery against the real application. Recorded exactly as observed,
+neither softened nor extended:
+
+- **10.3 (contrast, light/dark): PASS.** The drawing, legend and surrounding text stay legible in both
+  appearances.
+- **Continuous resize: PASS**, though this is not a numbered task on its own — no flicker, no visible
+  regeneration, and the spectrogram itself does not change while the window is resized. Corroborates
+  group 12's move to a raster that is a function of the model rather than the view's size.
+- **10.4 (greyscale monotonicity): FAIL.** Viewed in greyscale, the intensity stops being distinguishable
+  with enough clarity. This is recorded as a real, observed defect — not as "not evaluated" — even though
+  luminance is asserted strictly monotonic every 0.25 dB by automated test: a test proving the numbers
+  increase is not the same claim as a person being able to tell adjacent levels apart by eye, and the two
+  disagree here.
+- **10.1 (VoiceOver / accessibility tree): not executed**, for the same reason as the comparison surface
+  below — the environment did not grant this session's process Screen Recording or Automation access.
+- **10.2, 10.5, 10.6: not addressed by this pass** and stay exactly as before — not evaluated, not
+  claimed either way.
+
+**This does not change 10.1, 10.2, 10.5 or 10.6's status**, which stay open exactly as recorded above.
+**10.3 is now satisfied** by real observation. **10.4 moves from "not evaluated" to "evaluated and
+failed"** — a stronger, more specific piece of information than the gap it replaces, and a real product
+defect rather than a validation debt. Neither ADR-0016 nor group 11 is touched by this entry; that
+decision belongs to whoever picks up this specific defect.
+
+## The two-file technical comparison's manual validation — blocked by environment permissions (2026-08-08)
+
+Change `add-two-file-technical-comparison`, group 7. **No item of group 7 is recorded as passed by
+observation.** The attempt is recorded here so a later reader does not have to repeat the same blocked
+path before finding a working one.
+
+### What was prepared
+
+Four real fixtures were generated with `AVFoundation` (the same technique `AudioFixtureSupport.swift`
+uses for tests) for the minimum set of scenarios: `a.wav` (44.1 kHz/16-bit PCM, the primary file and its
+own second file for the SAME case), `b.aiff` (48 kHz/16-bit PCM, big-endian — a clear DIFFERENT case),
+`c.m4a` (AAC — lossy, so bit depth reads INCOMPARABLE against either PCM file, and doubles as the file to
+replace B with), and `broken.wav` (a `.wav` extension over bytes that are not a WAV file, to fail a
+second inspection outright). None of these entered the repository.
+
+The real app was built and run: `xcodebuild -project App/AudioInspector.xcodeproj -scheme AudioInspector
+-configuration Debug -destination 'platform=macOS' build`, then launched from
+`DerivedData/.../Debug/AudioInspector.app`. `System Events` could see the running process, so the app
+itself launched correctly.
+
+### What blocked the pass
+
+Two separate macOS permissions, neither grantable by this session itself (see this project's own rule:
+modifying security/privacy settings is not something to do unattended), stopped every subsequent step:
+
+- **Screen Recording** — `screencapture` failed with `could not create image from display` for the
+  process hosting this session, before and after the permission was added and the host app restarted.
+  No screenshot of the running app was obtained.
+- **Accessibility** — `osascript`/`System Events` failed with *"osascript no tiene permitido el acceso de
+  ayuda"* (error -1719) on anything beyond listing process names — reading the window's accessibility
+  tree, clicking a button, or sending a keystroke were all refused. No UI scripting, and therefore no
+  driving of the file picker, no click on *Compare with another file…*, and no VoiceOver interaction, was
+  possible.
+
+Both were tried again after the permission was granted and the host app was restarted, with no change.
+Diagnosing further (a different TCC identity than the one granted, a process that cannot self-inspect its
+own permission state, or something else) was not pursued past this point, in keeping with this pass's
+own instruction not to turn an environment limitation into an investigation.
+
+### What stands in for observation, and its limit
+
+With no way to drive or photograph the running app, group 7 falls back to what the source and the
+existing test suite can show — which is real evidence, but is not the observation the tasks ask for:
+
+- **7.1** (each row announced as one element) is true **by construction**: every comparison row in
+  `ComparisonView.comparedRows` carries `.accessibilityElement(children: .ignore)` plus a single
+  `.accessibilityLabel(row.accessibilityLabel)`, a standard SwiftUI mechanism whose behaviour does not
+  vary at runtime. `ComparisonPresentationTests` pins the label's exact text — property, both files'
+  values, then the outcome, with the incomparable reason included — for a normal row and an incomparable
+  one. What is missing is a live reading of the rendered tree confirming this app, today, exposes what
+  the modifier promises; unlike the waveform's own validation (above), which recorded this as directly
+  observed, this one could not be.
+- **7.2** (no meaning carried by colour, position or a symbol alone) is supported by a source read: every
+  `ComparisonOutcomeDisplay` case carries real text (`Same`, `Different`, or the stated reason), the only
+  colour distinction is `.secondary` vs `.primary` on already-worded text (never a bespoke hue standing
+  for a meaning), and no icon or symbol appears anywhere in `ComparisonView`. Actual contrast and legibility
+  were not seen.
+- **7.3** (legible in light and dark) has no automated substitute and was not evaluated at all — this one
+  is purely visual and the blocked permissions removed the only way to check it.
+- **7.4** (an eye-read for a preferred file, a verdict, a score, an unread encoder or bitrate) is
+  substituted by `ComparisonPresentationTests.noOutcomeUsesForbiddenWording`, which scans every one of the
+  25 reachable state pairings plus the fixed copy against a forbidden-word list, and by a source-literal
+  scan of every string in `ComparisonPresentation.swift`, `ComparisonView.swift` and the comparison
+  controls in `RootView.swift` against a second list (`recommended`, `original`, `source`, `derived`,
+  `fake`, `transcode`, `winner`, `loser`, `same file`, `identical file`, and others) — clean. This is
+  exhaustive over everything the vocabulary *can* render, which is stronger than a sampled by-eye pass,
+  but it is a string scan, not the eye-read the task names.
+- **7.5** is satisfied by this section: the result is recorded plainly, including everything that was
+  not checked.
+
+**Consequence.** Per this task list's own rule — "nothing below may be marked done without actually
+performing it" — 7.1 through 7.4 stay open. Only 7.5 is marked done. ADR-0017 stays `Proposed`: its own
+promotion criterion names a person having looked at the surface, which did not happen here.
+
+### Re-running this pass
+
+Grant both **Screen Recording** and **Accessibility** to the process that will run the shell commands
+(System Settings → Privacy & Security), confirm with `screencapture` and
+`osascript -e 'tell application "System Events" to tell process "AudioInspector" to get entire contents
+of window 1'` that both succeed, then rebuild the app and repeat: SAME (`a.wav` against itself),
+DIFFERENT (`a.wav` vs `b.aiff`), INCOMPARABLE (`a.wav` vs `c.m4a`, bit depth), FAILED (`broken.wav`),
+replace B→C, close, light/dark, narrow/wide window, Accessibility Inspector on one row of each kind, and
+an interactive VoiceOver traversal. The known VoiceOver traversal gap recorded above (the report's own
+content not reached by interactive VoiceOver) was never re-checked here and its status against the
+comparison section is therefore also unknown.
+
+### Retry (2026-08-08, same day) — still blocked, and why this is not recorded as NOT EVALUABLE
+
+Before repeating the whole pass, the two capabilities above were checked again, on their own, with
+nothing rebuilt or relaunched: a single `screencapture` and a single minimal `osascript` call to `System
+Events`. Both failed again:
+
+- `screencapture -x <file>` → `could not create image from display`, unchanged from before.
+- `osascript -e 'tell application "System Events" to get name of every process whose name contains
+  "AudioInspector"'` → **a different, more specific error than last time**:
+  *"No tienes autorización para enviar eventos Apple a System Events"* (-1743). A bare
+  `tell application "System Events" to return "ping"` succeeds, so the process can address System Events
+  at all; what it cannot do is direct System Events to inspect or control another application. That is
+  **Automation** (System Settings → Privacy & Security → Automation → *this session's host process* →
+  System Events), a third, separate permission from both Screen Recording and the general Accessibility
+  toggle named in the first attempt.
+
+Per the instruction for this pass, this was checked once more and not pursued further — no third
+permission was requested mid-session, and no attempt was made to launch the app again with no way to
+observe it.
+
+**This is deliberately not filed as NOT EVALUABLE.** This document uses that label for a criterion with
+*no referent on this platform* (the Dynamic Type case above) or a repeatedly-attempted, real interaction
+that a properly-permissioned run could not get past (the waveform's VoiceOver traversal gap). Neither
+applies here: a human, or a session holding the ordinary permissions any Mac user grants an app once,
+could complete every one of 7.1–7.4 in minutes. What is missing is not a capability of the platform but
+an entitlement of the process running this pass, and it has now failed to appear across two separate
+attempts, one of them after being explicitly granted and the host restarted. Recording that as
+"unobservable" would misstate a mundane, fixable gap as a platform limit, which is exactly the confusion
+this document's own convention exists to prevent. **7.1–7.4 therefore stay open as ordinary unfinished
+work, not as a permanent or platform-level limitation.**
+
+**What was decided instead of re-attempting the permissions a third time**, reading each task's literal
+text against this repository's own precedent (the near-identical spectrogram tasks 10.2 and 10.6 stayed
+open despite comparable automated coverage, on the stated ground that "a test is not an observation"):
+
+- **7.1**, **7.2**, **7.3** and **7.4** all name the rendered, running surface — "announced," "remains
+  legible," "read... by eye" — not the source that produces it. None is closed by the structural audit
+  and the exhaustive wording scan already on record (in `ComparisonPresentationTests` and in this
+  document's earlier section); that evidence is real but is, consistently with the spectrogram's own
+  precedent, not treated as a substitute for looking. All four stay open, unchanged from the first
+  attempt.
+- **6.12** is a different kind of task — a structural audit of the domain and presentation *types*, not
+  of the rendered surface — and is closed separately, in `tasks.md`, on the strength of a completed
+  review of the full public surface of `PropertyComparison`, `ComparisonGap`, `FileComparison`,
+  `ComparisonRowDisplay`, `ComparisonFormatter` and `ComparisonView`: no accessor anywhere returns a
+  preferred side. See that task for the exact wording.
+- Group 8's tasks 8.1–8.3 (the four gates, the diff's scope, the domain's isolation) do not depend on
+  7.1–7.4 at all and could run today; **8.4 does** — deciding ADR-0017's status from 1.5 and archiving —
+  because ADR-0017's own Status line requires "a person looking at it," which "partial evidence does not
+  promote." That has not happened, so **the change is not ready to close**, independent of whether its
+  mechanical gates would pass.
+
+### Concluded (2026-08-08): deferred by decision, not resolved
+
+A third, single-purpose check of the same two permissions — done immediately before this entry, before
+touching the app again — produced the same result as the first two: `screencapture` still cannot create
+an image from the display, and `System Events` still refuses to inspect or control another application
+on this session's behalf (Automation). No fourth attempt was made: the block is now treated as settled
+rather than as something to keep re-checking.
+
+**What is true, stated once and plainly:**
+
+- The implementation is finished against production code, and its architecture is closed: nothing in
+  `Sources/AudioInspectorDomain` gained a framework import or a port, the JSON exporter is
+  byte-identical, and the whole automated matrix (group 6, including 6.12's structural audit) is
+  complete.
+- **No defect of the product was observed at any point**, in three separate attempts, because none of
+  the attempts got far enough to observe the product at all — the block sits entirely upstream of the
+  running app.
+- The manual observation itself — a person actually looking at the rendered surface, in light and dark,
+  with Accessibility Inspector and VoiceOver — **did not happen** and is not claimed to have happened.
+
+**This is recorded exactly as `add-static-spectrogram-visualization` records its own group 10**: deferred
+by decision, nothing marked, the debt named rather than hidden. Per that same change's own precedent, a
+deferred validation does not promote the ADR it gates (ADR-0016 stays `Proposed` there for the identical
+reason) and does not close the task that bundles "decide the ADR's status and archive" (its 11.5 stays
+unchecked, exactly as 8.4 stays unchecked here). Nothing in this document, in `tasks.md`, or in
+ADR-0017 has been reworded to change that outcome — the criteria that were true before this attempt are
+still true after it. The debt is a **deferred human observation**, prepared and ready to run whenever the
+two permissions above are granted to whatever process attempts it next; it is not evidence of a problem
+with the comparison itself.
+
+### A real manual pass, in part (2026-08-08)
+
+A person ran the comparison against the real application with the prepared fixtures, replacing part of
+the block above rather than the whole of it. Recorded exactly as reported.
+
+**Case 1 — the same FLAC compared against itself.** Every comparable property read `Same`; no difference
+was invented; the extension/size/status context row stayed uncompared, as it always does; no forbidden
+word appeared (`better`, `worse`, `winner`, `loser`, `original`, `copy`, `source`, `derived`, `fake`,
+`transcode`, or similar).
+
+**Case 2 — two distinct FLAC files.** `Different` appeared where the files actually differ (duration);
+`Same` appeared where they agree (sample rate, codec, and others); `Not comparable` appeared where
+neither is a fact the other can be measured against; the section's own subtitle still stated, unchanged,
+that the comparison does not say which file is better or whether the two hold the same recording.
+
+**Case 3 — a second file that is not really audio (a `.js` file renamed to `.wav`).** The first report
+stayed intact; the second correctly showed that it could not be inspected; the comparison kept rendering
+around that failure rather than breaking; no invented state like *"Comparison failed"* appeared — the
+second file's own failure is what is shown, exactly as `ComparisonCopy.failedHeadline` and the flow's own
+tests already specify; no crash, no visible inconsistency.
+
+**Flow.** The first report stayed visible throughout; choosing another second file replaced the
+comparison correctly; *Close comparison* removed only the comparison; a new comparison could be started
+again afterward; no visual defect was observed at any point.
+
+**What this closes, and on what literal ground:**
+
+- **7.2** ("every meaning has a textual alternative; nothing depends on colour, position or a symbol") is
+  now satisfied by real observation: every meaning the surface produced in these three cases — same,
+  different, not comparable, and a second file's own failure — was read as words, not inferred from a
+  colour or a symbol. Closed.
+- **7.4** ("read the whole surface by eye and confirm nothing names a preferred file, a verdict, a score,
+  an encoder or a bitrate the app did not read") is now satisfied: the whole surface was read by eye
+  across three real, distinct states plus the replace/close flow, and none of the named claims appeared;
+  the denial sentence in the subtitle was confirmed present and unchanged. Closed.
+
+**What stays open, and exactly why — nothing in the new evidence touches these:**
+
+- **7.1** ("each property row is announced as a single element... " — an accessibility-tree/VoiceOver
+  claim) — no Accessibility Inspector or VoiceOver observation of the comparison surface was performed or
+  reported. The three cases above are visual/functional observations, not accessibility observations, and
+  do not stand in for one. **Still open.**
+- **7.3** ("the surface remains legible in light and dark appearance") — light and dark were checked for
+  the **spectrogram** in this same pass, not for the comparison surface; no light/dark observation of the
+  comparison was reported. **Still open**, for a different reason than 7.1: not contradicted, simply not
+  yet looked at.
+
+**Consequence for ADR-0017.** Two of four criteria under group 7 are now real; two are not. The ADR's own
+Status line says "validated with a person looking at it. Partial evidence does not promote it." — and two
+open criteria out of four is exactly partial evidence, however much stronger than before. **ADR-0017
+stays `Proposed`.** 8.4 stays open for the same reason, unchanged: it still needs the decision this
+remaining gap prevents. Nothing in the ADR, `tasks.md`, or this document has been reworded to close that
+gap; only what was actually observed has been recorded.
+
+### A second real pass closes light/dark and attempts VoiceOver (2026-08-08)
+
+The same person returned to close the gap the first pass explicitly left standing.
+
+**Light and dark: PASS.** The comparison itself — not only the spectrogram — was viewed in both
+appearances and reported legible in both: rows, values, the outcome column, secondary text and the
+*Compare with another file…* / *Close comparison* controls.
+
+**Resize: PASS.** Reported correct, consistent with the first pass's report for the spectrogram and with
+this surface using the same `Grid`-based layout throughout.
+
+**VoiceOver: attempted, and it reproduced this project's own known accessibility gap rather than
+observing anything new.** Recorded exactly as reported:
+
+> VoiceOver validation attempted. Existing accessibility issue reproduced unchanged (focus remains
+> trapped on *Export JSON*). No evidence that the comparison UI introduces a new accessibility
+> regression.
+
+This is not a new finding. It is the same **known VoiceOver traversal gap** recorded earlier in this
+document for the report surface (the waveform slice): "interactive VoiceOver reached only the export
+action and the file-picking action... and would not enter the report's contents." A comparison renders
+*inside* that same report content, below the properties — so if VoiceOver's focus never gets past the two
+controls outside the scrolling area, it was never going to reach a comparison row either, regardless of
+anything this change does. That is exactly why there is no evidence of a *new* regression: the trap sits
+upstream of anywhere this feature's own accessibility contract could be exercised.
+
+**It is also, for the same reason, not evidence that the contract is met.** 7.1 asks whether a comparison
+row announces as one element naming the property, both values and the outcome. VoiceOver never reached a
+row, so that question was not answered either way — not "answered and fine despite the bug," but
+genuinely unobserved. This project already has a precedent for exactly this situation: the identical gap
+is why **ADR-0015 stays `Proposed`**, not an exception that let it promote. Applying that same standard
+here rather than a new one: **7.1 stays open, and ADR-0017 stays `Proposed`** on the strength of one
+remaining, unobserved criterion — not four.
+
+**What this closes:** 7.3, on the light/dark evidence above. **What stays open, and why:** 7.1 — attempted
+and blocked by a pre-existing, already-documented gap, not by anything new; tracked as the same debt, not
+a fresh one. Nothing about 7.2 or 7.4, closed in the first pass, changes here.
+
 ## What is already automated (do not re-verify by hand)
 
 These are covered by `swift test` / `Scripts/check-boundaries.sh` and need no manual work:

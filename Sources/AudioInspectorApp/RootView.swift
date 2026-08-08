@@ -101,17 +101,58 @@ public struct RootView: View {
 
     /// The inspected report plus the way back to picking another file. `ReportView` is used exactly as
     /// group 5 shipped it — the export action is passed straight through, unchanged.
+    /// The comparison's own controls, beside the existing way to pick another file.
+    ///
+    /// **No new navigation.** Comparing is an action on the report already on screen, so it is an
+    /// action next to it — not a mode, not a second window, not a separate screen.
+    @ViewBuilder
+    private var comparisonControls: some View {
+        switch flow.comparison {
+        case .none:
+            Button("Compare with another file…") {
+                Task { await flow.selectAndCompare() }
+            }
+        case .loading:
+            // Disabled rather than hidden: a control that vanishes reads as a bug, and the section
+            // itself already says in words what is happening.
+            Button("Compare with another file…") {}
+                .disabled(true)
+        case .ready, .failed:
+            // A comparison on screen can be replaced by another file, or closed. Closing touches
+            // nothing about the report.
+            Button("Compare with another file…") {
+                Task { await flow.selectAndCompare() }
+            }
+            Button("Close comparison") { flow.dismissComparison() }
+        }
+    }
+
+    /// Translates the flow's comparison state into the presentation vocabulary, exactly as the two
+    /// visualisations are translated.
+    private static func comparisonPresentation(
+        for state: ImportFlowModel.ComparisonState
+    ) -> ComparisonPresentation {
+        switch state {
+        case .none: .none
+        case .loading: .loading
+        case let .ready(comparison): .ready(comparison)
+        case let .failed(message): .failed(message: message)
+        }
+    }
+
     private func reportSurface(_ presentation: InspectionPresentation) -> some View {
         VStack(spacing: 0) {
             ReportView(
                 report: presentation.report,
                 waveform: Self.waveformPresentation(for: presentation.waveform),
                 spectrogram: Self.spectrogramPresentation(for: presentation.spectrogram),
+                comparison: Self.comparisonPresentation(for: flow.comparison),
                 export: export
             )
             Divider()
-            HStack {
+            HStack(spacing: 12) {
                 Spacer()
+                comparisonControls
                 Button("Choose another file…") {
                     Task { await flow.selectAndInspect() }
                 }

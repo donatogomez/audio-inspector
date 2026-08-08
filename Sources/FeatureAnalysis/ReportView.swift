@@ -13,6 +13,7 @@ public struct ReportView: View {
     private let report: InspectionReport
     private let waveform: WaveformPresentation
     private let spectrogram: SpectrogramPresentation
+    private let comparison: ComparisonPresentation
     @State private var exportModel: ReportExportModel
 
     /// Both visualisations are **required** parameters with no default. A default would let a caller
@@ -21,11 +22,13 @@ public struct ReportView: View {
         report: InspectionReport,
         waveform: WaveformPresentation,
         spectrogram: SpectrogramPresentation,
+        comparison: ComparisonPresentation = .none,
         export: @escaping ReportExportAction
     ) {
         self.report = report
         self.waveform = waveform
         self.spectrogram = spectrogram
+        self.comparison = comparison
         _exportModel = State(initialValue: ReportExportModel(action: export))
     }
 
@@ -36,6 +39,11 @@ public struct ReportView: View {
                 waveformSection
                 spectrogramSection
                 propertiesSection
+                // **After this file's own facts, before its warnings.** A comparison is a statement
+                // about the properties just read, so it belongs next to them — and the report still
+                // reads as a complete report first. When nothing is being compared this renders
+                // nothing at all, so the surface is unchanged.
+                ComparisonSection(presentation: comparison)
                 warningsSection
                 statusSection
                 fileSection

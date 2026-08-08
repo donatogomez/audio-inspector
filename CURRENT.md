@@ -162,6 +162,13 @@ own would let this one finish while keeping the debt named and owned. The wavefo
 to a change of its own too, scoped to reconciling the two error spaces first, and nothing about it is
 started.
 
+**Update (2026-08-08): part of that deferred battery was actually run.** A person confirmed 10.3
+(light/dark contrast) by real observation. **10.4 (the colour ramp's greyscale monotonicity) was also run,
+and it failed**: the intensity stops reading clearly enough in greyscale, a real product observation
+distinct from the automated luminance-monotonicity test, which still passes. ADR-0016 stays `Proposed`;
+this is a real, named defect now, not just missing observation, and fixing the ramp is a separate piece of
+work from this session.
+
 **A second thread is open: the design of a two-file technical comparison.** Contract only — no domain,
 no surface, no code. It answers exactly one question, *which observable technical facts are the same,
 different, or not comparable between these two files*, and refuses the four it cannot answer honestly:
@@ -174,9 +181,153 @@ three-way, *not comparable* is first-class and explains which state each side wa
 can express an order, a winner or a score. Signal comparison, hashes, alignment and export are all
 deferred by decision, each with its reason written down.
 
-The spectrogram stays functionally finished with its manual battery still deferred, and neither ADR is
-promoted. **Next step: the domain semantics, once this design is reviewed and merged** — not before,
-because settling the semantics wrongly would poison every comparison level built on top of them.
+**The domain now holds all of it and nothing more**: the state of one side, the gap, the three-way
+comparison of a single property, and the comparison of two whole reports across the eight technical
+facts. Pure value types with no imports at all. There is **no flow and no surface** — choosing a second
+file is the next piece, and none of it is started.
+
+Two things are worth carrying. The generic constraint sits on the *operation*, not the type: storing a
+value needs nothing, and equality is required only where the same-or-different decision is made. That is
+also why duration needed no special case — a `Double` falls through the same rule as every other field,
+so there is nowhere for a tolerance to live even if someone wanted one.
+
+And the gap's invariant stopped being a check. It was a failable initialiser, which forced the rule's own
+caller — having already proved the pair impossible — through an unchecked back door whose safety rested
+on the order of two switch branches. Splitting the five states into *available* and the four that are
+not, and giving the gap three cases that each name a non-available side, means the contradictory pair has
+**no spelling at all**. Every existing test passed untouched across that change, which is the result
+worth having.
+
+`FileComparison` is derived, never assembled: declaring its two-report initialiser suppresses the
+memberwise one, so a comparison that contradicts its own reports cannot be written. It keeps both reports
+whole, because everything it deliberately does not judge — extension, size, warnings, status — is context
+a reader still wants, and one copy cannot drift from another.
+
+**The second-file flow now exists too, and it was the risky part.** The flow held one operation number,
+so every new selection cancelled the last and dropped whatever was still in flight; a comparison needs a
+second inspection that does *not* supersede the first. It now has its own task and its own number,
+disjoint from the primary one — a waveform still being produced for the file on screen still lands while
+a whole comparison begins and settles. The relationship runs one way only: a comparison never touches the
+report, and a new primary inspection ends the comparison, because its left-hand side is being replaced.
+
+The comparison is built the moment the second **report** exists, before that file's visualisations. Those
+are still produced, and discarded: expressing *"not asked for"* would need a new case in two outcome
+types that three slices depend on, to save work that is already off the critical path — and the visual
+comparison slice will want exactly those models. That is written down with its reversal criterion rather
+than left as an omission.
+
+**And it is now visible.** *Compare with another file…* sits beside the existing way to pick one; the
+comparison appears inside the report, after that file's own properties, and renders nothing at all when
+none is asked for. Eight technical facts, both files' values, and what comparing them established **in
+words** — same, different, or a sentence naming what each side actually was.
+
+Two choices carry most of the honesty. Both sides go through the report's **own** formatter, so a value
+reads identically in a comparison and in a report — and the numbers stay on screen when nothing could be
+compared: two uncertain estimates show both figures, both labelled unreliable, while the surface declines
+to call them the same or different. And extension, size, status and warnings appear per file with **no
+outcome column at all**, so none can appear; the reason they are unjudged is stated rather than left as
+an omission.
+
+There is **no score, no count, no winner and no direction** anywhere — not *higher*, not *improved*. The
+section says in its own words that it does not establish which file is better, or whether the two hold
+the same recording.
+
+The spectrogram stays functionally finished with its manual battery still deferred, and no ADR is
+promoted — ADR-0017 included, which waits on the comparison existing against production code and on a
+person looking at the surface. **The export's byte-identity under a comparison is now pinned**: the
+exporter's own signature takes only an `InspectionReport`, and six tests confirm the *flow* honours that
+— a comparison, however it settles, changes not one byte of the first file's JSON and introduces no
+comparison-shaped key.
+
+**6.12 is now closed, as an audit rather than a test.** Its `Comparable` half was already a genuine,
+passing runtime check; its *no preferred side* half was always going to stay an audit, since Swift
+offers no reflection over a type's methods or computed properties. What changed is that the audit itself
+was finally performed rather than deferred: the complete public surface of `PropertyComparison`,
+`ComparisonGap`, `FileComparison`, `ComparisonRowDisplay`, `ComparisonFormatter` and `ComparisonView` was
+read end to end, and none of it exposes anything that prefers one side. The task's own condition —
+"until group 3 shows whether there is anything better to do" — has been checked, not assumed: there
+isn't, and there cannot be in Swift as it stands. **The test matrix is now closed except for what group 7
+observes.**
+
+**Group 7 was attempted twice and is blocked both times, not skipped.** Four real fixtures were built and
+the actual app (`App/AudioInspector.xcodeproj`) was compiled and launched to run the
+SAME/DIFFERENT/INCOMPARABLE/failed/replace/close pass by hand. The first attempt found two macOS
+permissions missing for the process hosting the session — Screen Recording and Accessibility — and
+neither appeared after being granted once and the host restarted. Before repeating the whole pass, a
+second, minimal check (one `screencapture`, one `osascript` call) confirmed the block persists, and
+surfaced a more specific cause on the scripting side: **Automation** — the process is not authorised to
+direct `System Events` to inspect or control another app (error -1743) — which sits alongside Screen
+Recording as a second, separate gap, distinct from the general Accessibility toggle the first attempt
+named.
+
+**This is recorded as ordinary unfinished work, not as `NOT EVALUABLE`.** That label, in this document's
+own convention, is for a criterion with no referent on this platform, or a real, repeated interaction
+that still fails under ordinary permissions — neither is true here. A person, or a session holding the
+permissions any Mac user grants an app once, could finish 7.1–7.4 in minutes; nothing about the platform
+prevents it. So none of the four is downgraded to "unobservable," and none is closed by the structural
+audit and exhaustive wording scan already on record — consistent with this project's own precedent, the
+near-identical spectrogram tasks 10.2 and 10.6 stayed open against comparable automated coverage on the
+same ground: a test is not an observation. **7.1–7.4 stay open, unchanged, as real remaining work.**
+ADR-0017 stays `Proposed` — its Status line requires "a person looking at it" and states plainly that
+partial evidence does not promote it.
+
+**Group 8's mechanical gates (8.1–8.3) do not depend on any of this and could run today**; 8.4 does,
+because deciding ADR-0017's status and archiving both wait on the same unmet criterion. So **the change
+is not ready to close**, independent of whether the four gates would currently pass.
+
+**Group 8's mechanical gates (8.1–8.3) are done and green**; 8.4 stays open, unchanged, for the same
+reason it always was.
+
+**Group 7 is now concluded as deferred, not resolved and not re-attempted further.** A third,
+single-purpose permission check gave the same result as the first two, and the block is treated as
+settled rather than something to keep polling. **The comparison itself is finished and clean: production
+code, closed architecture, complete automated matrix, zero observed defects — in three separate attempts,
+none of which got far enough to observe the running app at all.** What is missing is a person actually
+looking at the rendered surface, and that has not happened. This is recorded exactly as this project
+already records `add-static-spectrogram-visualization`'s own group 10: deferred by decision, nothing
+marked, the debt named in `docs/manual-validation-mvp.md` and in `tasks.md` rather than hidden or
+reworded away. **Nothing in the ADR, the tasks or this file has been changed to make that debt look
+smaller than it is.**
+
+Per that same precedent, a deferred validation does not promote the ADR it gates and does not close the
+task that bundles "decide the ADR's status and archive": ADR-0016 stays `Proposed` there for the
+identical reason, and its own 11.5 stays unchecked exactly as 8.4 stays unchecked here. **ADR-0017 stays
+`Proposed`.** No merge, no push, no `openspec archive` — the change's own 8.4 requires the ADR decision
+this debt prevents, and archiving a change with an open, load-bearing task ahead of it is not something
+this repository's own convention does.
+
+**A person then ran the comparison for real (2026-08-08), and part of the deferred debt closes on that
+evidence.** Three scenarios against the real app with the prepared fixtures — the same FLAC against
+itself, two distinct FLACs, and a second file that is not really audio — plus the replace/close flow, all
+behaved exactly as specified: no invented difference, no invented failure state, no forbidden word, the
+first report never disturbed, the surface's own denial that it ranks the files still present. **This
+closes 7.2 and 7.4** on real observation, not on the structural/automated evidence that stood in for them
+before.
+
+**The same person returned for a second pass and closed 7.3.** Light and dark were checked against the
+comparison surface itself this time, and reported legible in both, with a correct continuous resize. That
+leaves exactly **one** open criterion under group 7, not two.
+
+**7.1 was attempted, not skipped, and stays open on this project's own precedent.** VoiceOver reproduced
+the report surface's own known, pre-existing traversal gap — focus trapped on *Export JSON*, never
+entering the report's content, so never reaching a comparison row either. There is no evidence this
+feature introduces a new regression, because the trap sits entirely upstream of where this feature could
+be exercised at all — but there is equally no evidence the row-announcement contract is met, since
+nothing about it was actually observed. **The identical gap already keeps ADR-0015 `Proposed`, treated as
+open debt rather than as an exception**, and the same standard applies here rather than a more lenient
+one invented for this change. **One open criterion out of four is still partial evidence** by ADR-0017's
+own words ("partial evidence does not promote it"), so **ADR-0017 stays `Proposed`**, unmodified, and 8.4
+stays open for exactly that one remaining reason.
+
+**Nothing here changed a line of implementation, an ADR, a spec, or a task's own normative text.** Only
+checkboxes and evidence notes moved, and only where the evidence honestly supports them.
+
+**Next step, whenever someone chooses to take it:** 7.1 needs either the pre-existing VoiceOver traversal
+gap fixed (a dedicated accessibility change, already named as such for the report surface) or Accessibility
+Inspector access from a session that isn't blocked by Screen Recording/Automation, to inspect the
+comparison rows' structure directly instead of through VoiceOver's broken traversal. No merge, no push, no
+`openspec archive` follows from this session: this change sits one specific, already-known, already-named
+accessibility gap away from closing 8.4.
 
 ---
-_Last touched: 2026-08-07. Overwrite freely; empty is fine._
+_Last touched: 2026-08-08. Overwrite freely; empty is fine._

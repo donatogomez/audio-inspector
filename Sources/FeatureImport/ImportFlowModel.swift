@@ -22,7 +22,37 @@ public final class ImportFlowModel {
         case failed(message: String)
     }
 
+    /// What is known about a comparison against a **second** file right now.
+    ///
+    /// **Beside `state`, never inside it.** The primary inspection is what `state` means, and a
+    /// comparison is a second thing the user asked for on top of it — folding it into
+    /// `InspectionPresentation` would make the second file part of the first file's presentation, which
+    /// it is not.
+    ///
+    /// It wraps the outcome and nothing more. **The field-by-field semantics live only in
+    /// `FileComparison`**: there is no parallel notion of difference here, no flag, no list of
+    /// differing fields, no count and no presentation type standing in for one.
+    ///
+    /// A second file whose inspection **failed globally** is not a failure of the comparison. Its report
+    /// exists with a `.failed` status and all-unavailable properties, so a comparison is built as
+    /// normal and every field reports that nothing was compared. `failed` here means only what it means
+    /// for `state`: no inspection of that file could be attempted at all.
+    public enum ComparisonState: Equatable, Sendable {
+        /// No comparison has been asked for.
+        case none
+        /// A second file is being chosen or inspected.
+        case loading
+        /// The comparison of the report on screen against the second file's report.
+        case ready(FileComparison)
+        /// The second file could not be opened for inspection at all.
+        case failed(message: String)
+    }
+
     public private(set) var state: State = .idle
+
+    /// The comparison, if one has been asked for. **Never written by the primary inspection's own
+    /// updates**, and it never writes `state` in return.
+    public private(set) var comparison: ComparisonState = .none
 
     /// Why the last drop was refused, if any. **Orthogonal to `state`:** it takes part in no
     /// transition, so a refusal never discards a report already on screen. Any accepted operation —
@@ -39,6 +69,17 @@ public final class ImportFlowModel {
     /// dropped rather than allowed to overwrite a newer one.
     private var currentOperation = 0
 
+    /// The comparison's own in-flight task and its own operation number, **disjoint from the primary
+    /// inspection's**.
+    ///
+    /// This separation is the whole of group 4. Until now one counter meant one inspection at a time and
+    /// every new selection superseded the last; a comparison needs a second inspection that does **not**
+    /// supersede the first. Two counters, two tasks, and neither path touches the other's: starting,
+    /// finishing, cancelling or replacing a comparison cannot invalidate an update belonging to the
+    /// primary inspection, and a late waveform or spectrogram still lands.
+    private var comparisonTask: Task<Void, Never>?
+    private var currentComparisonOperation = 0
+
     public init(action: @escaping SourceInspectionAction) {
         self.action = action
     }
@@ -53,6 +94,81 @@ public final class ImportFlowModel {
     /// sandbox or the reader.
     public func inspectDroppedSource(using action: @escaping SourceInspectionAction) async {
         await inspect(using: action)
+    }
+
+    /// Compares the report on screen against a second file, chosen through the **same** path a first
+    /// file is — the *Compare with another file…* action.
+    ///
+    /// Only meaningful with a report on screen, so it does nothing otherwise: there is nothing to
+    /// compare against while the flow is idle, working, or showing a failure.
+    public func selectAndCompare() async {
+        await compare(using: action)
+    }
+
+    /// Compares against a second file the composition root has already accepted. The action is opaque
+    /// and already bound to that source, exactly as `inspectDroppedSource(using:)` is.
+    ///
+    /// **Nothing here touches the primary inspection.** It reads the report on screen once, at the
+    /// start, and writes only `comparison` from then on. The primary operation's number is not bumped
+    /// and its task is not cancelled, so a waveform or spectrogram still being produced for the first
+    /// file arrives and lands as it would have.
+    ///
+    /// **The comparison is built the moment the second report exists**, before either of that file's
+    /// visualisations. Those are produced — the pipeline is the same one a first file runs, unchanged —
+    /// and this ignores them: they cannot change a technical comparison, and waiting for them would
+    /// hold back a result that is already complete.
+    public func compare(using action: @escaping SourceInspectionAction) async {
+        guard case let .report(presentation) = state else { return }
+        let primary = presentation.report
+
+        // Supersede only a previous *comparison*. The primary inspection is untouched.
+        comparisonTask?.cancel()
+        currentComparisonOperation += 1
+        let operation = currentComparisonOperation
+
+        let previous = comparison
+        comparison = .loading
+
+        let task = Task { [weak self] in
+            let outcome = await action { update in
+                guard let self, operation == self.currentComparisonOperation else { return } // superseded
+                // Only the report takes part. The second file's visualisations settle into nothing
+                // here: this slice does not draw them, and they cannot change a technical fact.
+                guard case let .report(report) = update else { return }
+                self.comparison = .ready(FileComparison(first: primary, second: report))
+            }
+            guard let self, operation == self.currentComparisonOperation else { return } // superseded
+            self.settle(outcome, against: primary, restoringOnCancellation: previous)
+        }
+        comparisonTask = task
+        await task.value
+    }
+
+    /// Dismisses the comparison. The report on screen is untouched, and nothing about it is walked back.
+    public func dismissComparison() {
+        comparisonTask?.cancel()
+        currentComparisonOperation += 1 // so a result already in flight cannot land afterwards
+        comparison = .none
+    }
+
+    /// Settles a comparison once its operation has finished. Only ever called for the current one.
+    private func settle(
+        _ outcome: SourceInspectionOutcome,
+        against primary: InspectionReport,
+        restoringOnCancellation previous: ComparisonState
+    ) {
+        switch outcome {
+        case let .inspected(report, _, _):
+            // Normally already set from the update; this is the backstop for a caller that reported
+            // nothing, so a comparison cannot stay stuck on `loading`. The two visualisations are
+            // discarded here as deliberately as they are above.
+            comparison = .ready(FileComparison(first: primary, second: report))
+        case .cancelled:
+            // Neutral: dismissing the picker is not a statement about either file.
+            comparison = previous
+        case .preparationFailed:
+            comparison = .failed(message: "That file could not be opened for comparison.")
+        }
     }
 
     /// Records that a drop could not be turned into an inspection. `state` is deliberately untouched.
@@ -83,6 +199,14 @@ public final class ImportFlowModel {
         activeTask?.cancel()
         currentOperation += 1
         let operation = currentOperation
+
+        // **A new primary inspection ends any comparison**, and this direction of the relationship is
+        // the only one that exists. A comparison is *against the report on screen*; once that report is
+        // being replaced, what the comparison describes is no longer there, and keeping it would leave a
+        // result on screen whose left-hand side the user can no longer see.
+        comparisonTask?.cancel()
+        currentComparisonOperation += 1
+        comparison = .none
 
         dropRejection = nil // an accepted operation supersedes any pending refusal
         let previous = state

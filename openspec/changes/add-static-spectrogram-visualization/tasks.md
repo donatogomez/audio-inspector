@@ -478,22 +478,40 @@ performance problem and the fix was confirmed by running the application. **Manu
 product decision. Basic functional observation was satisfactory, but the literal validation criteria were
 not executed and therefore are not recorded as passed.** What was and was not observed is recorded
 durably in `docs/manual-validation-mvp.md`; the fixtures and the runbook are prepared and were left in
-place, so this group can be run later without rebuilding anything. Nothing below is marked.
+place, so this group can be run later without rebuilding anything.
+
+**Partly run for real (2026-08-08).** A person exercised part of this battery against the real
+application. Two tasks close on that evidence below; the rest — including one that was actually run and
+**failed** — stay exactly as open as before, or open for a new, more specific reason.
 
 Nothing below may be marked done without actually performing it.
 
 - [ ] 10.1 VoiceOver: the spectrogram is announced as a single element describing what it is, with no
       characterisation of the audio; an absent spectrogram is announced as unavailable.
+      **Not executed.** Screen Recording and Automation toward `System Events` were not available to the
+      process attempting this, the same block recorded for the comparison surface.
 - [ ] 10.2 Confirm every meaning the drawing conveys has a textual alternative, and that no meaning
       depends on colour alone.
-- [ ] 10.3 Contrast: the drawing, its legend and its axis labels remain legible in light and dark
+      **Not addressed by the 2026-08-08 pass.** Stays exactly as before — not evaluated, not claimed.
+- [x] 10.3 Contrast: the drawing, its legend and its axis labels remain legible in light and dark
       appearance.
+      **Closed by real observation (2026-08-08).** A person viewed the spectrogram in both light and dark
+      appearance and reported it legible in both.
 - [ ] 10.4 Confirm the colour ramp increases monotonically in luminance by viewing it in greyscale.
+      **Executed, and failed — recorded as a real defect, not as a gap.** Viewed in greyscale, the
+      intensity stops being distinguishable with enough clarity. Automated tests already assert the
+      luminance values themselves increase monotonically every 0.25 dB; that is a different claim from a
+      person being able to tell the levels apart by eye, and this observation is the one the task actually
+      asks for. This task stays open because it is unmet, not because it is unobserved.
 - [ ] 10.5 Look at a 96 kHz and a 192 kHz file and confirm the mostly-empty upper range reads as
       information rather than as a rendering fault.
+      **Not addressed by the 2026-08-08 pass.** Stays exactly as before.
 - [ ] 10.6 Confirm by eye that nothing on the surface names an encoder, a bitrate, or a verdict.
-- [ ] 10.7 Record the result in `docs/manual-validation-mvp.md` as a durable statement, stating plainly
+      **Not addressed by the 2026-08-08 pass.** Stays exactly as before.
+- [x] 10.7 Record the result in `docs/manual-validation-mvp.md` as a durable statement, stating plainly
       which checks were performed and which were not.
+      **Recorded**, including the one real failure, without softening it. See
+      `docs/manual-validation-mvp.md` for the full account.
 
 ## 11. Gates and closure
 
