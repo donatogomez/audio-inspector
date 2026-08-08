@@ -1,6 +1,6 @@
 /// The structural state of **one side** of a comparison, with no value and no explanation attached.
 ///
-/// It exists because `ComparisonGap` has to be able to say *"this side was available and that one was
+/// It exists because a comparison has to be able to say *"this side was available and that one was
 /// not"*, and therefore needs a case for `available` — which is exactly the case `WarningKind`
 /// deliberately omits, so that a warning about a cleanly available property is unrepresentable. **The
 /// two types are different on purpose and must not be unified**: one describes a situation worth
@@ -16,6 +16,46 @@ public enum PropertyState: Sendable, Equatable {
     case unsupported
     case uncertain
     case failed
+}
+
+/// The four states that are **not** `available` — the ones that leave a side with no comparable value.
+///
+/// A separate type rather than a convention, because it is what makes a contradictory
+/// `ComparisonGap` impossible to write down at all (see `ComparisonGap`). Splitting the five states
+/// into "available" and "these four" is the whole mechanism.
+///
+/// **It is not `WarningKind` either**, though today they carry the same four names. `WarningKind`
+/// describes a situation worth warning a reader about; this describes why a side of a comparison had
+/// nothing to compare. They are free to diverge, and unifying them would couple the comparison
+/// vocabulary to the warning vocabulary for no reason beyond a coincidence of spelling.
+public enum NonAvailableState: Sendable, Equatable {
+    case unavailable
+    case unsupported
+    case uncertain
+    case failed
+}
+
+public extension PropertyState {
+    /// This state as a non-available one, or `nil` when it is `available`.
+    var nonAvailable: NonAvailableState? {
+        switch self {
+        case .available: nil
+        case .unavailable: .unavailable
+        case .unsupported: .unsupported
+        case .uncertain: .uncertain
+        case .failed: .failed
+        }
+    }
+
+    /// The state a non-available one describes, widened back to the full five.
+    init(_ state: NonAvailableState) {
+        switch state {
+        case .unavailable: self = .unavailable
+        case .unsupported: self = .unsupported
+        case .uncertain: self = .uncertain
+        case .failed: self = .failed
+        }
+    }
 }
 
 extension PropertyState {
@@ -37,44 +77,90 @@ extension PropertyState {
 
 /// Why two properties could not be compared: the state each side was in, and nothing more.
 ///
-/// ## Why this is a type rather than two loose parameters
+/// ## The invariant is the shape, not a check
 ///
-/// For one reason only. Two `available` states describe a pair that **is** comparable, so a gap holding
-/// them would contradict itself, and leaving that representable would give up exactly the guarantee
-/// `Property`'s own design buys (ADR-0008). The failable initialiser refuses it — the device
-/// `WaveformBucket.init?` already uses to refuse a bucket it could not describe honestly. Without that
-/// invariant to enforce, the two states on their own would have been the right shape.
+/// Two `available` states describe a pair that **is** comparable, so a gap holding them would
+/// contradict itself. Rather than accept that pair and reject it at runtime, the three cases below
+/// make it **impossible to write down**: every case names at least one side as non-available, so
+/// `(available, available)` has no spelling. 4 + 4 + 16 = **24 combinations, which is exactly the 24
+/// that are gaps**, and the twenty-fifth does not exist rather than being refused.
+///
+/// That is worth more than a failable initialiser. A refusal has to be reached to work, and a caller
+/// that has already proved the pair is impossible then needs either a force-unwrap or an unreachable
+/// branch. Here there is nothing to prove and nothing to unwrap: the compiler carries it.
 ///
 /// ## The two states are kept exactly, never summarised
 ///
-/// There is no `missing`, no `oneSideMissing`, no `bothMissing`. *"This format cannot express bit
-/// depth"* and *"reading bit depth errored"* are different things to tell a person, and they are
-/// already distinct one level down; collapsing them here would throw that away for a shorter enum.
+/// `first` and `second` reconstruct the pair, so nothing is lost by the shape. There is no `missing`,
+/// no `oneSideMissing`, no `bothMissing`: *"this format cannot express bit depth"* and *"reading bit
+/// depth errored"* are different things to tell a person, they are already distinct one level down,
+/// and collapsing them here would throw that away for a shorter enum.
 ///
 /// The order is the order the sides were supplied — **the file already open, then the file chosen for
 /// comparison**. It carries no rank, and nothing here derives one from it.
-public struct ComparisonGap: Sendable, Equatable {
-    public let first: PropertyState
-    public let second: PropertyState
+public enum ComparisonGap: Sendable, Equatable {
+    /// The first side had a value; the second did not.
+    case firstAvailable(second: NonAvailableState)
+    /// The second side had a value; the first did not.
+    case secondAvailable(first: NonAvailableState)
+    /// Neither side had a value.
+    case neitherAvailable(first: NonAvailableState, second: NonAvailableState)
+}
 
-    /// Fails when both sides are `available`, because that pair is comparable and is therefore not a
-    /// gap. Every other combination of the five states is valid — 24 of the 25.
-    public init?(first: PropertyState, second: PropertyState) {
-        guard !(first == .available && second == .available) else { return nil }
-        self.first = first
-        self.second = second
+public extension ComparisonGap {
+    /// The state the first side was in.
+    var first: PropertyState {
+        switch self {
+        case .firstAvailable: .available
+        case let .secondAvailable(state): PropertyState(state)
+        case let .neitherAvailable(state, _): PropertyState(state)
+        }
     }
 
-    /// Builds a gap **without** checking the invariant, for the one caller that has already excluded the
-    /// contradictory pair by construction.
+    /// The state the second side was in.
+    var second: PropertyState {
+        switch self {
+        case let .firstAvailable(state): PropertyState(state)
+        case .secondAvailable: .available
+        case let .neitherAvailable(_, state): PropertyState(state)
+        }
+    }
+
+    /// The gap between two states, or `nil` when both are `available` — the one pair that is not a gap.
     ///
-    /// `fileprivate`, so it cannot be reached from outside this file: `PropertyComparison`'s rule
-    /// matches two `available` properties in an earlier branch, so by the time this runs the pair
-    /// provably cannot be `(.available, .available)`. Using the failable initialiser there would force
-    /// either a force-unwrap or an unreachable fallback that lies about what it means.
-    fileprivate init(uncheckedFirst: PropertyState, second: PropertyState) {
-        first = uncheckedFirst
-        self.second = second
+    /// A convenience for a caller holding two `PropertyState`s. The comparison rule does **not** use it:
+    /// it builds a case directly, because it already knows which side was which.
+    init?(first: PropertyState, second: PropertyState) {
+        switch (first.nonAvailable, second.nonAvailable) {
+        case (nil, nil):
+            return nil
+        case let (nil, .some(secondState)):
+            self = .firstAvailable(second: secondState)
+        case let (.some(firstState), nil):
+            self = .secondAvailable(first: firstState)
+        case let (.some(firstState), .some(secondState)):
+            self = .neitherAvailable(first: firstState, second: secondState)
+        }
+    }
+}
+
+/// One side of a comparison, split so the compiler can see that a pair which is not two values is a
+/// gap. Total over every `Property`: each one is either a value or a reason there is none.
+///
+/// Private, and the whole reason the rule below needs no force-unwrap, no unchecked initialiser and no
+/// unreachable branch.
+private enum ComparisonSide<Value> {
+    case value(Value)
+    case gap(NonAvailableState)
+
+    init(of property: Property<Value>) {
+        switch property {
+        case let .available(value): self = .value(value)
+        case .unavailable: self = .gap(.unavailable)
+        case .unsupported: self = .gap(.unsupported)
+        case .uncertain: self = .gap(.uncertain)
+        case .failed: self = .gap(.failed)
+        }
     }
 }
 
@@ -131,19 +217,23 @@ public extension PropertyComparison where Value: Equatable {
     /// Equality is the field's own, exact: a `Double` duration compares by `==`, with no tolerance,
     /// no rounding and no conversion. That is a decision (ADR-0017), and it is enforced by there being
     /// nowhere for a special case to live — every field falls through this one generic rule.
+    ///
+    /// **Every branch below constructs its result outright.** Splitting each side into a value or a
+    /// reason there is none leaves the four cases the compiler can check, and each one already knows
+    /// which side was which — so there is no invariant to re-establish, nothing to unwrap and no
+    /// branch that cannot happen.
     init(first: Property<Value>, second: Property<Value>) {
-        switch (first, second) {
-        case let (.available(firstValue), .available(secondValue)):
+        switch (ComparisonSide(of: first), ComparisonSide(of: second)) {
+        case let (.value(firstValue), .value(secondValue)):
             self = firstValue == secondValue
                 ? .same(firstValue)
                 : .different(first: firstValue, second: secondValue)
-        default:
-            // The branch above has taken the only pair a gap refuses, so the unchecked initialiser
-            // cannot produce a contradictory one here.
-            self = .incomparable(ComparisonGap(
-                uncheckedFirst: PropertyState(of: first),
-                second: PropertyState(of: second)
-            ))
+        case let (.value, .gap(secondState)):
+            self = .incomparable(.firstAvailable(second: secondState))
+        case let (.gap(firstState), .value):
+            self = .incomparable(.secondAvailable(first: firstState))
+        case let (.gap(firstState), .gap(secondState)):
+            self = .incomparable(.neitherAvailable(first: firstState, second: secondState))
         }
     }
 }

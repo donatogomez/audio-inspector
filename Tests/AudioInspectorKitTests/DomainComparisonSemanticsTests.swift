@@ -66,10 +66,50 @@ struct PropertyStateTests {
 @Suite("Domain — the comparison gap")
 struct ComparisonGapTests {
 
-    /// The one invariant: a pair that compares is not a gap.
+    /// The one invariant, approached through the convenience initialiser: a pair that compares is not
+    /// a gap.
     @Test("two available states are refused")
     func twoAvailableStatesAreRefused() {
         #expect(ComparisonGap(first: .available, second: .available) == nil)
+    }
+
+    /// **The invariant is the shape, and this enumerates the shape exhaustively.**
+    ///
+    /// Every gap that can be written down is built here — all three cases across every non-available
+    /// state — and none of them reports both sides available. There are exactly 24, which is exactly
+    /// the number of state pairs that are gaps: the twenty-fifth has no spelling rather than being
+    /// refused at runtime.
+    @Test("no gap that can be constructed reports both sides available")
+    func noConstructibleGapReportsBothAvailable() {
+        let nonAvailable: [NonAvailableState] = [.unavailable, .unsupported, .uncertain, .failed]
+        var everyGap: [ComparisonGap] = []
+
+        for state in nonAvailable {
+            everyGap.append(.firstAvailable(second: state))
+            everyGap.append(.secondAvailable(first: state))
+        }
+        for first in nonAvailable {
+            for second in nonAvailable {
+                everyGap.append(.neitherAvailable(first: first, second: second))
+            }
+        }
+
+        #expect(everyGap.count == 24)
+        for gap in everyGap {
+            #expect(!(gap.first == .available && gap.second == .available))
+        }
+    }
+
+    /// The three cases reconstruct the pair of states they stand for, so the shape costs no
+    /// information.
+    @Test("each case reports the pair of states it stands for")
+    func theCasesReconstructTheirStates() {
+        #expect(ComparisonGap.firstAvailable(second: .unsupported).first == .available)
+        #expect(ComparisonGap.firstAvailable(second: .unsupported).second == .unsupported)
+        #expect(ComparisonGap.secondAvailable(first: .failed).first == .failed)
+        #expect(ComparisonGap.secondAvailable(first: .failed).second == .available)
+        #expect(ComparisonGap.neitherAvailable(first: .uncertain, second: .unavailable).first == .uncertain)
+        #expect(ComparisonGap.neitherAvailable(first: .uncertain, second: .unavailable).second == .unavailable)
     }
 
     /// **The 5 × 5 matrix.** Exactly one of the 25 pairs is invalid, and it is the one above.
