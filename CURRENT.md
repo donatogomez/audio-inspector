@@ -304,19 +304,30 @@ first report never disturbed, the surface's own denial that it ranks the files s
 closes 7.2 and 7.4** on real observation, not on the structural/automated evidence that stood in for them
 before.
 
-**7.1 and 7.3 do not close on this evidence, and the reason is specific to each.** 7.1 asks about the
-accessibility tree and VoiceOver — nothing in the new pass touched that, because it is a visual/functional
-observation, not an accessibility one. 7.3 asks about light and dark — light and dark **were** checked in
-this same session, but for the spectrogram, not for the comparison surface; that observation belongs to a
-different section of the report and does not transfer. **Two of four is still partial evidence** by
-ADR-0017's own words ("partial evidence does not promote it"), so **ADR-0017 stays `Proposed`** and 8.4
-stays open for exactly that reason — named now as 7.1 and 7.3 specifically, not as "group 7 in general."
+**The same person returned for a second pass and closed 7.3.** Light and dark were checked against the
+comparison surface itself this time, and reported legible in both, with a correct continuous resize. That
+leaves exactly **one** open criterion under group 7, not two.
 
-**Next step, whenever someone chooses to take it:** either get Screen Recording and Automation working
-for an automated session, or have a person spend a few more minutes with Accessibility Inspector/VoiceOver
-and a light/dark toggle on the same running app and fixtures — nothing else is needed to close 7.1 and
-7.3 and, with them, 8.4. No merge, no push, no `openspec archive` follows from this session: the same two
-tasks that blocked the change before this evidence still block it now, just by a much smaller margin.
+**7.1 was attempted, not skipped, and stays open on this project's own precedent.** VoiceOver reproduced
+the report surface's own known, pre-existing traversal gap — focus trapped on *Export JSON*, never
+entering the report's content, so never reaching a comparison row either. There is no evidence this
+feature introduces a new regression, because the trap sits entirely upstream of where this feature could
+be exercised at all — but there is equally no evidence the row-announcement contract is met, since
+nothing about it was actually observed. **The identical gap already keeps ADR-0015 `Proposed`, treated as
+open debt rather than as an exception**, and the same standard applies here rather than a more lenient
+one invented for this change. **One open criterion out of four is still partial evidence** by ADR-0017's
+own words ("partial evidence does not promote it"), so **ADR-0017 stays `Proposed`**, unmodified, and 8.4
+stays open for exactly that one remaining reason.
+
+**Nothing here changed a line of implementation, an ADR, a spec, or a task's own normative text.** Only
+checkboxes and evidence notes moved, and only where the evidence honestly supports them.
+
+**Next step, whenever someone chooses to take it:** 7.1 needs either the pre-existing VoiceOver traversal
+gap fixed (a dedicated accessibility change, already named as such for the report surface) or Accessibility
+Inspector access from a session that isn't blocked by Screen Recording/Automation, to inspect the
+comparison rows' structure directly instead of through VoiceOver's broken traversal. No merge, no push, no
+`openspec archive` follows from this session: this change sits one specific, already-known, already-named
+accessibility gap away from closing 8.4.
 
 ---
 _Last touched: 2026-08-08. Overwrite freely; empty is fine._
