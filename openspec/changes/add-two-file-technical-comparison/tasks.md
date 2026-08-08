@@ -181,15 +181,26 @@ already covered and marked. What stays open needs something that does not exist 
 - [x] 6.10 `declaredBitrate` is never compared against `estimatedBitrate`, in either direction.
 - [x] 6.11 Duration differing by the smallest representable amount yields `different`, with no
       tolerance anywhere in the path.
-- [ ] 6.12 **No ordering exists**: assert structurally that the comparison exposes no preferred side and
+- [x] 6.12 **No ordering exists**: assert structurally that the comparison exposes no preferred side and
       no `Comparable` conformance.
-      **Half done, and left open deliberately.** The `Comparable` half is asserted for real — a
-      conformance is a runtime fact, and a positive control confirmed the check answers `false` for a
-      non-conforming type and `true` for a conforming one. The *no preferred side* half **cannot be
-      asserted honestly**: Swift offers no reflection over a type's members, so the only available
+      **Both halves closed, as a test and as an audit — never conflated.** The `Comparable` half is
+      asserted for real — a conformance is a runtime fact, and a positive control confirmed the check
+      answers `false` for a non-conforming type and `true` for a conforming one
+      (`ComparisonProhibitionTests`). The *no preferred side* half **cannot be asserted honestly**:
+      Swift offers no reflection over a type's methods or computed properties, so the only available
       "test" would look for a hand-written string, which proves nothing and would pass against a member
-      spelled differently. It is recorded as an **audit** in the test file rather than dressed up as a
-      test, and this task stays open until group 3 shows whether there is anything better to do.
+      spelled differently. It stays an **audit**, recorded in the test file's own documentation rather
+      than dressed up as a test — and the condition this task was left open for, "until group 3 shows
+      whether there is anything better to do," has now been checked rather than assumed: group 3 through
+      5 shipped with no such mechanism appearing, and the audit itself has been performed, by reading the
+      complete public surface of every comparison-related type — `PropertyComparison`, `ComparisonGap`,
+      `PropertyState`/`NonAvailableState`, `FileComparison`, `ComparisonRowDisplay`, `ComparisonFormatter`
+      and `ComparisonView` — end to end. None exposes an accessor, a method or a computed property that
+      returns one side in preference to the other; `first`/`second` and `sideText`/`accessibilityLabel`
+      are purely positional and descriptive. **The residual is named rather than hidden**: a computed
+      property added later — `var preferred: InspectionReport` — would not be caught by this audit, only
+      by the next one, exactly as 6.13 already notes for a hypothetical `allSame`. That is the limit of
+      what an audit can promise, and it is why this stays an audit and never becomes a test.
 - [x] 6.13 **No aggregate exists**: assert that neither the comparison nor its presentation exposes a
       score, a percentage, a count of differences, or a boolean summary of the whole comparison.
       **Both halves are now covered.** `Mirror` reports a struct's stored properties, so
