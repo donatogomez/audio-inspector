@@ -232,27 +232,47 @@ exporter's own signature takes only an `InspectionReport`, and six tests confirm
 — a comparison, however it settles, changes not one byte of the first file's JSON and introduces no
 comparison-shaped key.
 
-**What is left in the test matrix is exactly 6.12's ordering half** — that no accessor prefers either
-side. That stays a permanent audit rather than a test, because Swift offers no reflection over a type's
-methods or computed properties; the `Comparable` half of the same task is a genuine, passing runtime
-check.
+**6.12 is now closed, as an audit rather than a test.** Its `Comparable` half was already a genuine,
+passing runtime check; its *no preferred side* half was always going to stay an audit, since Swift
+offers no reflection over a type's methods or computed properties. What changed is that the audit itself
+was finally performed rather than deferred: the complete public surface of `PropertyComparison`,
+`ComparisonGap`, `FileComparison`, `ComparisonRowDisplay`, `ComparisonFormatter` and `ComparisonView` was
+read end to end, and none of it exposes anything that prefers one side. The task's own condition —
+"until group 3 shows whether there is anything better to do" — has been checked, not assumed: there
+isn't, and there cannot be in Swift as it stands. **The test matrix is now closed except for what group 7
+observes.**
 
-**Group 7 was attempted and blocked, not skipped.** Four real fixtures were built and the actual app
-(`App/AudioInspector.xcodeproj`) was compiled and launched to run the SAME/DIFFERENT/INCOMPARABLE/failed/
-replace/close pass by hand. Two macOS permissions the session cannot grant itself — Screen Recording and
-Accessibility, for the process hosting the session — refused every step past launching the app, even
-after being granted once and the host restarted: no screenshot, no UI scripting, no VoiceOver. Only 7.5
-is closed, by recording that block plainly in `docs/manual-validation-mvp.md`; 7.1 and 7.2 rest on
-construction plus the existing test suite rather than on observation, 7.4 rests on an exhaustive wording
-scan rather than an eye-read, and 7.3 has no substitute at all. None of the four is marked done. ADR-0017
-stays `Proposed` — its own promotion criterion names a person having looked at the surface, and that has
-not happened yet.
+**Group 7 was attempted twice and is blocked both times, not skipped.** Four real fixtures were built and
+the actual app (`App/AudioInspector.xcodeproj`) was compiled and launched to run the
+SAME/DIFFERENT/INCOMPARABLE/failed/replace/close pass by hand. The first attempt found two macOS
+permissions missing for the process hosting the session — Screen Recording and Accessibility — and
+neither appeared after being granted once and the host restarted. Before repeating the whole pass, a
+second, minimal check (one `screencapture`, one `osascript` call) confirmed the block persists, and
+surfaced a more specific cause on the scripting side: **Automation** — the process is not authorised to
+direct `System Events` to inspect or control another app (error -1743) — which sits alongside Screen
+Recording as a second, separate gap, distinct from the general Accessibility toggle the first attempt
+named.
 
-**Next step: re-run group 7.** Grant Screen Recording and Accessibility to whatever process will run the
-shell commands, confirm both with a plain `screencapture` and a `System Events` query before starting,
-then repeat the pass — the fixtures and the exact scenario list are written down at the end of the new
-section in `docs/manual-validation-mvp.md`. Group 8 (gates and closure) has not been started and should
-not be, until group 7 has something observed to close.
+**This is recorded as ordinary unfinished work, not as `NOT EVALUABLE`.** That label, in this document's
+own convention, is for a criterion with no referent on this platform, or a real, repeated interaction
+that still fails under ordinary permissions — neither is true here. A person, or a session holding the
+permissions any Mac user grants an app once, could finish 7.1–7.4 in minutes; nothing about the platform
+prevents it. So none of the four is downgraded to "unobservable," and none is closed by the structural
+audit and exhaustive wording scan already on record — consistent with this project's own precedent, the
+near-identical spectrogram tasks 10.2 and 10.6 stayed open against comparable automated coverage on the
+same ground: a test is not an observation. **7.1–7.4 stay open, unchanged, as real remaining work.**
+ADR-0017 stays `Proposed` — its Status line requires "a person looking at it" and states plainly that
+partial evidence does not promote it.
+
+**Group 8's mechanical gates (8.1–8.3) do not depend on any of this and could run today**; 8.4 does,
+because deciding ADR-0017's status and archiving both wait on the same unmet criterion. So **the change
+is not ready to close**, independent of whether the four gates would currently pass.
+
+**Next step:** get Screen Recording *and* Automation granted to whatever process will run the shell
+commands, confirm both directly (`screencapture` to a file; `osascript` asking `System Events` to
+inspect a real window, not just name a process) before touching the app again, then run the pass in
+`docs/manual-validation-mvp.md`'s prepared scenario list. Group 8 has still not been started and should
+not be until 7.1–7.4 have something observed to close them.
 
 ---
 _Last touched: 2026-08-08. Overwrite freely; empty is fine._
