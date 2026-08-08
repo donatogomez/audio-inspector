@@ -141,6 +141,32 @@ remains `Proposed`; **ADR-0015** is independent and remains `Proposed` on its ow
 Group 11's task 11.4 — deleting `Spike/validate-static-spectrogram/` — is gated on ADR-0016 being
 Accepted and therefore cannot be reached from here.
 
+### A real manual pass, in part (2026-08-08)
+
+A person ran part of group 10's battery against the real application. Recorded exactly as observed,
+neither softened nor extended:
+
+- **10.3 (contrast, light/dark): PASS.** The drawing, legend and surrounding text stay legible in both
+  appearances.
+- **Continuous resize: PASS**, though this is not a numbered task on its own — no flicker, no visible
+  regeneration, and the spectrogram itself does not change while the window is resized. Corroborates
+  group 12's move to a raster that is a function of the model rather than the view's size.
+- **10.4 (greyscale monotonicity): FAIL.** Viewed in greyscale, the intensity stops being distinguishable
+  with enough clarity. This is recorded as a real, observed defect — not as "not evaluated" — even though
+  luminance is asserted strictly monotonic every 0.25 dB by automated test: a test proving the numbers
+  increase is not the same claim as a person being able to tell adjacent levels apart by eye, and the two
+  disagree here.
+- **10.1 (VoiceOver / accessibility tree): not executed**, for the same reason as the comparison surface
+  below — the environment did not grant this session's process Screen Recording or Automation access.
+- **10.2, 10.5, 10.6: not addressed by this pass** and stay exactly as before — not evaluated, not
+  claimed either way.
+
+**This does not change 10.1, 10.2, 10.5 or 10.6's status**, which stay open exactly as recorded above.
+**10.3 is now satisfied** by real observation. **10.4 moves from "not evaluated" to "evaluated and
+failed"** — a stronger, more specific piece of information than the gap it replaces, and a real product
+defect rather than a validation debt. Neither ADR-0016 nor group 11 is touched by this entry; that
+decision belongs to whoever picks up this specific defect.
+
 ## The two-file technical comparison's manual validation — blocked by environment permissions (2026-08-08)
 
 Change `add-two-file-technical-comparison`, group 7. **No item of group 7 is recorded as passed by
@@ -308,6 +334,60 @@ ADR-0017 has been reworded to change that outcome — the criteria that were tru
 still true after it. The debt is a **deferred human observation**, prepared and ready to run whenever the
 two permissions above are granted to whatever process attempts it next; it is not evidence of a problem
 with the comparison itself.
+
+### A real manual pass, in part (2026-08-08)
+
+A person ran the comparison against the real application with the prepared fixtures, replacing part of
+the block above rather than the whole of it. Recorded exactly as reported.
+
+**Case 1 — the same FLAC compared against itself.** Every comparable property read `Same`; no difference
+was invented; the extension/size/status context row stayed uncompared, as it always does; no forbidden
+word appeared (`better`, `worse`, `winner`, `loser`, `original`, `copy`, `source`, `derived`, `fake`,
+`transcode`, or similar).
+
+**Case 2 — two distinct FLAC files.** `Different` appeared where the files actually differ (duration);
+`Same` appeared where they agree (sample rate, codec, and others); `Not comparable` appeared where
+neither is a fact the other can be measured against; the section's own subtitle still stated, unchanged,
+that the comparison does not say which file is better or whether the two hold the same recording.
+
+**Case 3 — a second file that is not really audio (a `.js` file renamed to `.wav`).** The first report
+stayed intact; the second correctly showed that it could not be inspected; the comparison kept rendering
+around that failure rather than breaking; no invented state like *"Comparison failed"* appeared — the
+second file's own failure is what is shown, exactly as `ComparisonCopy.failedHeadline` and the flow's own
+tests already specify; no crash, no visible inconsistency.
+
+**Flow.** The first report stayed visible throughout; choosing another second file replaced the
+comparison correctly; *Close comparison* removed only the comparison; a new comparison could be started
+again afterward; no visual defect was observed at any point.
+
+**What this closes, and on what literal ground:**
+
+- **7.2** ("every meaning has a textual alternative; nothing depends on colour, position or a symbol") is
+  now satisfied by real observation: every meaning the surface produced in these three cases — same,
+  different, not comparable, and a second file's own failure — was read as words, not inferred from a
+  colour or a symbol. Closed.
+- **7.4** ("read the whole surface by eye and confirm nothing names a preferred file, a verdict, a score,
+  an encoder or a bitrate the app did not read") is now satisfied: the whole surface was read by eye
+  across three real, distinct states plus the replace/close flow, and none of the named claims appeared;
+  the denial sentence in the subtitle was confirmed present and unchanged. Closed.
+
+**What stays open, and exactly why — nothing in the new evidence touches these:**
+
+- **7.1** ("each property row is announced as a single element... " — an accessibility-tree/VoiceOver
+  claim) — no Accessibility Inspector or VoiceOver observation of the comparison surface was performed or
+  reported. The three cases above are visual/functional observations, not accessibility observations, and
+  do not stand in for one. **Still open.**
+- **7.3** ("the surface remains legible in light and dark appearance") — light and dark were checked for
+  the **spectrogram** in this same pass, not for the comparison surface; no light/dark observation of the
+  comparison was reported. **Still open**, for a different reason than 7.1: not contradicted, simply not
+  yet looked at.
+
+**Consequence for ADR-0017.** Two of four criteria under group 7 are now real; two are not. The ADR's own
+Status line says "validated with a person looking at it. Partial evidence does not promote it." — and two
+open criteria out of four is exactly partial evidence, however much stronger than before. **ADR-0017
+stays `Proposed`.** 8.4 stays open for the same reason, unchanged: it still needs the decision this
+remaining gap prevents. Nothing in the ADR, `tasks.md`, or this document has been reworded to close that
+gap; only what was actually observed has been recorded.
 
 ## What is already automated (do not re-verify by hand)
 
