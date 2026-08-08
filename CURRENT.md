@@ -268,11 +268,32 @@ partial evidence does not promote it.
 because deciding ADR-0017's status and archiving both wait on the same unmet criterion. So **the change
 is not ready to close**, independent of whether the four gates would currently pass.
 
-**Next step:** get Screen Recording *and* Automation granted to whatever process will run the shell
-commands, confirm both directly (`screencapture` to a file; `osascript` asking `System Events` to
-inspect a real window, not just name a process) before touching the app again, then run the pass in
-`docs/manual-validation-mvp.md`'s prepared scenario list. Group 8 has still not been started and should
-not be until 7.1–7.4 have something observed to close them.
+**Group 8's mechanical gates (8.1–8.3) are done and green**; 8.4 stays open, unchanged, for the same
+reason it always was.
+
+**Group 7 is now concluded as deferred, not resolved and not re-attempted further.** A third,
+single-purpose permission check gave the same result as the first two, and the block is treated as
+settled rather than something to keep polling. **The comparison itself is finished and clean: production
+code, closed architecture, complete automated matrix, zero observed defects — in three separate attempts,
+none of which got far enough to observe the running app at all.** What is missing is a person actually
+looking at the rendered surface, and that has not happened. This is recorded exactly as this project
+already records `add-static-spectrogram-visualization`'s own group 10: deferred by decision, nothing
+marked, the debt named in `docs/manual-validation-mvp.md` and in `tasks.md` rather than hidden or
+reworded away. **Nothing in the ADR, the tasks or this file has been changed to make that debt look
+smaller than it is.**
+
+Per that same precedent, a deferred validation does not promote the ADR it gates and does not close the
+task that bundles "decide the ADR's status and archive": ADR-0016 stays `Proposed` there for the
+identical reason, and its own 11.5 stays unchecked exactly as 8.4 stays unchecked here. **ADR-0017 stays
+`Proposed`.** No merge, no push, no `openspec archive` — the change's own 8.4 requires the ADR decision
+this debt prevents, and archiving a change with an open, load-bearing task ahead of it is not something
+this repository's own convention does.
+
+**Next step, whenever someone chooses to take it:** grant Screen Recording and Automation to whatever
+process will run the pass, confirm both directly, then run the prepared scenario list in
+`docs/manual-validation-mvp.md` — the fixtures and the four cases (same, different, incomparable, failed)
+are ready and untouched. Until then, this change sits exactly where
+`add-static-spectrogram-visualization` sits: functionally finished, honestly not yet closable.
 
 ---
 _Last touched: 2026-08-08. Overwrite freely; empty is fine._
