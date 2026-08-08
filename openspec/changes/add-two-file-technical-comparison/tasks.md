@@ -141,18 +141,24 @@ spectrogram, the waveform and the `schemaVersion` 1 exporter are not touched.**
 
 ## 5. Presentation
 
-- [ ] 5.1 Present both files' technical facts with the comparison outcome for each property **stated in
+- [x] 5.1 Present both files' technical facts with the comparison outcome for each property **stated in
       words**. Colour is never the sole carrier of any meaning, and there is no colour that means good
       or bad.
-- [ ] 5.2 Present `incomparable` as a sentence naming what each side was — *"this file's format cannot
+- [x] 5.2 Present `incomparable` as a sentence naming what each side was — *"this file's format cannot
       express bit depth"* — never as a blank cell, a dash, or a symbol a reader has to decode.
-- [ ] 5.3 Show each file's warnings and global status **beside its own facts**, not compared.
-- [ ] 5.4 No badge, arrow, ordering, highlight or emphasis that reads as a preference; no similarity
+- [x] 5.3 Show each file's warnings and global status **beside its own facts**, not compared.
+- [x] 5.4 No badge, arrow, ordering, highlight or emphasis that reads as a preference; no similarity
       figure and no difference count anywhere on the surface.
-- [ ] 5.5 Expose each property row to an assistive reader as a single element announcing the property,
+- [x] 5.5 Expose each property row to an assistive reader as a single element announcing the property,
       both values and the outcome, with no characterisation of either file.
-- [ ] 5.6 Say the states the surface can be in — no second file chosen, second file loading, second
+- [x] 5.6 Say the states the surface can be in — no second file chosen, second file loading, second
       inspection failed, second inspection cancelled — **in words**.
+      **Three of the four say themselves; the other two are worth stating exactly.** Loading and failed
+      each render a sentence. *No second file chosen* renders **no section at all** rather than an empty
+      area — there is nothing to explain when the report is simply a report, and a box saying "no
+      comparison" would be noise where the task's concern is an unexplained gap. *Cancelled* is **not a
+      state the surface can be in**: the flow models a cancelled selection as restoring what was there
+      before, so the surface never sees one and does not invent an error for it.
 
 ## 6. The test matrix
 
@@ -184,18 +190,20 @@ already covered and marked. What stays open needs something that does not exist 
       "test" would look for a hand-written string, which proves nothing and would pass against a member
       spelled differently. It is recorded as an **audit** in the test file rather than dressed up as a
       test, and this task stays open until group 3 shows whether there is anything better to do.
-- [ ] 6.13 **No aggregate exists**: assert that neither the comparison nor its presentation exposes a
+- [x] 6.13 **No aggregate exists**: assert that neither the comparison nor its presentation exposes a
       score, a percentage, a count of differences, or a boolean summary of the whole comparison.
 - [x] 6.14 A cancelled second inspection leaves the first report identical.
 - [x] 6.15 A globally failed second file yields a comparison that is entirely `incomparable`, with the
       first report identical.
 - [x] 6.16 A superseded second result never reaches the surface.
-      **Its domain half is already covered** — `Mirror` reports a struct's stored properties, so the
-      exact set of them is a real question with a real answer, and `FileComparison` is shown to store
-      the two reports and the eight comparisons and nothing else. Two halves remain: the presentation
-      does not exist yet, and `Mirror` cannot see *computed* members, so a `var allSame: Bool` added
-      later would not fail that test. The second half stays an audit of the public surface, stated as
-      such in the test file rather than dressed up as a check.
+      **Both halves are now covered.** `Mirror` reports a struct's stored properties, so
+      `FileComparison` is shown to store the two reports and the eight comparisons and nothing else. On
+      the presentation side the formatter is shown to produce exactly eight rows with no ninth
+      summarising them, and **every sentence it can ever render** — all 25 pairings of the five states
+      across both sides, plus the fixed copy — is scanned for ranking, direction and aggregate wording.
+      **One residual, stated rather than glossed:** `Mirror` cannot see *computed* members, so a
+      `var allSame: Bool` added later would not fail these. That is narrower than 6.12's gap — a stored
+      aggregate and aggregate wording are both detectable — but it is not nothing.
 - [x] 6.17 The same file chosen twice compares as `same` on every comparable property, and nothing
       further is claimed.
       **The comparison half is done**: a report compared against itself agrees on all seven comparable
