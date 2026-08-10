@@ -115,7 +115,7 @@ struct SpectrogramFlowTests {
             )
             let outcome = await coordinator.inspect(url, onUpdate: { box.collect($0) })
 
-            guard case let .inspected(report, waveform, _) = outcome else {
+            guard case let .inspected(report, waveform, _, _) = outcome else {
                 Issue.record("expected an inspected outcome"); return
             }
             guard case .failed = report.status else {
@@ -147,7 +147,7 @@ struct SpectrogramFlowTests {
             )
             let outcome = await coordinator.inspect(url, onUpdate: { box.collect($0) })
 
-            guard case let .inspected(report, waveform, _) = outcome else {
+            guard case let .inspected(report, waveform, _, _) = outcome else {
                 Issue.record("expected an inspected outcome"); return
             }
             if case .failed = report.status {
@@ -185,7 +185,7 @@ struct SpectrogramFlowTests {
             )
             let outcome = await coordinator.inspect(url, onUpdate: { box.collect($0) })
 
-            guard case let .inspected(_, waveform, _) = outcome else {
+            guard case let .inspected(_, waveform, _, _) = outcome else {
                 Issue.record("expected an inspected outcome"); return
             }
             guard case .failed = waveform else {
@@ -216,7 +216,7 @@ struct SpectrogramFlowTests {
             )
             let outcome = await coordinator.inspect(url, onUpdate: { box.collect($0) })
 
-            guard case let .inspected(report, waveform, _) = outcome else {
+            guard case let .inspected(report, waveform, _, _) = outcome else {
                 Issue.record("expected an inspected outcome"); return
             }
             #expect(box.first == .cancelled)
@@ -241,7 +241,7 @@ struct SpectrogramFlowTests {
             )
             let outcome = await coordinator.inspect(url, onUpdate: { box.collect($0) })
 
-            guard case let .inspected(_, waveform, _) = outcome else {
+            guard case let .inspected(_, waveform, _, _) = outcome else {
                 Issue.record("expected an inspected outcome"); return
             }
             #expect(waveform == .cancelled)
@@ -301,7 +301,9 @@ struct SpectrogramFlowTests {
             let coordinator = SourceInspectionCoordinator(makeDecoder: { _ in decoder })
             _ = await coordinator.inspect(url, onUpdate: { box.collect($0) })
 
-            #expect(await decoder.spy.callCount == 1, "the spectrogram was not produced")
+            // Twice: once for the spectrogram, once for the signal level metrics — both share this
+            // single injected decoder in this test, but each calls `makeDecoder` independently.
+            #expect(await decoder.spy.callCount == 2, "the spectrogram was not produced")
             #expect(box.outcomes.count == 1, "its result never reached the channel")
         }
     }

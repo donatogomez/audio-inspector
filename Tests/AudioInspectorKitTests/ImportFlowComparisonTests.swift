@@ -162,7 +162,7 @@ struct ImportFlowComparisonTests {
 
         second.finish(.cancelled)
         await comparing.value
-        primaryAction.finish(.inspected(primary, waveform: .unavailable, spectrogram: .unavailable))
+        primaryAction.finish(.inspected(primary, waveform: .unavailable, spectrogram: .unavailable, signalLevelMetrics: .unavailable))
         await running.value
     }
 
@@ -200,9 +200,9 @@ struct ImportFlowComparisonTests {
         #expect(comparison.second == other)
         #expect(comparison.sampleRate == .different(first: 44_100, second: 48_000))
 
-        second.finish(.inspected(other, waveform: .unavailable, spectrogram: .unavailable))
+        second.finish(.inspected(other, waveform: .unavailable, spectrogram: .unavailable, signalLevelMetrics: .unavailable))
         await comparing.value
-        primaryAction.finish(.inspected(primary, waveform: .unavailable, spectrogram: .unavailable))
+        primaryAction.finish(.inspected(primary, waveform: .unavailable, spectrogram: .unavailable, signalLevelMetrics: .unavailable))
         await running.value
     }
 
@@ -222,12 +222,12 @@ struct ImportFlowComparisonTests {
         // Both of the second file's visualisations settle afterwards, one of them as a failure.
         second.finish(
             sending: [.waveform(.unavailable), .spectrogram(.failed(message: "no"))],
-            .inspected(other, waveform: .unavailable, spectrogram: .failed(message: "no"))
+            .inspected(other, waveform: .unavailable, spectrogram: .failed(message: "no"), signalLevelMetrics: .unavailable)
         )
         await comparing.value
 
         #expect(flow.comparison == afterReport)
-        primaryAction.finish(.inspected(primary, waveform: .unavailable, spectrogram: .unavailable))
+        primaryAction.finish(.inspected(primary, waveform: .unavailable, spectrogram: .unavailable, signalLevelMetrics: .unavailable))
         await running.value
     }
 
@@ -246,7 +246,7 @@ struct ImportFlowComparisonTests {
 
         #expect(flow.comparison == .none) // back to exactly where the user was
         #expect(flow.state == .report(loadingPresentation(primary)))
-        primaryAction.finish(.inspected(primary, waveform: .unavailable, spectrogram: .unavailable))
+        primaryAction.finish(.inspected(primary, waveform: .unavailable, spectrogram: .unavailable, signalLevelMetrics: .unavailable))
         await running.value
     }
 
@@ -259,7 +259,7 @@ struct ImportFlowComparisonTests {
         let second = ControllableAction(delivering: [.report(b)])
         let first = Task { await flow.compare(using: second.run) }
         await second.waitUntilStarted()
-        second.finish(.inspected(b, waveform: .unavailable, spectrogram: .unavailable))
+        second.finish(.inspected(b, waveform: .unavailable, spectrogram: .unavailable, signalLevelMetrics: .unavailable))
         await first.value
         let settled = flow.comparison
 
@@ -271,7 +271,7 @@ struct ImportFlowComparisonTests {
         await replacing.value
 
         #expect(flow.comparison == settled)
-        primaryAction.finish(.inspected(primary, waveform: .unavailable, spectrogram: .unavailable))
+        primaryAction.finish(.inspected(primary, waveform: .unavailable, spectrogram: .unavailable, signalLevelMetrics: .unavailable))
         await running.value
     }
 
@@ -290,11 +290,11 @@ struct ImportFlowComparisonTests {
         #expect(flow.comparison == .none)
         #expect(flow.state == .report(loadingPresentation(primary)))
 
-        second.finish(.inspected(b, waveform: .unavailable, spectrogram: .unavailable))
+        second.finish(.inspected(b, waveform: .unavailable, spectrogram: .unavailable, signalLevelMetrics: .unavailable))
         await comparing.value
         #expect(flow.comparison == .none, "a dismissed comparison came back")
 
-        primaryAction.finish(.inspected(primary, waveform: .unavailable, spectrogram: .unavailable))
+        primaryAction.finish(.inspected(primary, waveform: .unavailable, spectrogram: .unavailable, signalLevelMetrics: .unavailable))
         await running.value
     }
 
@@ -312,7 +312,7 @@ struct ImportFlowComparisonTests {
         let second = ControllableAction(delivering: [.report(broken)])
         let comparing = Task { await flow.compare(using: second.run) }
         await second.waitUntilStarted()
-        second.finish(.inspected(broken, waveform: .unavailable, spectrogram: .unavailable))
+        second.finish(.inspected(broken, waveform: .unavailable, spectrogram: .unavailable, signalLevelMetrics: .unavailable))
         await comparing.value
 
         guard case let .ready(comparison) = flow.comparison else {
@@ -328,7 +328,7 @@ struct ImportFlowComparisonTests {
         #expect(comparison.first == primary)
         #expect(flow.state == .report(loadingPresentation(primary)))
 
-        primaryAction.finish(.inspected(primary, waveform: .unavailable, spectrogram: .unavailable))
+        primaryAction.finish(.inspected(primary, waveform: .unavailable, spectrogram: .unavailable, signalLevelMetrics: .unavailable))
         await running.value
     }
 
@@ -348,7 +348,7 @@ struct ImportFlowComparisonTests {
         #expect(flow.comparison == .failed(message: "That file could not be opened for comparison."))
         #expect(flow.state == .report(loadingPresentation(primary)))
 
-        primaryAction.finish(.inspected(primary, waveform: .unavailable, spectrogram: .unavailable))
+        primaryAction.finish(.inspected(primary, waveform: .unavailable, spectrogram: .unavailable, signalLevelMetrics: .unavailable))
         await running.value
     }
 
@@ -383,7 +383,7 @@ struct ImportFlowComparisonTests {
         let b = report(named: "b.wav", sampleRate: 48_000)
         bAction.finish(
             sending: [.report(b)],
-            .inspected(b, waveform: .unavailable, spectrogram: .unavailable)
+            .inspected(b, waveform: .unavailable, spectrogram: .unavailable, signalLevelMetrics: .unavailable)
         )
         await comparingB.value
 
@@ -394,7 +394,7 @@ struct ImportFlowComparisonTests {
         #expect(afterStaleB.second == c, "a superseded second file reached the surface")
         #expect(afterStaleB.sampleRate == .different(first: 44_100, second: 96_000))
 
-        cAction.finish(.inspected(c, waveform: .unavailable, spectrogram: .unavailable))
+        cAction.finish(.inspected(c, waveform: .unavailable, spectrogram: .unavailable, signalLevelMetrics: .unavailable))
         await comparingC.value
 
         guard case let .ready(final) = flow.comparison else {
@@ -405,7 +405,7 @@ struct ImportFlowComparisonTests {
         #expect(final.first == primary)
         #expect(flow.state == .report(loadingPresentation(primary)))
 
-        primaryAction.finish(.inspected(primary, waveform: .unavailable, spectrogram: .unavailable))
+        primaryAction.finish(.inspected(primary, waveform: .unavailable, spectrogram: .unavailable, signalLevelMetrics: .unavailable))
         await running.value
     }
 
@@ -423,14 +423,14 @@ struct ImportFlowComparisonTests {
         let second = ControllableAction(delivering: [.report(b)])
         let comparing = Task { await flow.compare(using: second.run) }
         await second.waitUntilStarted()
-        second.finish(.inspected(b, waveform: .unavailable, spectrogram: .unavailable))
+        second.finish(.inspected(b, waveform: .unavailable, spectrogram: .unavailable, signalLevelMetrics: .unavailable))
         await comparing.value
 
         // Now the first file's visualisations arrive, late.
         let envelope = try #require(WaveformEnvelope.empty(channelCount: 2))
         primaryAction.finish(
             sending: [.waveform(.available(envelope)), .spectrogram(.unavailable)],
-            .inspected(primary, waveform: .available(envelope), spectrogram: .unavailable)
+            .inspected(primary, waveform: .available(envelope), spectrogram: .unavailable, signalLevelMetrics: .unavailable)
         )
         await running.value
 
@@ -462,11 +462,11 @@ struct ImportFlowComparisonTests {
         let second = ControllableAction(delivering: [.report(b)])
         let comparing = Task { await flow.compare(using: second.run) }
         await second.waitUntilStarted()
-        second.finish(.inspected(b, waveform: .unavailable, spectrogram: .unavailable))
+        second.finish(.inspected(b, waveform: .unavailable, spectrogram: .unavailable, signalLevelMetrics: .unavailable))
         await comparing.value
         #expect(flow.comparison != .none)
 
-        primaryAction.finish(.inspected(primary, waveform: .unavailable, spectrogram: .unavailable))
+        primaryAction.finish(.inspected(primary, waveform: .unavailable, spectrogram: .unavailable, signalLevelMetrics: .unavailable))
         await running.value
 
         // A brand-new primary selection.
@@ -477,7 +477,7 @@ struct ImportFlowComparisonTests {
 
         #expect(flow.comparison == .none)
 
-        fresh.finish(.inspected(newPrimary, waveform: .unavailable, spectrogram: .unavailable))
+        fresh.finish(.inspected(newPrimary, waveform: .unavailable, spectrogram: .unavailable, signalLevelMetrics: .unavailable))
         await reinspecting.value
         #expect(flow.comparison == .none)
     }
@@ -495,7 +495,7 @@ struct ImportFlowComparisonTests {
         let firstAction = ControllableAction(delivering: [.report(b)])
         let first = Task { await flow.compare(using: firstAction.run) }
         await firstAction.waitUntilStarted()
-        firstAction.finish(.inspected(b, waveform: .unavailable, spectrogram: .unavailable))
+        firstAction.finish(.inspected(b, waveform: .unavailable, spectrogram: .unavailable, signalLevelMetrics: .unavailable))
         await first.value
 
         // The next one starts from `loading`, not from the previous result.
@@ -507,7 +507,7 @@ struct ImportFlowComparisonTests {
         let c = report(named: "c.wav", sampleRate: 44_100)
         secondAction.finish(
             sending: [.report(c)],
-            .inspected(c, waveform: .unavailable, spectrogram: .unavailable)
+            .inspected(c, waveform: .unavailable, spectrogram: .unavailable, signalLevelMetrics: .unavailable)
         )
         await second.value
 
@@ -518,7 +518,7 @@ struct ImportFlowComparisonTests {
         #expect(comparison.second == c)
         #expect(comparison.sampleRate == .same(44_100))
 
-        primaryAction.finish(.inspected(primary, waveform: .unavailable, spectrogram: .unavailable))
+        primaryAction.finish(.inspected(primary, waveform: .unavailable, spectrogram: .unavailable, signalLevelMetrics: .unavailable))
         await running.value
     }
 
@@ -533,7 +533,7 @@ struct ImportFlowComparisonTests {
         let second = ControllableAction(delivering: [.report(primary)])
         let comparing = Task { await flow.compare(using: second.run) }
         await second.waitUntilStarted()
-        second.finish(.inspected(primary, waveform: .unavailable, spectrogram: .unavailable))
+        second.finish(.inspected(primary, waveform: .unavailable, spectrogram: .unavailable, signalLevelMetrics: .unavailable))
         await comparing.value
 
         guard case let .ready(comparison) = flow.comparison else {
@@ -543,7 +543,7 @@ struct ImportFlowComparisonTests {
         #expect(comparison.sampleRate == .same(44_100))
         #expect(comparison.container == .same("wav"))
 
-        primaryAction.finish(.inspected(primary, waveform: .unavailable, spectrogram: .unavailable))
+        primaryAction.finish(.inspected(primary, waveform: .unavailable, spectrogram: .unavailable, signalLevelMetrics: .unavailable))
         await running.value
     }
 
@@ -557,7 +557,7 @@ struct ImportFlowComparisonTests {
         let outcomes: [SourceInspectionOutcome] = [
             .cancelled,
             .preparationFailed,
-            .inspected(globallyFailedReport(named: "b.wav"), waveform: .unavailable, spectrogram: .unavailable),
+            .inspected(globallyFailedReport(named: "b.wav"), waveform: .unavailable, spectrogram: .unavailable, signalLevelMetrics: .unavailable),
         ]
 
         for outcome in outcomes {
@@ -576,7 +576,7 @@ struct ImportFlowComparisonTests {
             #expect(presentation.report.status == .completed)
         }
 
-        primaryAction.finish(.inspected(primary, waveform: .unavailable, spectrogram: .unavailable))
+        primaryAction.finish(.inspected(primary, waveform: .unavailable, spectrogram: .unavailable, signalLevelMetrics: .unavailable))
         await running.value
     }
 }
