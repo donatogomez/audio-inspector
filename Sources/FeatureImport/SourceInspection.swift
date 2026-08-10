@@ -11,9 +11,14 @@ import AudioInspectorDomain
 public enum SourceInspectionOutcome: Sendable, Equatable {
     /// The user dismissed the picker — **not** an error.
     case cancelled
-    /// A file was inspected; the report carries the outcome, including a global failure. Both
-    /// visualisations travel **beside** it, and whatever became of either never changes the report.
-    case inspected(InspectionReport, waveform: WaveformOutcome, spectrogram: SpectrogramOutcome)
+    /// A file was inspected; the report carries the outcome, including a global failure. All three
+    /// travel **beside** it, and whatever became of any of them never changes the report.
+    case inspected(
+        InspectionReport,
+        waveform: WaveformOutcome,
+        spectrogram: SpectrogramOutcome,
+        signalLevelMetrics: SignalLevelMetricsOutcome
+    )
     /// The selection could not be turned into an inspectable file at all.
     case preparationFailed
 }
@@ -31,6 +36,8 @@ public enum InspectionUpdate: Sendable {
     case waveform(WaveformOutcome)
     /// What became of the spectral model.
     case spectrogram(SpectrogramOutcome)
+    /// What became of the signal level metrics.
+    case signalLevelMetrics(SignalLevelMetricsOutcome)
 }
 
 /// Receives each part of an inspection as it settles, on the main actor.
