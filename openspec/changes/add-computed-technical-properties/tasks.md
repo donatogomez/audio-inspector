@@ -168,30 +168,69 @@ constant anywhere.
 
 ## 4. Wiring the new pass into the flow
 
-**Not started — reaffirmed by group 3's own evidence, not yet acted on.** Group 3's measurement answers
-this group's own open question with real numbers rather than the assumption it was left on: a third pass
-costs **0.69 s (Debug) / 0.071 s (Release)** on top of a 0.035 s decode, for a ten-minute file — small
-next to the spectrogram's own already-accepted cost (0.9–1.8 s Release) and nowhere near the threshold
-(tens of seconds) that once forced a dedicated performance slice. **4.1's decision stands, strengthened,
-not reopened**: no shared-read strategy is warranted. `SignalLevelMetricsAccumulator.accumulate(_ chunk:
-PCMChunk)` (3.2) already has the exact shape a future `SignalLevelMetricsGeneration.run(for:)` would
-call — `decoder.decode(file, chunkFrames:) { _, chunk in accumulator.accumulate(chunk); return
-.continue }` — mirroring `SpectrogramGeneration.run(for:)` line for line, so this group's own work is
-mechanical composition, not new design. Neither `SourceInspectionCoordinator`, `ImportFlowModel`, nor any
-outcome type (`SignalLevelMetricsOutcome`, mirroring `WaveformOutcome`/`SpectrogramOutcome`) was touched
-in group 3 — that flow-level "loading/cancelled" concern is distinct from, and does not replace, the
-domain type's own "zero frames" representation (3.1), which is a fact about the stream, not the
-operation.
+**Done — implemented and demonstrated, not merely composed.** `SignalLevelMetricsAccumulator.accumulate(_
+chunk: PCMChunk)` (3.2) had the exact shape this group's own `SignalLevelMetricsGeneration.run(for:)`
+needed, mirroring `SpectrogramGeneration.run(for:)` line for line as anticipated — the same fault/
+cancellation/absence/empty-answer handling, the same two-guard fault check (`chunk.channelCount ==
+stream.channelCount, chunk.fits(stream)`), adapted only where the two compositions genuinely differ
+(`SignalLevelMetricsAccumulator.init?(channelCount:)` needs no `sampleRate`/`frameCount`, since level
+metrics carry no frame position). Implemented in
+`Sources/AudioInspectorApp/Import/SignalLevelMetricsGeneration.swift`.
 
-- [ ] 4.1 `SignalLevelMetrics` is produced by a **third independent operation** over the existing,
+Wiring it into `SourceInspectionCoordinator` required extending `SourceInspectionOutcome.inspected` and
+`InspectionUpdate` with a fourth case (`signalLevelMetrics`), exactly as `SpectrogramOutcome`/
+`SpectrogramState` were added beside the waveform's own in commit `8459553` — the same architectural
+precedent, not a new one. `SignalLevelMetricsOutcome`/`SignalLevelMetricsState` (mirroring
+`WaveformOutcome`/`SpectrogramOutcome` and their `State` counterparts, including the `loading` case and
+the `cancelled`-drops-to-`nil` rule) were added to `Sources/FeatureImport/InspectionPresentation.swift`,
+and `InspectionPresentation` gained a third field, `signalLevelMetrics: SignalLevelMetricsState`. This
+ripple mechanically touched `ImportFlowModel` (both `apply` methods, plus the comparison path's
+discarding of the third value exactly as it already discards the other two) and ~13 test files that
+construct or pattern-match `.inspected(...)` — none of that is new design, all of it is the same shape
+group by group already established for the waveform and the spectrogram.
+
+- [x] 4.1 `SignalLevelMetrics` is produced by a **third independent operation** over the existing,
       shared `AudioDecoding` port — the same port the spectrogram already consumes — with its own
       cancellation, per ADR-0016's already-decided "separate operations, separate cancellation" rule.
       **Decided, not merely considered:** it does **not** hook into the waveform's own generator, which
       remains deliberately un-migrated onto the shared seam for its own, separate, already-declared
       reasons (`design.md` §10) — coupling a new consumer to that debt would make the eventual migration
       harder, not easier, and would reopen a shared-pass question ADR-0016 already closed.
-- [ ] 4.2 Confirm the new metrics do not delay, block, or get blocked by the report, the waveform, or the
+      **Demonstrated, not assumed:** `SignalLevelMetricsGeneration` imports no `WaveformGenerating` type
+      at all, and `SourceInspectionCoordinator.signalLevelMetrics(for:at:)` calls `makeDecoder(url)`
+      independently of `spectrogram(for:at:)`'s own call — a fresh decoder instance per operation in
+      production, proven by a call-order-scripted fake in
+      `SignalLevelMetricsFlowTests.aCancelledSpectrogramLeavesTheOperationAlone` (cancelling the
+      spectrogram's decoder leaves signal level metrics' real result intact) and its mirror,
+      `aCancelledOperationLeavesTheWaveformAlone`/`aCancelledWaveformLeavesTheOperationAlone`. Its own
+      cancellation is proven directly by `SignalLevelMetricsGenerationTests.cancellationBeforeStarting`
+      and `cancellationDuringAccumulationYieldsNoMetrics` (no partial metrics ever escape). **Negative
+      control run and reverted** (not merely asserted): artificially forcing
+      `signalLevelMetricsOutcome` to mirror `waveformOutcome`'s cancelled/failed cases in the coordinator
+      made exactly the two waveform-independence tests fail
+      (`aFailingWaveformDoesNotStopSignalLevelMetrics`, `aCancelledWaveformLeavesTheOperationAlone`) and
+      nothing else — confirming the independence tests discriminate rather than passing vacuously. Fully
+      reverted; `git diff` against the pre-mutation file showed no residue.
+- [x] 4.2 Confirm the new metrics do not delay, block, or get blocked by the report, the waveform, or the
       spectrogram — each stays independently cancellable and independently presentable.
+      **Demonstrated for delay/block/cancellation**, by both a positive and a negative test: a failing or
+      cancelled signal level metrics operation leaves the report's status, the waveform's result and the
+      spectrogram's result untouched (`SignalLevelMetricsFlowTests.aFailingOperationChangesNothingElse`,
+      `aCancelledOperationLeavesTheWaveformAlone`), and the reverse direction holds too
+      (`aFailingWaveformDoesNotStopSignalLevelMetrics`, `aCancelledWaveformLeavesTheOperationAlone`,
+      `aCancelledSpectrogramLeavesTheOperationAlone`). A first negative control (Control 1: temporarily
+      making the coordinator never run or emit the third operation) was caught by
+      `SignalLevelMetricsFlowTests` and `SignalLevelMetricsReportIsolationTests` failing outright — proof
+      the wiring, not just the isolated composition, is what the tests exercise. **"Independently
+      presentable" is demonstrated only at the flow-state layer, not the human-facing one**: the outcome
+      reaches `InspectionUpdate`/`SourceInspectionOutcome` and settles into its own
+      `SignalLevelMetricsState` (`loading`/`available`/`unavailable`/`failed`) inside
+      `InspectionPresentation`, independently of the other two states — but no words, units, or dBFS
+      conversion exist yet, because that is group 5's own scope and was not started here. Also
+      demonstrated: the operation reads the file only inside the coordinator's existing security-scoped
+      window (`SignalLevelMetricsFlowTests.theDecoderRunsInsideTheWindow`,
+      `theMetricsSettleBeforeTheCoordinatorReturns`), and never touches the source file
+      (`theSourceIsUntouched`). `Sources/`: no new port, no new use case, `Waveform*` files untouched.
 
 ## 5. Presentation
 
