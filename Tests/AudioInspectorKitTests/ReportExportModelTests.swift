@@ -15,7 +15,7 @@ struct ReportExportModelTests {
         private(set) var callCount = 0
         private let outcome: ExportOutcome
         init(_ outcome: ExportOutcome) { self.outcome = outcome }
-        func run(_: InspectionReport) async -> ExportOutcome {
+        func run(_: InspectionReport, _: SignalLevelMetrics?) async -> ExportOutcome {
             callCount += 1
             return outcome
         }
@@ -26,7 +26,7 @@ struct ReportExportModelTests {
     final class ControllableAction {
         private(set) var callCount = 0
         private var continuation: CheckedContinuation<ExportOutcome, Never>?
-        func run(_: InspectionReport) async -> ExportOutcome {
+        func run(_: InspectionReport, _: SignalLevelMetrics?) async -> ExportOutcome {
             callCount += 1
             return await withCheckedContinuation { continuation = $0 }
         }
@@ -42,7 +42,7 @@ struct ReportExportModelTests {
         let action = CountingAction(.succeeded)
         let model = ReportExportModel(action: action.run)
 
-        await model.export(sample)
+        await model.export(sample, signalLevelMetrics: nil)
 
         #expect(model.phase == .succeeded)
         #expect(action.callCount == 1)
@@ -50,19 +50,19 @@ struct ReportExportModelTests {
 
     @Test func cancellationReturnsToIdle() async {
         let model = ReportExportModel(action: CountingAction(.cancelled).run)
-        await model.export(sample)
+        await model.export(sample, signalLevelMetrics: nil)
         #expect(model.phase == .idle) // cancellation is NOT an error
     }
 
     @Test func encodingFailureBecomesPresentableMessage() async {
         let model = ReportExportModel(action: CountingAction(.encodingFailed).run)
-        await model.export(sample)
+        await model.export(sample, signalLevelMetrics: nil)
         #expect(model.phase == .failed(message: "The report could not be encoded."))
     }
 
     @Test func writeFailureBecomesPresentableMessage() async {
         let model = ReportExportModel(action: CountingAction(.writeFailed).run)
-        await model.export(sample)
+        await model.export(sample, signalLevelMetrics: nil)
         #expect(model.phase == .failed(message: "The file could not be written."))
     }
 
@@ -70,12 +70,12 @@ struct ReportExportModelTests {
         let action = ControllableAction()
         let model = ReportExportModel(action: action.run)
 
-        let first = Task { await model.export(sample) }
+        let first = Task { await model.export(sample, signalLevelMetrics: nil) }
         while action.callCount == 0 { await Task.yield() } // wait until the action is in flight
 
         #expect(model.phase == .exporting)
 
-        await model.export(sample) // second call while exporting → ignored (no re-invocation)
+        await model.export(sample, signalLevelMetrics: nil) // second call while exporting → ignored (no re-invocation)
         #expect(action.callCount == 1)
 
         action.finish(.succeeded)

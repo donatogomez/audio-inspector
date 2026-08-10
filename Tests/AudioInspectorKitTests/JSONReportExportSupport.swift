@@ -167,22 +167,27 @@ func report(
 
 // MARK: - Export & decode (Codable-only)
 
-/// Exports a report to raw JSON bytes with the injected clock/generator.
+/// Exports a report to raw JSON bytes with the injected clock/generator. `signalLevelMetrics` defaults
+/// to `nil` — absent from `measurements`, exactly like every pre-group-6 test fixture — so the ~50
+/// existing call sites that predate `measurements` keep compiling and keep asserting the export as it
+/// was, unchanged by this addition.
 func exportData(
     _ report: InspectionReport,
+    signalLevelMetrics: SignalLevelMetrics? = nil,
     now: Date = fixedNow,
     generator: ReportGenerator = fixedGenerator
 ) throws -> Data {
-    try JSONReportExporter(generator: generator, now: { now }).export(report)
+    try JSONReportExporter(generator: generator, now: { now }).export(report, signalLevelMetrics: signalLevelMetrics)
 }
 
 /// Exports and decodes into a typed `JSONValue` tree (via `JSONDecoder`) for structural assertions.
 func exportValue(
     _ report: InspectionReport,
+    signalLevelMetrics: SignalLevelMetrics? = nil,
     now: Date = fixedNow,
     generator: ReportGenerator = fixedGenerator
 ) throws -> JSONValue {
-    let data = try exportData(report, now: now, generator: generator)
+    let data = try exportData(report, signalLevelMetrics: signalLevelMetrics, now: now, generator: generator)
     return try JSONDecoder().decode(JSONValue.self, from: data)
 }
 

@@ -134,8 +134,8 @@ struct EndToEndFlowTests {
                 exporter: JSONReportExporter(generator: fixedGenerator, now: { fixedNow }),
                 chooseDestination: { name in suggestedName = name; return destination }
             )
-            let exportModel = ReportExportModel(action: { await exportCoordinator.export($0) })
-            await exportModel.export(report)
+            let exportModel = ReportExportModel(action: { report, metrics in await exportCoordinator.export(report, signalLevelMetrics: metrics) })
+            await exportModel.export(report, signalLevelMetrics: nil)
 
             #expect(exportModel.phase == .succeeded)
             #expect(suggestedName == "fixture-inspection.json")
@@ -224,8 +224,8 @@ struct EndToEndFlowTests {
                     exporter: JSONReportExporter(generator: fixedGenerator, now: { fixedNow }),
                     chooseDestination: { _ in destination }
                 )
-                let exportModel = ReportExportModel(action: { await exportCoordinator.export($0) })
-                await exportModel.export(presentation.report)
+                let exportModel = ReportExportModel(action: { report, metrics in await exportCoordinator.export(report, signalLevelMetrics: metrics) })
+                await exportModel.export(presentation.report, signalLevelMetrics: nil)
                 #expect(exportModel.phase == .succeeded)
 
                 return (presentation, try Data(contentsOf: destination))
@@ -290,8 +290,8 @@ struct EndToEndFlowTests {
                     exporter: JSONReportExporter(generator: fixedGenerator, now: { fixedNow }),
                     chooseDestination: { _ in destination }
                 )
-                let exportModel = ReportExportModel(action: { await exportCoordinator.export($0) })
-                await exportModel.export(presentation.report)
+                let exportModel = ReportExportModel(action: { report, metrics in await exportCoordinator.export(report, signalLevelMetrics: metrics) })
+                await exportModel.export(presentation.report, signalLevelMetrics: nil)
                 #expect(exportModel.phase == .succeeded)
 
                 return (presentation, try Data(contentsOf: destination))
