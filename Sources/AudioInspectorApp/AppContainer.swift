@@ -55,6 +55,8 @@ public struct AppContainer {
                 await ReportExportDestination.choose(suggestedName: suggestedName)
             }
         )
-        return { report in await coordinator.export(report) }
+        return { report, signalLevelMetrics in
+            await coordinator.export(report, signalLevelMetrics: signalLevelMetrics)
+        }
     }
 }

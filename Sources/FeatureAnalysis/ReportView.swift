@@ -225,10 +225,18 @@ public struct ReportView: View {
             }
 
             Button("Export JSON…") {
-                Task { await exportModel.export(report) }
+                Task { await exportModel.export(report, signalLevelMetrics: exportableSignalLevelMetrics) }
             }
             .disabled(exportModel.phase == .exporting)
         }
+    }
+
+    /// The domain measurement to export, or `nil` when there is nothing to report — `loading`,
+    /// `absent` and `failed` all collapse to `nil` here, so the export layer never has to decide what
+    /// a UI-only state would mean on the wire (that decision belongs to this Feature, per ADR-0009).
+    private var exportableSignalLevelMetrics: SignalLevelMetrics? {
+        guard case let .metrics(metrics) = signalLevelMetrics else { return nil }
+        return metrics
     }
 }
 
@@ -391,7 +399,7 @@ private extension SignalLevelMetricsPresentation {
 #Preview {
     ReportView(
         report: .preview, waveform: .preview, spectrogram: .preview, signalLevelMetrics: .preview,
-        export: { _ in .succeeded }
+        export: { _, _ in .succeeded }
     )
 }
 #endif

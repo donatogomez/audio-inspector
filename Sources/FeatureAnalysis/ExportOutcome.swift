@@ -19,6 +19,8 @@ public enum ExportOutcome: Sendable, Equatable {
 /// The export action the Feature receives as an injected dependency from the composition root.
 ///
 /// It is `@MainActor` (it drives a native picker) and `async` (it awaits the user's destination
-/// choice and the write). The Feature calls it with the already-available report and reacts to the
-/// returned `ExportOutcome`; it knows nothing about how the destination is chosen or written.
-public typealias ReportExportAction = @MainActor (InspectionReport) async -> ExportOutcome
+/// choice and the write). The Feature calls it with the already-available report and whatever signal
+/// level metrics are currently shown (`nil` when there is nothing to report — the Feature collapses
+/// loading/absent/failed itself before calling), and reacts to the returned `ExportOutcome`. It knows
+/// nothing about how the destination is chosen, written, or how a measurement becomes wire bytes.
+public typealias ReportExportAction = @MainActor (InspectionReport, SignalLevelMetrics?) async -> ExportOutcome
