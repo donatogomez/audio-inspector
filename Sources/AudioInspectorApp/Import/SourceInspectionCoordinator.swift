@@ -99,27 +99,42 @@ struct SourceInspectionCoordinator {
         let report = await useCase.execute(file: reference)
         onUpdate(.report(report))
 
-        // Nothing could be read at all, so there is nothing to read samples from either. **Neither**
-        // sample read starts: the report stands, and both visualisations are simply absent.
+        // Nothing could be read at all, so there is nothing to read samples from either. **None** of
+        // the three sample reads starts: the report stands, and all three are simply absent.
         if case .failed = report.status {
             onUpdate(.waveform(.unavailable))
             onUpdate(.spectrogram(.unavailable))
-            return .inspected(report, waveform: .unavailable, spectrogram: .unavailable)
+            onUpdate(.signalLevelMetrics(.unavailable))
+            return .inspected(
+                report, waveform: .unavailable, spectrogram: .unavailable, signalLevelMetrics: .unavailable
+            )
         }
 
         // Each visualisation is reported the moment it settles, so whichever finishes first is shown
-        // first and neither waits on the other. They are separate operations over separate ports: a
+        // first and none waits on another. They are separate operations over separate ports: a
         // separate decode, a fresh accumulator, and no shared state. Sequential is not the same as
-        // coupled — neither can cancel or fail the other, which is what ADR-0016 decision 15 requires.
-        // Group 9 may or may not move the waveform onto the shared seam; until then two reads is a
-        // declared cost, not an oversight.
+        // coupled — none can cancel or fail another, which is what ADR-0016 decision 15 requires.
+        // Group 9 may or may not move the waveform onto the shared seam; until then two of these three
+        // reads is a declared cost, not an oversight.
         let waveformOutcome = await waveform(for: reference, at: url)
         onUpdate(.waveform(waveformOutcome))
 
         let spectrogramOutcome = await spectrogram(for: reference, at: url)
         onUpdate(.spectrogram(spectrogramOutcome))
 
-        return .inspected(report, waveform: waveformOutcome, spectrogram: spectrogramOutcome)
+        // The third independent operation over the shared `AudioDecoding` port (ADR-0018,
+        // design.md §10). Its own decoder instance, its own cancellation — it does not hook into the
+        // waveform's own, deliberately-unmigrated generator, and shares no accumulator with the
+        // spectrogram.
+        let signalLevelMetricsOutcome = await signalLevelMetrics(for: reference, at: url)
+        onUpdate(.signalLevelMetrics(signalLevelMetricsOutcome))
+
+        return .inspected(
+            report,
+            waveform: waveformOutcome,
+            spectrogram: spectrogramOutcome,
+            signalLevelMetrics: signalLevelMetricsOutcome
+        )
     }
 
     /// Produces the spectrogram inside the window the caller already holds.
@@ -130,6 +145,15 @@ struct SourceInspectionCoordinator {
     /// between two inspections.
     private func spectrogram(for reference: AudioFileReference, at url: URL) async -> SpectrogramOutcome {
         await SpectrogramGeneration(decoder: makeDecoder(url)).run(for: reference)
+    }
+
+    /// Produces the signal level metrics inside the window the caller already holds.
+    ///
+    /// A fresh decoder and a fresh accumulator per operation, exactly like `spectrogram(for:at:)` above
+    /// — `makeDecoder(url)` is called again here rather than reusing the spectrogram's instance, so the
+    /// two operations share no state (ADR-0016 decision 15).
+    private func signalLevelMetrics(for reference: AudioFileReference, at url: URL) async -> SignalLevelMetricsOutcome {
+        await SignalLevelMetricsGeneration(decoder: makeDecoder(url)).run(for: reference)
     }
 
     /// Produces the waveform and translates its outcome, keeping the three meanings apart.
