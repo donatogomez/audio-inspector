@@ -1,5 +1,7 @@
 import Foundation
 
+import AudioInspectorDomain
+
 /// Turns raw values into something a person reads, and nothing more.
 ///
 /// Two rules govern everything here:
@@ -113,6 +115,38 @@ enum HumanFormat {
         let kilohertz = (hertz / 1_000)
             .formatted(.number.precision(.fractionLength(0 ... 2)).locale(locale))
         return "\(kilohertz) kHz"
+    }
+
+    // MARK: - Signal level
+
+    /// A linear amplitude on the domain's own normalized scale, as dBFS: `1.0` → `0.00 dBFS`,
+    /// `0.5` → `-6.02 dBFS`. A sample genuinely beyond full scale reads **positive**, explicitly signed,
+    /// rather than being hidden — the domain keeps such a sample exactly as read (`PCMChunk`'s own
+    /// contract), and a presentation that clamped it would misstate a real fact about the file.
+    ///
+    /// Exact silence floors at `Spectrogram.floorDecibels` (−120 dBFS), reusing that convention rather
+    /// than inventing a second one, and specifically to avoid `log10(0)`'s mathematical `-∞` — never
+    /// shown as such (task 5.1's own "positive value ... explained rather than hidden" cuts the other
+    /// way too: a meaningless infinity must not be shown as though it were a measurement).
+    static func decibelsFullScale(_ linearAmplitude: Float) -> String {
+        let magnitude = Double(abs(linearAmplitude))
+        let decibels = magnitude > 0 ? 20 * log10(magnitude) : -Double.infinity
+        let floored = max(Double(Spectrogram.floorDecibels), decibels)
+        let formatted = floored.formatted(
+            .number.precision(.fractionLength(2)).sign(strategy: .always(includingZero: false)).locale(locale)
+        )
+        return "\(formatted) dBFS"
+    }
+
+    /// A linear, signed value with no unit — DC offset has no good behaviour on a decibel scale, since
+    /// it can be negative and sits naturally near zero. Four decimal places: `Float`'s own roughly seven
+    /// significant digits give a comfortable margin at this magnitude, and four places already resolve
+    /// an offset two orders below what real capture equipment introduces without asserting more
+    /// precision than the type honestly carries.
+    static func linearOffset(_ value: Float) -> String {
+        Double(value).formatted(
+            .number.precision(.fractionLength(4)).sign(strategy: .always(includingZero: false)).locale(locale)
+        )
     }
 
     // MARK: - Shared

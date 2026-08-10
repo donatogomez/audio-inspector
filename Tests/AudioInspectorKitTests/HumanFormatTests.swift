@@ -117,6 +117,44 @@ struct HumanFormatTests {
         #expect(formatted.contains("2025"))
     }
 
+    // MARK: - Signal level
+
+    /// The reference points task 12 names: full scale, half amplitude, a decade down, and an
+    /// out-of-range sample reading positive rather than being clamped or hidden.
+    @Test(arguments: [
+        (Float(1.0), "0.00 dBFS"),
+        (Float(0.5), "-6.02 dBFS"),
+        (Float(0.1), "-20.00 dBFS"),
+        (Float(1.5), "+3.52 dBFS"),
+    ])
+    func decibelsFullScaleMatchesTheKnownReferencePoints(amplitude: Float, expected: String) {
+        #expect(HumanFormat.decibelsFullScale(amplitude) == expected)
+    }
+
+    /// Sign is about polarity, not magnitude: `-0.5` reads exactly like `0.5`, since only the absolute
+    /// value has a meaningful level in dBFS.
+    @Test func decibelsFullScaleIgnoresSign() {
+        #expect(HumanFormat.decibelsFullScale(-0.5) == HumanFormat.decibelsFullScale(0.5))
+    }
+
+    /// Exact silence floors at the spectrogram's own convention rather than producing `log10`'s
+    /// mathematical `-∞`, which must never reach a reader as text.
+    @Test func exactSilenceFloorsRatherThanProducingInfinity() {
+        let text = HumanFormat.decibelsFullScale(0)
+        #expect(text == "-120.00 dBFS")
+        #expect(!text.lowercased().contains("inf"))
+        #expect(!text.contains("∞"))
+    }
+
+    @Test(arguments: [
+        (Float(0), "0.0000"),
+        (Float(0.0023), "+0.0023"),
+        (Float(-0.0041), "-0.0041"),
+    ])
+    func linearOffsetIsSignedExceptAtExactlyZero(value: Float, expected: String) {
+        #expect(HumanFormat.linearOffset(value) == expected)
+    }
+
     // MARK: - Nothing here judges
 
     /// The formatter produces names and magnitudes. If a judgement ever creeps into one of these
@@ -128,6 +166,7 @@ struct HumanFormatTests {
             HumanFormat.sampleRate(44_100), HumanFormat.sampleRateExact(44_100),
             HumanFormat.bitrate(128_000), HumanFormat.bitrateExact(128_000),
             HumanFormat.channels(2), HumanFormat.channelsExact(2), HumanFormat.bitDepth(16),
+            HumanFormat.decibelsFullScale(0.5), HumanFormat.linearOffset(0.002),
         ]
         let forbidden = ["good", "bad", "better", "worse", "high", "low", "quality", "professional", "recommended"]
         for sample in samples {
