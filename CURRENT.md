@@ -383,9 +383,36 @@ would add an always-present warning to every fixture with a valid size and durat
 warning-count assertions across the use-case test suite. Left as a named follow-up rather than forced
 through alongside an unrelated field's own group.
 
-**Next step:** group 3, `SignalLevelMetrics` — starting with measuring an unoptimised accumulator against
-a real ten-minute file before deciding whether it needs Accelerate, exactly as group 12 did for the
-spectrogram.
+**Group 3 is now implemented and closed: `SignalLevelMetrics` exists, measured before it was built.** A
+disposable harness (a real 10-minute stereo WAV, deleted after use) tried four implementations before
+choosing one. Plain Swift — even the domain's own established `SIMD8` technique
+(`PCMChunk.isProvablyAllFinite`'s trick) — stayed a genuine "brutal `-Onone` penalty": 9.15 s and 6.6 s
+respectively for a combined peak/sum/sum-of-squares/clip pass, against a 0.035 s decode. vDSP alone
+wasn't enough either — it has no primitive for the clip count, and the leftover scalar loop dominated at
+7.2 s. **vDSP for the three reductions it does have, plus `SIMD8<Int32>` for the one it doesn't, measured
+0.69 s (Debug) / 0.071 s (Release)** — small next to the spectrogram's own already-accepted cost. That
+number, not a preference, is why the accumulator lives in `AudioInspectorAnalysis` while the model itself
+(`SignalLevelMetrics`, linear amplitude, `nil` per-channel metrics for a genuinely empty channel rather
+than a fabricated zero) stays a plain, framework-free type in `AudioInspectorDomain`.
+
+**A real, measured caveat was found by actually running the tests, not assumed, and is documented rather
+than hidden:** `rms`/`dcOffset` agree across chunk sizes only to ~10⁻⁵, not bit-for-bit, because
+`vDSP_sve`/`vDSP_svesq` reduce each chunk in `Float32` internally before the result is widened to this
+accumulator's own `Double` running total — different chunk boundaries hand vDSP different internal
+pairings. `peak`, the clip count and the sample count stay exact, since neither a maximum nor a count has
+an arithmetic combination for a grouping to change. 19 tests pin all of this, plus two temporary negative
+controls (a naive per-channel-RMS average; a strict `>` clipping comparison), both confirmed to break real
+assertions and both fully reverted.
+
+**Group 4 (flow wiring) and group 5 (presentation) are untouched, deliberately** — this session's own
+scope was group 3 only. Their own open decisions are reaffirmed, not reopened, by group 3's evidence: a
+third independent pass over the shared `AudioDecoding` port costs little next to the rest of an
+inspection, and `SignalLevelMetricsAccumulator.accumulate(_ chunk:)` already has exactly the shape a
+future `SignalLevelMetricsGeneration` would call, mirroring `SpectrogramGeneration` line for line.
+
+**Next step:** group 4 — a `SignalLevelMetricsGeneration` composition (decode → accumulate → finish,
+mirroring `SpectrogramGeneration`) and its outcome type, wired into `SourceInspectionCoordinator` as a
+third independent operation, not coupled to the waveform's own generator.
 
 ---
 _Last touched: 2026-08-08. Overwrite freely; empty is fine._
