@@ -234,15 +234,56 @@ group by group already established for the waveform and the spectrogram.
 
 ## 5. Presentation
 
-- [ ] 5.1 Present peak, DC offset, RMS and clipping **in words**, with units stated explicitly: peak and
+**Done.** A new presentation vocabulary, `SignalLevelMetricsPresentation`/`SignalLevelMetricsCopy`
+(`Sources/FeatureAnalysis/SignalLevelMetricsPresentation.swift`), mirrors `WaveformPresentation`/
+`SpectrogramPresentation` exactly — `loading`/`metrics`/`absent`/`failed`, no `cancelled` case — with one
+structural difference stated rather than glossed over: the waveform and spectrogram fall back to words
+only because there is no drawing; here the content **is** words, so `.metrics` produces a fixed set of
+rows (`SignalLevelMetricsRow`) instead of a single section-level sentence, each independently accessible
+rather than merged into one label the way a picture's caption is. `SignalLevelMetricsSection`
+(`SignalLevelMetricsView.swift`) renders them; `RootView.signalLevelMetricsPresentation(for:)` is the
+total, no-default translation from the flow's `SignalLevelMetricsState`, wired into `ReportView` directly
+beneath the waveform (both concern amplitude/level over the file; the spectrogram, which concerns
+frequency, follows both — a semantic placement, not an aesthetic one). The domain type is untouched:
+every conversion lives in two new pure functions on `HumanFormat`
+(`decibelsFullScale`/`linearOffset`), never in `SignalLevelMetrics` itself and never inline in a view body.
+
+- [x] 5.1 Present peak, DC offset, RMS and clipping **in words**, with units stated explicitly: peak and
       RMS in dBFS (reusing the spectrogram's existing −120 dBFS floor convention, and allowing a positive
       value for a genuinely out-of-range sample, explained rather than hidden); DC offset as a plain
       linear value; clipped-sample count as a plain integer.
-- [ ] 5.2 No colour-only meaning, no verdict, no "this file clips too much" characterisation — the
+      **Demonstrated with exact reference points**, not merely implemented: `1.0 → "0.00 dBFS"`,
+      `0.5 → "-6.02 dBFS"`, `0.1 → "-20.00 dBFS"`, `1.5 → "+3.52 dBFS"` (signed, never clamped or
+      hidden), and exact silence floors at `Spectrogram.floorDecibels` rather than producing `log10`'s
+      mathematical `-∞` — swept for directly (`HumanFormatTests.exactSilenceFloorsRatherThanProducingInfinity`,
+      `SignalLevelMetricsPresentationTests.noSignalLevelTextShowsAMathematicalInfinity`). DC offset is
+      linear, signed except at exactly zero, four decimal places (justified: `Float`'s ~7 significant
+      digits give margin at this magnitude; four places resolve two orders below what real capture
+      equipment introduces without asserting precision the type does not honestly carry). Clipped-sample
+      count is a grouped plain integer (`"12,431"`), never a percentage. **Zero frames versus a genuine
+      computed zero is preserved, not collapsed**: a channel with no samples reports "Not computable" for
+      peak/RMS/DC offset (never a fabricated `0`, never a bare, unexplained dash — negative control A
+      confirmed this discriminates); a channel that was measured and is genuinely silent reports the
+      real, floored dBFS/zero value. The clip count has no such state — always defined, `0` for a silent
+      or empty channel exactly as for a channel with nothing clipped.
+- [x] 5.2 No colour-only meaning, no verdict, no "this file clips too much" characterisation — the
       numbers and a plain statement of what was counted, nothing evaluative.
-- [ ] 5.3 `averageFileBitrate` reads beside `declaredBitrate` and `estimatedBitrate` with its own label
+      **Demonstrated by a forbidden-word sweep** over every row and every state's text
+      (`SignalLevelMetricsPresentationTests.noSignalLevelTextCharacterisesTheSignal`), covering the
+      waveform suite's own vocabulary plus "clipping detected" by name — a non-zero clipped count reads
+      as `"Clipped samples: 37"` with the explanation `"Samples at or beyond full scale."`, never a
+      diagnosis. `SignalLevelMetricsSection`'s colour rule mirrors the waveform's own exactly: only a
+      genuine failure to measure is read at full weight; loading, real metrics and absence all read at
+      secondary weight, and nothing is coloured by what a value contains.
+- [x] 5.3 `averageFileBitrate` reads beside `declaredBitrate` and `estimatedBitrate` with its own label
       naming what it covers (the whole file, not the audio stream), so a reader is never left guessing
       which of three numbers means what or conflating this one with a stream-only figure.
+      **Already satisfied by group 2, confirmed rather than assumed**: `ReportPropertyFormatter.displays`
+      already lists `"Average file bitrate"` as its own row beside `"Declared bitrate"`/
+      `"Estimated bitrate"`, and the reader's own `.uncertain` reason string already names what the
+      figure includes — "the file's total size", "any container header, metadata and embedded artwork,
+      not only the audio payload" — so a reader cannot conflate it with a stream-only figure. No code
+      changed for this task; the audit found nothing missing.
 
 ## 6. Export
 

@@ -16,29 +16,38 @@
 >   session protocol in `CLAUDE.md`).
 
 ---
-**Focus:** `add-computed-technical-properties`, group 4 — wiring `SignalLevelMetrics` into the flow.
-`SignalLevelMetricsGeneration` (decode → accumulate → finish) mirrors `SpectrogramGeneration` exactly,
-and is wired into `SourceInspectionCoordinator` as a **third independent operation** over the shared
-`AudioDecoding` port, with its own decoder instance and its own cancellation — never coupled to the
-waveform's own, deliberately un-migrated generator. Wiring this in required extending
-`SourceInspectionOutcome.inspected`/`InspectionUpdate` with a fourth case, exactly as the spectrogram's
-own was added beside the waveform's — a mechanical ripple across `ImportFlowModel` and ~13 test files,
-not new design. Independence from the waveform and the spectrogram (delay, blocking, cancellation,
-failure) is demonstrated with real tests, not assumed, and confirmed with two negative controls (breaking
-the wiring; artificially sharing the waveform's result), both run and fully reverted. Group 4's two tasks
-(4.1, 4.2) are closed. All four gates are green; 821 tests, up from 791.
+**Focus:** `add-computed-technical-properties`, group 5 — presenting `SignalLevelMetrics`. A new
+presentation vocabulary, `SignalLevelMetricsPresentation`/`SignalLevelMetricsCopy`
+(`Sources/FeatureAnalysis/SignalLevelMetricsPresentation.swift`), mirrors `WaveformPresentation`/
+`SpectrogramPresentation` exactly (`loading`/`metrics`/`absent`/`failed`, no `cancelled`), with one
+stated structural difference: the content here **is** words, so `.metrics` produces four independent,
+accessible rows rather than one section-level sentence standing in for a picture. Peak and RMS read in
+dBFS via a new `HumanFormat.decibelsFullScale`, reusing `Spectrogram.floorDecibels` for exact silence so
+`log10(0)`'s mathematical `-∞` never reaches a reader; DC offset is linear and signed
+(`HumanFormat.linearOffset`, four decimal places); clipped-sample count is a grouped plain integer. Wired
+into `ReportView` directly beneath the waveform (both concern amplitude/level; the spectrogram, which
+concerns frequency, follows both) via a new, total `RootView.signalLevelMetricsPresentation(for:)`. The
+domain model is untouched — every conversion lives in `HumanFormat`, never inline in a view body. Group
+5's three tasks (5.1–5.3) are closed; 5.3 needed no code, since group 2 had already satisfied it. All six
+gates are green; 850 tests, up from 821.
 
-**Why this stopped here, not further.** Group 5 (presentation — words, units, dBFS conversion, no
-verdict) and group 6 (export — the JSON `measurements` object) are both untouched by design: this
-session's own scope was group 4 only, and `SignalLevelMetricsState` reaching `InspectionPresentation`
-is flow-state plumbing, not presentation. ADR-0018 stays `Proposed` — its own promotion criterion is
+**What the presentation is careful not to collapse.** A channel with no samples reports "Not computable"
+for peak/RMS/DC offset — never a fabricated zero, never a bare unexplained dash — while a channel that
+was measured and is genuinely silent reports the real, floored value; the clipped-sample count has no
+such state, since counting is always defined. Two negative controls confirmed this is actually enforced,
+not merely written: converting "not computable" to a fabricated zero, and formatting peak/RMS as raw
+linear values instead of dBFS, each broke exactly the tests written to catch it. Both fully reverted.
+
+**Why this stopped here, not further.** Group 6 (export — the JSON `measurements` object) is untouched by
+design: this session's own scope was group 5 only, and nothing here changes `InspectionReport`, the
+`schemaVersion` 1 export, or any warning. ADR-0018 stays `Proposed` — its own promotion criterion is
 implementing at least `averageFileBitrate` against production code **and** manual validation, and neither
 this group nor the change as a whole has done the manual validation half yet.
 
-**Next step:** group 5 — present peak, DC offset, RMS and clipping in words with explicit units (dBFS for
-peak/RMS reusing the spectrogram's −120 dBFS floor, linear for DC offset, a plain integer for clipping),
-no colour-only meaning, no verdict, and give `averageFileBitrate` a label distinguishing it from
-`declaredBitrate`/`estimatedBitrate`. Do not start group 6 (export) before group 5 is done and reviewed.
+**Next step:** group 6 — add `averageFileBitrate` to the exported `technicalProperties` object
+(additive, no `schemaVersion` bump) and `SignalLevelMetrics` under the schema's already-anticipated,
+still-unused `measurements` object; confirm the export stays byte-identical for a report without either,
+following the isolation-test pattern already established for the waveform and the spectrogram.
 
 **Other open threads** (see `openspec list` for their real task counts, not restated here):
 `add-static-spectrogram-visualization` (manual validation battery deferred by product decision) and
