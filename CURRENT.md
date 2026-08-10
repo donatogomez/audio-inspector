@@ -363,8 +363,29 @@ uses — never coupled to the waveform's own generator, which stays deliberately
 for its own separate, already-declared reasons; coupling a new consumer to that debt would make its
 eventual migration harder, not easier.
 
-Nothing is implemented; the next step is picking up group 2 of its tasks (`averageFileBitrate`, the
-smallest and cheapest of everything this audit found).
+**Group 2 is now implemented and closed.** `averageFileBitrate` exists end to end — domain field, the
+property reader's own pure mapper (`sizeBytes × 8 ÷ duration`, rounded away from zero, always `uncertain`
+and never `available`, per ADR-0018), the export DTO, and the report's presentation, with
+`declaredBitrate`'s own long-`nil` reason finally given real text too. 757 tests grew to 772, all green.
+
+**One real regression was found and fixed while closing this group, not glossed over.**
+`ComparisonFormatter.rows(for:)`, in the already-merged two-file comparison feature, zipped the report's
+own property rows positionally against `FileComparison`'s fixed eight outcomes and demanded an *exact*
+count match — the new ninth row silently made every comparison render **zero** rows. Fixed by pairing
+only the rows the comparison actually covers; `FileComparison` itself stays at exactly eight fields,
+unchanged, matching the design's own decision to keep `averageFileBitrate` out of the comparison (it can
+never read as `Same`/`Different`, being always uncertain).
+
+**One deliberate boundary, named rather than silently decided either way:** `averageFileBitrate` does
+**not** yet generate a warning through `InspectAudioFileUseCase`, unlike its seven siblings. Wiring it in
+would add an always-present warning to every fixture with a valid size and duration — mirroring
+`estimatedBitrate`'s own always-present warning — and break a real, if mechanical, number of existing
+warning-count assertions across the use-case test suite. Left as a named follow-up rather than forced
+through alongside an unrelated field's own group.
+
+**Next step:** group 3, `SignalLevelMetrics` — starting with measuring an unoptimised accumulator against
+a real ten-minute file before deciding whether it needs Accelerate, exactly as group 12 did for the
+spectrogram.
 
 ---
 _Last touched: 2026-08-08. Overwrite freely; empty is fine._
