@@ -1,0 +1,152 @@
+# Implementation Tasks
+
+**Only group 1 is done: this change is the contract, written before any implementation.** No
+`Sources/` or `Tests/` file is touched by this change. Every task from group 2 onward is a roadmap for a
+future session, not work performed here.
+
+Boundaries no future task may cross: `TechnicalProperties` gains **no DSP** field — `averageFileBitrate`
+is arithmetic on metadata already read, nothing more. Any sample-level metric is a **new domain value
+type** (`SignalLevelMetrics`), never a field of `TechnicalProperties`. `AudioInspectorDomain` gains no
+framework import. `AudioInspectorAnalysis` is the only target where Accelerate/vDSP may appear, and only
+if measurement shows it is needed — not by default. No aggregate, no score, no single "dynamic range"
+field, no frequency-extent property without a named, versioned threshold, no user-configurable analysis
+constant anywhere.
+
+## 1. The contract
+
+- [x] 1.1 Open the change with `proposal.md`, `design.md`, this task list, and the delta specs on
+      `audio-file-inspection` (MODIFIED) and the new `audio-signal-level-metrics` capability (ADDED).
+- [x] 1.2 Audit every existing property's exact source by reading
+      `AVFoundationAudioFilePropertyReader.swift` line by line — no claim in `design.md` §2 is assumed.
+- [x] 1.3 Investigate `declaredBitrate`/`estimatedBitrate` fully: what produces each, when each is
+      absent, and whether a real average bitrate is computable from data already in the domain
+      (`design.md` §3). Confirmed computable from `sizeBytes × 8 ÷ duration`, always `.uncertain`,
+      consistent with ADR-0012's own already-rejected alternative. **Named `averageFileBitrate`**, not
+      `calculatedAverageBitrate` — audited and corrected: the first draft understated how common and how
+      large the embedded-artwork distortion is, and the final name keeps *File* directly beside *Bitrate*
+      so the qualifier survives being read quickly (`design.md` §3).
+- [x] 1.4 Evaluate each candidate new property against a full-sample-pass/FFT/format-dependence/
+      objectivity test (`design.md` §6), reject two by name with reasons rather than silently, and
+      classify every survivor as declared/calculated/DSP-derived (never interpretation).
+- [x] 1.5 Write **ADR-0018** in `Proposed`, fixing where a DSP-derived property may live relative to
+      `TechnicalProperties` and that a calculated bitrate is never conflated with a declared or a
+      framework-estimated one. References ADR-0006, ADR-0008, ADR-0009, ADR-0012; edits none of them.
+      Add its row to `docs/adr/README.md`.
+- [x] 1.6 Audit, and close rather than defer, two naming/survival questions the first draft left open:
+      whether `declaredBitrate` should be kept, renamed, or removed despite being permanently empty today
+      (kept, unchanged — `design.md` §4), and whether `estimatedBitrate` should be renamed to
+      `frameworkEstimatedBitrate` for symmetry (not renamed — the cost of breaking an already-shipped
+      `schemaVersion` 1 wire key outweighs a cosmetic gain the new field's own name already delivers
+      without it; `design.md` §5).
+
+## 2. `averageFileBitrate` (metadata-only — no DSP, no port change)
+
+- [ ] 2.1 Add `averageFileBitrate: Property<Int>` to `TechnicalProperties`, defaulting to
+      `.unavailable(reason: nil)` like every other field.
+- [ ] 2.2 Thread `AudioFileReference.sizeBytes` from `readProperties(of file:)` through to
+      `technicalProperties(from:)` in `AVFoundationAudioFilePropertyReader` — the value is already in
+      scope at the call site and is not currently passed further.
+- [ ] 2.3 Implement the pure mapping: `sizeBytes` present and `duration` a clean, positive, confirmed
+      value → `.uncertain(value: sizeBytes*8/duration, reason: …)`; any other combination (missing size,
+      unconfirmed/zero/unavailable/failed duration) → `.uncertain(value: nil, reason: …)`, mirroring
+      `estimatedBitrate`'s own shape. **Never `.available`, by design, per ADR-0012 and ADR-0018.** The
+      `reason` string SHALL name what the figure includes — headers, tags, and any embedded artwork, not
+      only the audio payload — not just say "an estimate."
+- [ ] 2.4 Unit-test the pure mapping with controlled inputs (no real file): both facts present and
+      confirmed; missing size; unconfirmed/zero/negative/failed duration; a value that would overflow
+      `Int`.
+- [ ] 2.5 Confirm the addition changes no other field, warning, or the global status for any existing
+      fixture — a byte-for-byte regression check against the current property-mapper tests.
+- [ ] 2.6 *(Optional, low-risk, may ride with this group or ship separately.)* Give
+      `declaredBitrate(from:)`'s `.unavailable` case a real `reason` string (today `nil`) explaining that
+      no evaluated API declares a nominal bitrate directly, now that the reason is fully understood
+      (`design.md` §4). Documentation-quality only — the field's semantics and its `Property` case are
+      unchanged.
+
+## 3. `SignalLevelMetrics` domain type (arithmetic — no FFT)
+
+- [ ] 3.1 Add `SignalLevelMetrics` (peak, DC offset, RMS, clipped-sample count) as a sibling of the
+      report, never a field of `TechnicalProperties`. Store **per channel** as the canonical
+      representation; expose **overall** peak/RMS/DC-offset/clipped-count as values derived by a fixed
+      formula from the per-channel data (`design.md` §8) — not a second measurement pass. Represent "not
+      computable" (zero frames: division by zero, an undefined maximum) distinctly from "computed and the
+      value is zero," mirroring `WaveformEnvelopeAccumulator`'s own silence-vs-absence distinction.
+- [ ] 3.2 Add its accumulator, built on `WaveformEnvelopeAccumulator`'s own proven shape: samples arrive
+      as any `Collection<Float>`, the result is independent of feed order and chunk size, and the fold
+      is a pure, commutative accumulation per channel — one running max, one running sum, one running
+      sum-of-squares, one running clip count, per channel.
+- [ ] 3.3 Fix the clipping threshold at `|sample| ≥ 1.0` (full scale on the domain's normalized
+      amplitude), as a **named constant tied to the analysis engine version** (ADR-0006's own pattern),
+      **never user-configurable** — a configurable analysis threshold would make identical files produce
+      different results across runs, which this project's reproducibility principle rules out. The
+      "near-0 dBFS run" refinement `analysis-methodology.md` also names is explicitly **not** part of this
+      slice (`design.md` §8).
+- [ ] 3.4 Measure before choosing Accelerate: run the accumulator against a real ten-minute file in an
+      unoptimised build first, exactly as group 12 did for the spectrogram, and let the number decide
+      whether it stays pure Swift in `AudioInspectorDomain` or moves to `AudioInspectorAnalysis`.
+- [ ] 3.5 Unit-test the accumulator directly, with no file and no framework: known signals with known
+      peak/DC-offset/RMS/clipping counts; silence (zero peak/RMS/DC-offset, zero clip count — not
+      absent); a single full-scale sample; a sample beyond `|1|` (kept, not clamped, and can yield a
+      positive dBFS peak); zero frames (metrics reported as not computable, not as zero); order- and
+      chunk-size-independence; the overall/per-channel combination formulas against hand-computed values.
+
+## 4. Wiring the new pass into the flow
+
+- [ ] 4.1 `SignalLevelMetrics` is produced by a **third independent operation** over the existing,
+      shared `AudioDecoding` port — the same port the spectrogram already consumes — with its own
+      cancellation, per ADR-0016's already-decided "separate operations, separate cancellation" rule.
+      **Decided, not merely considered:** it does **not** hook into the waveform's own generator, which
+      remains deliberately un-migrated onto the shared seam for its own, separate, already-declared
+      reasons (`design.md` §10) — coupling a new consumer to that debt would make the eventual migration
+      harder, not easier, and would reopen a shared-pass question ADR-0016 already closed.
+- [ ] 4.2 Confirm the new metrics do not delay, block, or get blocked by the report, the waveform, or the
+      spectrogram — each stays independently cancellable and independently presentable.
+
+## 5. Presentation
+
+- [ ] 5.1 Present peak, DC offset, RMS and clipping **in words**, with units stated explicitly: peak and
+      RMS in dBFS (reusing the spectrogram's existing −120 dBFS floor convention, and allowing a positive
+      value for a genuinely out-of-range sample, explained rather than hidden); DC offset as a plain
+      linear value; clipped-sample count as a plain integer.
+- [ ] 5.2 No colour-only meaning, no verdict, no "this file clips too much" characterisation — the
+      numbers and a plain statement of what was counted, nothing evaluative.
+- [ ] 5.3 `averageFileBitrate` reads beside `declaredBitrate` and `estimatedBitrate` with its own label
+      naming what it covers (the whole file, not the audio stream), so a reader is never left guessing
+      which of three numbers means what or conflating this one with a stream-only figure.
+
+## 6. Export
+
+- [ ] 6.1 Add `averageFileBitrate` to the `technicalProperties` object in the `schemaVersion` 1
+      JSON — additive, no version bump, per `docs/json-schema-v1.md`'s own stated evolution rule.
+- [ ] 6.2 Add `SignalLevelMetrics` under the schema's already-anticipated, still-unused `measurements`
+      object (`docs/json-schema-v1.md`: "Future (additive, still v1): measurements, findings — only once
+      DSP slices land") — this is that slice.
+- [ ] 6.3 Confirm the export change is isolated: a report without level metrics (or without the new
+      bitrate field populated) exports byte-identically to today, following the same isolation-test
+      pattern `add-two-file-technical-comparison` group 6.18 already established.
+
+## 7. Deferred, and named so it is not quietly dropped
+
+- [ ] 7.1 **True peak** — ADR-0006 already governs the methodology (≥4× oversampling, ITU-R BS.1770/EBU
+      R128). Not designed here; implementation belongs to a change of its own.
+- [ ] 7.2 **Significant max frequency** — needs its own noise-floor/persistence methodology, comparable
+      in weight to what ADR-0006 already did for true peak, not a one-line reduction (`design.md` §11).
+      When designed, it is a **pure post-processing step over the already-produced `Spectrogram` model**
+      — no new file read. Not designed here.
+- [ ] 7.3 **Crest factor** — mathematically free once peak and RMS both exist, and unlike "dynamic range"
+      it has exactly one standard definition, so ADR-0006's "never a single truth" objection does not
+      apply directly. Deferred anyway: exposed alone, ahead of the roadmap's own Phase 3 loudness suite,
+      it invites the same out-of-context "how dynamic/compressed is this" reading that suite is meant to
+      contextualize properly (`design.md` §12). Not designed here.
+- [ ] 7.4 **Any named, single dynamic-range metric** (e.g. EBU LRA specifically) — only once the loudness
+      suite is designed with multiple named metrics presented side by side, per ADR-0006. A generic
+      `dynamicRange` field is rejected outright, not deferred (see `design.md` §7).
+
+## 8. Gates and closure
+
+- [ ] 8.1 Four gates green — `./Scripts/check-boundaries.sh`, `swift build -Xswiftc -warnings-as-errors`,
+      `swift test`, `OPENSPEC_TELEMETRY=0 openspec validate --all --strict` — plus the Xcode app build.
+- [ ] 8.2 Confirm `averageFileBitrate` never becomes `.available` in any test, and that `SignalLevelMetrics`
+      never gains a Codable conformance that would let it leak into an unrelated export path.
+- [ ] 8.3 Decide ADR-0018's status from what was actually implemented, update `CURRENT.md`, and archive
+      through `openspec archive` after merge.
