@@ -33,7 +33,13 @@ struct JSONReportExportContractTests {
             declaredBitrate: .available(128_000),
             estimatedBitrate: .uncertain(
                 value: 180_904,
-                reason: "estimated as fileSize*8/duration; includes container overhead and is not read from the stream"
+                reason: "Framework estimated data rate; an estimate — not a declared bitrate — that may not exactly represent the stream."
+            ),
+            averageFileBitrate: .uncertain(
+                value: 180_857,
+                reason: "Calculated from the file's total size and duration; includes any container header, "
+                    + "metadata and embedded artwork, not only the audio payload — always an approximation "
+                    + "of the audio stream's own rate, never a declared or measured one."
             )
         )
         let warnings = [
@@ -141,7 +147,9 @@ struct JSONReportExportContractTests {
         "codec":           { "state": "available",   "value": "aac" },
         "declaredBitrate": { "state": "available",   "value": 128000, "unit": "bitsPerSecond" },
         "estimatedBitrate":{ "state": "uncertain",   "value": 180904, "unit": "bitsPerSecond",
-                             "reason": "estimated as fileSize*8/duration; includes container overhead and is not read from the stream" }
+                             "reason": "Framework estimated data rate; an estimate — not a declared bitrate — that may not exactly represent the stream." },
+        "averageFileBitrate": { "state": "uncertain", "value": 180857, "unit": "bitsPerSecond",
+                             "reason": "Calculated from the file's total size and duration; includes any container header, metadata and embedded artwork, not only the audio payload — always an approximation of the audio stream's own rate, never a declared or measured one." }
       },
       "warnings": [
         { "code": "property_unsupported", "field": "bitDepth", "kind": "unsupported",

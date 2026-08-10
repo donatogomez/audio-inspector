@@ -151,7 +151,8 @@ func allAvailableProperties() -> TechnicalProperties {
         bitDepth: .available(16),
         codec: .available("pcm"),
         declaredBitrate: .available(1_411_200),
-        estimatedBitrate: .available(1_411_200)
+        estimatedBitrate: .available(1_411_200),
+        averageFileBitrate: .available(1_411_200)
     )
 }
 

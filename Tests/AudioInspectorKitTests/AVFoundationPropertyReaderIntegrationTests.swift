@@ -80,11 +80,20 @@ struct AVFoundationPropertyReaderIntegrationTests {
             }
             #expect(containerUTI == spec.expectedContainerUTI)
 
-            // Bitrate policy for PCM: no declared source; the estimate is always uncertain.
-            #expect(properties.declaredBitrate == .unavailable(reason: nil))
+            // Bitrate policy for PCM: no declared source; the estimate is always uncertain; the
+            // calculated average is uncertain-without-a-value here because the fixture reference below
+            // carries no `sizeBytes` (a real file's own size threads through separately — see the pure
+            // mapping tests in `AVFoundationPropertyMappingTests` for the computed-value cases).
+            guard case .unavailable = properties.declaredBitrate else {
+                Issue.record("expected an unavailable declaredBitrate, got \(properties.declaredBitrate)"); return
+            }
             guard case .uncertain = properties.estimatedBitrate else {
                 Issue.record("expected an uncertain estimatedBitrate, got \(properties.estimatedBitrate)"); return
             }
+            guard case let .uncertain(value, _) = properties.averageFileBitrate else {
+                Issue.record("expected an uncertain averageFileBitrate, got \(properties.averageFileBitrate)"); return
+            }
+            #expect(value == nil) // no sizeBytes in this fixture's reference
         }
     }
 

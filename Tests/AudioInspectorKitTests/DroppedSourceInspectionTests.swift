@@ -152,11 +152,11 @@ let report = presentation.report
             #expect(panelJSON["generator"] == dropJSON["generator"])
             #expect(panelJSON["generatedAt"] == dropJSON["generatedAt"])
 
-            // All eight technical properties are present and none is entry-point dependent.
+            // All nine technical properties are present and none is entry-point dependent.
             let properties = try #require(panelJSON["technicalProperties"]?.keys)
             #expect(properties == [
                 "container", "duration", "sampleRate", "channelCount",
-                "bitDepth", "codec", "declaredBitrate", "estimatedBitrate",
+                "bitDepth", "codec", "declaredBitrate", "estimatedBitrate", "averageFileBitrate",
             ])
 
             // The safe origin travels identically, and no location key appears by either route.

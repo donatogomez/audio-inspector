@@ -18,24 +18,25 @@ struct ReportPropertyDisplayTests {
             bitDepth: .unsupported(reason: "lossy codec"),
             codec: .uncertain(value: "aac", reason: "inferred"),
             declaredBitrate: .failed(PropertyFailure(code: .propertyReadError, message: "boom")),
-            estimatedBitrate: .uncertain(value: nil, reason: "cannot estimate")
+            estimatedBitrate: .uncertain(value: nil, reason: "cannot estimate"),
+            averageFileBitrate: .uncertain(value: 133_875, reason: "calculated from size and duration")
         )
     }
 
-    @Test func allEightPropertiesAreRepresentedInOrder() {
+    @Test func allNinePropertiesAreRepresentedInOrder() {
         let displays = ReportPropertyFormatter.displays(for: mixedProperties())
         #expect(displays.map(\.name) == [
             "Container", "Duration", "Sample rate", "Channel count",
-            "Bit depth", "Codec", "Declared bitrate", "Estimated bitrate",
+            "Bit depth", "Codec", "Declared bitrate", "Estimated bitrate", "Average file bitrate",
         ])
     }
 
     @Test func eachStateIsDistinctlyRepresented() {
         let displays = ReportPropertyFormatter.displays(for: mixedProperties())
-        // Same eight distinctions as before, now as a closed presentation enum instead of free strings.
+        // Same nine distinctions as before, now as a closed presentation enum instead of free strings.
         #expect(displays.map(\.state) == [
             .measured, .measured, .measured, .notPresent,
-            .notDefinedByFormat, .readButUnreliable, .couldNotBeRead, .readButUnreliable,
+            .notDefinedByFormat, .readButUnreliable, .couldNotBeRead, .readButUnreliable, .readButUnreliable,
         ])
     }
 
@@ -131,7 +132,8 @@ struct ReportPropertyDisplayTests {
         #expect(groups.map(\.name) == ["Format", "Encoding"])
         #expect(groups[0].properties.map(\.name) == ["Container", "Codec", "Duration"])
         #expect(groups[1].properties.map(\.name) == [
-            "Sample rate", "Channel count", "Bit depth", "Declared bitrate", "Estimated bitrate",
+            "Sample rate", "Channel count", "Bit depth",
+            "Declared bitrate", "Estimated bitrate", "Average file bitrate",
         ])
     }
 
@@ -236,7 +238,7 @@ struct ReportPropertyDisplayTests {
         let rows = ReportPropertyFormatter.displays(for: properties)
 
         let partial = ReportPropertyFormatter.outcome(for: .partial(message: nil), properties: rows)
-        #expect(partial == .someNotRead(read: 3, total: 8))
+        #expect(partial == .someNotRead(read: 3, total: 9))
         for name in ["completed", "partial", "failed"] {
             #expect(!partial.text.lowercased().contains(name))
         }
@@ -288,8 +290,8 @@ struct ReportPropertyDisplayTests {
         let rows = ReportPropertyFormatter.displays(for: properties)
         let outcome = ReportPropertyFormatter.outcome(for: .partial(message: nil), properties: rows)
 
-        #expect(outcome == .someNotRead(read: 1, total: 8))
-        #expect(outcome.text == "Read 1 of 8 properties cleanly. Each of the remaining 7 shows what is known about it.")
+        #expect(outcome == .someNotRead(read: 1, total: 9))
+        #expect(outcome.text == "Read 1 of 9 properties cleanly. Each of the remaining 8 shows what is known about it.")
     }
 
     /// No internal vocabulary and no judgement, across every shape the outcome can take.

@@ -107,9 +107,9 @@ struct EndToEndFlowTests {
             }
             #expect(seconds > 0)
 
-            // 7. The report is presentable: the eight rows `ReportView` renders.
+            // 7. The report is presentable: the nine rows `ReportView` renders.
             let displays = ReportPropertyFormatter.displays(for: report.properties)
-            #expect(displays.count == 8)
+            #expect(displays.count == 9)
             // Every row is well formed: nothing failed to read on a fixture we generated ourselves.
             #expect(displays.allSatisfy { $0.state != .couldNotBeRead })
             // Readable value, with the exact figure preserved beside it.
@@ -118,6 +118,13 @@ struct EndToEndFlowTests {
             // The codec token `lpcm` is now named, with the token preserved as detail.
             #expect(displays.first { $0.name == "Codec" }?.value == "Linear PCM")
             #expect(displays.first { $0.name == "Codec" }?.detail == "lpcm")
+            // A real file with a real, known size and a confirmed duration: the calculated average
+            // bitrate is computable for real here, not just in the controlled pure-mapping tests.
+            guard case let .uncertain(averageValue, _) = report.properties.averageFileBitrate else {
+                Issue.record("expected an uncertain averageFileBitrate, got \(report.properties.averageFileBitrate)"); return
+            }
+            let sizeBytes = try #require(report.file.sizeBytes)
+            #expect(averageValue == Int((Double(sizeBytes) * 8.0 / seconds).rounded(.toNearestOrAwayFromZero)))
 
             // 8–10. The same report, exported for real to a *different* file.
             let destination = directory.appendingPathComponent("out.json")
@@ -156,7 +163,7 @@ struct EndToEndFlowTests {
             let technical = try #require(json["technicalProperties"])
             #expect(try #require(technical.keys) == [
                 "container", "duration", "sampleRate", "channelCount",
-                "bitDepth", "codec", "declaredBitrate", "estimatedBitrate",
+                "bitDepth", "codec", "declaredBitrate", "estimatedBitrate", "averageFileBitrate",
             ])
             #expect(technical["sampleRate"]?["value"]?.int == 44_100)
             #expect(technical["codec"]?["value"]?.string == "lpcm")

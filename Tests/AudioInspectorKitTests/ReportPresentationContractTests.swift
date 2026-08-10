@@ -79,7 +79,10 @@ struct ReportPresentationContractTests {
             "metadata_size_unavailable", "metadata_modified_at_unavailable",
             "file_open_failed", "file_unreadable", "file_access_denied",
         ]
-        let wireKeys = ["sampleRate", "channelCount", "bitDepth", "declaredBitrate", "estimatedBitrate", "sizeBytes", "modifiedAt"]
+        let wireKeys = [
+            "sampleRate", "channelCount", "bitDepth", "declaredBitrate", "estimatedBitrate",
+            "averageFileBitrate", "sizeBytes", "modifiedAt",
+        ]
 
         for text in ours {
             #expect(!text.contains("_"), "underscored identifier surfaced: \(text)")
@@ -154,8 +157,8 @@ struct ReportPresentationContractTests {
         #expect(warnings.allSatisfy { texts.contains($0.message) })             // every warning message
         #expect(warnings.compactMap(\.subject).allSatisfy(texts.contains))      // every warning subject
         #expect(rows.allSatisfy { texts.contains($0.accessibilityLabel) })      // accessibility labels
-        #expect(texts.contains(InspectionOutcomeDisplay.allRead(count: 8).text))
-        #expect(texts.contains(InspectionOutcomeDisplay.someNotRead(read: 3, total: 8).text))
+        #expect(texts.contains(InspectionOutcomeDisplay.allRead(count: rows.count).text))
+        #expect(texts.contains(InspectionOutcomeDisplay.someNotRead(read: 3, total: rows.count).text))
         #expect(texts.contains(InspectionOutcomeDisplay.couldNotInspect(message: "This file could not be inspected.").text))
     }
 
