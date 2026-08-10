@@ -16,38 +16,43 @@
 >   session protocol in `CLAUDE.md`).
 
 ---
-**Focus:** `add-computed-technical-properties`, group 5 — presenting `SignalLevelMetrics`. A new
-presentation vocabulary, `SignalLevelMetricsPresentation`/`SignalLevelMetricsCopy`
-(`Sources/FeatureAnalysis/SignalLevelMetricsPresentation.swift`), mirrors `WaveformPresentation`/
-`SpectrogramPresentation` exactly (`loading`/`metrics`/`absent`/`failed`, no `cancelled`), with one
-stated structural difference: the content here **is** words, so `.metrics` produces four independent,
-accessible rows rather than one section-level sentence standing in for a picture. Peak and RMS read in
-dBFS via a new `HumanFormat.decibelsFullScale`, reusing `Spectrogram.floorDecibels` for exact silence so
-`log10(0)`'s mathematical `-∞` never reaches a reader; DC offset is linear and signed
-(`HumanFormat.linearOffset`, four decimal places); clipped-sample count is a grouped plain integer. Wired
-into `ReportView` directly beneath the waveform (both concern amplitude/level; the spectrogram, which
-concerns frequency, follows both) via a new, total `RootView.signalLevelMetricsPresentation(for:)`. The
-domain model is untouched — every conversion lives in `HumanFormat`, never inline in a view body. Group
-5's three tasks (5.1–5.3) are closed; 5.3 needed no code, since group 2 had already satisfied it. All six
-gates are green; 850 tests, up from 821.
+**Focus:** `add-computed-technical-properties`, group 6 — exporting `SignalLevelMetrics`. A new,
+additive `measurements.signalLevels` object joins `schemaVersion` 1
+(`Sources/AudioInspectorApp/Export/ReportJSONDTO.swift`), holding exactly the domain model's own public
+surface (overall + per-channel peak/RMS/DC offset/clipped-sample count, plus `sampleCount`) in the
+domain's own **linear** amplitude — never dBFS, which stays a presentation-only concern. `nil` metrics
+means the `measurements` key is **omitted entirely**, not `null`, so a report exported without signal
+level metrics is byte-identical to the pre-group-6 output. `SignalLevelMetrics?` is threaded end to end —
+`ReportExporting` → `JSONReportExporter` → `ReportExportCoordinator` → `ReportExportAction` →
+`ReportExportModel` → `ReportView`'s own export button — with `ReportView` as the single point that
+collapses `loading`/`unavailable`/`failed`/cancelled to `nil` before the export layer ever sees them.
+`InspectionReport` and `AudioInspectorDomain` are untouched; folding `SignalLevelMetrics` into
+`InspectionReport` was never implemented. `averageFileBitrate`'s own export (6.1) turned out to already
+be done since group 2 — confirmed by audit and existing tests, not re-implemented. Group 6's three tasks
+(6.1–6.3) are closed. All six gates are green; 868 tests, up from 850.
 
-**What the presentation is careful not to collapse.** A channel with no samples reports "Not computable"
-for peak/RMS/DC offset — never a fabricated zero, never a bare unexplained dash — while a channel that
-was measured and is genuinely silent reports the real, floored value; the clipped-sample count has no
-such state, since counting is always defined. Two negative controls confirmed this is actually enforced,
-not merely written: converting "not computable" to a fabricated zero, and formatting peak/RMS as raw
-linear values instead of dBFS, each broke exactly the tests written to catch it. Both fully reverted.
+**What the export is careful not to collapse or invent.** "Not computable" (zero frames) is a present
+key with an explicit `null`, never an omitted key and never a fabricated `0`; a genuinely measured,
+computed zero (real silence) exports as a real `0`, never `null`. A sample beyond full scale exports
+exactly as measured, never clamped. No clipping threshold is exported — audited and declined: it is an
+analysis-engine constant with no wire-version convention yet to anchor it to, not part of
+`SignalLevelMetrics`'s own public surface. Two negative controls confirmed the isolation is actually
+enforced: putting a DSP key directly into `technicalProperties`, and exporting peak/RMS in dBFS instead
+of the domain's linear value (which also surfaced `log10(0)`'s `-∞` failing the encoder outright, as it
+should). Both broke exactly the tests written to catch them, and both were fully reverted.
 
-**Why this stopped here, not further.** Group 6 (export — the JSON `measurements` object) is untouched by
-design: this session's own scope was group 5 only, and nothing here changes `InspectionReport`, the
-`schemaVersion` 1 export, or any warning. ADR-0018 stays `Proposed` — its own promotion criterion is
-implementing at least `averageFileBitrate` against production code **and** manual validation, and neither
-this group nor the change as a whole has done the manual validation half yet.
+**Why this stopped here, not further.** Nothing in group 7 (deferred properties — true peak, significant
+max frequency, crest factor, dynamic range) was started; each stays named and deferred with its own
+reason, unchanged from the original design. ADR-0018 stays `Proposed` — its own promotion criterion is
+implementing at least `averageFileBitrate` against production code **and** manual validation, and the
+manual-validation half still hasn't happened.
 
-**Next step:** group 6 — add `averageFileBitrate` to the exported `technicalProperties` object
-(additive, no `schemaVersion` bump) and `SignalLevelMetrics` under the schema's already-anticipated,
-still-unused `measurements` object; confirm the export stays byte-identical for a report without either,
-following the isolation-test pattern already established for the waveform and the spectrogram.
+**Next step:** group 8 — the four gates (already green throughout this session, but not yet re-run as
+group 8's own closing act) plus 8.2 (confirm `averageFileBitrate` never becomes `.available` in any test,
+and that `SignalLevelMetrics` never gains a `Codable` conformance that could let it leak into an
+unrelated export path) and 8.3 (decide ADR-0018's status from what was actually implemented, update
+`CURRENT.md`, archive through `openspec archive` after merge). This is very likely the change's own
+last group.
 
 **Other open threads** (see `openspec list` for their real task counts, not restated here):
 `add-static-spectrogram-visualization` (manual validation battery deferred by product decision) and

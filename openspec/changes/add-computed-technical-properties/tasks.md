@@ -287,14 +287,55 @@ every conversion lives in two new pure functions on `HumanFormat`
 
 ## 6. Export
 
-- [ ] 6.1 Add `averageFileBitrate` to the `technicalProperties` object in the `schemaVersion` 1
+**Done.** `measurements.signalLevels` is a new, additive `schemaVersion` 1 object
+(`Sources/AudioInspectorApp/Export/ReportJSONDTO.swift`: `SignalLevelOverallDTO`,
+`SignalLevelChannelDTO`, `SignalLevelsDTO`, `MeasurementsDTO`), built by
+`InspectionReportMapper.envelope(for:signalLevelMetrics:generatedAt:generator:)` from a
+`SignalLevelMetrics?` threaded end to end through `ReportExporting` → `JSONReportExporter` →
+`ReportExportCoordinator` → `ReportExportAction`/`ExportOutcome.swift` → `ReportExportModel` →
+`ReportView`'s own export button, which is the single point collapsing `loading`/`unavailable`/
+`failed`/cancelled to `nil` before the export layer ever sees them — the export layer itself never
+learns those states exist. `InspectionReport` and `AudioInspectorDomain` are untouched; option C
+(folding `SignalLevelMetrics` into `InspectionReport`) was never implemented, exactly as required.
+`measurements` is omitted entirely (not `null`) when there is nothing to report, so a report exported
+without signal level metrics is byte-identical to the pre-group-6 output — confirmed by test, not
+assumed.
+
+- [x] 6.1 Add `averageFileBitrate` to the `technicalProperties` object in the `schemaVersion` 1
       JSON — additive, no version bump, per `docs/json-schema-v1.md`'s own stated evolution rule.
-- [ ] 6.2 Add `SignalLevelMetrics` under the schema's already-anticipated, still-unused `measurements`
+      **Already implemented in group 2, confirmed here rather than re-done**: audited
+      `InspectionReportMapper.technicalProperties(from:)` and found the ninth entry
+      (`("averageFileBitrate", property(p.averageFileBitrate, ...))`) already present, already exercised
+      by `JSONReportExportTests.averageFileBitrateExportsUnderItsOwnKeyDistinctFromTheOtherTwo` (exact
+      name, `uncertain` state, numeric value, coexistence with `declaredBitrate`/`estimatedBitrate`) and
+      `averageFileBitrateAbsentIsNullValueWithReasonNoUnit` (absence), plus the full canonical-example
+      contract test in `JSONReportExportContractTests`. `docs/json-schema-v1.md`'s own `estimatedBitrate`
+      row was checked and does not (and never did) attribute size/duration to it — that description
+      belongs only to `averageFileBitrate`'s own row. No code changed for this task.
+- [x] 6.2 Add `SignalLevelMetrics` under the schema's already-anticipated, still-unused `measurements`
       object (`docs/json-schema-v1.md`: "Future (additive, still v1): measurements, findings — only once
       DSP slices land") — this is that slice.
-- [ ] 6.3 Confirm the export change is isolated: a report without level metrics (or without the new
+      Exports exactly the domain model's own public surface — overall and per-channel peak/RMS/DC
+      offset/clipped-sample count, plus `sampleCount` per channel — in the domain's own **linear**
+      amplitude, never dBFS (a presentation-only conversion, confirmed absent from the wire by test).
+      No clipping threshold is exported (audited and declined: it is an analysis-engine constant with
+      no wire-version convention to anchor to yet, not part of `SignalLevelMetrics`'s own public
+      surface). "Not computable" (zero frames) is a present key with an explicit `null`, never an
+      omitted key and never a fabricated `0` — verified for both `overall` and per-channel, and verified
+      distinct from a genuinely computed zero (real silence).
+- [x] 6.3 Confirm the export change is isolated: a report without level metrics (or without the new
       bitrate field populated) exports byte-identically to today, following the same isolation-test
       pattern `add-two-file-technical-comparison` group 6.18 already established.
+      `JSONReportExportMeasurementsTests.exportIsByteIdenticalWithAndWithoutMetricsWhenMetricsAreNil`
+      and `exportWithoutMetricsOmitsTheKeyEntirelyAndStaysValid` confirm this directly;
+      `measurementsDoNotChangeAnyExistingField` and `technicalPropertiesNeverContainsADSPKey` confirm no
+      existing field or boundary was disturbed. **Two negative controls, both reverted in full**: (1)
+      adding a DSP key (`peakSample`) directly into `technicalProperties` broke
+      `technicalPropertiesNeverContainsADSPKey`; (2) exporting `overall.peakSample`/`rms` in dBFS
+      instead of the domain's linear value broke three tests, including one that additionally surfaced
+      `log10(0)`'s `-∞` failing the encoder outright — confirming the finite-value guarantee holds even
+      under a deliberately wrong mutation. Both mutations fully reverted; `diff` against a pre-mutation
+      copy showed no residue.
 
 ## 7. Deferred, and named so it is not quietly dropped
 
