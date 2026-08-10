@@ -41,27 +41,54 @@ constant anywhere.
 
 ## 2. `averageFileBitrate` (metadata-only — no DSP, no port change)
 
-- [ ] 2.1 Add `averageFileBitrate: Property<Int>` to `TechnicalProperties`, defaulting to
+- [x] 2.1 Add `averageFileBitrate: Property<Int>` to `TechnicalProperties`, defaulting to
       `.unavailable(reason: nil)` like every other field.
-- [ ] 2.2 Thread `AudioFileReference.sizeBytes` from `readProperties(of file:)` through to
+- [x] 2.2 Thread `AudioFileReference.sizeBytes` from `readProperties(of file:)` through to
       `technicalProperties(from:)` in `AVFoundationAudioFilePropertyReader` — the value is already in
       scope at the call site and is not currently passed further.
-- [ ] 2.3 Implement the pure mapping: `sizeBytes` present and `duration` a clean, positive, confirmed
+- [x] 2.3 Implement the pure mapping: `sizeBytes` present and `duration` a clean, positive, confirmed
       value → `.uncertain(value: sizeBytes*8/duration, reason: …)`; any other combination (missing size,
       unconfirmed/zero/unavailable/failed duration) → `.uncertain(value: nil, reason: …)`, mirroring
       `estimatedBitrate`'s own shape. **Never `.available`, by design, per ADR-0012 and ADR-0018.** The
       `reason` string SHALL name what the figure includes — headers, tags, and any embedded artwork, not
       only the audio payload — not just say "an estimate."
-- [ ] 2.4 Unit-test the pure mapping with controlled inputs (no real file): both facts present and
+      Implemented as an instance mapper `averageFileBitrate(sizeBytes:duration:)`, beside
+      `declaredBitrate`/`estimatedBitrate` in the same file (Option C of the location audit — pure
+      arithmetic on values already domain-level, but kept in the established one-mapper-per-field seam
+      rather than split into a new Domain-level location for no functional gain). Rounding: `Double`
+      division, `.rounded(.toNearestOrAwayFromZero)`, guarded against overflow before the final `Int(_:)`
+      conversion — never a silent truncation.
+- [x] 2.4 Unit-test the pure mapping with controlled inputs (no real file): both facts present and
       confirmed; missing size; unconfirmed/zero/negative/failed duration; a value that would overflow
-      `Int`.
-- [ ] 2.5 Confirm the addition changes no other field, warning, or the global status for any existing
+      `Int`. Also covers: a defensive non-zero-uncertain-duration case (the real reader never produces
+      one today, but the guard is proven to check the case, not just non-nil); zero `sizeBytes` computes
+      an honest `0` rather than being treated as absent; an exact rounding boundary (`0.5` rounds to `1`);
+      that doubling `sizeBytes` (as embedded artwork would) doubles the result, proving nothing is
+      excluded from the numerator; a consolidated "never `.available`" sweep across every input shape;
+      and that `declaredBitrate`/`estimatedBitrate`/`averageFileBitrate` are independent fields.
+- [x] 2.5 Confirm the addition changes no other field, warning, or the global status for any existing
       fixture — a byte-for-byte regression check against the current property-mapper tests.
-- [ ] 2.6 *(Optional, low-risk, may ride with this group or ship separately.)* Give
-      `declaredBitrate(from:)`'s `.unavailable` case a real `reason` string (today `nil`) explaining that
-      no evaluated API declares a nominal bitrate directly, now that the reason is fully understood
+      **757 → 772 tests, all green** after updating every fixture/assertion that literally enumerated the
+      prior eight technical-property keys (JSON export, presentation rows/groups, the outcome sentence's
+      property count) to nine. `InspectAudioFileUseCase`'s warning-generation list is **deliberately not
+      touched** in this group: wiring `averageFileBitrate` into it would add a new, always-present warning
+      to every fixture with a valid size and duration (mirroring `estimatedBitrate`'s own always-present
+      warning), breaking numerous existing warning-count assertions that predate this field. Left as a
+      named, open follow-up rather than done silently or forced through — see the note below.
+      **One real regression was found and fixed, not merely worked around**: `ComparisonFormatter.rows(for:)`
+      (in the already-merged two-file comparison feature) zips `ReportPropertyFormatter.displays(for:)`
+      positionally against `FileComparison`'s own fixed eight outcomes, and required an *exact* count
+      match — the new ninth row made every comparison render zero rows. Fixed by pairing only the leading
+      rows that match the outcome count (comment added explaining why), which is also the correct
+      behaviour per the group 7 decision to keep `averageFileBitrate` out of the two-file comparison.
+      `FileComparison` itself is untouched.
+      **Follow-up named, not resolved here:** should `averageFileBitrate` eventually generate a warning
+      like its seven siblings? Doing so needs a deliberate pass over every affected fixture (primarily in
+      `InspectAudioFileUseCaseTests`), not a silent addition alongside an unrelated field's own group.
+- [x] 2.6 Give `declaredBitrate(from:)`'s `.unavailable` case a real `reason` string (was `nil`) explaining
+      that no evaluated API declares a nominal bitrate directly, now that the reason is fully understood
       (`design.md` §4). Documentation-quality only — the field's semantics and its `Property` case are
-      unchanged.
+      unchanged; the one integration test that pinned the old `nil` reason now checks the case instead.
 
 ## 3. `SignalLevelMetrics` domain type (arithmetic — no FFT)
 
