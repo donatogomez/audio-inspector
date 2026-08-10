@@ -92,32 +92,96 @@ constant anywhere.
 
 ## 3. `SignalLevelMetrics` domain type (arithmetic — no FFT)
 
-- [ ] 3.1 Add `SignalLevelMetrics` (peak, DC offset, RMS, clipped-sample count) as a sibling of the
+- [x] 3.1 Add `SignalLevelMetrics` (peak, DC offset, RMS, clipped-sample count) as a sibling of the
       report, never a field of `TechnicalProperties`. Store **per channel** as the canonical
       representation; expose **overall** peak/RMS/DC-offset/clipped-count as values derived by a fixed
       formula from the per-channel data (`design.md` §8) — not a second measurement pass. Represent "not
       computable" (zero frames: division by zero, an undefined maximum) distinctly from "computed and the
       value is zero," mirroring `WaveformEnvelopeAccumulator`'s own silence-vs-absence distinction.
-- [ ] 3.2 Add its accumulator, built on `WaveformEnvelopeAccumulator`'s own proven shape: samples arrive
+      Implemented in `Sources/AudioInspectorDomain/ValueObjects/SignalLevelMetrics.swift`, no import at
+      all. `peakSample`/`rms`/`dcOffset` are `Float?`, `nil` iff `sampleCount == 0`;
+      `clippedSampleCount` is a plain, always-defined `Int`. Linear amplitude, not dBFS — a presentation
+      layer converts for display, matching how `TechnicalProperties` itself stores Hz rather than a
+      rendered string.
+- [x] 3.2 Add its accumulator, built on `WaveformEnvelopeAccumulator`'s own proven shape: samples arrive
       as any `Collection<Float>`, the result is independent of feed order and chunk size, and the fold
       is a pure, commutative accumulation per channel — one running max, one running sum, one running
       sum-of-squares, one running clip count, per channel.
-- [ ] 3.3 Fix the clipping threshold at `|sample| ≥ 1.0` (full scale on the domain's normalized
+      **One deliberate deviation from the literal wording, stated rather than silent:** this accumulates
+      `PCMChunk`, not `some Collection<Float>` — mirroring `SpectrogramAccumulator.accumulate(_:)`'s own
+      shape instead of `WaveformEnvelopeAccumulator`'s. Two reasons: peak/RMS/DC/clipping need no frame
+      **position** the way waveform buckets do, so the position-aware generic signature buys nothing; and
+      vDSP (3.4) needs contiguous, pointer-accessible storage, which a fully generic `Collection` cannot
+      promise without an intermediate copy that would defeat the point of accepting one. Feed order and
+      chunk size independence hold exactly as asked — see 3.5's own caveat on what "independent" means
+      once vDSP is in the loop.
+- [x] 3.3 Fix the clipping threshold at `|sample| ≥ 1.0` (full scale on the domain's normalized
       amplitude), as a **named constant tied to the analysis engine version** (ADR-0006's own pattern),
       **never user-configurable** — a configurable analysis threshold would make identical files produce
       different results across runs, which this project's reproducibility principle rules out. The
       "near-0 dBFS run" refinement `analysis-methodology.md` also names is explicitly **not** part of this
       slice (`design.md` §8).
-- [ ] 3.4 Measure before choosing Accelerate: run the accumulator against a real ten-minute file in an
+      `SignalLevelMetricsAccumulator.clippingThreshold: Float = 1.0`, inclusive (`≥`, confirmed by a
+      negative control below), documented as engine-versioned, no configuration surface anywhere.
+- [x] 3.4 Measure before choosing Accelerate: run the accumulator against a real ten-minute file in an
       unoptimised build first, exactly as group 12 did for the spectrogram, and let the number decide
       whether it stays pure Swift in `AudioInspectorDomain` or moves to `AudioInspectorAnalysis`.
-- [ ] 3.5 Unit-test the accumulator directly, with no file and no framework: known signals with known
+      **Measured with a disposable harness (a real 10 min/44.1 kHz/stereo WAV, deleted after use), four
+      implementations, Debug (`-Onone`) and Release (`-O`):**
+
+      | Implementation | Debug | Release |
+      | --- | --- | --- |
+      | Decode only, no accumulation | 0.035 s | 0.035 s |
+      | Naive scalar Swift (Domain, no import) | 9.15 s | 0.227 s |
+      | `SIMD8<Float>` Swift (Domain, matching `isProvablyAllFinite`) | 6.6 s | 0.102 s |
+      | vDSP for peak/sum/sumSq + scalar clip | 7.2 s | 0.077 s |
+      | **vDSP for peak/sum/sumSq + `SIMD8<Int32>` for clip (chosen)** | **0.69 s** | **0.071 s** |
+
+      Debug stayed a "brutal `-Onone` penalty" (per this task's own rule) under every pure-Swift
+      variant, including the domain's own established SIMD8 technique — vDSP alone was not enough
+      either, because it has no primitive for the clip count and the remaining scalar loop dominated.
+      Only combining vDSP with `SIMD8` for the one operation vDSP cannot do closed the gap to something
+      genuinely insignificant next to the rest of an inspection. **Decision: `AudioInspectorAnalysis`,
+      with Accelerate**, per the rule's own "document the measured reason" branch — implemented in
+      `Sources/AudioInspectorAnalysis/SignalLevelMetricsAccumulator.swift`.
+- [x] 3.5 Unit-test the accumulator directly, with no file and no framework: known signals with known
       peak/DC-offset/RMS/clipping counts; silence (zero peak/RMS/DC-offset, zero clip count — not
       absent); a single full-scale sample; a sample beyond `|1|` (kept, not clamped, and can yield a
       positive dBFS peak); zero frames (metrics reported as not computable, not as zero); order- and
       chunk-size-independence; the overall/per-channel combination formulas against hand-computed values.
+      **19 tests, `Tests/AudioInspectorKitTests/SignalLevelMetricsAccumulatorTests.swift`** — every case
+      above, plus a sine wave's standard RMS/peak ratio, stereo channel independence, opposite-polarity
+      non-cancellation, a mismatched-channel-count chunk changing nothing, determinism across two runs,
+      and two precision cases: a ten-million-sample accumulation staying accurate to a bound derived from
+      `Double`'s own error model (not an arbitrary tolerance), and exact cancellation of balanced
+      positive/negative samples. **A real, measured caveat found by actually running these, not assumed:**
+      `rms`/`dcOffset` are identical across chunk sizes only up to ~10⁻⁵ absolute, not bit-for-bit —
+      `vDSP_sve`/`vDSP_svesq` compute each chunk's own partial sum in `Float32` internally, and different
+      chunk boundaries hand vDSP different pairings that round differently in the last bit or two. `peak`,
+      `clippedSampleCount` and `sampleCount` stay bit-exact, since a maximum and a count have no
+      arithmetic combination for a grouping to change. Documented in the accumulator's own doc comment,
+      not only in the test. **Two temporary negative controls, both reverted in full:** (1) computing
+      `overallRMS` as the naive mean of per-channel RMS broke 2 assertions in
+      `overallRMSIsNotTheAverageOfPerChannelRMS`; (2) using strict `>`/`<` instead of `≥`/`≤` for clipping
+      broke 4 assertions across two tests. Both confirmed the tests discriminate, then were fully reverted
+      (`diff` against a pre-mutation copy showed no residue).
 
 ## 4. Wiring the new pass into the flow
+
+**Not started — reaffirmed by group 3's own evidence, not yet acted on.** Group 3's measurement answers
+this group's own open question with real numbers rather than the assumption it was left on: a third pass
+costs **0.69 s (Debug) / 0.071 s (Release)** on top of a 0.035 s decode, for a ten-minute file — small
+next to the spectrogram's own already-accepted cost (0.9–1.8 s Release) and nowhere near the threshold
+(tens of seconds) that once forced a dedicated performance slice. **4.1's decision stands, strengthened,
+not reopened**: no shared-read strategy is warranted. `SignalLevelMetricsAccumulator.accumulate(_ chunk:
+PCMChunk)` (3.2) already has the exact shape a future `SignalLevelMetricsGeneration.run(for:)` would
+call — `decoder.decode(file, chunkFrames:) { _, chunk in accumulator.accumulate(chunk); return
+.continue }` — mirroring `SpectrogramGeneration.run(for:)` line for line, so this group's own work is
+mechanical composition, not new design. Neither `SourceInspectionCoordinator`, `ImportFlowModel`, nor any
+outcome type (`SignalLevelMetricsOutcome`, mirroring `WaveformOutcome`/`SpectrogramOutcome`) was touched
+in group 3 — that flow-level "loading/cancelled" concern is distinct from, and does not replace, the
+domain type's own "zero frames" representation (3.1), which is a fact about the stream, not the
+operation.
 
 - [ ] 4.1 `SignalLevelMetrics` is produced by a **third independent operation** over the existing,
       shared `AudioDecoding` port — the same port the spectrogram already consumes — with its own
