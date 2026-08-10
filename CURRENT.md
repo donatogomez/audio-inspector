@@ -329,5 +329,42 @@ comparison rows' structure directly instead of through VoiceOver's broken traver
 `openspec archive` follows from this session: this change sits one specific, already-known, already-named
 accessibility gap away from closing 8.4.
 
+**A third thread is open: an audit of the technical-property model, `add-computed-technical-properties`.**
+Contract only — no domain, no port, no code; `Sources/` and `Tests/` are untouched. It answers two
+questions with evidence read from the actual property reader rather than assumed: whether a real average
+bitrate can be computed from data already in the domain (yes — `sizeBytes × 8 ÷ duration`, always
+`uncertain`, never `available`, consistent with what ADR-0012 had already decided about that exact
+computation), and which further technical properties are objective facts worth exposing versus
+interpretation dressed up as one. Two are rejected by name rather than silently: a "lowest observed
+frequency" with no product need on record anywhere in this project, and a generic "dynamic range" field,
+which ADR-0006 already forbids as a single truth. Three are named and deferred with their reasons rather
+than dropped: true peak (ADR-0006 already governs its methodology), a noise-floor-relative significant
+max frequency (needs its own methodology decisions, not a simple reduction — reuses the existing
+`Spectrogram` model with no new file read, once designed), and crest factor (free once peak+RMS exist,
+but held back so it is not read in isolation as an out-of-context dynamics signal). **ADR-0018** fixes
+the one permanent decision this forces: `TechnicalProperties`'s own "no DSP" line means a sample-level
+metric can never join it, so it becomes a new peer value type, `SignalLevelMetrics`, beside the report —
+exactly the shape `WaveformEnvelope`/`Spectrogram` already use — while a metadata-only calculation like
+the new bitrate stays inside the existing type. ADR-0018 is `Proposed`.
+
+**A second pass then audited the first draft itself, before anything was committed, and corrected it in
+three places rather than rubber-stamping it.** The bitrate field is named `averageFileBitrate`, not the
+first draft's `calculatedAverageBitrate`: the draft had understated how common embedded cover art is and
+how much it can inflate the figure (a 3 MB cover on a 3-minute track alone adds roughly 130 kbps), so the
+name now keeps *File* directly beside *Bitrate* rather than trusting a doc comment to carry that caveat.
+Two naming questions the first draft left open are now closed with a quantified cost instead of deferred:
+`declaredBitrate` is kept exactly as it is (it has a real producer, ADR-0012 already treats it as a
+permanent tier, and removing a shipped wire field is a bigger change than keeping an honestly empty one);
+`estimatedBitrate` is **not** renamed to `frameworkEstimatedBitrate` — breaking an already-shipped
+`schemaVersion` 1 key for a cosmetic gain the new field's own name delivers anyway fails its own cost
+test outright. And the level-metrics read strategy is now a decision, not an open question: a **third
+independent operation over the existing, shared `AudioDecoding` port** — the same one the spectrogram
+uses — never coupled to the waveform's own generator, which stays deliberately un-migrated onto that seam
+for its own separate, already-declared reasons; coupling a new consumer to that debt would make its
+eventual migration harder, not easier.
+
+Nothing is implemented; the next step is picking up group 2 of its tasks (`averageFileBitrate`, the
+smallest and cheapest of everything this audit found).
+
 ---
 _Last touched: 2026-08-08. Overwrite freely; empty is fine._
