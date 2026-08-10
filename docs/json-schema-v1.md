@@ -30,8 +30,9 @@ produced, which need not equal the inspection time.
 | `technicalProperties` | object | no | Map of property → stateful value (see below). |
 | `warnings` | array | no | May be empty. Warning objects (see below). |
 | `inspectionStatus` | object | no | Global outcome (see below). |
+| `measurements` | object | **key omitted, not `null`, when absent** | DSP-derived measurements (see below). Additive; present only when at least one measurement exists. |
 
-Future (additive, still v1): `measurements`, `findings` — only once DSP slices land.
+Future (additive, still v1): `findings` — only once a capability needs it.
 
 ## `inspectedFile`
 
@@ -104,6 +105,60 @@ each with its explicit `state` (an absent datum is `unavailable`/`unsupported`, 
 therefore means "no inspection occurred", distinct from an inspected property that turned out absent.
 Descriptive-metadata warnings (`metadata_*`, see below) may still appear on a global failure **without**
 changing the `failed` state.
+
+## `measurements` (additive — DSP-derived, never metadata)
+
+`measurements` never joins `technicalProperties`: everything under it required decoding sample data,
+which `technicalProperties`'s own boundary excludes by design (ADR-0018). The key is **omitted
+entirely** when there is nothing to report — not present as `null` — so a report exported without any
+measurement is byte-identical to one exported before this object existed. Its absence carries no
+warning and never changes `inspectionStatus`; a measurement is orthogonal to whether the file's
+metadata could be read.
+
+### `measurements.signalLevels`
+
+Peak, RMS, DC offset and clipped-sample count, overall and per channel — the wire form of the domain's
+`SignalLevelMetrics`. Present only when `SignalLevelMetrics` was actually produced (not `loading`,
+`unavailable`, `failed`, or a cancelled operation — those all collapse to `measurements` being absent
+before export is ever reached).
+
+**Values are the domain's own linear amplitude, never dBFS.** A decibel conversion is a presentation
+concern, applied only inside the app's UI layer; the wire contract exports what was measured, in the
+unit it was measured in — the same principle `technicalProperties` already follows for `sampleRate`
+(Hz, not a rendered `"44.1 kHz"` string).
+
+| Field | Type | Null? | Notes |
+| --- | --- | --- | --- |
+| `overall.peakSample` | number | yes | Linear amplitude. `null` iff every channel has `sampleCount == 0` ("not computable", never a fabricated `0`). Can exceed `1.0` — a genuinely out-of-range sample is kept exactly as measured, never clamped. |
+| `overall.rms` | number | yes | Linear amplitude. Same null rule as `peakSample`. |
+| `overall.dcOffset` | number | yes | Linear, signed. Same null rule as `peakSample`. |
+| `overall.clippedSampleCount` | integer | no | Always defined, even when every channel is empty (`0`, not `null`) — counting is defined over zero samples. |
+| `channels` | array | no | One entry per channel, in the stream's own order. May be empty only if the stream itself reports no channels (never observed in practice). |
+| `channels[].sampleCount` | integer | no | `0` iff this channel's other three fields are `null`. |
+| `channels[].peakSample` / `.rms` / `.dcOffset` | number | yes | Same shape and null rule as the `overall` fields, per channel. |
+| `channels[].clippedSampleCount` | integer | no | Always defined. |
+
+No clipping threshold is exported: it is a named constant of the analysis engine
+(`SignalLevelMetricsAccumulator.clippingThreshold`), not a fact this measurement itself carries, and
+this contract has no engine-version field yet for such a constant to be meaningfully anchored to.
+
+Example, added to the realistic export below when signal level metrics are available:
+
+```json
+"measurements": {
+  "signalLevels": {
+    "overall": { "peakSample": 0.708, "rms": 0.22, "dcOffset": -0.0003, "clippedSampleCount": 12 },
+    "channels": [
+      { "sampleCount": 13230000, "peakSample": 0.708, "rms": 0.25, "dcOffset": 0.0006, "clippedSampleCount": 0 },
+      { "sampleCount": 13230000, "peakSample": 0.501, "rms": 0.18, "dcOffset": -0.0011, "clippedSampleCount": 12 }
+    ]
+  }
+}
+```
+
+Pinned by `JSONReportExportMeasurementsTests` (overall/per-channel/multichannel shape, the
+not-computable-vs-zero distinction, values beyond full scale, determinism, and that the key is fully
+absent — not `null` — when there is nothing to report).
 
 ## Stable codes
 
@@ -202,5 +257,6 @@ Example of a **global failure**:
 ```
 
 This document is the canonical `schemaVersion` 1 contract. It supersedes the earlier illustrative
-draft (which used `fileIdentity`/`mediaProperties`/`analysisStatus` and a `path` field). DSP-era
-fields will be added additively without bumping the version.
+draft (which used `fileIdentity`/`mediaProperties`/`analysisStatus` and a `path` field). `measurements`
+is the first DSP-era field, added additively without bumping the version, per the rule stated above;
+any future measurement (e.g. true peak) is a sibling key under `measurements`, added the same way.
