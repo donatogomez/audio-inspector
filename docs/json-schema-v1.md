@@ -93,12 +93,13 @@ MVP property keys and units (units are stable tokens: `seconds`, `hertz`, `bitsP
 | `bitDepth` | integer | `bits` | Usually `unsupported` for lossy codecs. |
 | `codec` | string | — | Only `available` when reliably determinable. |
 | `declaredBitrate` | integer | `bitsPerSecond` | Container/stream-declared. |
-| `estimatedBitrate` | integer | `bitsPerSecond` | **Always `uncertain`**; `reason` states the method (size÷duration) and its limitations (includes container overhead; not read from the stream). Kept **separate** from `declaredBitrate`. |
+| `estimatedBitrate` | integer | `bitsPerSecond` | **Always `uncertain`**; `reason` states the actual source (the framework's own track-level data-rate estimate, e.g. `AVAssetTrack.estimatedDataRate`) and that it may not exactly represent the stream. Kept **separate** from `declaredBitrate`. |
+| `averageFileBitrate` | integer | `bitsPerSecond` | **Always `uncertain`** (never `available`; ADR-0018); calculated as `sizeBytes × 8 ÷ duration` — the file's **whole size**, including any container header, tag or embedded artwork, not the audio payload alone. `reason` states this explicitly. Absent when the file's size or a confirmed duration is not known. Kept **separate** from both `declaredBitrate` and `estimatedBitrate` — three distinct claims about a rate, never merged. |
 
 **Failure vs. inspection outcome.** `technicalProperties` reflects whether property inspection
 happened. When `inspectionStatus.state` is `"failed"` (a global failure — the file could not be opened
 or read at all), `technicalProperties` **MUST** be the empty object `{}`: no property was inspected.
-When the state is `"completed"` or `"partial"`, all eight technical-property keys **MUST** be present,
+When the state is `"completed"` or `"partial"`, all nine technical-property keys **MUST** be present,
 each with its explicit `state` (an absent datum is `unavailable`/`unsupported`, never omitted). `{}`
 therefore means "no inspection occurred", distinct from an inspected property that turned out absent.
 Descriptive-metadata warnings (`metadata_*`, see below) may still appear on a global failure **without**
@@ -162,7 +163,9 @@ localized). Initial registry (grows additively):
     "codec":           { "state": "available",   "value": "aac" },
     "declaredBitrate": { "state": "available",   "value": 128000, "unit": "bitsPerSecond" },
     "estimatedBitrate":{ "state": "uncertain",   "value": 180904, "unit": "bitsPerSecond",
-                         "reason": "estimated as fileSize*8/duration; includes container overhead and is not read from the stream" }
+                         "reason": "Framework estimated data rate; an estimate — not a declared bitrate — that may not exactly represent the stream." },
+    "averageFileBitrate": { "state": "uncertain", "value": 133875, "unit": "bitsPerSecond",
+                         "reason": "Calculated from the file's total size and duration; includes any container header, metadata and embedded artwork, not only the audio payload — always an approximation of the audio stream's own rate, never a declared or measured one." }
   },
   "warnings": [
     { "code": "property_unsupported", "field": "bitDepth", "kind": "unsupported",

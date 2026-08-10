@@ -79,14 +79,18 @@ struct ComparisonRowDisplay: Equatable, Identifiable {
 /// view at all.
 enum ComparisonFormatter {
 
-    /// The eight rows, in the order the report already presents these properties.
+    /// The eight compared rows, in the order the report already presents these properties.
     ///
     /// Both sides go through **`ReportPropertyFormatter.displays(for:)`**, the same function the report
     /// uses, so a value reads identically whether it appears in a report or in a comparison — and no
-    /// second set of formatters can drift from the first.
+    /// second set of formatters can drift from the first. That function may return **more** rows than
+    /// are compared here — `averageFileBitrate` (ADR-0018) is deliberately not one of `FileComparison`'s
+    /// eight fields, since it can never be `available` and therefore could never read as `Same`/
+    /// `Different` under the current semantics — so only the leading rows matching `outcomes` are paired;
+    /// anything beyond that is the report's own, uncompared.
     ///
-    /// The outcomes are listed in that same order, which is the one coupling here; the order is pinned
-    /// by a test rather than trusted.
+    /// The outcomes are listed in the same order as those leading rows, which is the one coupling here;
+    /// the order is pinned by a test rather than trusted.
     static func rows(for comparison: FileComparison) -> [ComparisonRowDisplay] {
         let first = ReportPropertyFormatter.displays(for: comparison.first.properties)
         let second = ReportPropertyFormatter.displays(for: comparison.second.properties)
@@ -101,9 +105,9 @@ enum ComparisonFormatter {
             outcome(comparison.estimatedBitrate),
         ]
 
-        guard first.count == outcomes.count, second.count == outcomes.count else { return [] }
+        guard first.count >= outcomes.count, second.count >= outcomes.count else { return [] }
 
-        return zip(zip(first, second), outcomes).map { sides, outcome in
+        return zip(zip(first.prefix(outcomes.count), second.prefix(outcomes.count)), outcomes).map { sides, outcome in
             ComparisonRowDisplay(
                 name: sides.0.name,
                 first: sides.0,

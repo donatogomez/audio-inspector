@@ -59,10 +59,10 @@ enum InspectionReportMapper {
 
     // MARK: - technicalProperties
 
-    /// `{}` **iff** the inspection failed globally (no property was inspected); otherwise the eight
+    /// `{}` **iff** the inspection failed globally (no property was inspected); otherwise the nine
     /// explicit entries, each in its wire state. The gate is the global `status`, never the content of
     /// `TechnicalProperties` — a global failure carries an all-`unavailable` set that must **not** be
-    /// emitted as eight `unavailable` entries.
+    /// emitted as nine `unavailable` entries.
     private static func technicalProperties(from report: InspectionReport) -> TechnicalPropertiesDTO {
         if case .failed = report.status {
             return TechnicalPropertiesDTO(entries: [])
@@ -77,6 +77,7 @@ enum InspectionReportMapper {
             ("codec", property(p.codec, unit: nil, scalar: JSONScalar.string)),
             ("declaredBitrate", property(p.declaredBitrate, unit: "bitsPerSecond", scalar: JSONScalar.int)),
             ("estimatedBitrate", property(p.estimatedBitrate, unit: "bitsPerSecond", scalar: JSONScalar.int)),
+            ("averageFileBitrate", property(p.averageFileBitrate, unit: "bitsPerSecond", scalar: JSONScalar.int)),
         ])
     }
 

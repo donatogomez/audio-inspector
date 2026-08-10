@@ -43,7 +43,7 @@ public struct AVFoundationAudioFilePropertyReader: AudioFilePropertyReading {
             )
         }
         let loaded = try await loadAudio(from: url)
-        return technicalProperties(from: loaded)
+        return technicalProperties(from: loaded, sizeBytes: file.sizeBytes)
     }
 }
 
@@ -149,18 +149,22 @@ extension AVFoundationAudioFilePropertyReader {
     /// Assembles `TechnicalProperties` from the per-field mappers. The audio stream basic description is
     /// derived **once** here (preserving the value/absence/read-error distinction) and shared by every
     /// ASBD-dependent mapper (`sampleRate`/`channelCount`/`bitDepth`/`codec`), so the CoreMedia access is
-    /// not duplicated.
-    func technicalProperties(from loaded: LoadedAudio) -> TechnicalProperties {
+    /// not duplicated. `duration` is likewise derived once and reused for `averageFileBitrate`, which
+    /// needs it alongside `sizeBytes` — the file reference's own size, not a property this reader reads
+    /// itself, threaded in from `readProperties(of:)`.
+    func technicalProperties(from loaded: LoadedAudio, sizeBytes: Int?) -> TechnicalProperties {
         let stream = Self.streamProperty(from: loaded.formatDescription)
+        let durationProperty = duration(from: loaded.duration)
         return TechnicalProperties(
             container: container(from: loaded.url),
-            duration: duration(from: loaded.duration),
+            duration: durationProperty,
             sampleRate: sampleRate(from: stream),
             channelCount: channelCount(from: stream),
             bitDepth: bitDepth(from: stream),
             codec: codec(from: stream),
             declaredBitrate: declaredBitrate(from: loaded),
-            estimatedBitrate: estimatedBitrate(from: loaded.estimatedDataRate)
+            estimatedBitrate: estimatedBitrate(from: loaded.estimatedDataRate),
+            averageFileBitrate: averageFileBitrate(sizeBytes: sizeBytes, duration: durationProperty)
         )
     }
 }
@@ -356,8 +360,11 @@ extension AVFoundationAudioFilePropertyReader {
     /// self-computation**. Spike 0031/G found no such direct source among the evaluated AVFoundation APIs,
     /// and the adapter does not attempt to read one, so it is always `unavailable` — an *absence of
     /// capability*, **not** a read error, so never `failed`. No value is fabricated; no AudioToolbox.
+    /// The `reason` names that absence explicitly (ADR-0012 §1.4 keeps this a real, permanent tier — a
+    /// declared rate is not guaranteed to be readable across formats, not something this reader failed
+    /// to look for), rather than leaving a future reader to re-derive why from source.
     func declaredBitrate(from _: LoadedAudio) -> Property<Int> {
-        .unavailable(reason: nil)
+        .unavailable(reason: "No API this reader uses declares a nominal bitrate directly for this file.")
     }
 
     /// `estimatedBitrate` — **always `uncertain`** by contract (criterion 3.5; matrix; design), except a
@@ -380,6 +387,43 @@ extension AVFoundationAudioFilePropertyReader {
                 reason: "Framework estimated data rate; an estimate — not a declared bitrate — that may not exactly represent the stream."
             )
         }
+    }
+
+    /// `averageFileBitrate` — **calculated from the file's total size and its duration, never from a
+    /// decoded sample** (ADR-0018): `sizeBytes × 8 ÷ duration`, rounded to the nearest whole bit per
+    /// second (away from zero — the result is never negative, so this is also "round half up"). This is
+    /// the **whole file**, including any container header, tag, or embedded artwork, not the audio
+    /// payload alone, so it is **never `available`** — always `uncertain` when computable, mirroring
+    /// `estimatedBitrate`'s own shape, or `uncertain(nil)` when it is not.
+    ///
+    /// Computable only when every input is genuinely usable: `sizeBytes` present and non-negative
+    /// (`URLResourceValues.fileSize` never reports a negative size in practice, but the type does not
+    /// promise it, so this is checked rather than assumed), and `duration` a **confirmed** positive,
+    /// finite value — `.available` specifically, never `.uncertain`'s own zero-duration case, which
+    /// would divide by zero. A result that does not fit `Int` (an astronomically large size over a
+    /// vanishingly small duration) is treated the same as any other unusable input: absent, not a crash
+    /// and not a silently wrapped number.
+    func averageFileBitrate(sizeBytes: Int?, duration: Property<Double>) -> Property<Int> {
+        guard let sizeBytes, sizeBytes >= 0 else {
+            return .uncertain(value: nil, reason: Self.noAverageFileBitrateReason)
+        }
+        guard case let .available(seconds) = duration, seconds.isFinite, seconds > 0 else {
+            return .uncertain(value: nil, reason: Self.noAverageFileBitrateReason)
+        }
+        let bitsPerSecond = (Double(sizeBytes) * 8.0 / seconds).rounded(.toNearestOrAwayFromZero)
+        guard bitsPerSecond.isFinite, bitsPerSecond >= 0, bitsPerSecond <= Double(Int.max) else {
+            return .uncertain(value: nil, reason: Self.noAverageFileBitrateReason)
+        }
+        return .uncertain(
+            value: Int(bitsPerSecond),
+            reason: "Calculated from the file's total size and duration; includes any container header, "
+                + "metadata and embedded artwork, not only the audio payload — always an approximation "
+                + "of the audio stream's own rate, never a declared or measured one."
+        )
+    }
+
+    static var noAverageFileBitrateReason: String {
+        "No reliable average bitrate could be calculated: the file's size or a confirmed duration is not available."
     }
 
     static var noEstimateReason: String { "No reliable bitrate estimate is available from the file." }

@@ -131,7 +131,8 @@ enum ReportPropertyFormatter {
 
     // MARK: - Properties
 
-    /// The eight rows, in declaration order. Declared and estimated bitrate stay separate.
+    /// The nine rows, in declaration order. Declared, estimated and average-file bitrate stay separate —
+    /// three different claims about a rate, never merged (ADR-0018).
     ///
     /// Each numeric field pairs a readable form with the exact one, so rounding never loses the datum.
     static func displays(for properties: TechnicalProperties) -> [PropertyDisplay] {
@@ -144,6 +145,7 @@ enum ReportPropertyFormatter {
             display("Codec", properties.codec, format: codecName, exact: { $0 }),
             display("Declared bitrate", properties.declaredBitrate, format: HumanFormat.bitrate, exact: HumanFormat.bitrateExact),
             display("Estimated bitrate", properties.estimatedBitrate, format: HumanFormat.bitrate, exact: HumanFormat.bitrateExact),
+            display("Average file bitrate", properties.averageFileBitrate, format: HumanFormat.bitrate, exact: HumanFormat.bitrateExact),
         ]
     }
 
@@ -269,7 +271,7 @@ enum ReportPropertyFormatter {
 
     // MARK: - Grouping and summary
 
-    /// Two groups: what the file **is**, and how it is **encoded**. Every one of the eight rows appears
+    /// Two groups: what the file **is**, and how it is **encoded**. Every one of the nine rows appears
     /// in exactly one group, so grouping reorganises without hiding anything.
     static func groups(for properties: TechnicalProperties) -> [PropertyGroup] {
         let rows = displays(for: properties)
@@ -280,7 +282,10 @@ enum ReportPropertyFormatter {
             PropertyGroup(name: "Format", properties: pick(["Container", "Codec", "Duration"])),
             PropertyGroup(
                 name: "Encoding",
-                properties: pick(["Sample rate", "Channel count", "Bit depth", "Declared bitrate", "Estimated bitrate"])
+                properties: pick([
+                    "Sample rate", "Channel count", "Bit depth",
+                    "Declared bitrate", "Estimated bitrate", "Average file bitrate",
+                ])
             ),
         ]
     }
