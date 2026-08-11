@@ -427,6 +427,82 @@ remaining, unobserved criterion — not four.
 and blocked by a pre-existing, already-documented gap, not by anything new; tracked as the same debt, not
 a fresh one. Nothing about 7.2 or 7.4, closed in the first pass, changes here.
 
+## Signal level metrics — a real defect found by manual validation (2026-08-11)
+
+Change `add-computed-technical-properties`, group 8/ADR-0018's own promotion criterion ("its own manual
+validation is done"). A person ran the real Debug build against a real stereo WAV fixture (4 s, 44.1 kHz,
+DC-biased differently per channel, a full-scale burst on channel 1) and reported both screenshots and
+the exported JSON verbatim. **This pass found a real, reproducible defect, not merely "not yet run."**
+
+### OBSERVED — the on-screen surface (PASS on every checked point)
+
+- The **Signal levels** section appears, legible, directly beneath Waveform and before Spectrogram —
+  exactly the placement group 5 decided on.
+- **Peak sample**: `0.00 dBFS`, with `Channel 1: 0.00 dBFS · Channel 2: -8.64 dBFS`. In dBFS, as
+  specified.
+- **RMS level**: `-9.15 dBFS`, with per-channel values. In dBFS, as specified.
+- **DC offset**: `+0.0055`, with `Channel 1: +0.0311 · Channel 2: -0.0200` — linear, signed, **not**
+  dBFS, as specified.
+- **Clipped samples**: `0`, with the explanatory line "Samples at or beyond full scale." An integer, as
+  specified. (The fixture's intended clipped burst used raw `+32767`, which normalizes to `0.999969…`
+  under the standard 16-bit-PCM-to-float convention (division by `32768`, not `32767`) — **not** `≥ 1.0`.
+  This is the fixture's own construction error, not a finding about the reader: it is consistent with,
+  and confirms, correct `≥ 1.0` threshold behaviour rather than contradicting it.)
+- Channels are labelled **"Channel 1" / "Channel 2"** — never "Left"/"Right", as specified.
+- No quality or diagnostic wording was seen anywhere in the section.
+- **Waveform** and **Spectrogram** remained visible and intact, both showing the transient from the
+  fixture's loud burst; neither was disturbed by Signal levels being present.
+- The rest of the report (Format, Encoding, Notes, Result, File) read normally, with
+  `averageFileBitrate` shown under its own label ("Average file bitrate 1,411.29 kbps") distinct from
+  `Declared bitrate`/`Estimated bitrate`, each correctly reflecting this WAV's own real absence/
+  unreliability.
+
+### OBSERVED — the exported JSON (FAIL, reproduced twice)
+
+Exported twice, several minutes apart, **after** the Signal levels values were already visible on
+screen (confirmed explicitly by the person running the pass, ruling out a load-in-progress race):
+`generatedAt` `2026-08-11T00:17:09Z` and, on request, again at `2026-08-11T00:24:17Z`. **Both documents
+are structurally identical and both omit `measurements` entirely** — `schemaVersion`, `generatedAt`,
+`generator`, `inspectedFile`, `inspectionStatus`, `technicalProperties` (including
+`averageFileBitrate`, correctly present under its own key) and `warnings` are all present and correct;
+`measurements.signalLevels` never appears, in either export.
+
+**This is a real defect, not the expected "absent when nothing to report" case**: the UI had already
+rendered real, non-`loading` signal level metrics in both cases, so the export's own contract
+(`ReportView`'s `exportableSignalLevelMetrics` collapsing only `loading`/`absent`/`failed`/`cancelled`
+to `nil`) should have produced a populated `measurements` object.
+
+**Where this sits relative to existing coverage.** Every automated test that exercises
+`SignalLevelMetrics` reaching the export layer (`JSONReportExportMeasurementsTests`) constructs a
+`SignalLevelMetrics` fixture directly and hands it straight to the exporter — none of them go through
+`ReportView`'s real `Button`/`.toolbar` action. `EndToEndFlowTests`, the suite that does exercise the
+real `ReportExportCoordinator` end to end, calls `exportModel.export(report, signalLevelMetrics: nil)`
+explicitly in all three of its export scenarios. **No test in this repository exercises the actual path
+from `ReportView`'s export button through to a populated `measurements` object.** That gap is exactly
+what this manual pass was for, and it found a real defect the automated suite structurally cannot see.
+
+**A hypothesis, recorded as a hypothesis, not a finding.** `exportAction` (and its `Button`) is nested
+inside a SwiftUI `.toolbar { ToolbarItem(placement: .primaryAction) { exportAction } }` modifier
+(`ReportView.swift`). On macOS, a `.toolbar` item's underlying `NSToolbarItem` is not guaranteed to be
+rebuilt on every `body` re-evaluation the way in-line content is — if it is not, a closure captured on
+the toolbar item's first construction (while `signalLevelMetrics` was still `.loading`, hence `nil`)
+would explain a button that always exports `nil` regardless of what the rest of the view now shows,
+consistent with both reproductions. This was **not confirmed by live debugging** (breakpoints,
+logging) — this pass was limited to build, launch, and observe, per its own scope — so it is recorded
+as the strongest available lead, not as a diagnosis.
+
+### Consequence
+
+**This is filed as a found defect, not as "validation not yet done."** No code was changed to
+investigate or fix it, per this pass's own instruction. **ADR-0018 stays `Proposed`**: its own
+promotion criterion required this change's manual validation to be done, and it has now been done —
+but it did not pass. Group 8's task 8.3 stays open for the ADR decision it depends on; `openspec
+archive` was never going to run in this session regardless. The next session on this change should
+start by reproducing this defect under a debugger (or by testing `ReportView`'s export button through
+`ViewInspector`/a UI test, if this project ever adopts one) before attempting a fix — printing the
+value of `exportableSignalLevelMetrics` at the moment the closure executes would confirm or rule out
+the toolbar hypothesis directly.
+
 ## What is already automated (do not re-verify by hand)
 
 These are covered by `swift test` / `Scripts/check-boundaries.sh` and need no manual work:
