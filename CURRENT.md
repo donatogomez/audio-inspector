@@ -16,32 +16,37 @@
 >   session protocol in `CLAUDE.md`).
 
 ---
-**Focus:** `add-true-peak-measurement`, groups 1–3 done. **The domain model exists; no DSP does.**
-Nothing in the project yet reads a sample to produce a true peak — `TruePeakMeasurement` is a result
-type and the identity of the method that produced it, and that is all.
+**Focus:** `add-true-peak-measurement`, groups 1–4 done. **A true peak can now be computed; nothing
+computes one.** `TruePeakAccumulator` takes `PCMChunk`s handed to it by hand and returns a
+`TruePeakMeasurement`; no decoder, no flow, no state, no interface and no export reference it, and
+nothing in the app produces one.
 
-**What the model decided, beyond holding numbers.** `overallTruePeak` is **derived, not stored**, so it
-cannot drift from the per-channel values: there is no argument to pass wrongly and no field to fill in
-wrongly. That differs from `SignalLevelMetrics` on purpose — its overall RMS and DC offset genuinely are
-not functions of the per-channel results, while a maximum of maxima exactly is. Contradictory channels
-are unrepresentable rather than merely documented: a failable initialiser enforces `truePeak == nil` iff
-`sampleCount == 0` in **both** directions, and refuses negatives, `NaN` and infinities.
+**The two guarantees that shaped the implementation, and that any change to it must preserve.** First,
+`truePeak >= samplePeak` is **structural, not clamped**: phase 0's taps are exactly `0, …, 1, …, 0`
+because `sinc` is evaluated with its integer zeros used as the definition they are, so the stored
+samples are already inside the set the maximum is taken over. There is no `max(samplePeak, …)` anywhere
+in the file, and there must never be — it would hide a broken filter instead of failing on it. Second,
+the result is **bit-exact under any chunking**, which is a stronger contract than the RMS in
+`SignalLevelMetrics` can offer, and it holds because a maximum accumulates nothing.
 
-**The methodology is recorded as an identity, not as configuration.** `TruePeakFilterIdentifier` follows
-`WarningCode`'s existing shape in this repo — a `RawRepresentable` over `String` whose rawValue is the
-identity and survives any refactor. The 48 taps, the Kaiser β and the cutoff are **not** in the model:
-it says which methodology ran, never how to configure one. Changing any of those constants requires a
-new identity (`v2`), which is what keeps two differently-measured files from exporting the same token.
+**One number worth carrying forward.** The samples that must cross a chunk boundary are
+`tapsPerPhase − 1` = **47**, not the 23 the task list first named: 23 is the left context a position
+reads, and 24 more are the lookahead that holds back the last positions of a chunk. Carrying only 23
+loses them, which the third negative control demonstrated by collapsing chunk independence outright.
 
-**Next step:** group 4 — the accumulator in `AudioInspectorAnalysis`, `vDSP_conv` per phase plus
-`vDSP_maxmgv`, with the filter generated from the recorded parameters rather than a pasted table. Two
-things the group-2 spike already fixed and that the accumulator must honour: evaluate `sinc` with its
-integer zeros used exactly (that is what makes `truePeak >= samplePeak` structural rather than a clamp),
-and carry `tapsPerPhase/2 − 1` samples of history across chunks so the result stays bit-exact. The
-methodological floor of ADR-0006 (≥4×) belongs there too — the model deliberately does not police it.
+**Performance is better than the spike predicted, not worse**: 10 min stereo costs **0.57 s in Release
+and 1.06 s in Debug**, against the spike's 0.69 s and 5.24 s. The difference is that production keeps
+`Float` natively and reuses its buffers where the spike converted from `Double` per chunk — the caveat
+the spike report already flagged. Memory stays bounded by the chunk, never by duration.
 
-**ADR-0019 stays `Proposed`.** Its promotion still needs oracle agreement against production code plus a
-manual pass; a domain type does not move it.
+**Next step:** group 5 — measure the **whole inspection** with three operations versus four, against the
+real decode path, in Debug. Group 4's numbers are DSP only on synthesised buffers; the stop rule in
+`design.md` §8 is still the escape hatch if the end-to-end figure disagrees. Only after that does group 6
+wire the fourth operation in.
+
+**ADR-0019 stays `Proposed`.** The oracle now agrees within the pinned 0.05 dB against *production*
+code, which is one of its two promotion conditions; the other is a manual pass over a real surface, and
+no surface exists yet.
 
 **Other open threads** (see `openspec list` for their real task counts, not restated here):
 `add-static-spectrogram-visualization` (manual validation battery deferred by product decision) and
