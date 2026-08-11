@@ -326,6 +326,70 @@ struct EndToEndFlowTests {
         }
     }
 
+    /// **The real path that was never exercised before.** Every existing export test in this suite —
+    /// and every one of `JSONReportExportMeasurementsTests` — either passes `signalLevelMetrics: nil`
+    /// explicitly or constructs a `SignalLevelMetrics` fixture by hand and hands it straight to the
+    /// exporter. None of them walk the actual production sequence: a real file, decoded for real by the
+    /// real `SignalLevelMetricsGeneration`, settling into `InspectionPresentation.signalLevelMetrics`,
+    /// extracted from it exactly the way `ReportView.exportableSignalLevelMetrics` does (`.available`
+    /// unwrapped, everything else `nil`), and only then exported. A manual validation pass found that
+    /// gap by hand; this closes it permanently.
+    @Test func theRealSignalLevelMetricsPathReachesTheExportedDocument() async throws {
+        try await withTemporaryDirectory { directory in
+            let source = directory.appendingPathComponent("fixture.wav")
+            try writePCMFixture(to: source)
+
+            // 1–6. The full production sequence: selection → coordinator → real reader, real decoder,
+            // real SignalLevelMetricsGeneration → flow model. No port is scripted.
+            let inspection = SourceInspectionCoordinator(chooseSource: { source })
+            let flow = ImportFlowModel(action: { onUpdate in await inspection.inspect(onUpdate: onUpdate) })
+            await flow.selectAndInspect()
+
+            guard case let .report(presentation) = flow.state else {
+                Issue.record("expected the flow to end in .report, got \(flow.state)"); return
+            }
+
+            // The metrics really were produced — this run is exercising something real, not proving
+            // nothing by exporting an absence.
+            guard case let .available(metrics) = presentation.signalLevelMetrics else {
+                Issue.record("expected available signal level metrics, got \(presentation.signalLevelMetrics)")
+                return
+            }
+            #expect(metrics.channels.count == 1)
+            #expect(metrics.overallPeakSample != nil)
+
+            // The exact extraction `ReportView.exportableSignalLevelMetrics` performs — `.available`
+            // unwrapped to the domain value, everything else collapsed to `nil` — reproduced here since
+            // that computed property is private to the view and SwiftUI's own `Button`/`.toolbar` are
+            // not reachable from a headless test.
+            func exportableSignalLevelMetrics(_ state: SignalLevelMetricsPresentation) -> SignalLevelMetrics? {
+                guard case let .metrics(metrics) = state else { return nil }
+                return metrics
+            }
+
+            let destination = directory.appendingPathComponent("out.json")
+            let exportCoordinator = ReportExportCoordinator(
+                exporter: JSONReportExporter(generator: fixedGenerator, now: { fixedNow }),
+                chooseDestination: { _ in destination }
+            )
+            let exportModel = ReportExportModel(action: { report, metrics in await exportCoordinator.export(report, signalLevelMetrics: metrics) })
+
+            // The composition root's own translation, `RootView.signalLevelMetricsPresentation(for:)`,
+            // then the same extraction the button performs — the two seams between the flow's state and
+            // what actually gets exported.
+            let toExport = exportableSignalLevelMetrics(
+                RootView.signalLevelMetricsPresentation(for: presentation.signalLevelMetrics)
+            )
+            await exportModel.export(presentation.report, signalLevelMetrics: toExport)
+            #expect(exportModel.phase == .succeeded)
+
+            let json = try JSONDecoder().decode(JSONValue.self, from: Data(contentsOf: destination))
+            let signalLevels = try #require(json["measurements"]?["signalLevels"], "measurements never reached the export")
+            #expect(signalLevels["overall"]?["peakSample"]?.double == Double(try #require(metrics.overallPeakSample)))
+            #expect(signalLevels["channels"]?.array?.count == 1)
+        }
+    }
+
     private struct FlowDidNotProduceAReport: Error {}
 
     /// The wire token for a domain status, so the JSON is compared against the report rather than
