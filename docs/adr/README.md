@@ -26,4 +26,4 @@ disguise. Copy `0000-adr-template.md` for new ones.
 | [0015](0015-native-pcm-sample-reading.md) | Native PCM sample reading (`AVAudioFile`, bounded by `frameLength`) | Proposed (pending the MP3 case and manual validation) |
 | [0016](0016-shared-pcm-seam-and-stft-spectrogram.md) | Shared chunked PCM decoding seam and the STFT spectrogram model | Proposed (pending the format matrix and manual validation) |
 | [0017](0017-two-file-technical-comparison-semantics.md) | Semantics of a two-file technical comparison | Proposed (pending implementation and manual validation) |
-| [0018](0018-computed-technical-property-placement.md) | Where a computed technical property may live | Proposed (pending implementation and manual validation) |
+| [0018](0018-computed-technical-property-placement.md) | Where a computed technical property may live | Accepted |
