@@ -1,9 +1,12 @@
 # ADR-0019: True peak as a self-describing measurement, reported as a value rather than a flag
 
-- **Status**: **Proposed.** It stays Proposed until two things are true: the true-peak estimate agrees
-  with the FFmpeg `ebur128` oracle within the tolerance the implementing change pins from measured
-  agreement, against production code; and the resulting surface passes manual validation on a file whose
-  true peak genuinely exceeds its sample peak. Partial evidence does not promote it.
+- **Status**: **Proposed.** The tolerance its promotion conditions referred to is now pinned by
+  measurement — **0.05 dB** against FFmpeg `ebur128` for signals smooth at their boundaries up to
+  96 kHz, 0.0042 dB against analytic truth
+  (`docs/spikes/2026-08-11-true-peak-methodology-validation.md`). It stays Proposed until that agreement
+  is demonstrated **against production code** rather than a spike, and the resulting surface passes
+  manual validation on a file whose true peak genuinely exceeds its sample peak. Partial evidence does
+  not promote it.
 - **Date**: 2026-08-11
 - **Deciders**: Project maintainer
 - **Related**: **ADR-0006** (loudness/true-peak methodology — this ADR *applies and narrows* it;
@@ -17,10 +20,11 @@
 ADR-0006 fixed the *methodology* for true peak before any of it existed: ITU-R BS.1770 / EBU R128,
 oversampling ≥ 4× before peak detection, the factor and filter **recorded with the result**,
 implemented in `AudioInspectorAnalysis` with Accelerate, cross-checked against FFmpeg `ebur128`, every
-constant named and tied to the analysis engine version. Implementing it now surfaces two questions that
-record does not answer, and both are structural rather than numeric — which is why they are here and not
-in the change's own `design.md`, where the pinned constants belong (ADR-0006's own Follow-ups place them
-there).
+constant named and tied to the analysis engine version. Implementing it surfaces questions that record
+does not answer, and they are structural rather than numeric — which is why they are here and not in the
+change's own `design.md`, where the pinned constants belong (ADR-0006's own Follow-ups place them there).
+Two were visible before any measurement; the third only became visible once the methodology was actually
+measured.
 
 **First: nothing in this project records how a value was produced.** Every value type so far —
 `TechnicalProperties`, `WaveformEnvelope`, `Spectrogram`, `SignalLevelMetrics` — carries the measurement
@@ -40,6 +44,12 @@ capability that can carry that structure. "Inter-sample clipping" is an inferenc
 reconstruction exceeding full scale actually distorts depends on the converter, encoder or player in a
 given chain, not on the file alone. Shipping it as a flag beside a bare number would be the shape this
 project has refused everywhere else.
+
+**Third, and only visible after the measurements** (`docs/spikes/2026-08-11-true-peak-methodology-validation.md`):
+BS.1770's own Annex 2 filter coefficients were not available, so the shipped filter is one *designed* to
+recorded parameters and validated against analytic truth and an independent R128 implementation. That is
+a real, permanent constraint on **what the product may claim**, and a constraint on claims is exactly
+what an ADR is for.
 
 ## Decision
 
@@ -75,7 +85,17 @@ project has refused everywhere else.
    peak, in dBFS, sits next to it on screen. The stored and exported value stays linear; dBTP exists
    only at the presentation edge.
 
-6. **No analysis-engine-version field is introduced.** ADR-0006 ties that to *stored* results, there is
+6. **What may be claimed is bounded by what was validated.** The interpolation filter is a **designed**
+   polyphase windowed-sinc whose parameters are recorded, **not** the coefficient table of ITU-R
+   BS.1770 Annex 2 — that text was not available when the methodology was measured, and remembered
+   numbers would be fabricated evidence. So the app, its documentation and its export may state that
+   true peak is measured *following BS.1770 / R128 practice*, with a stated factor and filter, agreeing
+   with an independent R128 implementation to a measured tolerance. **They may not state or imply
+   conformance to the standard's own filter, nor quote a conformance tolerance from it.** If the annex
+   table later becomes available, comparing against it is a bounded follow-up; until then the weaker,
+   true claim is the only one permitted.
+
+7. **No analysis-engine-version field is introduced.** ADR-0006 ties that to *stored* results, there is
    no result store yet (ADR-0004, Phase 2), and `docs/json-schema-v1.md` states the contract has no such
    field. A version field would have to cover every measurement and the export envelope, which makes it
    the store's or the schema's decision. Recorded here so its absence is a decision rather than an
@@ -151,9 +171,13 @@ project has refused everywhere else.
 - **Promotion criteria** (see Status): oracle agreement within a measured tolerance against production
   code, plus manual validation of the surface. Until then this ADR asserts a direction, not a proven
   result.
-- **The pinned constants** — the filter, the factor per sample rate, edge handling, arithmetic width and
-  the cross-check tolerance — are settled by `add-true-peak-measurement`'s own spike, per ADR-0006's own
-  Follow-up placing them in the implementing change. Nothing here pre-empts them.
+- **The pinned constants** — the filter, the factor, edge handling, arithmetic width and the
+  cross-check tolerance — were settled by `add-true-peak-measurement`'s own spike, per ADR-0006's own
+  Follow-up placing them in the implementing change. They live in that change's `design.md` §4 and in
+  the spike report, deliberately **not** here: this record holds the decisions that outlive a constant,
+  and a constant that moves should not need a new ADR to move it.
+- **Comparing against BS.1770 Annex 2's own coefficients**, if the standard's text becomes available, is
+  a bounded follow-up under decision 6 — a validation, not a redesign.
 - **An inter-sample-clipping finding** — with evidence, alternative explanations and a confidence level,
   under the schema's `findings` object — is a future capability. Nothing in this ADR authorises a
   verdict without that structure.
