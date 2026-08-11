@@ -142,6 +142,11 @@ func makeReference(modifiedAt: Date? = date("2026-06-12T09:03:00Z")) -> AudioFil
 }
 
 /// Every technical property cleanly `available` — a valid `completed` shape.
+///
+/// `averageFileBitrate` is the one field kept `.uncertain` even here: ADR-0018 makes `.available`
+/// impossible for it by construction (`AVFoundationAudioFilePropertyReader.averageFileBitrate` has no
+/// code path that returns anything else), so a fixture claiming otherwise would assert a state
+/// production code can never produce.
 func allAvailableProperties() -> TechnicalProperties {
     TechnicalProperties(
         container: .available("wav"),
@@ -152,7 +157,7 @@ func allAvailableProperties() -> TechnicalProperties {
         codec: .available("pcm"),
         declaredBitrate: .available(1_411_200),
         estimatedBitrate: .available(1_411_200),
-        averageFileBitrate: .available(1_411_200)
+        averageFileBitrate: .uncertain(value: 1_411_200, reason: "calculated from size and duration")
     )
 }
 
