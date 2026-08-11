@@ -1,9 +1,10 @@
 # Implementation Tasks
 
-**Groups 1 and 2 are done: the contract, and the measurements that turned its open questions into
-constants.** No `Sources/` and no `Tests/` file has been touched — group 2's evidence lives entirely in
+**Groups 1–3 are done: the contract, the measurements that turned its open questions into constants,
+and the domain model those constants are recorded in.** Group 2's evidence lives in
 `Spike/validate-true-peak/` (outside the production graph) and
-`docs/spikes/2026-08-11-true-peak-methodology-validation.md`. Every task from group 3 onward is a
+`docs/spikes/2026-08-11-true-peak-methodology-validation.md`; group 3 added exactly one production file
+and one test file, and **no DSP** — nothing yet reads a sample. Every task from group 4 onward is a
 roadmap for a future session, not work performed here.
 
 **The methodology is now fixed and is no longer a decision for a later group**: polyphase FIR, **8×**,
@@ -116,17 +117,54 @@ to 1.9 × 10⁻⁷ linear, so the accumulator uses `Float` (`design.md` §4.4, �
 
 ## 3. The domain model
 
-- [ ] 3.1 Add the sibling value type: per-channel frame count and true peak (`nil` **iff** the frame
-      count is zero), an overall value under the same rule, and the method descriptor carrying the
-      oversampling factor and the filter's identity. Framework-free, `Sendable`, `Equatable`, **not
-      `Codable`** — the wire form is built by the export mapper, so the domain never learns JSON exists
-      (ADR-0009).
-- [ ] 3.2 Document in the type itself, as `SignalLevelMetrics` does for its own cases: linear not
-      decibels; values beyond full scale kept, never clamped; "not computable" distinct from a measured
-      zero; overall is the maximum of the per-channel values and why that combination is exact.
-- [ ] 3.3 Unit-test the model's own rules with constructed values and no file: the `nil` rule in both
-      directions, the overall/per-channel relationship, and that a value above full scale survives
-      construction unchanged.
+**Done.** `Sources/AudioInspectorDomain/ValueObjects/TruePeakMeasurement.swift` — **zero imports**, no
+Accelerate, no AVFoundation, no SwiftUI, no `Codable`, no JSON or `schemaVersion`, no dependency on
+`AudioInspectorAnalysis`. Nothing about DSP: the file holds a result and the identity of the method that
+produced it, and does not know how to produce one.
+
+- [x] 3.1 Added the sibling value type. `TruePeakMeasurement` (named for what it is — one measurement
+      carrying its own methodology, per ADR-0019 — rather than `TruePeakMetrics`, which would claim a
+      plurality of metrics that does not exist), with `TruePeakMeasurement.Channel` (`sampleCount`,
+      `truePeak: Float?`), `TruePeakMethod` (`oversamplingFactor`, `filter`) and
+      `TruePeakFilterIdentifier`. `Sendable`, `Equatable`, **not `Codable`**, and deliberately not
+      `Comparable` or `Hashable` — no order over measurements is meaningful and nothing keys on one.
+      **The `nil`-iff-empty rule is enforced in both directions by a failable initialiser**, following
+      `WaveformBucket`/`WaveformEnvelope`/`Spectrogram` rather than `SignalLevelMetrics`'s unchecked
+      init: a contradictory channel is unrepresentable, not merely undocumented.
+      **`overallTruePeak` is derived, never stored** — a computed maximum over the channels, so it has
+      no initialiser argument and no stored property and therefore *cannot* disagree with them. That
+      differs from `SignalLevelMetrics`, which must store its overall values because `overallRMS` and
+      `overallDCOffset` are genuinely not functions of the per-channel results; a maximum of maxima is.
+      **The filter identity follows `WarningCode`'s own precedent** — a `RawRepresentable` over `String`
+      with named static members and a `snake_case` rawValue (`"polyphase_fir_v1"`), chosen after
+      auditing how this repository already versions contracts rather than inventing a format. The
+      rawValue is the identity, so renaming the Swift member or moving the file cannot change it, and
+      the `v1` names a whole methodology: changing the taps, β, cutoff, normalisation or edge policy
+      requires a new identity.
+      **The 48 taps, the β and the cutoff are deliberately *not* in the model.** It records which
+      methodology ran, never how to configure one — a result type carrying its own DSP parameters would
+      let a consumer write back a measurement that never happened.
+- [x] 3.2 Documented in the type itself, in the register `SignalLevelMetrics` uses for its own cases:
+      linear not decibels (dBTP named as a presentation unit that appears nowhere in the module); values
+      beyond full scale kept and never clamped; "not computable" distinct from a measured zero, stated
+      in both directions; why the overall is the maximum and why that combination is exact; why the
+      sample peak is **not** duplicated here and where `truePeak >= samplePeak` is demonstrated instead;
+      and why the type is not `Codable`.
+- [x] 3.3 Unit-tested with constructed values, no file and no DSP —
+      `Tests/AudioInspectorKitTests/TruePeakMeasurementTests.swift`, **35 tests** (757 → 904 across the
+      suite): mono, stereo, six-channel; the `nil` rule in both directions; every empty; one empty beside
+      one measured; empty beside silent; zero, below, at and above full scale (0.9999999, 1.0, 1.0000001,
+      1.05, 1.5, 8.0, 1000.0) surviving construction unchanged; negative, `NaN`, signalling `NaN`, both
+      infinities and a negative sample count all rejected; an empty channel list rejected; negative zero
+      accepted and behaving as zero; the overall equal to the maximum and order-independent; the method
+      travelling with the value and participating in equality; the filter rawValue pinned literally;
+      `Sendable` by compile-time constraint; and `Codable`/`Comparable`/`Hashable` proven **absent** by
+      runtime conformance check rather than by comment.
+      **Two negative controls, both reverted in full** (`diff` against a pre-mutation copy showed no
+      residue): (1) computing the overall as a **mean** instead of a maximum broke 6 assertions across 4
+      tests, including the one that exists to say the overall is not a mean; (2) **clamping** a value
+      above full scale to 1 broke 14 assertions across 4 tests. Both confirmed the tests discriminate
+      rather than passing vacuously.
 
 ## 4. The accumulator (`AudioInspectorAnalysis`, Accelerate — placement already fixed by ADR-0006)
 
