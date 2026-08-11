@@ -16,43 +16,38 @@
 >   session protocol in `CLAUDE.md`).
 
 ---
-**Focus:** `add-computed-technical-properties`, group 6 — exporting `SignalLevelMetrics`. A new,
-additive `measurements.signalLevels` object joins `schemaVersion` 1
-(`Sources/AudioInspectorApp/Export/ReportJSONDTO.swift`), holding exactly the domain model's own public
-surface (overall + per-channel peak/RMS/DC offset/clipped-sample count, plus `sampleCount`) in the
-domain's own **linear** amplitude — never dBFS, which stays a presentation-only concern. `nil` metrics
-means the `measurements` key is **omitted entirely**, not `null`, so a report exported without signal
-level metrics is byte-identical to the pre-group-6 output. `SignalLevelMetrics?` is threaded end to end —
-`ReportExporting` → `JSONReportExporter` → `ReportExportCoordinator` → `ReportExportAction` →
-`ReportExportModel` → `ReportView`'s own export button — with `ReportView` as the single point that
-collapses `loading`/`unavailable`/`failed`/cancelled to `nil` before the export layer ever sees them.
-`InspectionReport` and `AudioInspectorDomain` are untouched; folding `SignalLevelMetrics` into
-`InspectionReport` was never implemented. `averageFileBitrate`'s own export (6.1) turned out to already
-be done since group 2 — confirmed by audit and existing tests, not re-implemented. Group 6's three tasks
-(6.1–6.3) are closed. All six gates are green; 868 tests, up from 850.
+**Focus:** `add-computed-technical-properties` is implementation-complete and closing, on
+`feature/add-signal-level-metrics-generation`, not yet merged. Every capability the change set out to
+build exists end to end: `averageFileBitrate` (calculated, always `uncertain`, coexisting with
+`declaredBitrate`/`estimatedBitrate` as three distinct claims about a rate) is threaded from the
+property reader through the domain, the report's own presentation, and the `schemaVersion` 1 export.
+`SignalLevelMetrics` (peak, RMS, DC offset, clipped-sample count — overall and per channel) is produced
+by a third, independent operation over the shared `AudioDecoding` port, presented in the report as its
+own section directly beneath the waveform (linear values converted to dBFS only at that presentation
+layer, never earlier), and exported additively under `measurements.signalLevels` in the domain's own
+linear amplitude — never dBFS on the wire. `TechnicalProperties` carries no DSP; `InspectionReport`
+carries no `SignalLevelMetrics`; the domain knows nothing of JSON or `schemaVersion`. Groups 1–6 are all
+closed (25 of 32 tasks); group 7's four properties (true peak, significant max frequency, crest factor,
+generic dynamic range) remain deliberately deferred and named, not implemented. Group 8: 8.1 and 8.2 are
+closed; 8.3 is split — the ADR decision and this snapshot are done, `openspec archive` is not (see below).
 
-**What the export is careful not to collapse or invent.** "Not computable" (zero frames) is a present
-key with an explicit `null`, never an omitted key and never a fabricated `0`; a genuinely measured,
-computed zero (real silence) exports as a real `0`, never `null`. A sample beyond full scale exports
-exactly as measured, never clamped. No clipping threshold is exported — audited and declined: it is an
-analysis-engine constant with no wire-version convention yet to anchor it to, not part of
-`SignalLevelMetrics`'s own public surface. Two negative controls confirmed the isolation is actually
-enforced: putting a DSP key directly into `technicalProperties`, and exporting peak/RMS in dBFS instead
-of the domain's linear value (which also surfaced `log10(0)`'s `-∞` failing the encoder outright, as it
-should). Both broke exactly the tests written to catch them, and both were fully reverted.
+**A real defect was found and fixed while closing, not just confirmed.** An `allAvailableProperties()`
+test fixture set `averageFileBitrate` to `.available`, a state production code has no path to produce
+(ADR-0018 makes it structurally `.uncertain`-only). Fixed to `.uncertain`; all 868 tests still pass,
+proving nothing depended on the wrong state. A repository-wide search now confirms `averageFileBitrate`
+is `.available` nowhere, and that `SignalLevelMetrics` carries no `Codable` conformance anywhere.
 
-**Why this stopped here, not further.** Nothing in group 7 (deferred properties — true peak, significant
-max frequency, crest factor, dynamic range) was started; each stays named and deferred with its own
-reason, unchanged from the original design. ADR-0018 stays `Proposed` — its own promotion criterion is
-implementing at least `averageFileBitrate` against production code **and** manual validation, and the
-manual-validation half still hasn't happened.
+**ADR-0018 stays `Proposed`.** Its own promotion criterion is two-part: `averageFileBitrate` implemented
+against production code (done), **and** this change's own manual validation (not done). No session in
+this change has opened the real app and looked at the signal-levels surface, or exported a real JSON and
+read it, with a person's own eyes — the same standard already applied to ADR-0016/ADR-0017 in this
+project, never satisfied by test coverage alone. That observation is the one thing left before this ADR
+can be promoted.
 
-**Next step:** group 8 — the four gates (already green throughout this session, but not yet re-run as
-group 8's own closing act) plus 8.2 (confirm `averageFileBitrate` never becomes `.available` in any test,
-and that `SignalLevelMetrics` never gains a `Codable` conformance that could let it leak into an
-unrelated export path) and 8.3 (decide ADR-0018's status from what was actually implemented, update
-`CURRENT.md`, archive through `openspec archive` after merge). This is very likely the change's own
-last group.
+**Next step:** a person runs the real app — inspects a real file, looks at the "Signal levels" section
+on screen, exports the JSON and reads it — then ADR-0018 can be promoted and 8.3 fully closed. After
+that: this branch gets reviewed and merged, and only then does `openspec archive` run. Nothing in this
+session pushed, opened a PR, or archived.
 
 **Other open threads** (see `openspec list` for their real task counts, not restated here):
 `add-static-spectrogram-visualization` (manual validation battery deferred by product decision) and
@@ -60,4 +55,4 @@ last group.
 traversal gap shared with ADR-0015). Neither was touched this session.
 
 ---
-_Last touched: 2026-08-10. Overwrite freely; empty is fine._
+_Last touched: 2026-08-11. Overwrite freely; empty is fine._
