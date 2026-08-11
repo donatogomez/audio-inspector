@@ -7,11 +7,15 @@ what it leaves open, which native API can implement the methodology without chan
 the value lives in the domain, how it is produced, presented and exported, and how it relates to the
 clipped-sample count already shipping.
 
-**It commits to no constant that has not been measured.** Where a value must be pinned (the
-interpolation filter, the oversampling factor above 48 kHz, the cross-check tolerance), this document
-names the decision, states the candidates and the criterion, and hands it to a task — it does not
-silently choose one. That is the same discipline `add-static-spectrogram-visualization` used for the FFT
-size and `add-computed-technical-properties` used for the accumulator's placement.
+**It commits to no constant that has not been measured.** Every value pinned below — the interpolation
+filter, the oversampling factor, the edge policy, the arithmetic width, the cross-check tolerance —
+comes from the group-2 spike, recorded in
+`docs/spikes/2026-08-11-true-peak-methodology-validation.md`. That is the same discipline
+`add-static-spectrogram-visualization` used for the FFT size and `add-computed-technical-properties`
+used for the accumulator's placement. **Group 2 is closed; no `Sources/` file exists yet.**
+
+Three things the spike settled *against* this document's first draft are marked where they occur: the
+arithmetic width (§4.4), the factor (§4.1), and the withdrawal of the frequency-domain candidate (§5).
 
 ## 2. Sample peak and true peak are two different measurements
 
@@ -44,7 +48,7 @@ peak.
   `PCMChunk`).
 - **Unit, when displayed**: **dBTP** = `20 · log10(truePeakLinear)`, referenced to full scale. The
   "TP" is not decoration: it states that the number came from the reconstructed inter-sample waveform
-  rather than from the stored samples, which is precisely the distinction §2 exists to protect. See §11
+  rather than from the stored samples, which is precisely the distinction §2 exists to protect. See §4.7
   for why this deviates in *wording* from ADR-0006 and FFmpeg, both of which write "dBFS".
 - **Per channel and overall**: per channel is the canonical measurement; overall is the maximum of the
   per-channel values (§7).
@@ -56,7 +60,7 @@ peak.
 | **Silence** (every sample exactly `0`) | linear `0`, displayed at the floor (`-120 dBTP`) | It was measured and the answer is zero. `HumanFormat.decibelsFullScale` already floors `log10(0)` at `Spectrogram.floorDecibels` for exactly this; the dBTP formatter reuses that convention. |
 | **Zero frames** (channel carried no audio) | `nil` — "not computable" | A maximum over an empty set does not exist. Identical to `SignalLevelMetrics.Channel.peakSample`'s own rule, and deliberately **not** collapsed with silence. |
 | **Samples beyond `\|1\|`** | kept, never clamped; yields a positive dBTP | Inherited from `PCMChunk`'s contract and stated by `SignalLevelMetrics` already: an out-of-range sample is a real fact, and limiting it is a concern of drawing. |
-| **True peak below sample peak** | must not happen — see §4.5 | An estimate that reads *lower* than a value the file literally contains would be an estimate of nothing. Made structurally impossible rather than asserted. |
+| **True peak below sample peak** | cannot happen — see §4.9 | An estimate that reads *lower* than a value the file literally contains would be an estimate of nothing. Made structurally impossible rather than asserted, and **proven**: worst shortfall over 21 fixtures is exactly `0.0`. |
 
 ### 2.3 What true peak is not
 
@@ -89,80 +93,56 @@ Its own Follow-ups add: *"Pin the exact constants and tolerances in the loudness
 That sentence is this change's mandate, and it is why the open items in §4 are tasks here rather than a
 new ADR.
 
-## 4. What ADR-0006 does **not** fix — the open decisions, named
+## 4. What ADR-0006 does **not** fix — closed by measurement (group 2)
 
-None of the following is decided by any existing record. Each is listed with its candidates and the
-criterion that will settle it; **none is chosen here by assumption**.
+Six decisions were named here as open. **All six are now closed**, by the spike recorded in
+`docs/spikes/2026-08-11-true-peak-methodology-validation.md`. The numbers live there; what follows is
+the decision and the one-line reason, so this document states the contract rather than the search.
 
-### 4.1 The oversampling factor above 48 kHz
+| # | Decision | Value | Reason |
+| --- | --- | --- | --- |
+| 4.1 | Oversampling factor | **8×, flat at every sample rate** | Worst-case grid under-read is **−0.169 dB at 4×** and **−0.042 dB at 8×**, measured over 64 signal phases per frequency. R128 limits are quoted to 0.1 dB, so 4×'s error can flip the judgement a reader is making. Rate-dependence was rejected: 2× at 192 kHz would break ADR-0006's own "≥4×". Cost of the choice: **+0.29 s Release / +0.33 s Debug** on a ten-minute stereo file. |
+| 4.2 | Interpolation filter | **Polyphase FIR, 48 taps per phase** (384 coefficients at 8×), **Kaiser β = 6.0**, **cutoff = 1.0**, each phase **normalised to unit sum** | Shortest design measured flat within ±0.1 dB up to **0.93·Nyquist** — and 16–20 kHz, the band this product exists to examine, sits at 0.73–0.91·Nyquist at 44.1 kHz. 32 taps reaches only 0.89·N; 64 and 96 buy nothing usable. Image leakage is ≤ +0.02 dB for every design, so it was not the binding constraint. |
+| 4.3 | Edge handling | **Zero-extension** | The only policy that neither fabricates nor misses. `constant` reads **1.1303** where the file's own maximum is 1.0; `mirror` reads **0.9432** on a tone whose true peak is provably 0.9; `interior-only` reads **0.000014** on a file whose peak is a full-scale sample at frame 0 — breaking the §2.2 invariant outright. Zero-extension is also the physical truth: a file is surrounded by silence. |
+| 4.4 | Arithmetic width | **`Float`** | Worst `float`−`double` difference over 21 fixtures: **1.9 × 10⁻⁷ linear / 2 × 10⁻⁶ dB**. `SignalLevelMetricsAccumulator`'s `Double` precedent does **not** transfer, and the reason is now recorded: it accumulates ~10⁸ additions; a maximum accumulates nothing. |
+| 4.5 | Cross-check tolerance | **0.05 dB** against FFmpeg for signals smooth at their boundaries, up to 96 kHz. **0.0042 dB** against analytic truth | Worst measured agreement **0.0236 dB**, plus the oracle's own ±0.0048 dB printing quantisation = 0.029 dB credible worst. Truncated-boundary fixtures (up to 1.05 dB apart) measure the two filters' **edge ringing**, not agreement, and are checked against analytic truth instead. 192 kHz is **not comparable**: the oracle does not oversample there. |
+| 4.6 | Oracle in CI | **Gated on FFmpeg's presence**; the **analytic** fixtures carry the CI-enforced claim | The oracle cannot validate 192 kHz and prints to 3 decimals; the analytic fixtures have exact answers, need no external tool, and agree ten times more tightly. Gating the weaker check is not a weakening. |
 
-ADR-0006 says "≥ 4×". BS.1770's 4× is specified relative to a 48 kHz base rate — the point being to
-reach a high enough reconstructed rate, not to multiply by four regardless of input. A file at 192 kHz
-already carries four times the resolution a 48 kHz file does.
+### 4.7 The unit's name — closed
 
-**Open**: whether the factor is a flat 4× at every sample rate (simplest, most conservative, most
-expensive at high rates) or rate-dependent so the *reconstructed* rate meets a fixed target (fewer
-operations at 96/192 kHz, but a second constant to justify and record). **Criterion**: measured
-agreement with the FFmpeg oracle at each supported rate, and the cost table in group 5. Whichever wins,
-the factor is recorded with the value, so a reader is never left guessing which was used.
+**dBTP** in the interface, linear everywhere else. The measurement is the argument: fixture 03 has a
+sample peak of 0.6364 and a true peak of 0.9, which reads as `−3.92 dBFS` beside `−0.92 dBTP`. Two
+numbers 3 dB apart sharing a unit invite the reader to conclude one is wrong. Recorded in **ADR-0019**,
+which narrows ADR-0006's wording without editing it.
 
-### 4.2 The interpolation filter
+### 4.8 The one thing that could not be closed, and what was done instead
 
-ADR-0006 requires the filter to be *recorded*, which presumes one is *chosen*; it does not choose one.
+ADR-0006 refers to BS.1770, whose Annex 2 tabulates its own polyphase FIR. **Those coefficients were not
+available to this spike, so they are not used and not reproduced** — writing down remembered numbers
+would be fabricated evidence. The filter above is of the same family, **designed** from parameters that
+are all recorded with the result, and validated against two independent references: signals whose true
+peak is known analytically, and FFmpeg's own R128 meter.
 
-**Candidates**: (a) the polyphase FIR of BS.1770's own annex, if its coefficients can be reproduced
-exactly from the standard's text; (b) a windowed-sinc polyphase FIR designed to a stated passband
-ripple and stopband attenuation, with the design parameters recorded; (c) frequency-domain zero-padding
-(exact band-limited interpolation, but block-boundary handling of its own). **Criterion**: agreement
-with the oracle within a tolerance decided in 4.5, at acceptable cost. **This is the single largest
-unknown in the change and is why group 2 is a spike, not an implementation.**
+**The consequence is a bounded claim, stated the same way everywhere**: this measures a true peak with a
+documented, reproducible methodology that agrees with an independent R128 implementation to 0.05 dB. It
+does **not** claim to be BS.1770's own filter. If the annex table becomes available, comparing against
+it is a well-defined follow-up, not a redesign.
 
-### 4.3 Edge handling
+### 4.9 Why `truePeak >= samplePeak` is structural, and what it costs
 
-An FIR interpolator needs samples on both sides of the point it reconstructs; at the very first and last
-samples of the file there are none. **Open**: zero-extension (treats the file as surrounded by silence —
-the reconstruction a decoder would also produce), reflection, or restricting the estimate to the region
-the filter fully covers. The spectrogram's own precedent is instructive but not binding: it discards the
-final incomplete window rather than zero-padding it, because padding *invented* samples and read the
-level 6 dB low. **Criterion**: whichever does not fabricate a peak the file cannot produce, verified
-against the oracle on a fixture whose energy sits at the very first and last frames.
+`sinc(u)` is **zero at every non-zero integer** — a definition, not an approximation. At phase 0 of the
+interpolator every tap argument is an integer, so every tap but the centre one is exactly zero and the
+centre one is exactly one: **phase 0 reproduces the input bit for bit**, which puts the stored samples
+inside the set the maximum is taken over. Measured: phase-0 taps are exactly `0, …, 1, …, 0`, and the
+worst `truePeak − samplePeak` over every fixture and channel is exactly `0.0`.
 
-### 4.4 Precision and accumulation
+The implementation must therefore evaluate `sinc` with its integer zeros used as such, rather than
+through `sin(πu)/(πu)`, which returns ~1e-16 at integer arguments.
 
-`SignalLevelMetricsAccumulator` accumulates in `Double` and narrows to `Float` at the end, measured to
-cost nothing. A maximum has no accumulation error, so the same reasoning does not transfer
-automatically: the question here is the *filter arithmetic*, not the running total. **Open**: whether the
-convolution runs in `Float` (matching the sample type and vDSP's fastest path) or `Double`. **Criterion**:
-whether the difference from the oracle is dominated by the filter design or by the arithmetic width —
-measurable, and measured before choosing.
-
-### 4.5 The cross-check tolerance
-
-ADR-0006 requires "explicit numeric tolerances" and states none. **Open**: the dB tolerance at which the
-native value must agree with FFmpeg `ebur128 peak=true`, per fixture class. **Criterion**: the observed
-spread across the fixture set, chosen so the tolerance describes the agreement actually achieved rather
-than being loosened until the test passes. Recorded in the spike report with the measurements behind it.
-
-### 4.6 Whether the cross-check can run in CI
-
-`ffmpeg` is present on the development machine (Homebrew 8.1.2, and its `ebur128` filter exposes both
-`peak=true` → `true_peak` and `sample_peak`, giving both halves of §12's comparison from one oracle).
-It is **not** installed on the CI runner (`.github/workflows/ci.yml`, `macos-26`, no install step).
-**Open**: gate the oracle tests on the tool's presence — the pattern `MP3WaveformEvidenceTests` already
-uses for a locally-available tool — or install FFmpeg in CI, which makes a GPL binary part of the
-pipeline (never of the product; ADR-0003 §4 governs shipping, not CI). **Criterion**: the gated form is
-the default unless CI coverage of the oracle is judged necessary; whichever is chosen is stated, because
-"cross-checked in tests" meaning "cross-checked only on one machine" must not be discovered later.
-
-### 4.7 The unit's name
-
-ADR-0006 writes "true peak > 0 **dBFS**"; `docs/analysis-methodology.md` writes "true peak (dBFS)";
-FFmpeg's own option is documented as "true peak (dBFS)". EBU R128 / Tech 3341 write **dBTP**, and that
-is the notation a reader of mastering tools will recognise. **Open, and small**: this design recommends
-**dBTP** in the interface (§10) precisely because the two numbers sit next to each other on screen and
-"peak sample: −0.10 dBFS / true peak: +0.30 dBFS" invites the reader to think one of them is wrong. The
-recommendation is recorded in ADR-0019 so the divergence from ADR-0006's wording is a decision and not
-a drift.
+**What it costs**: the cutoff is pinned at exactly 1.0 and stops being a free parameter. The negative
+control was run — the same filter at `cutoff = 0.90` has a phase 0 that is no longer the identity, and
+the invariant breaks by **−0.16** on a real fixture. Any future change to the cutoff breaks a structural
+guarantee, not merely a number, and the production code should say so where the constant is declared.
 
 ## 5. The native API — equivalence first, convenience second
 
@@ -208,10 +188,11 @@ conversion; nothing in this change needs one.)
 
 - **vImage** — image resampling. Its kernels carry no band-limiting guarantee for audio and its
   presence in an audio measurement would be an accident of API shape. Not considered further.
-- **`vDSP.FFT` / zero-padding in the frequency domain** — genuinely exact band-limited interpolation,
-  and therefore category A on correctness grounds, but it converts a streaming, `O(chunk)` problem into
-  a blocked one with its own edge handling at every block boundary. Kept in §4.2 as candidate (c) and
-  measured, not dismissed by assertion.
+- **`vDSP.FFT` / zero-padding in the frequency domain** — **measured, then withdrawn as a production
+  candidate and kept as a reference.** It interpolates the *periodic extension* exactly, which made it
+  an independent ground truth for the spike (it returns 0.900000 on a periodic tone whose analytic true
+  peak is 0.9, where a zero-padded FIR shows the file's own boundary discontinuity). That same property
+  disqualifies it here: a file is not periodic, and the method is whole-buffer rather than streaming.
 
 ## 6. Where true peak lives — a sibling, not a new field
 
@@ -272,8 +253,13 @@ line-for-line precedent, itself built by mirroring `SpectrogramGeneration`. Choo
   spectrogram or the signal levels;
 - costs one more full decode per inspection.
 
-**That cost is the one real objection, and it is measured rather than argued** (§9, group 5). Two
-alternatives were considered and are not chosen *now*:
+**That cost is the one real objection, and it was measured rather than argued.** Group 2 already
+answered it: the fourth decode itself costs **0.035 s** (the figure already measured for a ten-minute
+stereo file), and the DSP it enables costs **0.69 s in Release and ≈5 s in Debug** for the same file —
+next to the spectrogram's own ≈36 s in an unoptimised build. **The fourth read is accepted and the stop
+rule below is not triggered.** Group 5 re-measures against the real decode path rather than re-deciding.
+
+Two alternatives were considered and are not chosen:
 
 - **Fold true peak into `SignalLevelMetricsGeneration`** (one decode, two models). Tempting — the two
   metrics genuinely read the same samples — but it couples their cancellation and failure, widens an
@@ -283,34 +269,38 @@ alternatives were considered and are not chosen *now*:
   cross-cutting refactor of three working operations, and doing it inside a change whose subject is an
   interpolation filter would be two risky things at once.
 
-**Stop rule, written in advance**: if group 5's measurement shows the fourth decode is *not* clearly
-insignificant next to the rest of an inspection, this change does **not** quietly fold operations
-together. It records the number and opens a separate deduplication change, exactly as ADR-0016 provides
-for. The slice's own scope stays what it is.
+**Stop rule, written in advance and now evaluated**: if the fourth decode had *not* been clearly
+insignificant next to the rest of an inspection, this change would **not** have quietly folded
+operations together — it would have recorded the number and opened a separate deduplication change, as
+ADR-0016 provides for. Measured, it is insignificant, so the rule stands unused rather than forgotten,
+and remains the escape hatch if group 5's numbers against the real decode path disagree.
 
-## 9. Cost, measured before it is designed around
+## 9. Cost — measured, and what it decided
 
-Same method as `add-computed-technical-properties` task 3.4, which produced a four-row table and let the
-number choose the implementation. A **disposable harness** (created, measured, deleted — never committed
-to `Sources/` or `Tests/`), over a real file, reporting:
+Measured in group 2 with a disposable harness (created, measured, deleted), following
+`add-computed-technical-properties` task 3.4's own form. Full tables in the spike report; the figures
+that mattered:
 
-| Axis | Values |
-| --- | --- |
-| Duration | 1 min, 10 min |
-| Channels | mono, stereo |
-| Build | Debug (`-Onone`), Release (`-O`) |
-| Baseline | decode only, no accumulation |
-| Implementations | naive scalar interpolation; vDSP per-phase `vDSP_conv` + `vDSP_maxmgv`; and, if §4.2 keeps it alive, the frequency-domain variant |
-| Factor | the candidates from §4.1 |
+| | Release (`-O`) | Debug (`-Onone`) |
+| --- | --- | --- |
+| 10 min stereo, chosen design, **vDSP** | **0.693 s** | **≈5.2 s** |
+| 1 min mono, chosen design, **scalar** | 0.028 s | **151.8 s** |
 
-Also measured, because §8 depends on it: the **whole-inspection** wall time with three operations versus
-four, in Debug, which is the build a developer actually runs.
+**Two things this decided, neither of them a matter of taste:**
 
-**Decision rules, fixed in advance**: the implementation with the best measured cost that is
-methodologically equivalent wins (§5 — never performance alone); and the fourth read is accepted only if
-the measured whole-inspection delta is insignificant beside the existing work, otherwise §8's stop rule
-applies. The numbers land in a spike report under `docs/spikes/`, following
-`2026-08-06-static-spectrogram-validation.md`'s own form.
+1. **vDSP is not an optimisation, it is the only viable implementation.** A scalar pass over *one
+   minute* of mono audio costs **76–152 seconds** in the build a developer actually runs — three orders
+   of magnitude worse than the vectorised path. The production accumulator is `vDSP_conv` per phase plus
+   `vDSP_maxmgv`, and that is a correctness-of-workflow decision, not a performance preference.
+2. **The fourth read is affordable** (§8). Nothing is deduplicated in this change.
+
+`Float` versus `Double` cost the same to within 1 %, so §4.4's choice is free either way and was decided
+on accuracy grounds instead.
+
+**What group 5 still has to do**, and why it is not redundant: every figure above is DSP only, measured
+on synthesised buffers. Group 5 measures the **whole inspection** against the real decode path, with
+three operations versus four, in Debug — the number that describes what a person waits for. The stop
+rule in §8 remains available if that number disagrees.
 
 ## 10. Interface — a number and its method, never a verdict
 
@@ -322,9 +312,11 @@ applies. The numbers land in a spike report under `docs/spikes/`, following
 - **Value**: `+0.72 dBTP`, `-1.20 dBTP` — signed always (the sign is the whole point at this scale),
   two decimals, floored exactly as dBFS values already are. Per-channel detail in the established
   `Channel 1: … · Channel 2: …` form, and only when the file has more than one channel.
-- **Method, stated plainly**, e.g. *"Estimated from the waveform reconstructed between samples (4×
+- **Method, stated plainly**, e.g. *"Estimated from the waveform reconstructed between samples (8×
   oversampling)."* This is the visible half of ADR-0006 §3, and it is what keeps a reader from
-  mistaking an estimate for a stored value.
+  mistaking an estimate for a stored value. **It may not claim conformance to BS.1770's own filter**
+  (ADR-0019 §6): the wording says how the value was produced, not which standard's coefficients
+  produced it.
 - **Zero frames**: *"Not computable — this file has no audio frames."*, the exact wording already used.
 - **Forbidden, and swept for by test** (the same negative sweep `SignalLevelMetricsPresentationTests`
   already runs, extended with this metric's own vocabulary): *clipping detected*, *inter-sample
