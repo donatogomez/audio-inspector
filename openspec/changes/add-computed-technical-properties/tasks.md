@@ -371,20 +371,31 @@ assumed.
       after the fix (`averageFileBitrate:\s*\.available|averageFileBitrate\s*=\s*\.available`) returns
       no matches. `SignalLevelMetrics` carries no `Codable`/`Encodable`/`Decodable` conformance anywhere
       (its own doc comment states "Not `Codable`" outright), confirmed by search.
-- [ ] 8.3 Decide ADR-0018's status from what was actually implemented, update `CURRENT.md`, and archive
+- [x] 8.3 Decide ADR-0018's status from what was actually implemented, update `CURRENT.md`, and archive
       through `openspec archive` after merge.
-      **The manual validation this task's own criterion needed was actually run — and found a real,
-      reproducible defect**, not merely "not yet done" as in the prior session. A person built and ran
-      the real Debug app against a real stereo fixture: the on-screen Signal levels surface passed every
-      checked point (placement, dBFS for peak/RMS, linear signed DC offset, integer clipped count,
-      "Channel N" naming, no quality wording, waveform/spectrogram undisturbed) — but the exported JSON,
-      generated twice several minutes apart **after** the values were already visible on screen, omitted
-      `measurements` entirely both times. Full detail, including the leading hypothesis (a `.toolbar`
-      `ToolbarItem`'s closure possibly not being rebuilt on re-render) and the exact automated-coverage
-      gap this exposed, is in `docs/manual-validation-mvp.md`, "Signal level metrics — a real defect
-      found by manual validation." No code was changed to investigate or fix it, per this session's own
-      scope. **ADR-0018 stays `Proposed`**: the manual validation is done, and it failed — the same
-      documentation-only outcome as the prior session, but now backed by a specific, reproducible defect
-      rather than an unattempted check. `CURRENT.md` is updated in this session. The `openspec archive`
-      step is explicitly **not** run — it was never going to happen before a merge regardless, and
-      certainly not with a known, unfixed defect in the capability the change adds.
+      **Split, as it was going to be from the start — the ADR decision and `CURRENT.md` update are done
+      here; `openspec archive` is explicitly not, since it is conditioned on a merge that has not
+      happened.** The prior session's apparent export defect (JSON missing `measurements` twice, despite
+      the on-screen values already being real) was **investigated under live instrumentation before any
+      fix was attempted**, as that session's own note instructed. The trace — `print()`s at every seam
+      from `ReportView`'s button through `ReportExportModel`, `AppContainer`'s export closure,
+      `ReportExportCoordinator` and `JSONReportExporter` — showed the real, non-`nil`
+      `SignalLevelMetrics` reaching every single step, **including the `.toolbar` button the prior
+      session's hypothesis suspected**. That hypothesis is now disconfirmed, not just unconfirmed. The
+      actual cause: a second, much older `AudioInspector` process was still running in the background
+      (unkillable without `sudo`, almost certainly still attached to Xcode's own debugger), and `open`
+      — used to launch the build in the prior session — activates an already-running instance rather
+      than starting a new one. The prior session's manual pass, in other words, most likely validated a
+      stale build, not the one containing this change's own code. Full detail in
+      `docs/manual-validation-mvp.md`, "Signal level metrics — resolved: a stale app instance, not a
+      code defect." **The real validation was then repeated end to end on a confirmed-fresh process
+      instance (launched by executable path, never `open`), twice: `measurements.signalLevels` appeared
+      correctly in both exports**, with the exact on-screen values, in linear (never dBFS) form. All
+      instrumentation was fully reverted; `git diff` against the pre-instrumentation commit confirmed no
+      residue. One thing was added and kept: `EndToEndFlowTests
+      .theRealSignalLevelMetricsPathReachesTheExportedDocument`, closing the real gap this whole
+      investigation started from — no test previously drove the real production path (real decode → real
+      `SignalLevelMetricsGeneration` → the same `.metrics`-unwrapping extraction the export button
+      performs → real export) with genuine, non-`nil` metrics. A negative control (re-capturing `nil`
+      inside the new test) confirmed it actually discriminates, then was reverted. **ADR-0018 is now
+      `Accepted`**: both promotion conditions are genuinely met.
