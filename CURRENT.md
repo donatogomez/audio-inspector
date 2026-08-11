@@ -16,39 +16,32 @@
 >   session protocol in `CLAUDE.md`).
 
 ---
-**Focus:** `add-true-peak-measurement`, groups 1–2 done. **The methodology is closed; production has
-not started.** No `Sources/` and no `Tests/` file exists for this slice — group 2's evidence lives in
-`Spike/validate-true-peak/` (its own package, outside the production graph) and in
-`docs/spikes/2026-08-11-true-peak-methodology-validation.md`, which is the durable record.
+**Focus:** `add-true-peak-measurement`, groups 1–3 done. **The domain model exists; no DSP does.**
+Nothing in the project yet reads a sample to produce a true peak — `TruePeakMeasurement` is a result
+type and the identity of the method that produced it, and that is all.
 
-**What is now fixed, and why it is worth reading before writing the accumulator.** Polyphase FIR, **8×**,
-**48 taps per phase**, Kaiser **β = 6.0**, cutoff **1.0**, phases normalised, **zero-extension** at the
-edges, **`Float`** arithmetic, linear internally with **dBTP** only on screen. Each of those is a
-measurement, not a preference, and three of them closed *against* what the design first assumed: the
-convolution needs no `Double`; the factor is 8× rather than the ADR's 4× floor, because 4×'s worst case
-under-reads by 0.17 dB where R128 limits are quoted to 0.1 dB; and two of the three candidate edge
-policies turned out to fabricate or to miss a peak outright.
+**What the model decided, beyond holding numbers.** `overallTruePeak` is **derived, not stored**, so it
+cannot drift from the per-channel values: there is no argument to pass wrongly and no field to fill in
+wrongly. That differs from `SignalLevelMetrics` on purpose — its overall RMS and DC offset genuinely are
+not functions of the per-channel results, while a maximum of maxima exactly is. Contradictory channels
+are unrepresentable rather than merely documented: a failable initialiser enforces `truePeak == nil` iff
+`sampleCount == 0` in **both** directions, and refuses negatives, `NaN` and infinities.
 
-**The result that most changes how the code should be written**: `truePeak >= samplePeak` is
-**structural, not a clamp** — phase 0 of the interpolator is the exact identity because `sinc` is zero at
-every non-zero integer, so the stored samples are already inside the set the maximum is taken over. That
-holds only while the cutoff is exactly 1.0, which makes the cutoff a guarantee rather than a tuning knob.
-Related: chunk independence is **bit-exact** here, unlike RMS, because a maximum accumulates nothing.
+**The methodology is recorded as an identity, not as configuration.** `TruePeakFilterIdentifier` follows
+`WarningCode`'s existing shape in this repo — a `RawRepresentable` over `String` whose rawValue is the
+identity and survives any refactor. The 48 taps, the Kaiser β and the cutoff are **not** in the model:
+it says which methodology ran, never how to configure one. Changing any of those constants requires a
+new identity (`v2`), which is what keeps two differently-measured files from exporting the same token.
 
-**Known limitation, deliberately carried rather than hidden.** BS.1770 Annex 2's own filter coefficients
-were not available, so the filter is one designed to recorded parameters and validated against analytic
-ground truth and FFmpeg's `ebur128`. **ADR-0019 §6 therefore bounds what the product may claim**: it
-follows BS.1770/R128 *practice* with a stated factor and filter — it does not claim the standard's own
-filter. Anything written in the UI, the docs or the export has to respect that.
+**Next step:** group 4 — the accumulator in `AudioInspectorAnalysis`, `vDSP_conv` per phase plus
+`vDSP_maxmgv`, with the filter generated from the recorded parameters rather than a pasted table. Two
+things the group-2 spike already fixed and that the accumulator must honour: evaluate `sinc` with its
+integer zeros used exactly (that is what makes `truePeak >= samplePeak` structural rather than a clamp),
+and carry `tapsPerPhase/2 − 1` samples of history across chunks so the result stays bit-exact. The
+methodological floor of ADR-0006 (≥4×) belongs there too — the model deliberately does not police it.
 
-**Next step:** group 3 — the sibling domain value type (per-channel and overall true peak, plus the
-method descriptor), then group 4's accumulator in `AudioInspectorAnalysis`. The interpolation is
-`vDSP_conv` per phase plus `vDSP_maxmgv`, and that is not an optimisation: the scalar equivalent costs
-76 seconds per minute of mono audio in an unoptimised build.
-
-**ADR-0019 stays `Proposed`.** Its tolerance is now pinned (0.05 dB against FFmpeg on signals smooth at
-their boundaries), but promotion needs that agreement demonstrated against *production* code plus a
-manual pass — a spike does not promote it.
+**ADR-0019 stays `Proposed`.** Its promotion still needs oracle agreement against production code plus a
+manual pass; a domain type does not move it.
 
 **Other open threads** (see `openspec list` for their real task counts, not restated here):
 `add-static-spectrogram-visualization` (manual validation battery deferred by product decision) and
