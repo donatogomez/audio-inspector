@@ -373,12 +373,18 @@ assumed.
       (its own doc comment states "Not `Codable`" outright), confirmed by search.
 - [ ] 8.3 Decide ADR-0018's status from what was actually implemented, update `CURRENT.md`, and archive
       through `openspec archive` after merge.
-      **Split, per the task's own two conditions.** The decision is made below and `CURRENT.md` is
-      updated in this session — but the ADR's own stated promotion criterion is two-part ("`averageFileBitrate`
-      against production code **and** its own manual validation"), and only the first half is met.
-      **ADR-0018 stays `Proposed`**: no session in this change has run the real app and looked at the
-      signal-levels surface or a real exported JSON with a person's eyes, following the identical
-      "manual validation" standard already applied to ADR-0016/ADR-0017 in this project (never satisfied
-      by test coverage alone, however exhaustive). The `openspec archive` step is explicitly **not**
-      run here — it is conditioned on merge, which has not happened, and this session was instructed
-      not to run it regardless.
+      **The manual validation this task's own criterion needed was actually run — and found a real,
+      reproducible defect**, not merely "not yet done" as in the prior session. A person built and ran
+      the real Debug app against a real stereo fixture: the on-screen Signal levels surface passed every
+      checked point (placement, dBFS for peak/RMS, linear signed DC offset, integer clipped count,
+      "Channel N" naming, no quality wording, waveform/spectrogram undisturbed) — but the exported JSON,
+      generated twice several minutes apart **after** the values were already visible on screen, omitted
+      `measurements` entirely both times. Full detail, including the leading hypothesis (a `.toolbar`
+      `ToolbarItem`'s closure possibly not being rebuilt on re-render) and the exact automated-coverage
+      gap this exposed, is in `docs/manual-validation-mvp.md`, "Signal level metrics — a real defect
+      found by manual validation." No code was changed to investigate or fix it, per this session's own
+      scope. **ADR-0018 stays `Proposed`**: the manual validation is done, and it failed — the same
+      documentation-only outcome as the prior session, but now backed by a specific, reproducible defect
+      rather than an unattempted check. `CURRENT.md` is updated in this session. The `openspec archive`
+      step is explicitly **not** run — it was never going to happen before a merge regardless, and
+      certainly not with a known, unfixed defect in the capability the change adds.
