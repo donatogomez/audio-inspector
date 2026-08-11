@@ -16,30 +16,45 @@
 >   session protocol in `CLAUDE.md`).
 
 ---
-**Focus:** nothing in flight. `add-computed-technical-properties` is merged into `main` and **archived**;
-its capability specs are now canonical, so `openspec` and `git` — not this file — describe the state.
+**Focus:** designing **true peak** — the contract only. `add-true-peak-measurement` is open with its
+proposal, design, task list and delta spec on `audio-signal-level-metrics`, plus **ADR-0019** in
+`Proposed`. **No DSP, no `Sources/`, no tests: only group 1 is done, deliberately**, exactly as the
+previous change began. The preceding slice (`add-computed-technical-properties`) is merged and archived;
+its capability specs are canonical, so `openspec` and `git` — not this file — describe the state.
 
-**What landed.** `averageFileBitrate` (calculated from size and duration, always `uncertain`, never
-`available`, living beside `declaredBitrate`/`estimatedBitrate` without being conflated with either);
-`SignalLevelMetrics` (peak, RMS, DC offset, clipped-sample count) as its own domain value type produced
-by an independent operation over the shared `AudioDecoding` port, presented in the report beneath the
-waveform with dBFS conversion only at the presentation layer; and the export, which carries the metrics
-additively under `measurements.signalLevels` in the domain's own linear amplitude, omitting the key
-entirely when there is nothing to report. `TechnicalProperties` still carries no DSP, `InspectionReport`
-still carries no `SignalLevelMetrics`, and the domain still knows nothing of JSON or `schemaVersion`.
-**ADR-0018 is `Accepted`** — both promotion conditions were met against production code and a manual pass
-on a build whose process identity was verified rather than assumed.
+**Why the design took a whole session before any code.** ADR-0006 fixes the methodology (BS.1770/R128,
+oversampling ≥ 4× before peak detection, the factor and filter recorded with the result, Accelerate in
+`AudioInspectorAnalysis`, FFmpeg `ebur128` as the cross-check oracle) but leaves six things genuinely
+open — the factor above 48 kHz, the interpolation filter, edge handling, arithmetic width, the
+cross-check tolerance, and whether that oracle can run in CI at all. All six are named as decisions with
+their criteria and handed to a spike; none is chosen by assumption. Two structural questions ADR-0006
+does not answer are what **ADR-0019** records: a measurement that carries its own methodology (the first
+in this project), and a positive true peak reported as a **value rather than a flag** — narrowing that
+ADR's own "inter-sample clipping is flagged" sentence, because a flag is an inference and inferences
+here carry evidence, alternatives and confidence.
 
-**Known, deliberate debt from that change** (named at archive time, not dropped): true peak, significant
-max frequency, crest factor, and any single named dynamic-range metric were all deferred with reasons —
-each needs its own methodology decision under ADR-0006, not a one-line addition to this slice. A generic
-`dynamicRange` field stays rejected outright, not deferred. Separately, whether `averageFileBitrate`
-should generate a warning like its siblings is still open, because doing so needs a deliberate pass over
-every affected fixture rather than a silent addition.
+**The two decisions most likely to be revisited later, so they are written down.** True peak becomes a
+**sibling** value type, never a field of `SignalLevelMetrics` — that type is sample-level facts by its
+own definition and has nowhere to put a method. And it is produced by a **fourth** independent operation
+over the shared decoding port, per ADR-0016's own rule; the cost of a fourth full decode is measured
+before it is accepted, with a stop rule written in advance that opens a separate deduplication change
+rather than quietly folding operations together.
 
-**Next step:** pick the next slice. True peak is the natural head of the deferred queue and already has
-its methodology governed by ADR-0006, so it is the obvious candidate — but it needs its own OpenSpec
-change before any code, per the spec-driven rule.
+**What is already in `main` and stays untouched by this change:** the calculated bitrate and
+`SignalLevelMetrics` (sample peak, RMS, DC offset, clipped-sample count), each produced by its own
+independent operation and exported additively under `measurements`. `clippedSampleCount` keeps meaning
+exactly what it means today — the true peak is a **separate** fact, and proving that independence is a
+task group of its own.
+
+**Next step:** the methodology spike (group 2 of the new change) — pin the interpolation filter, the
+oversampling factor per sample rate, edge handling and the cross-check tolerance against FFmpeg
+`ebur128`, then write the spike report. Nothing in `Sources/` moves before that spike produces numbers.
+
+**Known, deliberate debt** (unchanged, named rather than dropped): significant max frequency, crest
+factor, and any single named dynamic-range metric all still wait on their own methodology decisions
+under ADR-0006; a generic `dynamicRange` field stays rejected outright. Whether `averageFileBitrate`
+should generate a warning like its siblings is still open, because it needs a deliberate pass over every
+affected fixture rather than a silent addition.
 
 **Other open threads** (see `openspec list` for their real task counts, not restated here):
 `add-static-spectrogram-visualization` (manual validation battery deferred by product decision) and
