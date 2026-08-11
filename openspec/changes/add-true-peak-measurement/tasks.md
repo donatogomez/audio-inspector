@@ -1,11 +1,11 @@
 # Implementation Tasks
 
-**Groups 1–3 are done: the contract, the measurements that turned its open questions into constants,
-and the domain model those constants are recorded in.** Group 2's evidence lives in
+**Groups 1–4 are done: the contract, the measurements that turned its open questions into constants,
+the domain model, and the accumulator that produces one.** Group 2's evidence lives in
 `Spike/validate-true-peak/` (outside the production graph) and
-`docs/spikes/2026-08-11-true-peak-methodology-validation.md`; group 3 added exactly one production file
-and one test file, and **no DSP** — nothing yet reads a sample. Every task from group 4 onward is a
-roadmap for a future session, not work performed here.
+`docs/spikes/2026-08-11-true-peak-methodology-validation.md`. **Nothing is wired up yet**: no decoder,
+no flow, no state, no interface, no export — a true peak can be computed from chunks handed in by hand,
+and nothing in the app hands them in. Every task from group 5 onward is a roadmap for a future session.
 
 **The methodology is now fixed and is no longer a decision for a later group**: polyphase FIR, **8×**,
 **48 taps per phase**, Kaiser **β = 6.0**, cutoff **1.0**, phases normalised, **zero-extension** at the
@@ -168,36 +168,62 @@ produced it, and does not know how to produce one.
 
 ## 4. The accumulator (`AudioInspectorAnalysis`, Accelerate — placement already fixed by ADR-0006)
 
-- [ ] 4.1 Implement the filter closed in 2.2/2.3 — polyphase FIR, 8×, 48 taps per phase, Kaiser
-      β = 6.0, cutoff 1.0, phases normalised to unit sum — as one FIR per output phase run at the input
-      rate via `vDSP_conv`, reduced with `vDSP_maxmgv`, never materialising the zero-stuffed oversampled
-      signal, so memory stays a function of the chunk and not of the file's duration. Generate the
-      coefficients from the recorded parameters rather than pasting a table, and evaluate `sinc` with its
-      integer zeros used exactly (4.3 depends on it). Every constant is engine-versioned and **not**
-      user-configurable.
-- [ ] 4.2 Preserve continuity across chunk boundaries: an interpolator needs samples on both sides of
-      the point it reconstructs, so the tail of each chunk is carried into the next. **The result must
-      not depend on how the file was chunked** — the same guarantee `SignalLevelMetricsAccumulator` and
-      `SpectrogramAccumulator` both make, and the same one the capability's existing spec already
-      requires of level metrics.
-- [ ] 4.3 Guarantee the "never below the sample peak" invariant **structurally**: with cutoff 1.0 and
-      exact integer sinc zeros, phase 0 *is* the identity, so the stored samples are already in the set
-      the maximum is taken over. **No clamp** — a clamp would hide a broken filter instead of failing on
-      it. Assert phase 0 reproduces its input bit for bit, and keep group 2's negative control (cutoff
-      0.90 breaks the invariant by −0.16) as a test rather than as a comment.
-- [ ] 4.4 Carry the convolution in **`Float`** — settled in group 2 (worst difference from `Double`
-      over 21 fixtures: 1.9 × 10⁻⁷ linear, 2 × 10⁻⁶ dB, at identical cost). Document beside the code why
-      this differs from `SignalLevelMetricsAccumulator`'s `Double`: that type accumulates ~10⁸
-      additions, a maximum accumulates nothing.
-- [ ] 4.5 Unit-test the accumulator with no file and no framework: known signals with known inter-sample
-      peaks; a tone whose crest is hidden between samples; silence; zero frames; a single sample beyond
-      full scale; chunk-size and feed-order independence; per-channel independence; determinism across
-      two runs. Include at least one **negative control** — a deliberately wrong variant (for example,
-      peak detection without interpolation) that must break specific named assertions — then revert it
-      in full and confirm no residue, as groups 3.5 and 6.3 of `add-computed-technical-properties` did.
-- [ ] 4.6 Cross-check against FFmpeg `ebur128 peak=true` within the tolerance from 2.5, gated per 2.6.
-      The oracle test compares **both** `true_peak` and `sample_peak`, since the oracle reports both and
-      the pair is exactly what §12 of `design.md` claims to keep independent.
+**Done.** `Sources/AudioInspectorAnalysis/TruePeakAccumulator.swift` — nothing `public`, nothing
+reachable from a feature or the app, and no reference to it anywhere outside `AudioInspectorAnalysis`.
+Domain, Media, the features, the app, the JSON contract, the waveform and the spectrogram are **all
+untouched**: this group added two files and modified none.
+
+- [x] 4.1 Implemented as a polyphase FIR at 8×, 48 taps per phase, Kaiser β 6.0, cutoff 1.0, phases
+      normalised to unit sum — one `vDSP_conv` plus one `vDSP_maxmgv` per phase, run at the **input**
+      rate, so the zero-stuffed 8× signal is never materialised and no buffer scales with 8× the
+      duration. `window` and `convolved` are allocated once and reused, growing only to the largest chunk
+      seen. **The 384 coefficients are generated from the four parameters, never pasted**: there is no
+      table in the repository, so the constants remain the single source of truth. `sinc` evaluates its
+      integer zeros exactly (`u == u.rounded()` → `u == 0 ? 1 : 0`) rather than through
+      `sin(πu)/(πu)`, which returns ~1e-16 there. Every constant is `static let` on an internal type —
+      no configuration surface exists at any layer.
+- [x] 4.2 Continuity across chunks: exactly `tapsPerPhase - 1` = **47** samples cross each boundary,
+      which is the 23 of left context a position needs plus the 24 of lookahead that hold back the last
+      positions of a chunk until the next arrives. **The task list previously named only the 23** —
+      that figure is the left-context/zero-extension depth, and carrying only it would lose the
+      positions that were not yet emittable; 47 is what an FIR of length 48 provably cannot do without.
+      No `removeFirst` on a growing buffer: `pending` never exceeds 47 between calls, so maintaining it
+      copies a fixed 47 floats per chunk regardless of chunk size or file length. Verified **bit-exact**
+      at 1, 3, 127, 512, 2048, 4096, 65536 and whole-file, mono and stereo, on five signals — equality,
+      not tolerance.
+- [x] 4.3 The invariant is structural. Phase 0's taps are exactly `0, …, 1, …, 0` (asserted with `==`,
+      not a tolerance), so the reconstruction reproduces the stored samples bit for bit and the maximum
+      is taken over a set that already contains them. **No clamp exists in the file**, and `truePeak >=
+      samplePeak` is asserted across nine signals including silence, an impulse, a stored 1.5, and
+      energy at the first and last frame. Group 2's negative control is now a run test rather than a
+      comment: at cutoff 0.90 phase 0 stops being the identity and the invariant breaks on five of the
+      nine.
+- [x] 4.4 The convolution is `Float` end to end, with the reason documented beside the code. Pinned by a
+      test against a deliberately slow `Double` reference reconstruction written the least clever way
+      possible: agreement within 1e-6 linear, consistent with the 1.9 × 10⁻⁷ the spike measured.
+- [x] 4.5 **28 tests**, no file and no framework beyond Accelerate: the filter's own shape (phase-0
+      identity, exact sinc zeros, unit-sum phases, 384 coefficients); silence as a measured zero; a crest
+      on a sample; a crest hidden between samples where the stored samples read 3 dB lower; sample peak
+      below full scale with true peak above it; an impulse reconstructing to exactly its own height; a
+      stored 1.5 measured and not clamped; energy at the first and last frame; a truncated tone keeping
+      its own boundary overshoot; chunk independence mono and stereo; determinism; per-channel
+      independence with no mixdown; six channels; all four sample rates including **192 kHz against
+      analytic truth**; zero frames and empty chunks reporting `nil` rather than zero; a file shorter
+      than the filter; a mismatched chunk ignored; an invalid channel count refused; and the method
+      travelling with the result.
+      **Three negative controls, all reverted in full** (`diff` against a pre-mutation copy showed no
+      residue each time): (1) **cutoff 0.90** broke the phase-0 identity and `truePeak >= samplePeak` on
+      five signals; (2) **constant extension at the tail** instead of zeros fabricated **+1.13 dB** on
+      the last-frame fixture — the same 1.1303 the spike measured for that policy; (3) **carrying no
+      history between chunks** collapsed chunk independence and dropped the last-frame peak to 0.0003.
+- [x] 4.6 Cross-checked against FFmpeg `ebur128 peak=true+sample` in its own suite,
+      `Tests/AudioInspectorKitTests/TruePeakOracleTests.swift`, gated on the tool's presence with a skip
+      message that says outright that a skip is **not** evidence of agreement. Within the tolerance
+      pinned in 2.5 (**0.05 dB**) at 44.1, 48 and 96 kHz on faded tones and on a complex programme.
+      **192 kHz is deliberately absent from this suite** — the oracle does not oversample there, so a
+      comparison would measure its limitation; that rate is covered by analytic truth in 4.5. The oracle
+      test reads **both** `true_peak` and `sample_peak` and asserts the two stay ordered in both meters,
+      which is the independence `design.md` §12 claims.
 
 ## 5. Cost — measured before the architecture is committed to
 
