@@ -16,41 +16,30 @@
 >   session protocol in `CLAUDE.md`).
 
 ---
-**Focus:** `add-computed-technical-properties` is implementation-complete and validated, on
-`feature/add-signal-level-metrics-generation`, **not yet merged**. All 32 tasks are settled: 28 done,
-4 (group 7 — true peak, significant max frequency, crest factor, generic dynamic range) deliberately
-deferred and named, not implemented. **ADR-0018 is now `Accepted`.**
+**Focus:** nothing in flight. `add-computed-technical-properties` is merged into `main` and **archived**;
+its capability specs are now canonical, so `openspec` and `git` — not this file — describe the state.
 
-**The apparent export defect from the previous session was investigated under live instrumentation and
-found to be a false negative, not a code defect.** A trace at every seam from `ReportView`'s export
-button through to `JSONReportExporter` showed the real `SignalLevelMetrics` reaching every step,
-including the `.toolbar` button the earlier session suspected — that hypothesis is disconfirmed. The
-actual cause: a stale, unkillable `AudioInspector` process from an earlier Xcode run was still alive in
-the background, and `open` (used to launch the build in the prior session) activates an already-running
-instance rather than starting a new one — the prior manual pass almost certainly validated a stale build,
-not this change's own code. Full account in `docs/manual-validation-mvp.md`, "Signal level metrics —
-resolved: a stale app instance, not a code defect." All instrumentation was reverted before any commit.
+**What landed.** `averageFileBitrate` (calculated from size and duration, always `uncertain`, never
+`available`, living beside `declaredBitrate`/`estimatedBitrate` without being conflated with either);
+`SignalLevelMetrics` (peak, RMS, DC offset, clipped-sample count) as its own domain value type produced
+by an independent operation over the shared `AudioDecoding` port, presented in the report beneath the
+waveform with dBFS conversion only at the presentation layer; and the export, which carries the metrics
+additively under `measurements.signalLevels` in the domain's own linear amplitude, omitting the key
+entirely when there is nothing to report. `TechnicalProperties` still carries no DSP, `InspectionReport`
+still carries no `SignalLevelMetrics`, and the domain still knows nothing of JSON or `schemaVersion`.
+**ADR-0018 is `Accepted`** — both promotion conditions were met against production code and a manual pass
+on a build whose process identity was verified rather than assumed.
 
-**The real validation was then repeated on a confirmed-fresh process instance, twice, and passed both
-times**: the on-screen `Signal levels` surface and the real exported `measurements.signalLevels` JSON
-both correct — linear values (never dBFS), `averageFileBitrate` under its own key, no absolute paths, no
-UI-only state, reproducible byte-for-byte except `generatedAt`. One thing was added and kept:
-`EndToEndFlowTests.theRealSignalLevelMetricsPathReachesTheExportedDocument`, which closes the real gap
-this whole investigation started from — no test previously drove the production export path with
-genuine, non-`nil` signal level metrics. A negative control confirmed the new test actually
-discriminates, then was reverted.
+**Known, deliberate debt from that change** (named at archive time, not dropped): true peak, significant
+max frequency, crest factor, and any single named dynamic-range metric were all deferred with reasons —
+each needs its own methodology decision under ADR-0006, not a one-line addition to this slice. A generic
+`dynamicRange` field stays rejected outright, not deferred. Separately, whether `averageFileBitrate`
+should generate a warning like its siblings is still open, because doing so needs a deliberate pass over
+every affected fixture rather than a silent addition.
 
-**Every capability is implemented, threaded end to end, and now manually confirmed**:
-`averageFileBitrate` (calculated, always `uncertain`, coexisting with `declaredBitrate`/
-`estimatedBitrate`); `SignalLevelMetrics` (peak, RMS, DC offset, clipped-sample count) produced by its
-own independent operation, presented in the report beneath the waveform (dBFS only at the presentation
-layer), and exported additively under `measurements.signalLevels` in the domain's own linear amplitude.
-`TechnicalProperties` carries no DSP; `InspectionReport` carries no `SignalLevelMetrics`; the domain
-knows nothing of JSON or `schemaVersion`. All six gates green (boundaries, build, `swift test` × 2 —
-869 tests — `xcodebuild` Debug, OpenSpec strict, `git diff --check`).
-
-**Next step:** this branch is ready for review and merge. Only after merge does `openspec archive` run.
-Nothing in this session pushed, opened a PR, or archived.
+**Next step:** pick the next slice. True peak is the natural head of the deferred queue and already has
+its methodology governed by ADR-0006, so it is the obvious candidate — but it needs its own OpenSpec
+change before any code, per the spec-driven rule.
 
 **Other open threads** (see `openspec list` for their real task counts, not restated here):
 `add-static-spectrogram-visualization` (manual validation battery deferred by product decision) and
