@@ -356,9 +356,29 @@ assumed.
 
 ## 8. Gates and closure
 
-- [ ] 8.1 Four gates green — `./Scripts/check-boundaries.sh`, `swift build -Xswiftc -warnings-as-errors`,
+- [x] 8.1 Four gates green — `./Scripts/check-boundaries.sh`, `swift build -Xswiftc -warnings-as-errors`,
       `swift test`, `OPENSPEC_TELEMETRY=0 openspec validate --all --strict` — plus the Xcode app build.
-- [ ] 8.2 Confirm `averageFileBitrate` never becomes `.available` in any test, and that `SignalLevelMetrics`
+      All six (boundaries, build, `swift test` run twice, `xcodebuild` Debug, OpenSpec strict,
+      `git diff --check`) green in this closing session — 868 tests both times.
+- [x] 8.2 Confirm `averageFileBitrate` never becomes `.available` in any test, and that `SignalLevelMetrics`
       never gains a Codable conformance that would let it leak into an unrelated export path.
+      **A real violation was found and fixed, not merely confirmed.**
+      `Tests/AudioInspectorKitTests/JSONReportExportSupport.swift`'s `allAvailableProperties()` fixture
+      set `averageFileBitrate: .available(1_411_200)` — a state `AVFoundationAudioFilePropertyReader
+      .averageFileBitrate` has no code path to produce (ADR-0018 makes it structurally `.uncertain`
+      only). Changed to `.uncertain(value: 1_411_200, reason: "calculated from size and duration")`;
+      868 tests still pass, confirming nothing depended on the wrong state. A repository-wide search
+      after the fix (`averageFileBitrate:\s*\.available|averageFileBitrate\s*=\s*\.available`) returns
+      no matches. `SignalLevelMetrics` carries no `Codable`/`Encodable`/`Decodable` conformance anywhere
+      (its own doc comment states "Not `Codable`" outright), confirmed by search.
 - [ ] 8.3 Decide ADR-0018's status from what was actually implemented, update `CURRENT.md`, and archive
       through `openspec archive` after merge.
+      **Split, per the task's own two conditions.** The decision is made below and `CURRENT.md` is
+      updated in this session — but the ADR's own stated promotion criterion is two-part ("`averageFileBitrate`
+      against production code **and** its own manual validation"), and only the first half is met.
+      **ADR-0018 stays `Proposed`**: no session in this change has run the real app and looked at the
+      signal-levels surface or a real exported JSON with a person's eyes, following the identical
+      "manual validation" standard already applied to ADR-0016/ADR-0017 in this project (never satisfied
+      by test coverage alone, however exhaustive). The `openspec archive` step is explicitly **not**
+      run here — it is conditioned on merge, which has not happened, and this session was instructed
+      not to run it regardless.
