@@ -1,6 +1,11 @@
 # ADR-0018: Where a computed technical property may live
 
-- **Status**: Proposed
+- **Status**: Accepted (2026-08-11) — both promotion conditions are met: `averageFileBitrate` is
+  implemented and exported against production code, and this change's own manual validation is done —
+  a person confirmed the real on-screen `Signal levels` surface and the real exported
+  `measurements.signalLevels` JSON, on a build whose process identity was verified rather than assumed,
+  reproducibly, twice. See `docs/manual-validation-mvp.md`, "Signal level metrics — resolved: a stale
+  app instance, not a code defect."
 - **Date**: 2026-08-08
 - **Deciders**: Project maintainer
 - **Related**: ADR-0006 (loudness/true-peak methodology), ADR-0008 (property availability and certainty),
@@ -99,6 +104,6 @@ sources, but for two *estimates* instead.
   meaningfully, deciding whether that disagreement itself becomes a reported observation (rather than two
   silent numbers) is a decision for that moment, made with a real example in hand rather than
   speculatively here.
-- Promote this ADR once `add-computed-technical-properties` has implemented at least
+- ~~Promote this ADR once `add-computed-technical-properties` has implemented at least
   `averageFileBitrate` against production code and its own manual validation is done, following the
-  same promotion discipline ADR-0017 already uses.
+  same promotion discipline ADR-0017 already uses.~~ **Done — see Status above.**
