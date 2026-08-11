@@ -113,12 +113,12 @@ struct JSONReportExportTests {
 
     // MARK: - technicalProperties — states, value types, units, reasons, errors
 
-    @Test func completedEmitsAllEightPropertyKeys() throws {
+    @Test func completedEmitsAllNinePropertyKeys() throws {
         let object = try exportValue(report(properties: allAvailableProperties(), status: .completed))
         let technicalKeys = try #require(object["technicalProperties"]?.keys)
         #expect(technicalKeys == [
             "container", "duration", "sampleRate", "channelCount",
-            "bitDepth", "codec", "declaredBitrate", "estimatedBitrate",
+            "bitDepth", "codec", "declaredBitrate", "estimatedBitrate", "averageFileBitrate",
         ])
     }
 
@@ -207,9 +207,47 @@ struct JSONReportExportTests {
         #expect(estimated["reason"]?.string == "cannot estimate")
     }
 
+    /// `averageFileBitrate` exports under its own key, additive to the `schemaVersion` 1 object
+    /// (`docs/json-schema-v1.md`), and — per ADR-0018 — is never `available`, so only its `uncertain`
+    /// shape is exercised here; `declaredBitrate`/`estimatedBitrate` are unaffected by its presence.
+    @Test func averageFileBitrateExportsUnderItsOwnKeyDistinctFromTheOtherTwo() throws {
+        var properties = allAvailableProperties()
+        properties.declaredBitrate = .unavailable(reason: nil)
+        properties.estimatedBitrate = .uncertain(value: 180_904, reason: "framework estimate")
+        properties.averageFileBitrate = .uncertain(
+            value: 180_857,
+            reason: "calculated from size and duration, includes container overhead and artwork"
+        )
+        let object = try exportValue(report(properties: properties, status: .partial(message: "x")))
+        let technical = try #require(object["technicalProperties"])
+
+        let average = try #require(technical["averageFileBitrate"])
+        #expect(average["state"]?.string == "uncertain")
+        #expect(average["value"]?.int == 180_857)
+        #expect(average["unit"]?.string == "bitsPerSecond")
+        #expect(average["reason"]?.string == "calculated from size and duration, includes container overhead and artwork")
+
+        // The three bitrate keys stay independent — none of this leaked into the other two.
+        #expect(technical["declaredBitrate"]?["state"]?.string == "unavailable")
+        #expect(technical["estimatedBitrate"]?["value"]?.int == 180_904)
+    }
+
+    @Test func averageFileBitrateAbsentIsNullValueWithReasonNoUnit() throws {
+        var properties = allAvailableProperties()
+        properties.averageFileBitrate = .uncertain(value: nil, reason: "size or duration not available")
+        let object = try exportValue(report(properties: properties, status: .partial(message: "x")))
+        let technical = try #require(object["technicalProperties"])
+
+        let average = try #require(technical["averageFileBitrate"])
+        #expect(average["state"]?.string == "uncertain")
+        #expect(average["value"]?.isNull == true)
+        #expect(average["unit"] == nil)
+        #expect(average["reason"]?.string == "size or duration not available")
+    }
+
     @Test func globalFailureEmitsEmptyTechnicalPropertiesObject() throws {
         // A failed status must yield `{}` — even though the report carries an all-`unavailable` set,
-        // the exporter must NOT emit eight `unavailable` entries (the gate is the status).
+        // the exporter must NOT emit nine `unavailable` entries (the gate is the status).
         let error = InspectionError(code: .fileOpenFailed, message: "The audio file could not be opened.")
         let subject = InspectionReport(
             file: makeReference(),

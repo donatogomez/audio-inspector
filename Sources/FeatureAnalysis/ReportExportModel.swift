@@ -24,13 +24,14 @@ final class ReportExportModel {
         self.action = action
     }
 
-    /// Runs one export of `report`. Re-entrancy is prevented: while `exporting`, further calls are
-    /// ignored, so the action runs at most once per in-flight operation. Cancellation returns to
-    /// `idle`; failures become a presentable message.
-    func export(_ report: InspectionReport) async {
+    /// Runs one export of `report`, plus whatever signal level metrics are currently available
+    /// (`nil` when there is nothing to report). Re-entrancy is prevented: while `exporting`, further
+    /// calls are ignored, so the action runs at most once per in-flight operation. Cancellation
+    /// returns to `idle`; failures become a presentable message.
+    func export(_ report: InspectionReport, signalLevelMetrics: SignalLevelMetrics?) async {
         guard phase != .exporting else { return }
         phase = .exporting
-        switch await action(report) {
+        switch await action(report, signalLevelMetrics) {
         case .succeeded:
             phase = .succeeded
         case .cancelled:

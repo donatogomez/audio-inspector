@@ -177,8 +177,14 @@ struct InspectionStatusDTO: Encodable {
     }
 }
 
-/// The top-level envelope. Every field is always present; `CodingKeys` pins the wire names so an
-/// internal property rename can never silently change the contract.
+/// The top-level envelope. Every field from the original v1 contract is always present;
+/// `measurements` is the one **additive** exception — `nil` when no DSP measurement exists, in which
+/// case the key is **omitted entirely** (Swift's synthesized `Encodable` already does this for an
+/// `Optional`, unlike the explicit-`null` fields above, which are part of the original required
+/// contract). A report exported with `measurements == nil` is therefore byte-identical to the
+/// pre-group-6 output — the strongest form the "additive, no version bump" rule can take.
+/// `CodingKeys` pins every wire name so an internal property rename can never silently change the
+/// contract.
 struct ReportEnvelopeDTO: Encodable {
     let schemaVersion: Int
     let generatedAt: Date
@@ -187,9 +193,87 @@ struct ReportEnvelopeDTO: Encodable {
     let technicalProperties: TechnicalPropertiesDTO
     let warnings: [WarningDTO]
     let inspectionStatus: InspectionStatusDTO
+    let measurements: MeasurementsDTO?
 
     enum CodingKeys: String, CodingKey {
-        case schemaVersion, generatedAt, generator, inspectedFile, technicalProperties, warnings, inspectionStatus
+        case schemaVersion, generatedAt, generator, inspectedFile, technicalProperties, warnings
+        case inspectionStatus, measurements
+    }
+}
+
+// MARK: - `measurements` (additive, still v1) — DSP-derived, never metadata
+
+/// The wire form of one channel's own peak/RMS/DC-offset/clipped-count. `sampleCount` travels with it
+/// so a consumer can tell "not computable" (`sampleCount == 0`, the three optionals `null`) from a
+/// genuinely measured, computed zero — the same distinction `SignalLevelMetrics.Channel` itself
+/// preserves, carried faithfully rather than collapsed into a single missing-value convention.
+///
+/// `peakSample`/`rms`/`dcOffset` are the domain's own **linear** amplitude, not dBFS: the wire
+/// contract exports what was measured, and a decibel conversion is a presentation concern (already
+/// applied only in `FeatureAnalysis`, never here). `clippedSampleCount` has no "not computable" state
+/// — counting is defined even over zero samples — so it is a plain, always-present integer.
+struct SignalLevelChannelDTO: Encodable {
+    let sampleCount: Int
+    let peakSample: Double?
+    let rms: Double?
+    let dcOffset: Double?
+    let clippedSampleCount: Int
+
+    private enum CodingKeys: String, CodingKey {
+        case sampleCount, peakSample, rms, dcOffset, clippedSampleCount
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(sampleCount, forKey: .sampleCount)
+        try encodeExplicit(peakSample, forKey: .peakSample, into: &container)
+        try encodeExplicit(rms, forKey: .rms, into: &container)
+        try encodeExplicit(dcOffset, forKey: .dcOffset, into: &container)
+        try container.encode(clippedSampleCount, forKey: .clippedSampleCount)
+    }
+}
+
+/// The whole-file combination of every channel's own figures — `SignalLevelMetrics`'s own
+/// `overall…` values, computed by a fixed formula from the per-channel data, never a second
+/// measurement. Carries no `sampleCount` of its own: "not computable" here means every channel was.
+struct SignalLevelOverallDTO: Encodable {
+    let peakSample: Double?
+    let rms: Double?
+    let dcOffset: Double?
+    let clippedSampleCount: Int
+
+    private enum CodingKeys: String, CodingKey {
+        case peakSample, rms, dcOffset, clippedSampleCount
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try encodeExplicit(peakSample, forKey: .peakSample, into: &container)
+        try encodeExplicit(rms, forKey: .rms, into: &container)
+        try encodeExplicit(dcOffset, forKey: .dcOffset, into: &container)
+        try container.encode(clippedSampleCount, forKey: .clippedSampleCount)
+    }
+}
+
+/// `measurements.signalLevels`: the overall figures plus one entry per channel, in the stream's own
+/// channel order — mirroring `SignalLevelMetrics`'s own shape exactly, with no field added or dropped.
+struct SignalLevelsDTO: Encodable {
+    let overall: SignalLevelOverallDTO
+    let channels: [SignalLevelChannelDTO]
+
+    enum CodingKeys: String, CodingKey {
+        case overall, channels
+    }
+}
+
+/// The `measurements` object itself. A struct rather than `SignalLevelsDTO` directly at the top level,
+/// so a future measurement (e.g. true peak, once designed) adds a sibling key rather than replacing
+/// this one or forcing a new top-level field.
+struct MeasurementsDTO: Encodable {
+    let signalLevels: SignalLevelsDTO
+
+    enum CodingKeys: String, CodingKey {
+        case signalLevels
     }
 }
 

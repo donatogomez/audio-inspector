@@ -142,6 +142,11 @@ func makeReference(modifiedAt: Date? = date("2026-06-12T09:03:00Z")) -> AudioFil
 }
 
 /// Every technical property cleanly `available` — a valid `completed` shape.
+///
+/// `averageFileBitrate` is the one field kept `.uncertain` even here: ADR-0018 makes `.available`
+/// impossible for it by construction (`AVFoundationAudioFilePropertyReader.averageFileBitrate` has no
+/// code path that returns anything else), so a fixture claiming otherwise would assert a state
+/// production code can never produce.
 func allAvailableProperties() -> TechnicalProperties {
     TechnicalProperties(
         container: .available("wav"),
@@ -151,7 +156,8 @@ func allAvailableProperties() -> TechnicalProperties {
         bitDepth: .available(16),
         codec: .available("pcm"),
         declaredBitrate: .available(1_411_200),
-        estimatedBitrate: .available(1_411_200)
+        estimatedBitrate: .available(1_411_200),
+        averageFileBitrate: .uncertain(value: 1_411_200, reason: "calculated from size and duration")
     )
 }
 
@@ -166,22 +172,27 @@ func report(
 
 // MARK: - Export & decode (Codable-only)
 
-/// Exports a report to raw JSON bytes with the injected clock/generator.
+/// Exports a report to raw JSON bytes with the injected clock/generator. `signalLevelMetrics` defaults
+/// to `nil` — absent from `measurements`, exactly like every pre-group-6 test fixture — so the ~50
+/// existing call sites that predate `measurements` keep compiling and keep asserting the export as it
+/// was, unchanged by this addition.
 func exportData(
     _ report: InspectionReport,
+    signalLevelMetrics: SignalLevelMetrics? = nil,
     now: Date = fixedNow,
     generator: ReportGenerator = fixedGenerator
 ) throws -> Data {
-    try JSONReportExporter(generator: generator, now: { now }).export(report)
+    try JSONReportExporter(generator: generator, now: { now }).export(report, signalLevelMetrics: signalLevelMetrics)
 }
 
 /// Exports and decodes into a typed `JSONValue` tree (via `JSONDecoder`) for structural assertions.
 func exportValue(
     _ report: InspectionReport,
+    signalLevelMetrics: SignalLevelMetrics? = nil,
     now: Date = fixedNow,
     generator: ReportGenerator = fixedGenerator
 ) throws -> JSONValue {
-    let data = try exportData(report, now: now, generator: generator)
+    let data = try exportData(report, signalLevelMetrics: signalLevelMetrics, now: now, generator: generator)
     return try JSONDecoder().decode(JSONValue.self, from: data)
 }
 

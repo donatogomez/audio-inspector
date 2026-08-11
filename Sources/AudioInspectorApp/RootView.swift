@@ -99,6 +99,22 @@ public struct RootView: View {
         }
     }
 
+    /// Translates the flow's signal level metrics state into the report surface's own, for the reason
+    /// and in the shape `waveformPresentation`/`spectrogramPresentation` already establish.
+    ///
+    /// Total by construction, with no default case — every state the flow can hold has exactly one
+    /// presentation, and none is invented.
+    nonisolated static func signalLevelMetricsPresentation(
+        for state: SignalLevelMetricsState
+    ) -> SignalLevelMetricsPresentation {
+        switch state {
+        case .loading: .loading
+        case let .available(metrics): .metrics(metrics)
+        case .unavailable: .absent
+        case let .failed(message): .failed(message: message)
+        }
+    }
+
     /// The inspected report plus the way back to picking another file. `ReportView` is used exactly as
     /// group 5 shipped it — the export action is passed straight through, unchanged.
     /// The comparison's own controls, beside the existing way to pick another file.
@@ -146,6 +162,7 @@ public struct RootView: View {
                 report: presentation.report,
                 waveform: Self.waveformPresentation(for: presentation.waveform),
                 spectrogram: Self.spectrogramPresentation(for: presentation.spectrogram),
+                signalLevelMetrics: Self.signalLevelMetricsPresentation(for: presentation.signalLevelMetrics),
                 comparison: Self.comparisonPresentation(for: flow.comparison),
                 export: export
             )

@@ -183,6 +183,125 @@ struct AVFoundationPropertyMappingTests {
         expectFailed(reader.estimatedBitrate(from: .failed))
     }
 
+    // MARK: - averageFileBitrate (Int? sizeBytes, Property<Double> duration → always uncertain, never available)
+
+    /// Task 2.4 / design.md §3, §8: normal, confirmed inputs produce a computed value — always
+    /// `uncertain`, never `available`.
+    @Test func averageFileBitrateNormalInputsIsUncertainWithComputedValue() {
+        // 3,600,000 bytes over 180 s ⇒ 3,600,000 × 8 ÷ 180 = 160,000 bit/s exactly.
+        expectUncertain(
+            reader.averageFileBitrate(sizeBytes: 3_600_000, duration: .available(180.0)),
+            value: 160_000
+        )
+    }
+
+    @Test func averageFileBitrateDurationZeroIsUncertainWithoutValue() {
+        // The reader's own duration mapper reports an unconfirmed zero as `.uncertain(0, …)`, never
+        // `.available` — this must not be treated as a usable, confirmed duration (would divide by zero).
+        expectUncertain(
+            reader.averageFileBitrate(sizeBytes: 1_000, duration: .uncertain(value: 0, reason: "zero")),
+            value: nil
+        )
+    }
+
+    @Test func averageFileBitrateDurationUnavailableIsUncertainWithoutValue() {
+        expectUncertain(
+            reader.averageFileBitrate(sizeBytes: 1_000, duration: .unavailable(reason: nil)),
+            value: nil
+        )
+    }
+
+    /// Defensive: even a hypothetical *non-zero* uncertain duration (which the real reader never
+    /// produces today — its only uncertain case is exactly zero) must not be treated as confirmed. Only
+    /// `.available` counts.
+    @Test func averageFileBitrateDurationUncertainNonZeroIsStillUncertainWithoutValue() {
+        expectUncertain(
+            reader.averageFileBitrate(sizeBytes: 1_000, duration: .uncertain(value: 5.0, reason: "hypothetical")),
+            value: nil
+        )
+    }
+
+    @Test func averageFileBitrateDurationFailedIsUncertainWithoutValueNotFailed() {
+        // The property itself never performs a read that can fail; an unusable input (including a
+        // failed duration) is absence, not a propagated failure.
+        expectUncertain(
+            reader.averageFileBitrate(sizeBytes: 1_000, duration: .failed(PropertyFailure(code: .propertyReadError, message: "x"))),
+            value: nil
+        )
+    }
+
+    @Test func averageFileBitrateSizeBytesNilIsUncertainWithoutValue() {
+        expectUncertain(reader.averageFileBitrate(sizeBytes: nil, duration: .available(180.0)), value: nil)
+    }
+
+    /// Zero is a **usable** size, not treated as absent — `sizeBytes ≥ 0` is the stated contract, and a
+    /// genuinely zero-byte file with a positive duration computes an honest `0`, not an absence.
+    @Test func averageFileBitrateSizeBytesZeroComputesZero() {
+        expectUncertain(reader.averageFileBitrate(sizeBytes: 0, duration: .available(10.0)), value: 0)
+    }
+
+    @Test func averageFileBitrateNegativeSizeBytesIsUncertainWithoutValue() {
+        // The type permits a negative Int even though the real API never reports one; guarded anyway.
+        expectUncertain(reader.averageFileBitrate(sizeBytes: -1, duration: .available(10.0)), value: nil)
+    }
+
+    /// A size/duration pair whose result does not fit `Int` is treated as absence, never a crash and
+    /// never a silently wrapped number.
+    @Test func averageFileBitrateOverflowIsUncertainWithoutValue() {
+        expectUncertain(
+            reader.averageFileBitrate(sizeBytes: Int.max, duration: .available(0.000_000_1)),
+            value: nil
+        )
+    }
+
+    /// Rounding policy, exact and testable: half rounds away from zero (equivalently "up," since the
+    /// result is never negative). 1,000 bytes over 8 s ⇒ 1,000 × 8 ÷ 8 = 1,000.0 exactly (no rounding
+    /// needed); 1,001 bytes over 8 s ⇒ 1,001 × 8 ÷ 8 = 1,001.0 exactly. A genuine half-way case:
+    /// 1 byte over 16 s ⇒ 8 ÷ 16 = 0.5 → rounds to 1, not 0.
+    @Test func averageFileBitrateRoundsHalfAwayFromZero() {
+        expectUncertain(reader.averageFileBitrate(sizeBytes: 1, duration: .available(16.0)), value: 1)
+    }
+
+    /// The whole file counts, by definition of the calculation — nothing here subtracts or special-cases
+    /// non-audio bytes. Doubling `sizeBytes` (as embedded artwork would) doubles the result, proving
+    /// there is no hidden overhead exclusion.
+    @Test func averageFileBitrateCountsTheWholeFileIncludingNonAudioBytes() {
+        let audioOnly = reader.averageFileBitrate(sizeBytes: 1_000_000, duration: .available(60.0))
+        let withArtwork = reader.averageFileBitrate(sizeBytes: 2_000_000, duration: .available(60.0))
+        expectUncertain(audioOnly, value: 133_333)
+        expectUncertain(withArtwork, value: 266_667)
+    }
+
+    /// Across every input shape above, the result is never `.available` — the one invariant ADR-0018
+    /// makes permanent for this field.
+    @Test func averageFileBitrateIsNeverAvailable() {
+        let results: [Property<Int>] = [
+            reader.averageFileBitrate(sizeBytes: 3_600_000, duration: .available(180.0)),
+            reader.averageFileBitrate(sizeBytes: 0, duration: .available(10.0)),
+            reader.averageFileBitrate(sizeBytes: nil, duration: .available(180.0)),
+            reader.averageFileBitrate(sizeBytes: 1_000, duration: .unavailable(reason: nil)),
+            reader.averageFileBitrate(sizeBytes: Int.max, duration: .available(0.000_000_1)),
+        ]
+        for result in results {
+            guard case .uncertain = result else {
+                Issue.record("expected .uncertain, got \(result)"); continue
+            }
+        }
+    }
+
+    /// `declaredBitrate`, `estimatedBitrate` and `averageFileBitrate` are three independent fields on
+    /// the same struct — setting one must never be visible through another.
+    @Test func declaredEstimatedAndAverageBitrateAreIndependentFields() {
+        var properties = TechnicalProperties()
+        properties.declaredBitrate = .available(128_000)
+        properties.estimatedBitrate = .uncertain(value: 180_904, reason: "framework estimate")
+        properties.averageFileBitrate = .uncertain(value: 133_875, reason: "calculated")
+
+        #expect(properties.declaredBitrate == .available(128_000))
+        #expect(properties.estimatedBitrate.value == 180_904)
+        #expect(properties.averageFileBitrate.value == 133_875)
+    }
+
     // MARK: - container (pure UTType? → Property<String>; IO error path via a missing URL)
 
     @Test func containerFromResolvedTypeIsUncertainWithIdentifier() {

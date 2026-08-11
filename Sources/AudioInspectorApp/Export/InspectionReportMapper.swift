@@ -12,8 +12,14 @@ enum InspectionReportMapper {
 
     /// Builds the full envelope. `generatedAt` (the export instant) and `generator` are supplied by
     /// the exporter — they belong to the envelope, not the domain report.
+    ///
+    /// `signalLevelMetrics` is `nil` whenever no measurement is available to export — the caller has
+    /// already collapsed `loading`/`unavailable`/`failed`/`cancelled` to `nil` before this is reached,
+    /// so this mapper only ever sees "a real measurement exists" or "there is nothing to report" and
+    /// never has to decide what a UI-only state would mean on the wire.
     static func envelope(
         for report: InspectionReport,
+        signalLevelMetrics: SignalLevelMetrics?,
         generatedAt: Date,
         generator: ReportGenerator
     ) -> ReportEnvelopeDTO {
@@ -24,7 +30,8 @@ enum InspectionReportMapper {
             inspectedFile: inspectedFile(from: report.file),
             technicalProperties: technicalProperties(from: report),
             warnings: report.warnings.map(warning(from:)),
-            inspectionStatus: status(from: report.status)
+            inspectionStatus: status(from: report.status),
+            measurements: measurements(from: signalLevelMetrics)
         )
     }
 
@@ -59,10 +66,10 @@ enum InspectionReportMapper {
 
     // MARK: - technicalProperties
 
-    /// `{}` **iff** the inspection failed globally (no property was inspected); otherwise the eight
+    /// `{}` **iff** the inspection failed globally (no property was inspected); otherwise the nine
     /// explicit entries, each in its wire state. The gate is the global `status`, never the content of
     /// `TechnicalProperties` — a global failure carries an all-`unavailable` set that must **not** be
-    /// emitted as eight `unavailable` entries.
+    /// emitted as nine `unavailable` entries.
     private static func technicalProperties(from report: InspectionReport) -> TechnicalPropertiesDTO {
         if case .failed = report.status {
             return TechnicalPropertiesDTO(entries: [])
@@ -77,6 +84,7 @@ enum InspectionReportMapper {
             ("codec", property(p.codec, unit: nil, scalar: JSONScalar.string)),
             ("declaredBitrate", property(p.declaredBitrate, unit: "bitsPerSecond", scalar: JSONScalar.int)),
             ("estimatedBitrate", property(p.estimatedBitrate, unit: "bitsPerSecond", scalar: JSONScalar.int)),
+            ("averageFileBitrate", property(p.averageFileBitrate, unit: "bitsPerSecond", scalar: JSONScalar.int)),
         ])
     }
 
@@ -109,6 +117,44 @@ enum InspectionReportMapper {
 
     private static func uncertain(value: JSONScalar?, reason: String, unit: String?) -> PropertyDTO {
         PropertyDTO(state: "uncertain", value: value, unit: value == nil ? nil : unit, reason: reason, error: nil)
+    }
+
+    // MARK: - measurements (additive — DSP-derived, never metadata; ADR-0018)
+
+    /// `nil` when there is nothing to report — the resulting envelope omits `measurements` entirely
+    /// (`ReportEnvelopeDTO`'s own synthesized `Encodable` drops a `nil` optional key), so a report
+    /// exported without signal level metrics is byte-identical to one from before this capability
+    /// existed.
+    private static func measurements(from metrics: SignalLevelMetrics?) -> MeasurementsDTO? {
+        guard let metrics else { return nil }
+        return MeasurementsDTO(signalLevels: signalLevels(from: metrics))
+    }
+
+    /// `Float` → `Double` for the wire only; the domain keeps `Float` throughout (matching
+    /// `PCMChunk`'s own sample type), and JSON does not distinguish the two widths regardless. No
+    /// clipping threshold is exported: it is a named constant of the analysis engine
+    /// (`SignalLevelMetricsAccumulator.clippingThreshold`, in `AudioInspectorAnalysis`), not a fact
+    /// this file's own measurement carries, and this project has no engine-version wire convention yet
+    /// for a constant like it to be meaningfully anchored to — adding one in isolation here would be a
+    /// stray field, not a considered contract addition.
+    private static func signalLevels(from metrics: SignalLevelMetrics) -> SignalLevelsDTO {
+        SignalLevelsDTO(
+            overall: SignalLevelOverallDTO(
+                peakSample: metrics.overallPeakSample.map(Double.init),
+                rms: metrics.overallRMS.map(Double.init),
+                dcOffset: metrics.overallDCOffset.map(Double.init),
+                clippedSampleCount: metrics.overallClippedSampleCount
+            ),
+            channels: metrics.channels.map { channel in
+                SignalLevelChannelDTO(
+                    sampleCount: channel.sampleCount,
+                    peakSample: channel.peakSample.map(Double.init),
+                    rms: channel.rms.map(Double.init),
+                    dcOffset: channel.dcOffset.map(Double.init),
+                    clippedSampleCount: channel.clippedSampleCount
+                )
+            }
+        )
     }
 
     // MARK: - warnings & status

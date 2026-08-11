@@ -427,6 +427,179 @@ remaining, unobserved criterion — not four.
 and blocked by a pre-existing, already-documented gap, not by anything new; tracked as the same debt, not
 a fresh one. Nothing about 7.2 or 7.4, closed in the first pass, changes here.
 
+## Signal level metrics — a real defect found by manual validation (2026-08-11)
+
+Change `add-computed-technical-properties`, group 8/ADR-0018's own promotion criterion ("its own manual
+validation is done"). A person ran the real Debug build against a real stereo WAV fixture (4 s, 44.1 kHz,
+DC-biased differently per channel, a full-scale burst on channel 1) and reported both screenshots and
+the exported JSON verbatim. **This pass found a real, reproducible defect, not merely "not yet run."**
+
+### OBSERVED — the on-screen surface (PASS on every checked point)
+
+- The **Signal levels** section appears, legible, directly beneath Waveform and before Spectrogram —
+  exactly the placement group 5 decided on.
+- **Peak sample**: `0.00 dBFS`, with `Channel 1: 0.00 dBFS · Channel 2: -8.64 dBFS`. In dBFS, as
+  specified.
+- **RMS level**: `-9.15 dBFS`, with per-channel values. In dBFS, as specified.
+- **DC offset**: `+0.0055`, with `Channel 1: +0.0311 · Channel 2: -0.0200` — linear, signed, **not**
+  dBFS, as specified.
+- **Clipped samples**: `0`, with the explanatory line "Samples at or beyond full scale." An integer, as
+  specified. (The fixture's intended clipped burst used raw `+32767`, which normalizes to `0.999969…`
+  under the standard 16-bit-PCM-to-float convention (division by `32768`, not `32767`) — **not** `≥ 1.0`.
+  This is the fixture's own construction error, not a finding about the reader: it is consistent with,
+  and confirms, correct `≥ 1.0` threshold behaviour rather than contradicting it.)
+- Channels are labelled **"Channel 1" / "Channel 2"** — never "Left"/"Right", as specified.
+- No quality or diagnostic wording was seen anywhere in the section.
+- **Waveform** and **Spectrogram** remained visible and intact, both showing the transient from the
+  fixture's loud burst; neither was disturbed by Signal levels being present.
+- The rest of the report (Format, Encoding, Notes, Result, File) read normally, with
+  `averageFileBitrate` shown under its own label ("Average file bitrate 1,411.29 kbps") distinct from
+  `Declared bitrate`/`Estimated bitrate`, each correctly reflecting this WAV's own real absence/
+  unreliability.
+
+### OBSERVED — the exported JSON (FAIL, reproduced twice)
+
+Exported twice, several minutes apart, **after** the Signal levels values were already visible on
+screen (confirmed explicitly by the person running the pass, ruling out a load-in-progress race):
+`generatedAt` `2026-08-11T00:17:09Z` and, on request, again at `2026-08-11T00:24:17Z`. **Both documents
+are structurally identical and both omit `measurements` entirely** — `schemaVersion`, `generatedAt`,
+`generator`, `inspectedFile`, `inspectionStatus`, `technicalProperties` (including
+`averageFileBitrate`, correctly present under its own key) and `warnings` are all present and correct;
+`measurements.signalLevels` never appears, in either export.
+
+**This is a real defect, not the expected "absent when nothing to report" case**: the UI had already
+rendered real, non-`loading` signal level metrics in both cases, so the export's own contract
+(`ReportView`'s `exportableSignalLevelMetrics` collapsing only `loading`/`absent`/`failed`/`cancelled`
+to `nil`) should have produced a populated `measurements` object.
+
+**Where this sits relative to existing coverage.** Every automated test that exercises
+`SignalLevelMetrics` reaching the export layer (`JSONReportExportMeasurementsTests`) constructs a
+`SignalLevelMetrics` fixture directly and hands it straight to the exporter — none of them go through
+`ReportView`'s real `Button`/`.toolbar` action. `EndToEndFlowTests`, the suite that does exercise the
+real `ReportExportCoordinator` end to end, calls `exportModel.export(report, signalLevelMetrics: nil)`
+explicitly in all three of its export scenarios. **No test in this repository exercises the actual path
+from `ReportView`'s export button through to a populated `measurements` object.** That gap is exactly
+what this manual pass was for, and it found a real defect the automated suite structurally cannot see.
+
+**A hypothesis, recorded as a hypothesis, not a finding.** `exportAction` (and its `Button`) is nested
+inside a SwiftUI `.toolbar { ToolbarItem(placement: .primaryAction) { exportAction } }` modifier
+(`ReportView.swift`). On macOS, a `.toolbar` item's underlying `NSToolbarItem` is not guaranteed to be
+rebuilt on every `body` re-evaluation the way in-line content is — if it is not, a closure captured on
+the toolbar item's first construction (while `signalLevelMetrics` was still `.loading`, hence `nil`)
+would explain a button that always exports `nil` regardless of what the rest of the view now shows,
+consistent with both reproductions. This was **not confirmed by live debugging** (breakpoints,
+logging) — this pass was limited to build, launch, and observe, per its own scope — so it is recorded
+as the strongest available lead, not as a diagnosis.
+
+### Consequence
+
+**This is filed as a found defect, not as "validation not yet done."** No code was changed to
+investigate or fix it, per this pass's own instruction. **ADR-0018 stays `Proposed`**: its own
+promotion criterion required this change's manual validation to be done, and it has now been done —
+but it did not pass. Group 8's task 8.3 stays open for the ADR decision it depends on; `openspec
+archive` was never going to run in this session regardless. The next session on this change should
+start by reproducing this defect under a debugger (or by testing `ReportView`'s export button through
+`ViewInspector`/a UI test, if this project ever adopts one) before attempting a fix — printing the
+value of `exportableSignalLevelMetrics` at the moment the closure executes would confirm or rule out
+the toolbar hypothesis directly.
+
+## Signal level metrics — resolved: a stale app instance, not a code defect (2026-08-11, later same day)
+
+The next session did exactly what the entry above asked: reproduced the defect under live
+instrumentation before touching production logic. **It found no code defect at all.** The record above
+is kept verbatim, unedited, because what was actually observed (JSON without `measurements`, twice) was
+real — the diagnosis of *why* was wrong, and this section is the correction, not a retraction.
+
+### What the instrumentation showed
+
+Temporary, minimal `print()` tracing was added at every seam named in the earlier "next session" note —
+`RootView.reportSurface`, `ReportView.body`, the export button's own closure, `ReportExportModel.export`,
+`AppContainer`'s export closure, `ReportExportCoordinator.export`, and `JSONReportExporter.export` — then
+the real Debug binary was launched **directly from its executable path**, not via `open`, specifically to
+control which process instance was being driven. A person repeated the exact same flow (drop the fixture,
+wait for Signal levels to show real values, click *Export JSON…*, complete the save panel).
+
+**The full captured trace, values elided for brevity, all showing the real `SignalLevelMetrics` — never
+`nil` — at every single step:**
+
+```
+RootView.reportSurface built. presentation.signalLevelMetrics=loading            (× while loading)
+RootView.reportSurface built. presentation.signalLevelMetrics=available(...)     (once settled)
+ReportView.body evaluated. signalLevelMetrics=metrics(...)
+ReportView button tapped. signalLevelMetrics=metrics(...), exportableSignalLevelMetrics=Optional(...)
+ReportExportModel.export received signalLevelMetrics=Optional(...)
+AppContainer export closure received signalLevelMetrics=Optional(...)
+ReportExportCoordinator.export received signalLevelMetrics=Optional(...)
+JSONReportExporter.export received signalLevelMetrics=Optional(...)
+```
+
+Every seam in the chain — including the `Button` inside `.toolbar { ToolbarItem(...) }` that the earlier
+hypothesis suspected — captured and forwarded the current, real value. **The toolbar hypothesis is
+false**, disconfirmed directly rather than left unconfirmed. All instrumentation was reverted in full
+immediately after (`git diff` against the pre-instrumentation commit showed no residue); none of it was
+committed.
+
+### The actual explanation
+
+While instrumenting, a second, much older `AudioInspector` process (PID observed as `48716`, launched
+hours earlier, carrying `-NSDocumentRevisionsDebugMode YES` — the flag Xcode adds when a build is run via
+its own Run button) was found still alive in the background, and could not be terminated with `kill -9`
+from this session (no `sudo`; the process was likely still attached to Xcode's debugger). **`open` on
+macOS activates an already-running instance of an app rather than launching a new one.** The earlier
+manual-validation session (the entry above) used `open "<path>/AudioInspector.app"` to launch the build —
+which, given that stale process was already running, most likely brought *that* old instance to the
+front instead of starting the freshly built one. Whether that old instance predated the `measurements`
+export capability entirely, or carried some other now-irrelevant stale state, was not established and
+does not need to be: either way, **the build under test was not the build that was actually running.**
+
+This was not asserted from theory — it was designed around: this session killed every reachable
+`AudioInspector` process, rebuilt clean, and launched the new binary **by its executable path directly**
+(never `open`), confirming a distinct PID each time and confirming with the person running the pass that
+the window on screen was a fresh, empty import screen before proceeding.
+
+### Real validation, on a confirmed-fresh instance, reproduced twice
+
+With process identity no longer in doubt, the full Fase 10 checklist was repeated against the same
+fixture, twice, several seconds apart (`generatedAt` `2026-08-11T11:52:32Z` and
+`2026-08-11T11:52:55Z`), and the **complete exported JSON was read directly**, not summarized secondhand:
+
+- `schemaVersion`: `1`. ✅
+- `technicalProperties.averageFileBitrate`: present, `state: "uncertain"`, `value: 1411288`,
+  its own `reason`. ✅
+- `measurements` and `measurements.signalLevels`: **present in both exports.** ✅
+- `overall`: `{"clippedSampleCount":0,"dcOffset":0.005549694411456585,"peakSample":0.999969482421875,
+  "rms":0.34888744354248047}`. ✅
+- `channels`: two entries, each with its own `sampleCount`/`peakSample`/`rms`/`dcOffset`/
+  `clippedSampleCount`, matching the on-screen per-channel values from the original pass exactly
+  (`0.9999695`/`0.42638656`/`0.031098228` and `0.3699646`/`0.2482728`/`-0.019998841`). ✅
+- **Linear values, never dBFS**: `peakSample: 0.999969482421875`, not `"0.00 dBFS"` — confirms the wire
+  contract holds even though the same number reads as `0.00 dBFS` on screen. ✅
+- `clippedSampleCount`: plain integer (`0`), both overall and per channel. ✅
+- No absolute path, `file://` URL, or any other filesystem detail anywhere in either document. ✅
+- No `loading`/`unavailable`/`failed`/`cancelled` — only the real, settled measurement. ✅
+- **Reproducible**: both exports are structurally and numerically identical, differing only in
+  `generatedAt`.
+
+### Consequence
+
+**This closes the defect record above as resolved-not-a-defect.** No production code was changed — the
+capability was correct throughout; only the earlier *test methodology* (launching via `open` against an
+environment with a stale, unkillable process already running) produced a false negative. One thing *was*
+added: `EndToEndFlowTests.theRealSignalLevelMetricsPathReachesTheExportedDocument`, a new automated test
+that walks the real production sequence (real file → real decode → real `SignalLevelMetricsGeneration` →
+`InspectionPresentation.signalLevelMetrics` → the same `.metrics`-unwrapping extraction
+`ReportView.exportableSignalLevelMetrics` performs → real export) and asserts `measurements.signalLevels`
+reaches the document. It passes on the current code without any change, but it closes the actual gap this
+whole investigation started from: **no automated test previously drove this path with real, non-`nil`
+metrics** — every existing one passed `nil` explicitly or handed a hand-built fixture straight to the
+exporter, skipping the seam where the false defect appeared to live. A negative control (temporarily
+re-capturing `nil` inside the new test) confirmed the test fails when the value is actually lost, then was
+fully reverted.
+
+**ADR-0018's manual-validation criterion is now genuinely satisfied**: a person looked at the real
+running application, confirmed the on-screen surface (already recorded above), and confirmed the real
+exported JSON, twice, reproducibly, on a build whose identity was verified rather than assumed.
+
 ## What is already automated (do not re-verify by hand)
 
 These are covered by `swift test` / `Scripts/check-boundaries.sh` and need no manual work:

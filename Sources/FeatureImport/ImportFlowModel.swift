@@ -158,9 +158,9 @@ public final class ImportFlowModel {
         restoringOnCancellation previous: ComparisonState
     ) {
         switch outcome {
-        case let .inspected(report, _, _):
+        case let .inspected(report, _, _, _):
             // Normally already set from the update; this is the backstop for a caller that reported
-            // nothing, so a comparison cannot stay stuck on `loading`. The two visualisations are
+            // nothing, so a comparison cannot stay stuck on `loading`. The three visualisations are
             // discarded here as deliberately as they are above.
             comparison = .ready(FileComparison(first: primary, second: report))
         case .cancelled:
@@ -248,30 +248,38 @@ public final class ImportFlowModel {
             guard let settled = SpectrogramState(outcome) else { return }
             presentation.spectrogram = settled
             state = .report(presentation)
+        case let .signalLevelMetrics(outcome):
+            guard case var .report(presentation) = state else { return }
+            guard let settled = SignalLevelMetricsState(outcome) else { return }
+            presentation.signalLevelMetrics = settled
+            state = .report(presentation)
         }
     }
 
     /// Settles the state once an operation has finished. Only ever called for the current operation.
     private func apply(_ outcome: SourceInspectionOutcome, restoringOnCancellation previous: State) {
         switch outcome {
-        case let .inspected(report, waveform, spectrogram):
-            // Neither visualisation withholds or replaces the report, whatever became of it.
+        case let .inspected(report, waveform, spectrogram, signalLevelMetrics):
+            // None of the three withholds or replaces the report, whatever became of it.
             //
-            // The progressive handler has normally settled both already; this is the backstop for a
+            // The progressive handler has normally settled all three already; this is the backstop for a
             // caller that reported nothing, so the state cannot stay stuck on `loading`. `?? .unavailable`
             // applies only to a cancelled outcome that was not dropped as stale — a fallback, not a
             // claim that the file offered nothing.
             let presentation = InspectionPresentation(
                 report: report,
                 waveform: WaveformState(waveform) ?? .unavailable,
-                spectrogram: SpectrogramState(spectrogram) ?? .unavailable
+                spectrogram: SpectrogramState(spectrogram) ?? .unavailable,
+                signalLevelMetrics: SignalLevelMetricsState(signalLevelMetrics) ?? .unavailable
             )
             // A settled visualisation already shown must not be walked back to a fallback.
             if case let .report(current) = state, current.report == report {
                 state = .report(InspectionPresentation(
                     report: report,
                     waveform: current.waveform == .loading ? presentation.waveform : current.waveform,
-                    spectrogram: current.spectrogram == .loading ? presentation.spectrogram : current.spectrogram
+                    spectrogram: current.spectrogram == .loading ? presentation.spectrogram : current.spectrogram,
+                    signalLevelMetrics: current.signalLevelMetrics == .loading
+                        ? presentation.signalLevelMetrics : current.signalLevelMetrics
                 ))
             } else {
                 state = .report(presentation)

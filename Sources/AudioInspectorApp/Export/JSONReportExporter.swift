@@ -23,8 +23,10 @@ struct JSONReportExporter: ReportExporting {
         self.now = now
     }
 
-    func export(_ report: InspectionReport) throws -> Data {
-        let envelope = InspectionReportMapper.envelope(for: report, generatedAt: now(), generator: generator)
+    func export(_ report: InspectionReport, signalLevelMetrics: SignalLevelMetrics?) throws -> Data {
+        let envelope = InspectionReportMapper.envelope(
+            for: report, signalLevelMetrics: signalLevelMetrics, generatedAt: now(), generator: generator
+        )
         return try Self.makeEncoder().encode(envelope)
     }
 

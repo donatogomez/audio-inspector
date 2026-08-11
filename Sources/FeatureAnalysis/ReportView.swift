@@ -13,21 +13,24 @@ public struct ReportView: View {
     private let report: InspectionReport
     private let waveform: WaveformPresentation
     private let spectrogram: SpectrogramPresentation
+    private let signalLevelMetrics: SignalLevelMetricsPresentation
     private let comparison: ComparisonPresentation
     @State private var exportModel: ReportExportModel
 
-    /// Both visualisations are **required** parameters with no default. A default would let a caller
-    /// forget one and ship a report that silently shows nothing where a state belongs.
+    /// All three visualisations are **required** parameters with no default. A default would let a
+    /// caller forget one and ship a report that silently shows nothing where a state belongs.
     public init(
         report: InspectionReport,
         waveform: WaveformPresentation,
         spectrogram: SpectrogramPresentation,
+        signalLevelMetrics: SignalLevelMetricsPresentation,
         comparison: ComparisonPresentation = .none,
         export: @escaping ReportExportAction
     ) {
         self.report = report
         self.waveform = waveform
         self.spectrogram = spectrogram
+        self.signalLevelMetrics = signalLevelMetrics
         self.comparison = comparison
         _exportModel = State(initialValue: ReportExportModel(action: export))
     }
@@ -37,6 +40,10 @@ public struct ReportView: View {
             VStack(alignment: .leading, spacing: 24) {
                 heroHeader
                 waveformSection
+                // Directly beneath the waveform: both concern amplitude/level over the file, and read
+                // together — the waveform shows it as a picture, these rows summarise it as numbers.
+                // The spectrogram, which concerns frequency rather than level, follows both.
+                signalLevelMetricsSection
                 spectrogramSection
                 propertiesSection
                 // **After this file's own facts, before its warnings.** A comparison is a statement
@@ -105,6 +112,17 @@ public struct ReportView: View {
     private var spectrogramSection: some View {
         ReportSection(SpectrogramCopy.title) {
             SpectrogramSection(presentation: spectrogram)
+        }
+    }
+
+    // MARK: - Signal levels — the numeric counterpart to the waveform's picture
+
+    /// Present in **every** state, including when nothing was measured, so an absent or failed reading
+    /// is a sentence rather than a gap the reader has to interpret — the same rule the waveform and the
+    /// spectrogram already follow.
+    private var signalLevelMetricsSection: some View {
+        ReportSection(SignalLevelMetricsCopy.title) {
+            SignalLevelMetricsSection(presentation: signalLevelMetrics)
         }
     }
 
@@ -207,10 +225,18 @@ public struct ReportView: View {
             }
 
             Button("Export JSON…") {
-                Task { await exportModel.export(report) }
+                Task { await exportModel.export(report, signalLevelMetrics: exportableSignalLevelMetrics) }
             }
             .disabled(exportModel.phase == .exporting)
         }
+    }
+
+    /// The domain measurement to export, or `nil` when there is nothing to report — `loading`,
+    /// `absent` and `failed` all collapse to `nil` here, so the export layer never has to decide what
+    /// a UI-only state would mean on the wire (that decision belongs to this Feature, per ADR-0009).
+    private var exportableSignalLevelMetrics: SignalLevelMetrics? {
+        guard case let .metrics(metrics) = signalLevelMetrics else { return nil }
+        return metrics
     }
 }
 
@@ -352,7 +378,28 @@ private extension SpectrogramPresentation {
     }
 }
 
+private extension SignalLevelMetricsPresentation {
+    /// A stereo signal with an asymmetric peak between channels, so the preview shows the per-channel
+    /// breakdown rather than two identical numbers.
+    static var preview: SignalLevelMetricsPresentation {
+        let channels = [
+            SignalLevelMetrics.Channel(sampleCount: 13_230_000, peakSample: 0.708, rms: 0.25, dcOffset: 0.0006, clippedSampleCount: 0),
+            SignalLevelMetrics.Channel(sampleCount: 13_230_000, peakSample: 0.501, rms: 0.18, dcOffset: -0.0011, clippedSampleCount: 12),
+        ]
+        return .metrics(SignalLevelMetrics(
+            channels: channels,
+            overallPeakSample: 0.708,
+            overallRMS: 0.22,
+            overallDCOffset: -0.0003,
+            overallClippedSampleCount: 12
+        ))
+    }
+}
+
 #Preview {
-    ReportView(report: .preview, waveform: .preview, spectrogram: .preview, export: { _ in .succeeded })
+    ReportView(
+        report: .preview, waveform: .preview, spectrogram: .preview, signalLevelMetrics: .preview,
+        export: { _, _ in .succeeded }
+    )
 }
 #endif
