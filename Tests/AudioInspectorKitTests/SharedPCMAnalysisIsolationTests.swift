@@ -110,6 +110,16 @@ struct SharedPCMAnalysisIsolationTests {
         return built
     }
 
+    /// True peak's **independent reference**: the accumulator fed the same chunks directly, with no
+    /// composition involved. There is no `TruePeakGeneration` to compare against — true peak was never
+    /// wired as an operation of its own — so this is what "what it produces on its own" means for it,
+    /// and it shares no line of code with the shared pass beyond the accumulator both use.
+    private func referenceTruePeak(_ material: [PCMChunk], channelCount: Int = 2) -> TruePeakMeasurement? {
+        guard var accumulator = TruePeakAccumulator(channelCount: channelCount) else { return nil }
+        for chunk in material { accumulator.accumulate(chunk) }
+        return accumulator.finish()
+    }
+
     // MARK: - 3.1 — a consumer's failure is invisible to the others
 
     /// The spectrogram cannot be built for this stream while the signal level metrics can, so exactly
@@ -132,6 +142,85 @@ struct SharedPCMAnalysisIsolationTests {
         }
         // Not "available", not "not nil": the whole outcome, compared to the run where nothing failed.
         #expect(withFailure.signalLevelMetrics == control.signalLevelMetrics)
+        // And the same for the consumer added last: a third analysis in the loop is a third analysis
+        // that must not notice the first one leaving.
+        #expect(withFailure.truePeak == control.truePeak)
+    }
+
+    /// **The mirror direction, which now has a real input.** True peak is the one consumer with a
+    /// failure a *valid* chunk can trigger: `PCMChunk` refuses `NaN` and infinity but keeps finite
+    /// samples of any magnitude, and a 48-tap convolution over enormous ones overflows to a value
+    /// `TruePeakMeasurement` refuses. The file is deliberately shorter than one FFT window, so the
+    /// spectrogram transforms nothing and cannot overflow with it — leaving exactly one consumer failing.
+    @Test("a failed true peak leaves the other two results identical to their undisturbed values")
+    func failedTruePeakLeavesTheOthersIdentical() async throws {
+        let frames = 512
+        let extreme = (0 ..< frames).map { $0.isMultiple(of: 2) ? Float.greatestFiniteMagnitude : -.greatestFiniteMagnitude }
+        let overflowing = [try PCMChunk(startFrame: 0, channels: [extreme, extreme])]
+        let description = try stream(frames: frames)
+
+        let withFailure = await SharedPCMAnalysisGeneration(
+            decoder: FakeAudioDecoding(streaming: description, chunks: overflowing)
+        ).run(for: reference())
+        // The control is the same audio through the same composition, read by the analyses that do not
+        // fail on it — so any difference below is true peak's failure leaking, not the input.
+        let separateSpectrogram = await SpectrogramGeneration(
+            decoder: FakeAudioDecoding(streaming: description, chunks: overflowing)
+        ).run(for: reference())
+        let separateLevels = await SignalLevelMetricsGeneration(
+            decoder: FakeAudioDecoding(streaming: description, chunks: overflowing)
+        ).run(for: reference())
+
+        guard case .failed = withFailure.truePeak else {
+            Issue.record("expected true peak to fail, got \(withFailure.truePeak)"); return
+        }
+        // The spectrogram's whole outcome, compared exactly, exactly as 3.1 compares it.
+        #expect(withFailure.spectrogram == separateSpectrogram)
+
+        // **Signal levels cannot be compared with `==` on this input, and the reason is IEEE rather
+        // than a difference.** Samples this large square to infinity in `Float`, so its RMS is `inf`
+        // and its DC offset is `NaN` — and `NaN != NaN` by definition, which makes the two identical
+        // outcomes compare unequal. Every field that *is* comparable is compared instead, against the
+        // separate read of the same audio; the incomparable ones are named rather than skipped
+        // silently, and both being `NaN` is itself asserted.
+        guard case let .available(sharedLevels) = withFailure.signalLevelMetrics,
+              case let .available(separate) = separateLevels else {
+            Issue.record("true peak's failure took the signal level metrics with it"); return
+        }
+        #expect(sharedLevels.channels.map(\.sampleCount) == separate.channels.map(\.sampleCount))
+        #expect(sharedLevels.channels.map(\.peakSample) == separate.channels.map(\.peakSample))
+        #expect(sharedLevels.channels.map(\.clippedSampleCount) == separate.channels.map(\.clippedSampleCount))
+        #expect(sharedLevels.overallPeakSample == separate.overallPeakSample)
+        #expect(sharedLevels.overallClippedSampleCount == separate.overallClippedSampleCount)
+        #expect(sharedLevels.overallDCOffset?.isNaN == separate.overallDCOffset?.isNaN)
+        #expect(sharedLevels.overallRMS == separate.overallRMS)
+        guard case .available = withFailure.spectrogram else {
+            Issue.record("true peak's failure took the spectrogram with it"); return
+        }
+    }
+
+    /// True peak leaving must not end the read for the others either — the same property 3.1 proved for
+    /// the spectrogram, asserted for the consumer that can now genuinely fail on valid audio.
+    @Test("the read continues to the end after true peak fails")
+    func theReadContinuesAfterTruePeakFails() async throws {
+        let frames = 512
+        let perChunk = 64
+        var material: [PCMChunk] = []
+        var start = 0
+        while start < frames {
+            let count = min(perChunk, frames - start)
+            let extreme = (0 ..< count).map { (start + $0).isMultiple(of: 2) ? Float.greatestFiniteMagnitude : -.greatestFiniteMagnitude }
+            material.append(try PCMChunk(startFrame: start, channels: [extreme, extreme]))
+            start += count
+        }
+        let decoder = ScriptedDecoder(stream: try stream(frames: frames), chunks: material)
+
+        let outcome = await SharedPCMAnalysisGeneration(decoder: decoder).run(for: reference())
+
+        guard case .failed = outcome.truePeak else {
+            Issue.record("expected true peak to fail, got \(outcome.truePeak)"); return
+        }
+        #expect(await decoder.log.delivered == material.count)
     }
 
     /// A consumer leaving must not end the read for the others — the decode has to run to the end.
@@ -179,8 +268,14 @@ struct SharedPCMAnalysisIsolationTests {
         guard case let .failed(levelsMessage) = outcome.signalLevelMetrics else {
             Issue.record("partial signal level metrics escaped: \(outcome.signalLevelMetrics)"); return
         }
-        // Each answers for itself. A reader of one never has to consult the other.
+        guard case let .failed(truePeakMessage) = outcome.truePeak else {
+            Issue.record("a partial true peak escaped: \(outcome.truePeak)"); return
+        }
+        // Each answers for itself. A reader of one never has to consult the others, and there is no
+        // shared "the read failed" anywhere for them to consult.
         #expect(spectrogramMessage != levelsMessage)
+        #expect(truePeakMessage != spectrogramMessage)
+        #expect(truePeakMessage != levelsMessage)
     }
 
     /// The two failures are **distinguishable by their effect**, which is the point of separating them:
@@ -202,10 +297,12 @@ struct SharedPCMAnalysisIsolationTests {
             Issue.record("expected both scenarios to fail the spectrogram"); return
         }
         // ...and only one of them takes the other analysis down with it.
-        guard case .available = consumerFailure.signalLevelMetrics else {
-            Issue.record("a consumer failure ended the other analysis"); return
+        guard case .available = consumerFailure.signalLevelMetrics,
+              case .available = consumerFailure.truePeak else {
+            Issue.record("a consumer failure ended another analysis"); return
         }
-        guard case .failed = producerFailure.signalLevelMetrics else {
+        guard case .failed = producerFailure.signalLevelMetrics,
+              case .failed = producerFailure.truePeak else {
             Issue.record("a producer failure left an analysis available"); return
         }
     }
@@ -236,6 +333,7 @@ struct SharedPCMAnalysisIsolationTests {
 
         #expect(outcome.spectrogram == .cancelled)
         #expect(outcome.signalLevelMetrics == .cancelled)
+        #expect(outcome.truePeak == .cancelled)
         // It stopped at the boundary it noticed, rather than reading the rest of the file.
         #expect(await decoder.log.delivered < material.count)
     }
@@ -263,6 +361,7 @@ struct SharedPCMAnalysisIsolationTests {
         // no audio, and this file has plenty.
         #expect(outcome.spectrogram == .cancelled)
         #expect(outcome.signalLevelMetrics == .cancelled)
+        #expect(outcome.truePeak == .cancelled)
         #expect(await decoder.log.delivered == 1)
     }
 
@@ -285,6 +384,9 @@ struct SharedPCMAnalysisIsolationTests {
 
         #expect(shared.spectrogram == separateSpectrogram)
         #expect(shared.signalLevelMetrics == separateLevels)
+        // No chunks means nothing was measured: every channel reports `nil` rather than a measured
+        // zero, which is a complete answer for a file with no audio and not an absence.
+        #expect(shared.truePeak == .available(try #require(referenceTruePeak([]))))
     }
 
     /// **B — a valid stream of zero frames.** A file with no audio: a complete answer, not an absence.
@@ -303,9 +405,14 @@ struct SharedPCMAnalysisIsolationTests {
 
         #expect(shared.spectrogram == separateSpectrogram)
         #expect(shared.signalLevelMetrics == separateLevels)
-        guard case .available = shared.spectrogram, case .available = shared.signalLevelMetrics else {
+        #expect(shared.truePeak == .available(try #require(referenceTruePeak([]))))
+        guard case .available = shared.spectrogram, case .available = shared.signalLevelMetrics,
+              case let .available(measurement) = shared.truePeak else {
             Issue.record("a file with no audio was reported as something other than available"); return
         }
+        // Not a measured zero — the absence of a maximum, which is what an unmeasured channel has.
+        #expect(measurement.channels.allSatisfy { $0.truePeak == nil && $0.sampleCount == 0 })
+        #expect(measurement.overallTruePeak == nil)
     }
 
     /// **C — no usable frame count.** An absence caused by the file, and it is *not* a failure.
@@ -314,6 +421,7 @@ struct SharedPCMAnalysisIsolationTests {
         let shared = await SharedPCMAnalysisGeneration(decoder: FakeAudioDecoding(.absent)).run(for: reference())
         #expect(shared.spectrogram == .unavailable)
         #expect(shared.signalLevelMetrics == .unavailable)
+        #expect(shared.truePeak == .unavailable)
     }
 
     /// **D — a real decoder failure.** Distinct from all three above.
@@ -368,6 +476,13 @@ struct SharedPCMAnalysisIsolationTests {
         // Full equality, no tolerance: both sides saw the same chunks, so sharing must change nothing.
         #expect(shared.spectrogram == separateSpectrogram, "spectrogram differed at chunk \(chunkFrames)")
         #expect(shared.signalLevelMetrics == separateLevels, "signal levels differed at chunk \(chunkFrames)")
+        // **True peak, bit for bit.** This is the comparison `add-shared-pcm-read` recorded as owed and
+        // could not make: its own guarantee is bit-exact chunk independence, stronger than anything the
+        // other two promise, and sharing a read must not weaken it by a single ULP.
+        #expect(
+            shared.truePeak == .available(try #require(referenceTruePeak(material))),
+            "true peak differed at chunk \(chunkFrames)"
+        )
     }
 
     /// The whole file in one chunk, which is the boundary case the sizes above approach.
@@ -390,5 +505,30 @@ struct SharedPCMAnalysisIsolationTests {
 
         #expect(shared.spectrogram == separateSpectrogram)
         #expect(shared.signalLevelMetrics == separateLevels)
+        #expect(shared.truePeak == .available(try #require(referenceTruePeak(material))))
+    }
+
+    /// The measurement is not merely equal to the reference — it is the **same at every chunk size**,
+    /// which is the property that would break first if a consumer were fed a chunk the others were not.
+    @Test("true peak is one value however the file was cut")
+    func truePeakIsIdenticalAcrossEveryChunkSize() async throws {
+        let frames = 8_192
+        let description = try stream(frames: frames)
+        var produced: [TruePeakMeasurement] = []
+
+        for chunkFrames in [1, 3, 127, 512, 1_024, 2_048, 4_096, 8_192, 65_536] {
+            let shared = await SharedPCMAnalysisGeneration(
+                decoder: FakeAudioDecoding(streaming: description, chunks: try chunks(frames: frames, per: chunkFrames))
+            ).run(for: reference())
+            guard case let .available(measurement) = shared.truePeak else {
+                Issue.record("true peak was not available at chunk \(chunkFrames)"); return
+            }
+            produced.append(measurement)
+        }
+
+        let first = try #require(produced.first)
+        #expect(produced.allSatisfy { $0 == first }, "the shared read made true peak depend on the chunking")
+        // A real value, so the equality above is not the trivial agreement of nine absences.
+        #expect(try #require(first.overallTruePeak) > 0)
     }
 }

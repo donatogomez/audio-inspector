@@ -59,6 +59,27 @@ struct SharedPCMAnalysisTests {
         #expect(await decoder.spy.callCount == 1)
     }
 
+    /// **The architectural gate, and the whole reason true peak waited for this change.** Its own group
+    /// 5 measured a fourth read at 0.47–0.53 s for a compressed file and refused it. Three consumers,
+    /// one call: adding a third analysis must add no read at all, and this counts at the port rather
+    /// than trusting the composition's shape.
+    @Test("three analyses still cost exactly one decode")
+    func threeConsumersStillCostOneDecode() async throws {
+        let frames = 8_192
+        let decoder = FakeAudioDecoding(
+            streaming: try stream(frames: frames), chunks: try chunks(frames: frames)
+        )
+        let outcome = await SharedPCMAnalysisGeneration(decoder: decoder).run(for: reference())
+
+        #expect(await decoder.spy.callCount == 1)
+        // All three really were produced from that one call — otherwise the count is trivially met.
+        guard case .available = outcome.spectrogram,
+              case .available = outcome.signalLevelMetrics,
+              case .available = outcome.truePeak else {
+            Issue.record("a consumer produced nothing from the shared read"); return
+        }
+    }
+
     @Test("each analysis reports its own outcome, and neither is derived from the other")
     func eachAnalysisReportsItsOwn() async throws {
         let frames = 8_192
@@ -73,9 +94,19 @@ struct SharedPCMAnalysisTests {
         guard case let .available(levels) = outcome.signalLevelMetrics else {
             Issue.record("expected available signal level metrics, got \(outcome.signalLevelMetrics)"); return
         }
+        guard case let .available(truePeak) = outcome.truePeak else {
+            Issue.record("expected an available true peak, got \(outcome.truePeak)"); return
+        }
         #expect(spectrogram.channelCount == 2)
         #expect(levels.channels.count == 2)
         #expect(levels.overallPeakSample != nil)
+        #expect(truePeak.channels.count == 2)
+        // The methodology travels with the value, and it is the accumulator's own — nothing in the
+        // composition chose, passed or repeated it (ADR-0006, ADR-0019).
+        #expect(truePeak.method.oversamplingFactor == 8)
+        #expect(truePeak.method.filter == .polyphaseFIRv1)
+        // The relationship the reconstruction guarantees, observed through the shared read.
+        #expect(try #require(truePeak.overallTruePeak) >= (try #require(levels.overallPeakSample)))
     }
 
     // MARK: - Equivalence: the transport changed, the analysis did not
@@ -100,8 +131,17 @@ struct SharedPCMAnalysisTests {
             decoder: FakeAudioDecoding(streaming: description, chunks: material)
         ).run(for: reference())
 
+        var referenceAccumulator = try #require(TruePeakAccumulator(channelCount: 2))
+        for chunk in material { referenceAccumulator.accumulate(chunk) }
+        let finished = referenceAccumulator.finish()
+        let separateTruePeak = try #require(finished)
+
         #expect(shared.spectrogram == separateSpectrogram)
         #expect(shared.signalLevelMetrics == separateLevels)
+        // True peak has no `Generation` of its own to compare against — it was never wired as a separate
+        // operation — so its reference is the accumulator fed the same chunks directly. Bit-exact, which
+        // is its own guarantee and not merely this suite's preference.
+        #expect(shared.truePeak == .available(separateTruePeak))
     }
 
     // MARK: - Isolation
