@@ -1,8 +1,9 @@
 # Implementation Tasks
 
-**Only group 1 is done: this change is the contract, written after the architecture was measured but
-before any of it is built.** No `Sources/` and no `Tests/` file is touched by this change. Group 1's
-evidence lives in `docs/spikes/2026-08-12-shared-pcm-analysis-architecture.md`.
+**Groups 1 and 2 are done: the contract, and the composition it specified.** Group 1's evidence lives
+in `docs/spikes/2026-08-12-shared-pcm-analysis-architecture.md`. Group 2 added one production file and
+one test file and changed one call sequence; the isolation it must guarantee is proven in group 3, and
+the saving is confirmed against production code in group 4.
 
 Boundaries no future task may cross: **`AudioDecoding` and `PCMChunk` are not modified** (audited — no
 incapacity found); no accumulator, domain model or analysis result is modified; the composition lives
@@ -37,18 +38,35 @@ is evidence the architecture is wrong (ADR-0020 follow-ups) and must be justifie
 
 ## 2. The shared read
 
-- [ ] 2.1 Add the composition in `AudioInspectorApp`: one `AudioDecoding` call whose callback builds
-      each consumer's accumulator from the first chunk's stream description and hands every chunk to
-      each in turn. **A concrete type, not a protocol** — the three `finish()` results are unrelated
-      (`design.md` §7). It opens no `URL` and no security scope; it runs inside the coordinator's
-      existing window (ADR-0010).
-- [ ] 2.2 Give each consumer its own recorded fault, so one consumer's failure is remembered without
-      ending the read or touching another's state. **The `.stop` disposition is returned only when every
-      consumer has finished or failed**, never when one has.
-- [ ] 2.3 Map the results to the three existing outcome types unchanged, so nothing downstream —
-      presentation, flow state, export — learns that the read is shared.
-- [ ] 2.4 Replace the separate reads in `SourceInspectionCoordinator`, keeping the waveform's own read
-      and keeping the report emitted before any sample is read.
+**Done.** `Sources/AudioInspectorApp/Import/SharedPCMAnalysisGeneration.swift` — one new production
+file, plus the coordinator's call sequence. **Domain, Media, Analysis, the features, the JSON contract
+and the waveform are untouched**, `AudioDecoding` and `PCMChunk` are byte-identical, and nothing named
+or reserved for a consumer that does not exist on this branch.
+
+- [x] 2.1 Added `SharedPCMAnalysisGeneration` in `AudioInspectorApp`: one `AudioDecoding` call whose
+      callback builds each accumulator from the first chunk's stream description — **one description, so
+      two consumers can never disagree about the file they are reading** — and hands every chunk to each
+      in turn. A **concrete** type: the consumers are held as their own stored properties, not behind a
+      `PCMConsumer` abstraction, because their `finish()` results are unrelated types with unrelated
+      optionality rules. It opens no `URL` and no security scope, and its callback stays synchronous, so
+      no chunk or accumulator outlives the coordinator's window (ADR-0010).
+- [x] 2.2 Each consumer carries its **own** recorded fault in a private `Consumers` value. A faulted
+      consumer stops being fed and its accumulator is never read again, while the read continues for the
+      others; `.stop` is returned **only** when every consumer has faulted, or on cancellation. The one
+      case that faults all of them at once is audio that does not match the stream it claims to come
+      from — a fault in what they all just received, not in any of them.
+- [x] 2.3 Results map to the two **existing** outcome types unchanged, with each analysis keeping the
+      exact wording it had when it read the file alone. `SharedPCMAnalysisOutcome` carries no combined
+      status and no shared error, so nothing downstream can ask a question about the analyses together;
+      the coordinator reads it apart immediately. Presentation, flow state and export are untouched and
+      cannot tell the read is shared.
+- [x] 2.4 `SourceInspectionCoordinator` now makes **one** decoder where it made two. The report is still
+      emitted before any sample is read, the waveform still runs on its own read first, and the same two
+      updates — `.spectrogram(…)` then `.signalLevelMetrics(…)` — are emitted in the same order.
+      `SpectrogramGeneration` and `SignalLevelMetricsGeneration` are **retained deliberately** and each
+      says why in its own documentation: they are the reference implementations the equivalence test
+      compares the shared read against. Deleting them would remove that oracle, so it is a separate
+      decision rather than a side effect of this one.
 
 ## 3. Proving the isolation, not assuming it
 
