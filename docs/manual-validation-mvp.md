@@ -80,6 +80,12 @@ The **spectrogram's** manual validation (change `add-static-spectrogram-visualiz
 **deliberately deferred**, and the section below states exactly what that leaves standing and what it
 does not.
 
+The **shared PCM read's** validation (change `add-shared-pcm-read`, task 5.2) **passed** on a
+confirmed-fresh instance over two real files, one uncompressed and one compressed: report, waveform,
+spectrogram and signal levels all present and unchanged, the replacement of one file by another clean,
+and nothing perceptibly slower. The section at the end of this document records it, including one
+cosmetic axis-label defect that predates the change.
+
 Re-run this runbook whenever the selection, drag & drop, export, routing, sandbox or entitlement
 behaviour changes.
 
@@ -752,3 +758,78 @@ B. Additional
 
 Anomalies / notes:
 ```
+
+## Shared PCM read — passed on a confirmed-fresh instance (2026-08-12)
+
+Change `add-shared-pcm-read`, task 5.2. The spectrogram and the signal level metrics now come from
+**one** decode instead of two, so what had to be confirmed by eye is narrow: the product still behaves
+exactly as it did, and nothing about sharing is visible in the surface.
+
+### Process identity, given the trap this document already records
+
+The stale-instance failure recorded above (2026-08-11) was designed around rather than hoped away. The
+same unkillable process from that entry — PID `48716`, launched 2026-08-10 under Xcode's debugger — is
+**still alive and still not terminable** from an unattended session (`kill -9` has no effect, and
+`System Events` cannot see it, so it holds no window). Because `open` activates an existing instance,
+it was not used: the freshly built Debug app was launched with **`open -n`**, which forces a new
+instance, and the new PID was confirmed distinct, registered with LaunchServices under its own name,
+and free of any crash report. The person running the pass confirmed the window on screen was the newly
+launched one.
+
+### What was validated, and against what
+
+Two real files from the operator's own library — not generated fixtures:
+
+| | file A | file B |
+| --- | --- | --- |
+| format | Linear PCM WAV, 44.1 kHz, 16-bit, stereo | FLAC, **64 kHz**, stereo |
+| duration / size | 5:09 · 54.5 MB | 4:53 · 83.1 MB |
+
+Neither path, nor any location, is recorded here; the app itself showed `Source — User-selected local
+file (location omitted)` for both, which is the privacy behaviour this project requires.
+
+### Observed — both files
+
+- **Report.** Complete and normal on both. The WAV read 5 of 9 properties cleanly and the FLAC 4 of 9,
+  each remaining property carrying its own note rather than disappearing — the availability and
+  certainty model behaving exactly as before. Format, Encoding, Notes, Result and File sections all
+  present.
+- **Waveform.** Present and correct on both, drawn across the whole file, with its own caption. It
+  still arrives on its own read, ahead of the two shared analyses.
+- **Spectrogram.** Present and correct on both, and **its content did not change by being fed from a
+  shared read**: the WAV spans 0–22.05 kHz and the FLAC 0–32 kHz, each the true Nyquist of its own
+  sample rate, with the time axis running to the file's real duration.
+- **Signal levels.** Present on both, with every metric and its per-channel breakdown, in unchanged
+  wording: WAV `Peak 0.00 dBFS` (0.00 / −0.96), `RMS −19.43` (−19.41 / −19.45), `DC 0.0000`,
+  `Clipped 4` (4 / 0); FLAC `Peak 0.00 dBFS` (0.00 / −2.67), `RMS −21.62` (−21.52 / −21.73),
+  `DC 0.0000`, `Clipped 0`.
+- **States.** No new error, no permanent loading, no empty section, no section overwriting another.
+
+### Observed — replacing A with B
+
+The FLAC was inspected **in the same window, immediately after the WAV**. All four sections changed to
+the new file together — name, format line, waveform, spectrogram and signal levels — and **nothing from
+the previous file reappeared afterwards**. Stale-result handling is unchanged by sharing, as designed.
+
+### Progressive delivery
+
+Confirmed by the person running the pass: the report appeared immediately and the visualisations
+followed, and **nothing felt slower than before the change**. Recorded exactly at that strength — the
+pass was not timed by hand, and it does not need to be: the timings are measured in the spike's §15
+(report at 1.5–2.0 ms; one full decode's worth of work removed).
+
+### One defect seen, and it is not this change's
+
+On the 64 kHz FLAC, the spectrogram's frequency axis draws **`32 kHz` and `30 kHz` overlapping** at the
+very top: the Nyquist label lands on a round tick. It is cosmetic, it lives in the spectrogram's
+presentation (`FeatureAnalysis`), and this change touches no Feature target — the same overlap would
+occur on `main`. It is recorded here rather than fixed, so closing this change does not quietly widen
+it.
+
+### Limits of this pass
+
+- Two files, one machine, one appearance (dark). Light mode, window resizing and VoiceOver were not
+  re-checked: this change adds **no new surface**, so nothing about the accessible tree or the layout
+  is new to evaluate.
+- The evidence is screenshots plus the observer's answers, not an instrumented recording; the ordering
+  and timing claims above rest on the measurements in the spike's §15, not on this pass.

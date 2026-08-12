@@ -16,44 +16,29 @@
 >   session protocol in `CLAUDE.md`).
 
 ---
-**Focus:** a new change, **`add-shared-pcm-read`** — contract only, nothing built.
-`add-true-peak-measurement` is finished up to its accumulator and **blocked at group 6** by its own
-stop rule; this change is what unblocks it. Nothing of the true-peak work is lost or redesigned.
+**Focus:** `add-true-peak-measurement`, groups 1–5 done and **group 6 no longer blocked.**
 
-**Why this change exists.** An inspection decodes the same file three times today, and would decode it
-four times to add true peak. Measured against the real pipeline, one more read costs about a quarter of
-a compressed inspection, and the existing three already spend most of a FLAC inspection decoding the
-same bytes over and over. ADR-0016 rejected a shared pass at the time *and wrote the condition for
-revisiting it* — "possible on top of this seam if measurement ever justifies one". The measurement now
-exists, so the condition is met rather than argued around.
+**What unblocked it.** Group 5's stop rule refused a fourth *read* of the file, not a fourth consumer,
+and said this group resumes once a PCM-sharing change lands. It has: shared PCM is merged, archived,
+and its capability is in the canonical specs, so `SharedPCMAnalysisGeneration` now exists here as
+ordinary `main` code. **ADR-0020** is `Accepted` — *independent analyses* is the invariant,
+*independent decodes* was only the implementation ADR-0016 chose while a decode looked free.
 
-**The distinction the whole change rests on**, recorded in **ADR-0020** (`Proposed`): *independent
-analyses* is the invariant ADR-0016 protects; *independent decodes* was the implementation it chose
-while a decode looked free. One analysis must not fail, cancel or delay another — none of which
-requires a decoder each.
+**What group 6 now is, and what its own text still says.** True peak becomes a **third consumer of the
+shared read** — one more accumulator folded from the pass that already exists, costing its own DSP and
+**no additional decode**. The tasks below it were written before that decision and still describe a
+fourth operation with its own decoder instance; that wording is superseded by ADR-0020 and gets revised
+when the group is actually started. **Nothing in it is started and nothing in it is marked.**
 
-**What the architecture spike settled, so it is not re-argued.** One read feeds the spectrogram, the
-signal level metrics and true peak, **sequentially, in the same task**, composed in the app layer.
-`AudioDecoding` and `PCMChunk` are audited and unchanged; no protocol is introduced for three known
-consumers; concurrency is rejected on a measured ceiling (~0.28 s against three deliberately
-non-`Sendable` accumulators and a synchronous callback that exists for a sandbox reason); PCM buffering
-is rejected outright because it would make memory scale with duration. **The waveform keeps its own
-read** — different port, different accumulator shape, and migrating it is a change of its own — so
-reads go from three (or four) to two, not to one.
+**What must not happen while wiring it.** `TruePeakMeasurement`, `TruePeakAccumulator`, the methodology
+and their tests are finished and are **not** redesigned. If wiring true peak ever required changing the
+accumulator, that is evidence the shared architecture is wrong, and it has to be justified before
+proceeding rather than absorbed. **ADR-0019 stays `Proposed`**: its promotion needs the oracle agreement
+and a manual validation of the surface, neither of which this wiring supplies.
 
-**The measured saving is exactly the redundant decodes removed, 97–100 % of them.** For the compressed
-formats this product exists to examine, that pays for the entire true-peak feature; in Debug every
-measured format ends up faster than today *with* true peak included. Uncompressed files gain almost
-nothing, because their decode was already nearly free — stated rather than averaged away.
-
-**The known cost, named in advance**: several existing tests assert the *mechanism* — they script two
-decoders by call order and state that each operation gets its own decoder instance. That sentence stops
-being true, and rewriting them to assert the *property* instead, with a negative control proving the
-rewrite still discriminates, is real work and the main risk in this change.
-
-**Next step:** group 2 of `add-shared-pcm-read` — the composition itself. After it merges,
-`add-true-peak-measurement` resumes at its group 6, wiring true peak as a consumer of the shared read
-with its model, accumulator, methodology and tests untouched.
+**Next step:** group 6 — wire true peak as the third consumer, keeping every independence property the
+other two already prove: one consumer's failure leaves the others untouched, a producer failure ends
+each with its own outcome, and cancellation cancels everything without letting a partial model escape.
 
 **Other open threads** (see `openspec list` for their real task counts, not restated here):
 `add-static-spectrogram-visualization` (manual validation battery deferred by product decision) and
