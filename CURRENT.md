@@ -16,30 +16,44 @@
 >   session protocol in `CLAUDE.md`).
 
 ---
-**Focus:** nothing in flight. `add-computed-technical-properties` is merged into `main` and **archived**;
-its capability specs are now canonical, so `openspec` and `git` — not this file — describe the state.
+**Focus:** a new change, **`add-shared-pcm-read`** — contract only, nothing built.
+`add-true-peak-measurement` is finished up to its accumulator and **blocked at group 6** by its own
+stop rule; this change is what unblocks it. Nothing of the true-peak work is lost or redesigned.
 
-**What landed.** `averageFileBitrate` (calculated from size and duration, always `uncertain`, never
-`available`, living beside `declaredBitrate`/`estimatedBitrate` without being conflated with either);
-`SignalLevelMetrics` (peak, RMS, DC offset, clipped-sample count) as its own domain value type produced
-by an independent operation over the shared `AudioDecoding` port, presented in the report beneath the
-waveform with dBFS conversion only at the presentation layer; and the export, which carries the metrics
-additively under `measurements.signalLevels` in the domain's own linear amplitude, omitting the key
-entirely when there is nothing to report. `TechnicalProperties` still carries no DSP, `InspectionReport`
-still carries no `SignalLevelMetrics`, and the domain still knows nothing of JSON or `schemaVersion`.
-**ADR-0018 is `Accepted`** — both promotion conditions were met against production code and a manual pass
-on a build whose process identity was verified rather than assumed.
+**Why this change exists.** An inspection decodes the same file three times today, and would decode it
+four times to add true peak. Measured against the real pipeline, one more read costs about a quarter of
+a compressed inspection, and the existing three already spend most of a FLAC inspection decoding the
+same bytes over and over. ADR-0016 rejected a shared pass at the time *and wrote the condition for
+revisiting it* — "possible on top of this seam if measurement ever justifies one". The measurement now
+exists, so the condition is met rather than argued around.
 
-**Known, deliberate debt from that change** (named at archive time, not dropped): true peak, significant
-max frequency, crest factor, and any single named dynamic-range metric were all deferred with reasons —
-each needs its own methodology decision under ADR-0006, not a one-line addition to this slice. A generic
-`dynamicRange` field stays rejected outright, not deferred. Separately, whether `averageFileBitrate`
-should generate a warning like its siblings is still open, because doing so needs a deliberate pass over
-every affected fixture rather than a silent addition.
+**The distinction the whole change rests on**, recorded in **ADR-0020** (`Proposed`): *independent
+analyses* is the invariant ADR-0016 protects; *independent decodes* was the implementation it chose
+while a decode looked free. One analysis must not fail, cancel or delay another — none of which
+requires a decoder each.
 
-**Next step:** pick the next slice. True peak is the natural head of the deferred queue and already has
-its methodology governed by ADR-0006, so it is the obvious candidate — but it needs its own OpenSpec
-change before any code, per the spec-driven rule.
+**What the architecture spike settled, so it is not re-argued.** One read feeds the spectrogram, the
+signal level metrics and true peak, **sequentially, in the same task**, composed in the app layer.
+`AudioDecoding` and `PCMChunk` are audited and unchanged; no protocol is introduced for three known
+consumers; concurrency is rejected on a measured ceiling (~0.28 s against three deliberately
+non-`Sendable` accumulators and a synchronous callback that exists for a sandbox reason); PCM buffering
+is rejected outright because it would make memory scale with duration. **The waveform keeps its own
+read** — different port, different accumulator shape, and migrating it is a change of its own — so
+reads go from three (or four) to two, not to one.
+
+**The measured saving is exactly the redundant decodes removed, 97–100 % of them.** For the compressed
+formats this product exists to examine, that pays for the entire true-peak feature; in Debug every
+measured format ends up faster than today *with* true peak included. Uncompressed files gain almost
+nothing, because their decode was already nearly free — stated rather than averaged away.
+
+**The known cost, named in advance**: several existing tests assert the *mechanism* — they script two
+decoders by call order and state that each operation gets its own decoder instance. That sentence stops
+being true, and rewriting them to assert the *property* instead, with a negative control proving the
+rewrite still discriminates, is real work and the main risk in this change.
+
+**Next step:** group 2 of `add-shared-pcm-read` — the composition itself. After it merges,
+`add-true-peak-measurement` resumes at its group 6, wiring true peak as a consumer of the shared read
+with its model, accumulator, methodology and tests untouched.
 
 **Other open threads** (see `openspec list` for their real task counts, not restated here):
 `add-static-spectrogram-visualization` (manual validation battery deferred by product decision) and
@@ -47,4 +61,4 @@ change before any code, per the spec-driven rule.
 traversal gap shared with ADR-0015). Neither was touched this session.
 
 ---
-_Last touched: 2026-08-11. Overwrite freely; empty is fine._
+_Last touched: 2026-08-12. Overwrite freely; empty is fine._
