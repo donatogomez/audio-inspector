@@ -16,52 +16,43 @@
 >   session protocol in `CLAUDE.md`).
 
 ---
-**Focus:** a new change, **`add-shared-pcm-read`** — contract only, nothing built.
+**Focus:** `add-shared-pcm-read`, groups 1–2 done. **The spectrogram and the signal level metrics now
+come from one read of the file**, where they each decoded it separately before.
 
-> **This branch carries only the shared-PCM thread.** `add-true-peak-measurement` is a separate,
-> active thread on its own branch: its change, **ADR-0019**, `TruePeakMeasurement`,
-> `TruePeakAccumulator` and their tests are **not here**, so `openspec list` and `docs/adr/` on this
-> branch will not show them, and the ADR index has a gap where 0019 will land. That is the separation
-> working, not something missing.
+> **This branch carries only the shared-PCM thread.** `add-true-peak-measurement` is a separate, active
+> thread on its own branch: its change, **ADR-0019**, `TruePeakMeasurement`, `TruePeakAccumulator` and
+> their tests are **not here**, so `openspec list` and `docs/adr/` on this branch will not show them,
+> and the ADR index has a gap where 0019 will land. That is the separation working, not something
+> missing.
 
-True peak is finished up to its accumulator and **blocked at group 6** by its own stop rule, and this
-change is what unblocks it. Nothing of that work is lost or redesigned — it simply lives elsewhere
-until both threads reach `main`.
+**What changed, and what deliberately did not.** One production file — a concrete composition in the app
+layer — plus one call in the coordinator that now makes a single decoder where it made two.
+`AudioDecoding` and `PCMChunk` are byte-identical, no accumulator moved, no protocol was introduced for
+two known consumers, nothing runs concurrently, nothing buffers PCM, and the waveform keeps its own read.
+The report is still emitted before any sample, and the same two updates arrive in the same order, so
+presentation, flow state and export cannot tell the read is shared.
 
-**Why this change exists.** An inspection decodes the same file three times today, and would decode it
-four times to add true peak. Measured against the real pipeline, one more read costs about a quarter of
-a compressed inspection, and the existing three already spend most of a FLAC inspection decoding the
-same bytes over and over. ADR-0016 rejected a shared pass at the time *and wrote the condition for
-revisiting it* — "possible on top of this seam if measurement ever justifies one". The measurement now
-exists, so the condition is met rather than argued around.
+**The isolation is the point, and it is held by construction rather than by separate decoders.** Each
+analysis keeps its own accumulator and its own recorded fault; a faulted consumer stops being fed while
+the read continues for the others; the read ends only when *nobody* needs it, never when someone is
+done. A decoder failure is treated as a different thing from a consumer failure — every unfinished
+analysis ends, but each reports its own outcome, so a reader of one never has to consult another.
 
-**The distinction the whole change rests on**, recorded in **ADR-0020** (`Proposed`): *independent
-analyses* is the invariant ADR-0016 protects; *independent decodes* was the implementation it chose
-while a decode looked free. One analysis must not fail, cancel or delay another — none of which
-requires a decoder each.
+**One asymmetry worth knowing before writing more tests.** Only the spectrogram has a failure mode a
+valid stream can trigger; `SignalLevelMetricsAccumulator` refuses nothing that `PCMStreamDescription`
+allows. The mirror isolation case therefore has no input today, and that is recorded as a test that
+starts failing the day it gains one — rather than as a comment nobody re-reads.
 
-**What the architecture spike settled, so it is not re-argued.** One read feeds the spectrogram, the
-signal level metrics and true peak, **sequentially, in the same task**, composed in the app layer.
-`AudioDecoding` and `PCMChunk` are audited and unchanged; no protocol is introduced for three known
-consumers; concurrency is rejected on a measured ceiling (~0.28 s against three deliberately
-non-`Sendable` accumulators and a synchronous callback that exists for a sandbox reason); PCM buffering
-is rejected outright because it would make memory scale with duration. **The waveform keeps its own
-read** — different port, different accumulator shape, and migrating it is a change of its own — so
-reads go from three (or four) to two, not to one.
+**Measured against production code, ten minutes of stereo:** FLAC 1.907 s → 1.471 s and AAC 2.180 s →
+1.660 s in Release; WAV, whose decode was nearly free, 0.698 s → 0.656 s. In Debug the saving is larger
+still. That is essentially one whole redundant decode removed, which is what the spike predicted.
 
-**The measured saving is exactly the redundant decodes removed, 97–100 % of them.** For the compressed
-formats this product exists to examine, that pays for the entire true-peak feature; in Debug every
-measured format ends up faster than today *with* true peak included. Uncompressed files gain almost
-nothing, because their decode was already nearly free — stated rather than averaged away.
+**Next step:** group 3 — proving the isolation rather than assuming it, including the tests that already
+had to be rewritten from asserting the *arrangement* (two decoder instances) to asserting the
+*property*. Group 4 then re-measures the saving in the spike's own form.
 
-**The known cost, named in advance**: several existing tests assert the *mechanism* — they script two
-decoders by call order and state that each operation gets its own decoder instance. That sentence stops
-being true, and rewriting them to assert the *property* instead, with a negative control proving the
-rewrite still discriminates, is real work and the main risk in this change.
-
-**Next step:** group 2 of `add-shared-pcm-read` — the composition itself. After it merges,
-`add-true-peak-measurement` resumes at its group 6, wiring true peak as a consumer of the shared read
-with its model, accumulator, methodology and tests untouched.
+**ADR-0020 stays `Proposed`**: its promotion needs the saving reproduced against production code *and*
+every isolation property demonstrated by a test that fails when the property is broken — group 3's job.
 
 **Other open threads** (see `openspec list` for their real task counts, not restated here):
 `add-static-spectrogram-visualization` (manual validation battery deferred by product decision) and
