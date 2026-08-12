@@ -1,8 +1,9 @@
 # ADR-0020: Independent analyses, not independent decodes
 
-- **Status**: **Proposed.** It stays Proposed until the shared read exists against production code and
-  the measured saving is reproduced there — 97–100 % of the redundant decode cost — with every
-  isolation property below demonstrated by test rather than by argument. A spike does not promote it.
+- **Status**: **Accepted** (2026-08-12). Promoted on the two conditions this record set for itself and
+  on nothing else — the shared read exists against production code and the saving was reproduced
+  there, and each isolation property is demonstrated by a test that fails when the property is broken.
+  The evidence, including where it falls short of what was promised, is in **Promotion** below.
 - **Date**: 2026-08-12
 - **Deciders**: Project maintainer
 - **Related**: **ADR-0016** (whose decision 15 this revisits under the condition that record wrote for
@@ -144,6 +145,47 @@ and it would be a mistake to discard it along with the mechanism it happened to 
 - No module boundary moves, no port changes, no domain type changes, and no dependency is inverted.
 - ADR-0016 remains in force in every other respect, including its port design, its module placement and
   its refusal to let the drawing interpret what it shows.
+
+## Promotion — what was actually demonstrated, and what was not
+
+Recorded when this moved from `Proposed` to `Accepted`, on `add-shared-pcm-read` groups 3 and 4. The
+measurements are in `docs/spikes/2026-08-12-shared-pcm-analysis-architecture.md` §15, which is
+appended to the spike rather than replacing it, so the pre-implementation evaluation and its
+production confirmation can be read against each other.
+
+**The saving reproduced against production code.** The real coordinator, the real AVFoundation
+adapters and the real accumulators, ten minutes of stereo, six runs per cell, Debug and Release. The
+pipeline went from three reads to two, so **one** redundant decode was removed, and one decode's worth
+of time disappeared: Release 0.06 s (WAV) / 0.73 s (FLAC) / 0.56 s (AAC), Debug 0.69 / 1.39 / 1.10 s.
+Expressed as this record's own criterion, the recovery lands between **98 % and 107 %** across the six
+cells, averaging 103.6 % against a run-to-run spread of 1–7 %. **The figures above 100 % are noise, not
+a second decode**: only one was removed, and claiming more would be reading the spread as signal.
+
+Three further facts were checked rather than assumed: the shared result is **identical value for
+value** to the pre-change result on real files of each format; the pipeline opens **exactly two**
+sample reads, counted at the adapters; and the process footprint during the read grew from 17 MB to
+22 MB when the audio grew ten-fold, against the 212 MB the rejected buffering alternative would have
+needed.
+
+**The isolation properties, and the one that has no reachable input.** Decision 2 lists five. Four are
+demonstrated by tests that were shown to fail when the property is broken — three negative controls,
+each reverted in full, each breaking exactly the tests that name its property: a consumer's failure
+leaves the other's *whole outcome* identical to a control run and the read still finishes; a
+producer's failure ends every consumer with its own outcome and publishes nothing partial; global
+cancellation, forced deterministically with a handshake mid-read, cancels everything and lets no
+partial model escape; results are still delivered per analysis.
+
+The fifth — *the read stops only when every consumer is done, so one finishing early cannot starve
+another* — **is not demonstrated by test, because it has no reachable input**: both consumers need
+every sample, so none can finish early. Its reachable half (a consumer leaving the read does not end
+it for the others) is tested. The rest remains contract text, exactly as `design.md` §3 declared
+before implementation, and the asymmetry is pinned by a test that starts failing when it changes.
+**This is the one respect in which the promotion is weaker than "every property demonstrated by
+test", and it is recorded rather than glossed.**
+
+**Not claimed.** The second redundant decode does not exist on this branch: true peak is not wired
+here, so the four-reads-to-two figures in the spike's §8 remain a projection until
+`add-true-peak-measurement` group 6 lands. Nothing was measured through the app's interface.
 
 ## Follow-ups
 
