@@ -9,10 +9,11 @@ fourth PCM read** and blocked the wiring. Evidence:
 **Group 6 is now done, and it is what group 5 was waiting for**: `add-shared-pcm-read` merged, so true
 peak is wired as a **third consumer of the read that already exists** rather than as the fourth decode
 the measurement rejected. An inspection reads the samples **twice**, with true peak included, and the
-third consumer costs its DSP and no decode (6.6). **Group 7 is done too**: the value is on screen in
-its own section, in **dBTP**, with the method stated in words and no verdict attached to it. **Still not
-wired: the export** — group 9 owns it, and nothing in groups 6 or 7 touched the JSON contract, the DTO
-or the exporter.
+third consumer costs its DSP and no decode (6.6). **Groups 7 and 8 are done too**: the value is on screen
+in its own section, in **dBTP**, with the method stated in words and no verdict attached to it, and its
+independence from `clippedSampleCount` is demonstrated rather than asserted. **Still not wired: the
+export** — group 9 owns it, and nothing in groups 6, 7 or 8 touched the JSON contract, the DTO or the
+exporter.
 
 **The methodology is now fixed and is no longer a decision for a later group**: polyphase FIR, **8×**,
 **48 taps per phase**, Kaiser **β = 6.0**, cutoff **1.0**, phases normalised, **zero-extension** at the
@@ -357,14 +358,39 @@ touched in this group**.
 
 ## 8. True peak versus clipped samples — the independence, proven
 
-- [ ] 8.1 Test case **A**: a fixture with **zero** clipped samples and a true peak **above** full scale
-      (the inter-sample case this metric exists for). The two values are reported side by side, neither
-      derived from nor overriding the other.
-- [ ] 8.2 Test case **B**: a fixture with clipped samples present and a true peak at or above full
-      scale — both reported, as two separate facts.
-- [ ] 8.3 Test case **C**: a quiet fixture with zero clipped samples and a true peak below full scale.
-- [ ] 8.4 Confirm by search and by test that no code path derives one from the other, and that no
-      user-facing string describes a positive true peak as clipping.
+- [x] 8.1 **Case A**, the one this metric exists for: a sine of amplitude 1.2 sampled an eighth of a
+      cycle off its crest stores every sample at **0.8485** and reconstructs to **1.1999**. Zero clipped
+      samples and **+1.58 dBTP**, both truthful at the same moment — a surface that inferred either from
+      the other would have to call this file clipped when it holds no clipped sample, or below full
+      scale when its waveform is not. Measured through the production shared read, with both values
+      shown side by side and no word joining them.
+- [x] 8.2 **Case B**: a 997 Hz tone at amplitude 1.2 stores **13 857** samples at or beyond full scale
+      and reconstructs to **1.2004**. Both facts reported, neither concluded from the other, and each
+      asserted equal to what its own accumulator produces from the same audio with the other never
+      constructed. Coexistence is not causation, and nothing here says it is.
+- [x] 8.3 **Case C**: the same generator at amplitude 0.5 — sample peak **0.5000**, zero clipped, true
+      peak **0.5002**, shown as an ordinary **-6.02 dBTP** with no special wording. It is what stops case
+      A from being explained by the fixture generator rather than by the signal.
+      **Two further cases are kept apart deliberately**, because collapsing them would lose the
+      distinction both domain types exist to preserve: *measured silence* reports a real zero from both
+      and floors at **-120.00 dBTP**, while *no frames at all* leaves the true peak with no maximum to
+      report — and the clipped count keeps its defined **0** in both, because counting nothing genuinely
+      yields none.
+- [x] 8.4 **By search**: no line of code in either metric's accumulator, model, generation or
+      presentation mentions the other. Every hit for the other's name is a documentation comment, each
+      one inspected; `clippingThreshold` is read at exactly one place, the stored-sample counter; no
+      warning, no `if truePeak > 1`, and no comparison of a true peak against full scale exists
+      anywhere. **By test**: each result equals the same accumulator run alone, value for value — proof
+      by consequence, since Swift cannot be asked to demonstrate that a type lacks a member.
+      **By sweep**: no string in either section calls a positive true peak clipping, and the sweep
+      matches single words whole rather than as substrings, because "overs" is jargon for a clipped
+      sample *and* sits inside the innocent "oversampling" the method line legitimately contains.
+      **Three negative controls, each reverted in full:** deriving the clipped count from a true peak
+      above full scale broke case A and the non-derivation test; reporting the sample peak as the true
+      peak broke cases A and B; adding "Inter-sample clipping detected." to the row broke both sweeps.
+      This implements **ADR-0019**, which reports the value and refuses the flag, narrowing ADR-0006's
+      "flagged when true peak > 0" sentence rather than contradicting it — the flag is an inference and
+      belongs to `findings`, with evidence and confidence, which does not exist yet.
 
 ## 9. Export
 
