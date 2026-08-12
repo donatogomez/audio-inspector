@@ -152,13 +152,26 @@ can be read against each other. The harness was temporary, in the test target, a
 
 ## 5. Gates and closure
 
-- [ ] 5.1 Four gates green — `./Scripts/check-boundaries.sh`, `swift build -Xswiftc -warnings-as-errors`,
-      `swift test`, `OPENSPEC_TELEMETRY=0 openspec validate --all --strict` — plus the Xcode app build
-      and `git diff --check`.
-- [ ] 5.2 Manual validation on a confirmed-fresh process instance: an inspection of a real compressed
-      file still produces the same report, waveform, spectrogram and signal levels, and visibly sooner.
-- [ ] 5.3 Decide **ADR-0020**'s status from what was actually measured against production code, update
-      `CURRENT.md`, and archive through `openspec archive` **after merge**.
+- [x] 5.1 All six green, run twice over the final tree: `./Scripts/check-boundaries.sh`,
+      `swift build -Xswiftc -warnings-as-errors`, `swift test` (889 tests / 98 suites, no flake),
+      `OPENSPEC_TELEMETRY=0 openspec validate --all --strict` (7/7), the Xcode `AudioInspector` Debug
+      build, and `git diff --check`.
+- [x] 5.2 **Passed**, and on a genuinely fresh instance rather than a hopefully fresh one: the stale
+      process this project has been caught by before is *still* alive and unkillable, so the build was
+      launched with `open -n` and its identity confirmed before anything was observed
+      (`docs/manual-validation-mvp.md`). Two **real** files — a 44.1 kHz WAV and a 64 kHz FLAC — each
+      produced report, waveform, spectrogram and signal levels, all present, all in unchanged wording,
+      with each spectrogram spanning its own true Nyquist. Replacing the first file with the second in
+      the same window changed all four sections and left nothing of the first behind. The report
+      appeared immediately and nothing felt slower — **recorded at exactly that strength**, since the
+      pass was not timed and the timings belong to §15 of the spike. One cosmetic defect was seen and
+      **not** fixed here: on the 64 kHz file the spectrogram's axis draws `32 kHz` over `30 kHz`. It
+      lives in presentation, which this change does not touch, and would occur on `main`.
+- [ ] 5.3 **Two of three done.** ADR-0020 was decided from what was measured against production code
+      and is now **Accepted**, with its `Promotion` section recording the evidence and the one respect
+      in which it is weaker than promised; `CURRENT.md` is updated. **`openspec archive` is deliberately
+      not run**: it belongs after the merge, so this task stays open until then rather than being marked
+      on two thirds of its content.
 
 ## 6. Deferred, and named so it is not quietly dropped
 
@@ -171,3 +184,12 @@ can be read against each other. The harness was temporary, in the test target, a
 - [ ] 6.3 **`add-true-peak-measurement` group 6** resumes once this merges, wiring true peak as a
       consumer of the shared read. Its model, accumulator, methodology and tests are finished and are
       **not** redesigned. Tracked there, not here.
+- [ ] 6.4 **`SpectrogramGeneration` and `SignalLevelMetricsGeneration` are no longer wired into an
+      inspection** — the coordinator produces both analyses through the shared read — and they are
+      **kept on purpose**, not forgotten: they are the oracle `sharedMatchesSeparate…` compares the
+      shared read against, and deleting them would remove the only independent implementation that
+      proves sharing changed the transport rather than the analysis. Each says so in its own
+      documentation. **Removing them is a separate decision**, and it is the wrong one while the
+      equivalence tests are the strongest evidence this change has; the moment to revisit it is when
+      true peak makes the shared pass the only composition anyone reads. Not done here: deleting live
+      code at the end of a change is exactly the kind of widening this task list refuses.
