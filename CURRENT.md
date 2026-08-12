@@ -16,34 +16,33 @@
 >   session protocol in `CLAUDE.md`).
 
 ---
-**Focus:** `add-true-peak-measurement`, groups 1–9 done. **The measurement is now visible *and*
-exportable**: `measurements.truePeak`, a sibling of `measurements.signalLevels`, added without a
-`schemaVersion` bump.
+**Focus:** `add-true-peak-measurement` is **finished and ready to publish.** True peak exists end to
+end: measured from the shared PCM read with **no decode of its own**, shown in **dBTP** with its method
+stated in words, exported **linearly** under `measurements.truePeak`, and demonstrated to be
+independent of the clipped-sample count.
 
-**Linear on the wire, dBTP only on screen.** The same number reads as `-6.02 dBTP` in the interface and
-travels as `0.5` in the document — a test sweeps the bytes to keep it that way. The method travels with
-the value, taken from the measurement's own record so a document always describes the methodology that
-actually ran, and the filter is an **identity rather than a recipe**: no taps, no window, no
-coefficients, and no claim of conformance to a standard whose coefficients this project does not use.
+**ADR-0019 is `Accepted`**, promoted on its own two conditions and nothing else. The oracle agreement
+was demonstrated against the **production path** — a gate that drives the real decoder and the shared
+read rather than the accumulator in isolation — at **0.0005 dB** against FFmpeg where the pinned
+tolerance is 0.05 dB. And a person saw the surface: on an analytic fixture whose waveform crosses full
+scale *between* samples, *Peak sample* −1.43 dBFS, *Clipped samples* 0 and *True peak* +1.58 dBTP were
+read together, with no warning, colour or diagnosis attached. Its `Promotion` section records what the
+evidence does **not** cover — the 192 kHz exclusion, the smooth-boundary signal class, the standing
+refusal to claim BS.1770 conformance, and the finding that is still not authorised.
 
-**The distinctions the domain refuses to lose survive the wire.** A silent file that was measured
-exports a real `0`; a file with no frames exports an explicit `null` with `sampleCount: 0` beside it,
-and the key is present in both cases. A value above full scale is exported unclamped, because that is
-the fact the measurement exists to reveal.
+**The spike package is deleted**, its own criterion met; the durable report stays in `docs/spikes/`.
 
-**Nothing else moved.** A report without a true peak is byte-identical to before; `measurements` is
-still omitted entirely when neither measurement exists; both children are independently optional, so
-none of the four combinations is faked. The real path is proved end to end — real file, real decode,
-real shared read, real export — because this project has already been caught by unit tests passing
-while the wiring was broken.
+**What this change deliberately does not contain**: no LUFS, no loudness range, no crest factor, no
+significant maximum frequency, no `findings`, no inter-sample-clipping flag, no score, no new decoder
+and no external dependency. A positive true peak is a value, and turning it into a verdict needs a
+structure that does not exist yet.
 
-**ADR-0019 stays `Proposed`.** Export does not promote it: its criteria are agreement with the oracle
-demonstrated **against production code** and a manual validation on a file whose true peak genuinely
-exceeds its sample peak. Neither has happened.
+**One thing is inherited rather than fixed**: interactive VoiceOver still does not enter the report's
+contents — a gap this document's runbook has recorded since the waveform slice. True peak adds a section
+to that same area, so it neither worsens nor repairs it, and nothing here claims a VoiceOver pass.
 
-**Next step:** group 10 — the gates, the manual validation on a confirmed-fresh instance, and the
-decision on ADR-0019's status from what was actually implemented. The spike package is deleted there,
-per its own rule, once this slice's tests cover what it observed.
+**Next step:** publish — push the branch and open the PR, then merge. **`openspec archive` runs only
+after the merge**; that is the one part of the task list still open, and it stays open on purpose.
 
 **Other open threads** (see `openspec list` for their real task counts, not restated here):
 `add-static-spectrogram-visualization` (manual validation battery deferred by product decision) and
