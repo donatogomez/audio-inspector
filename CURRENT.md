@@ -16,43 +16,42 @@
 >   session protocol in `CLAUDE.md`).
 
 ---
-**Focus:** `add-shared-pcm-read`, groups 1–2 done. **The spectrogram and the signal level metrics now
-come from one read of the file**, where they each decoded it separately before.
+**Focus:** `add-shared-pcm-read`, groups 1–3 done. **One read feeds both analyses, and the isolation
+that read has to preserve is now proved rather than argued.**
 
 > **This branch carries only the shared-PCM thread.** `add-true-peak-measurement` is a separate, active
 > thread on its own branch: its change, **ADR-0019**, `TruePeakMeasurement`, `TruePeakAccumulator` and
 > their tests are **not here**, so `openspec list` and `docs/adr/` on this branch will not show them,
-> and the ADR index has a gap where 0019 will land. That is the separation working, not something
-> missing.
+> and the ADR index has a gap where 0019 will land. It stays blocked until this change merges.
 
-**What changed, and what deliberately did not.** One production file — a concrete composition in the app
-layer — plus one call in the coordinator that now makes a single decoder where it made two.
-`AudioDecoding` and `PCMChunk` are byte-identical, no accumulator moved, no protocol was introduced for
-two known consumers, nothing runs concurrently, nothing buffers PCM, and the waveform keeps its own read.
-The report is still emitted before any sample, and the same two updates arrive in the same order, so
-presentation, flow state and export cannot tell the read is shared.
+**What group 3 established, and what it deliberately did not.** The composition needed **no change** —
+no defect was found — so this was almost entirely tests. A consumer that fails leaves the other's whole
+outcome identical to a control run where nothing failed, and the read still runs to the end, counted at
+the port. A producer failure is tested with a *different* fixture that fails after real audio has been
+accumulated, so "no partial model escapes" is a claim about state that actually existed.
 
-**The isolation is the point, and it is held by construction rather than by separate decoders.** Each
-analysis keeps its own accumulator and its own recorded fault; a faulted consumer stops being fed while
-the read continues for the others; the read ends only when *nobody* needs it, never when someone is
-done. A decoder failure is treated as a different thing from a consumer failure — every unfinished
-analysis ends, but each reports its own outcome, so a reader of one never has to consult another.
+**Cancellation is deterministic now.** A scripted decoder suspends inside the read at a chosen chunk,
+signals that it has arrived, and continues only once released — so the test cancels while the read is
+provably mid-flight. No sleep, no polling, no `Task.yield()`. The racy test written earlier was deleted
+rather than tuned; this replaces it.
 
-**One asymmetry worth knowing before writing more tests.** Only the spectrogram has a failure mode a
-valid stream can trigger; `SignalLevelMetricsAccumulator` refuses nothing that `PCMStreamDescription`
-allows. The mirror isolation case therefore has no input today, and that is recorded as a test that
-starts failing the day it gains one — rather than as a comment nobody re-reads.
+**One asymmetry still worth knowing.** Only the spectrogram has a failure a valid stream can trigger, so
+the mirror isolation case has no input. That is pinned as a test that starts failing the day
+`SignalLevelMetricsAccumulator` gains a second failure mode — which is the moment symmetric coverage
+becomes owed.
 
-**Measured against production code, ten minutes of stereo:** FLAC 1.907 s → 1.471 s and AAC 2.180 s →
-1.660 s in Release; WAV, whose decode was nearly free, 0.698 s → 0.656 s. In Debug the saving is larger
-still. That is essentially one whole redundant decode removed, which is what the spike predicted.
+**Four superseded tests were removed, not left beside their replacements.** One of them compared the
+shared read at chunk size *N* against separate reads at 4 096, which conflates "sharing changed
+something" with "chunking changed something"; every chunk-size comparison now feeds both sides the
+identical sequence, which is what lets it assert full equality with no tolerance.
 
-**Next step:** group 3 — proving the isolation rather than assuming it, including the tests that already
-had to be rewritten from asserting the *arrangement* (two decoder instances) to asserting the
-*property*. Group 4 then re-measures the saving in the spike's own form.
+**Next step:** group 4 — re-measure the saving against production code in the spike's own form, with the
+instruction it already carries: if it does not reproduce, stop and record the difference rather than
+keep the architecture because the spike liked it.
 
-**ADR-0020 stays `Proposed`**: its promotion needs the saving reproduced against production code *and*
-every isolation property demonstrated by a test that fails when the property is broken — group 3's job.
+**ADR-0020 stays `Proposed`.** Its promotion needs *both* halves — the isolation demonstrated by tests
+that fail when the property breaks, which group 3 has now done, **and** the saving reproduced against
+production code, which is group 4's.
 
 **Other open threads** (see `openspec list` for their real task counts, not restated here):
 `add-static-spectrogram-visualization` (manual validation battery deferred by product decision) and
