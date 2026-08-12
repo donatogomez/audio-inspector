@@ -8,7 +8,9 @@
 - **Related**: **ADR-0016** (whose decision 15 this revisits under the condition that record wrote for
   itself; *referenced, never edited*), ADR-0010 (the security-scoped window that shapes the port's
   synchronous callback), ADR-0011, ADR-0015, ADR-0019,
-  `docs/spikes/2026-08-12-true-peak-end-to-end-cost.md`,
+  `docs/spikes/2026-08-12-true-peak-end-to-end-cost.md` (**written on the `add-true-peak-measurement`
+  branch and reaching `main` with it** — the figures it supplies are quoted inline wherever they are
+  used here, so nothing below depends on being able to open it),
   `docs/spikes/2026-08-12-shared-pcm-analysis-architecture.md`, changes `add-shared-pcm-read` and
   `add-true-peak-measurement`
 

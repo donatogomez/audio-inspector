@@ -13,7 +13,9 @@
   `SignalLevelMetricsAccumulator` and `TruePeakAccumulator`.
 - **Related**: **ADR-0016** (decision 15 — the one this revisits; *referenced, never edited*), ADR-0010
   (the security-scoped window that shapes the port), ADR-0011, ADR-0018, ADR-0019,
-  `docs/spikes/2026-08-12-true-peak-end-to-end-cost.md` (the measurement that opened this).
+  `docs/spikes/2026-08-12-true-peak-end-to-end-cost.md` — the measurement that opened this. It is
+  written on the `add-true-peak-measurement` branch and arrives in `main` with that change; every
+  figure taken from it is quoted inline below, so this report stands on its own until then.
 
 ## 1. The architecture as it is today, read from the code
 
