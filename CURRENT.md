@@ -16,8 +16,9 @@
 >   session protocol in `CLAUDE.md`).
 
 ---
-**Focus:** `add-shared-pcm-read`, groups 1–3 done. **One read feeds both analyses, and the isolation
-that read has to preserve is now proved rather than argued.**
+**Focus:** `add-shared-pcm-read`, groups 1–4 done. **One read feeds both analyses, the isolation that
+read has to preserve is proved rather than argued, and the saving is now measured against production
+code rather than against a spike's harness.**
 
 > **This branch carries only the shared-PCM thread.** `add-true-peak-measurement` is a separate, active
 > thread on its own branch: its change, **ADR-0019**, `TruePeakMeasurement`, `TruePeakAccumulator` and
@@ -45,13 +46,23 @@ shared read at chunk size *N* against separate reads at 4 096, which conflates "
 something" with "chunking changed something"; every chunk-size comparison now feeds both sides the
 identical sequence, which is what lets it assert full equality with no tolerance.
 
-**Next step:** group 4 — re-measure the saving against production code in the spike's own form, with the
-instruction it already carries: if it does not reproduce, stop and record the difference rather than
-keep the architecture because the spike liked it.
+**What group 4 measured, and what it refused to claim.** The saving reproduces against the real
+coordinator and the real adapters: one redundant decode was removed and one decode's worth of time
+disappeared, in every format and in both build configurations. Several cells recover slightly *more*
+than 100 % of a decode; that is measurement spread and is written down as spread, not banked as a
+second decode that was never removed. The results are identical value for value to the pre-change
+ones on real files, the report still arrives first, and the footprint barely moves when the audio
+grows ten-fold. **The stop rule did not fire, so the architecture stands on evidence rather than on
+the spike having liked it.** Numbers live in the spike's §15, appended beside §§1–14 rather than over
+them; the harness was temporary and is deleted.
 
-**ADR-0020 stays `Proposed`.** Its promotion needs *both* halves — the isolation demonstrated by tests
-that fail when the property breaks, which group 3 has now done, **and** the saving reproduced against
-production code, which is group 4's.
+**ADR-0020 is now `Accepted`** — its two stated conditions are met, and its `Promotion` section
+records the one respect in which the evidence is weaker than promised: the "no consumer starves
+another" property has no reachable input today, so it stays contract text rather than a test.
+
+**Next step:** group 5 — the four gates plus the Xcode build on a confirmed-fresh process, then manual
+validation that a real compressed file still produces the same report, waveform, spectrogram and
+signal levels, visibly sooner. **Do not archive before merge.**
 
 **Other open threads** (see `openspec list` for their real task counts, not restated here):
 `add-static-spectrogram-visualization` (manual validation battery deferred by product decision) and
