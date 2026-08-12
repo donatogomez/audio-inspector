@@ -134,15 +134,66 @@ public enum SignalLevelMetricsState: Sendable, Equatable {
     }
 }
 
+/// What producing a true peak measurement actually yielded, once it is over.
+///
+/// The same four outcomes its three siblings have, for the same four reasons — and it is a fourth
+/// **outcome**, not a fourth field on one of theirs. `TruePeakMeasurement` never joins
+/// `SignalLevelMetrics` (ADR-0018's rule applied by ADR-0019): a sample peak is a direct reduction over
+/// stored values and a true peak is an estimate of a reconstruction that has to say which filter
+/// produced it, so they are two measurements that happen to travel together, never one.
+///
+/// **Sharing a read does not merge outcomes.** True peak is folded from the same pass as the
+/// spectrogram and the signal level metrics (ADR-0020), and it still answers entirely on its own: one
+/// of the three failing says nothing about the other two.
+public enum TruePeakOutcome: Sendable, Equatable {
+    /// The file's true peak, per channel and overall. A channel that carried no samples reports `nil`
+    /// rather than a measured zero — a complete answer for a file with no audio, not an absence.
+    case available(TruePeakMeasurement)
+    /// The file exposed no usable frame count. Caused by the file, and not a failure.
+    case unavailable
+    /// Producing it failed. The message is human and neutral: it names no path and no framework.
+    case failed(message: String)
+    /// The operation was cancelled — by the user picking something else, never by the file.
+    case cancelled
+}
+
+/// What the surface can say about a true peak right now.
+///
+/// The extra case over `TruePeakOutcome` is `loading`, which exists between the report arriving and the
+/// shared read finishing. `cancelled` is deliberately **absent**, exactly as it is for the other three:
+/// a cancelled generation belongs to an operation the user already replaced, so its result is discarded
+/// rather than shown.
+public enum TruePeakState: Sendable, Equatable {
+    case loading
+    case available(TruePeakMeasurement)
+    case unavailable
+    case failed(message: String)
+
+    /// The state an outcome settles into.
+    ///
+    /// Returns `nil` for `cancelled`, because there is nothing to show: the operation that produced it
+    /// has been superseded, and rendering it as an absence would blame the file for the user's own
+    /// action.
+    public init?(_ outcome: TruePeakOutcome) {
+        switch outcome {
+        case let .available(measurement): self = .available(measurement)
+        case .unavailable: self = .unavailable
+        case let .failed(message): self = .failed(message: message)
+        case .cancelled: return nil
+        }
+    }
+}
+
 /// A report together with whatever is currently known about its visualisations.
 ///
-/// All three are **beside** each other, never nested: neither the waveform nor the spectrogram nor the
-/// signal level metrics is part of `InspectionReport`, so the report's meaning, its warnings, its status
-/// and the `schemaVersion` 1 export are untouched by anything here (ADR-0009, ADR-0016 decision 14,
-/// ADR-0018). This type is not `Codable` and is never persisted.
+/// All four are **beside** each other, never nested: neither the waveform nor the spectrogram nor the
+/// signal level metrics nor the true peak is part of `InspectionReport`, so the report's meaning, its
+/// warnings, its status and the `schemaVersion` 1 export are untouched by anything here (ADR-0009,
+/// ADR-0016 decision 14, ADR-0018). This type is not `Codable` and is never persisted.
 ///
-/// The three are also beside **each other**: they settle independently, and none's state is derived
-/// from another's.
+/// The four are also beside **each other**: they settle independently, and none's state is derived
+/// from another's. Three of them now come from one read of the file (ADR-0020), which changes when
+/// they settle and nothing about what any of them means.
 ///
 /// It knows no `URL`, no AVFoundation type and no filesystem: the location stays in
 /// `AudioInspectorApp` (ADR-0010).
@@ -153,16 +204,19 @@ public struct InspectionPresentation: Sendable, Equatable {
     public var waveform: WaveformState
     public var spectrogram: SpectrogramState
     public var signalLevelMetrics: SignalLevelMetricsState
+    public var truePeak: TruePeakState
 
     public init(
         report: InspectionReport,
         waveform: WaveformState,
         spectrogram: SpectrogramState = .loading,
-        signalLevelMetrics: SignalLevelMetricsState = .loading
+        signalLevelMetrics: SignalLevelMetricsState = .loading,
+        truePeak: TruePeakState = .loading
     ) {
         self.report = report
         self.waveform = waveform
         self.spectrogram = spectrogram
         self.signalLevelMetrics = signalLevelMetrics
+        self.truePeak = truePeak
     }
 }

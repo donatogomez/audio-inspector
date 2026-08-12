@@ -49,7 +49,7 @@ import AudioInspectorDomain
 /// It owns mutable per-channel state with no synchronisation. Exactly like `SpectrogramAccumulator` and
 /// `SignalLevelMetricsAccumulator`, it is created and consumed inside one `nonisolated async`
 /// operation, never stored on a `Sendable` type, never cached, never shared.
-struct TruePeakAccumulator {
+public struct TruePeakAccumulator {
     /// Points per input sample the reconstruction is evaluated at.
     static let oversamplingFactor = 8
     /// Taps each phase reads. Even, so the support around the interpolated point stays symmetric.
@@ -95,7 +95,7 @@ struct TruePeakAccumulator {
     private var window: [Float] = []
 
     /// Fails only on a channel count no stream can have.
-    init?(channelCount: Int) {
+    public init?(channelCount: Int) {
         guard channelCount >= 1 else { return nil }
         self.channelCount = channelCount
         filter = PolyphaseInterpolationFilter(
@@ -119,7 +119,7 @@ struct TruePeakAccumulator {
     ///
     /// A chunk whose channel count disagrees with this accumulator's is ignored, mirroring the guard
     /// both sibling accumulators already use.
-    mutating func accumulate(_ chunk: PCMChunk) {
+    public mutating func accumulate(_ chunk: PCMChunk) {
         guard chunk.channelCount == channelCount else { return }
         for channel in 0 ..< channelCount {
             accumulate(chunk.channels[channel], intoChannel: channel)
@@ -136,7 +136,7 @@ struct TruePeakAccumulator {
     ///
     /// The tail is flushed through `lookahead` zeros first: the file is surrounded by silence, which is
     /// what a decoder handing it to anything else also produces.
-    mutating func finish() -> TruePeakMeasurement? {
+    public mutating func finish() -> TruePeakMeasurement? {
         for channel in 0 ..< channelCount {
             flush(channel)
         }
