@@ -9,10 +9,10 @@ fourth PCM read** and blocked the wiring. Evidence:
 **Group 6 is now done, and it is what group 5 was waiting for**: `add-shared-pcm-read` merged, so true
 peak is wired as a **third consumer of the read that already exists** rather than as the fourth decode
 the measurement rejected. An inspection reads the samples **twice**, with true peak included, and the
-third consumer costs its DSP and no decode (6.6). **Still not wired: the interface and the export** —
-groups 7 and 9 own those, and nothing in group 6 touched a view, the JSON contract, the DTO or the
-exporter. The value travels beside the report, the waveform, the spectrogram and the signal levels, and
-stops there.
+third consumer costs its DSP and no decode (6.6). **Group 7 is done too**: the value is on screen in
+its own section, in **dBTP**, with the method stated in words and no verdict attached to it. **Still not
+wired: the export** — group 9 owns it, and nothing in groups 6 or 7 touched the JSON contract, the DTO
+or the exporter.
 
 **The methodology is now fixed and is no longer a decision for a later group**: polyphase FIR, **8×**,
 **48 taps per phase**, Kaiser **β = 6.0**, cutoff **1.0**, phases normalised, **zero-extension** at the
@@ -323,21 +323,37 @@ touched in this group**.
 
 ## 7. Presentation
 
-- [ ] 7.1 Add the dBTP conversion as a sibling of `HumanFormat.decibelsFullScale` in `FeatureAnalysis`,
-      reusing the existing floor convention rather than inventing a second one, and pin it with exact
-      reference points the way the dBFS formatter is pinned (`1.0 → 0.00`, `0.5 → -6.02`, a value above
-      full scale reading a signed positive, and silence reading the floor rather than `-∞`).
-- [ ] 7.2 Present it in its **own section** titled *True peak*, directly beneath *Signal levels*, with
-      its own state (`loading`/`available`/`absent`/`failed`) so a true-peak failure cannot blank the
-      sample-level rows. Per-channel detail in the established `Channel 1: … · Channel 2: …` form, and
-      only when the file has more than one channel.
-- [ ] 7.3 State the method in words beside the value (the visible half of ADR-0006's "factor and filter
-      recorded with the result"), and use the existing "Not computable — this file has no audio frames."
-      wording for a file with no audio rather than a second phrasing for the same state.
-- [ ] 7.4 Extend the existing forbidden-word sweep with this metric's own vocabulary — *clipping
-      detected*, *inter-sample clipping*, *unsafe*, *too hot*, *bad master*, *distorted*, *poor
-      quality*, *overs* — and confirm no colour-only meaning: only a genuine failure to measure reads at
-      full weight, and nothing is coloured by what the value contains.
+- [x] 7.1 `HumanFormat.decibelsTruePeak`, a **sibling** of `decibelsFullScale` rather than a call to it:
+      the arithmetic is identical and the unit is not, and quoting a reconstruction under the stored
+      sample's unit would claim a measurement that never happened. Pinned at `1.0 → 0.00 dBTP`,
+      `0.5 → -6.02 dBTP`, `1.1 → +0.83 dBTP` (signed and **never clamped**) and exact silence at the
+      project's own `-120.00` floor rather than `-∞`. `nil` never reaches it: absence is the caller's
+      word, not a fabricated zero.
+- [x] 7.2 Its own section, titled *True peak*, beneath *Signal levels* and above *Spectrogram* — with
+      levels because it is amplitude, after them because it is a different kind of amplitude. Its own
+      `TruePeakPresentation` (`loading`/`measurement`/`absent`/`failed`, no visible `cancelled`), so a
+      failure here cannot blank the sample-level rows and a failure there cannot blank this. Per-channel
+      detail in the established `Channel 1: … · Channel 2: …` form, only above one channel, **numbered
+      and never named** — asserted at two channels and at six.
+- [x] 7.3 The method is stated in words beside the value, **from the measurement's own recorded factor
+      and filter** rather than constants repeated in the surface — a file measured at 4× is described as
+      4×, and an identity this surface does not recognise is shown as itself instead of borrowing the
+      known one's words. No coefficients, no taps, no window. **No standard is claimed** and a sweep
+      pins that: this filter was designed to recorded parameters and validated against analytic truth
+      and an independent meter, not built from BS.1770 Annex 2's own coefficients (ADR-0019 §6). A file
+      with no audio frames reuses the existing sentence exactly, rather than gaining a second voice for
+      the same state.
+- [x] 7.4 The sweep runs over **every** string this section can produce, aimed at the value most likely
+      to attract a verdict — a reconstruction at +3.52 dBTP — and covers the named vocabulary plus
+      *overs*, *clipping*, *warning*, *better*, *worse*, *fake* and *transcode*. A separate test pins
+      that **nothing is compared against the sample peak**: no delta, no "exceeds", no "higher than",
+      because the surface that put them side by side would be inviting a conclusion neither type
+      supports. Colour carries no meaning — the value above full scale is announced with the same name
+      and weight as any other, and only a genuine failure to measure reads at full weight.
+      **Four negative controls, each reverted in full:** the unit switched to dBFS broke ten tests; a
+      file with no frames reading `0.00 dBTP` broke the absence tests; a "Clipping detected" phrase added
+      to the copy broke the sweep; and clamping values above full scale before formatting broke the
+      unclamped-value tests.
 
 ## 8. True peak versus clipped samples — the independence, proven
 
