@@ -1,9 +1,10 @@
 # Implementation Tasks
 
-**Groups 1 and 2 are done: the contract, and the composition it specified.** Group 1's evidence lives
-in `docs/spikes/2026-08-12-shared-pcm-analysis-architecture.md`. Group 2 added one production file and
-one test file and changed one call sequence; the isolation it must guarantee is proven in group 3, and
-the saving is confirmed against production code in group 4.
+**Groups 1–3 are done: the contract, the composition, and the proof that it keeps its guarantees.**
+Group 1's evidence lives in `docs/spikes/2026-08-12-shared-pcm-analysis-architecture.md`. Group 2 added
+one production file and changed one call sequence; group 3 proved the isolation with a deterministic
+cancellation harness and three negative controls, and needed **no change to the composition** — no
+defect was found. Group 4 confirms the saving against production code in the spike's own form.
 
 Boundaries no future task may cross: **`AudioDecoding` and `PCMChunk` are not modified** (audited — no
 incapacity found); no accumulator, domain model or analysis result is modified; the composition lives
@@ -70,21 +71,54 @@ or reserved for a consumer that does not exist on this branch.
 
 ## 3. Proving the isolation, not assuming it
 
-- [ ] 3.1 Test that one consumer failing leaves every other consumer's result **identical** to what it
-      produces alone — compared value for value, not merely "not nil".
-- [ ] 3.2 Test that a decoder failure ends every unfinished consumer, each with its own outcome, and
-      that this is distinguishable from a single consumer's failure.
-- [ ] 3.3 Test that cancelling the inspection reports cancellation for every unfinished consumer and
-      that **no partial model escapes**.
-- [ ] 3.4 Test that a file with no audio frames yields each consumer's own complete empty answer rather
-      than a failure.
-- [ ] 3.5 Test chunk-size independence across the shared read, at the sizes each consumer's own tests
-      already use, and confirm true peak stays **bit-exact** as its own accumulator guarantees.
-- [ ] 3.6 **Rewrite the tests that assert the mechanism rather than the property.** Several today script
-      two decoders by call order and assert that "the coordinator gives each operation its own decoder
-      instance rather than passing one decoder to both". Rewrite them to assert isolation, and prove the
-      rewrite still discriminates with a **negative control** — coupling two consumers deliberately must
-      break named assertions — rather than merely still passing.
+**Done, and mostly with tests rather than code**: the composition needed no change, so this group added
+one test file and consolidated another. Four superseded tests were **removed** rather than left beside
+their stronger replacements — one of them had a flawed comparison (it measured the shared read at chunk
+size *N* against separate reads at 4 096, which conflates "sharing changed something" with "chunking
+changed something").
+
+- [x] 3.1 `failedConsumerLeavesTheOtherIdentical` compares the surviving analysis's **whole outcome**
+      against a control run where nothing failed — value for value, not "not nil" and not "available".
+      `theReadContinuesAfterAConsumerFails` adds what that alone would miss: the read really did run to
+      the end, counted at the port rather than inferred from an outcome.
+      The mirror direction is still unreachable and is **not fabricated**:
+      `signalLevelMetricsHaveNoReachableSoloFailure` pins that `SignalLevelMetricsAccumulator` refuses
+      only what `PCMStreamDescription` already refuses, so it starts failing the day that accumulator
+      gains a second failure mode — which is the moment symmetric coverage becomes owed.
+- [x] 3.2 Producer and consumer failures are tested **separately, with different fixtures**, and their
+      difference is asserted directly. `producerFailurePartwayPublishesNothingPartial` uses a decoder
+      that fails *after* eight chunks — proving the composition holds real partial state at that moment
+      — and neither analysis publishes it; each still answers in its own words.
+      `consumerAndProducerFailuresAreDistinguishable` states the difference that matters: a consumer
+      failure leaves the other analysis `available`, a producer failure does not.
+- [x] 3.3 **Deterministic, with a handshake rather than a hope.** A scripted decoder suspends inside the
+      read at a chunk the test chooses, signals that it has arrived, and continues only once released —
+      so the test cancels while the read is provably mid-flight. No sleep, no polling, no `Task.yield()`.
+      `cancellingMidReadCancelsEverything` (cancelled four chunks in) and
+      `cancellingBeforeTheFirstChunk` (cancelled before any audio is accumulated) both assert every
+      analysis reports `cancelled`, that **no partial or empty model escapes**, and — counted at the port
+      — that the read stopped instead of finishing the file.
+- [x] 3.4 The four ways a read can produce nothing are tested **apart**: a stream that hands over no
+      chunks, a valid stream of zero frames, no usable frame count, and a real decoder failure.
+      `theFourEmptyOutcomesAreDistinct` asserts they do not collapse into one another. The first two are
+      compared against the separate reads' own results, so the shared read is shown to have **inherited**
+      that semantics rather than invented a new common one.
+- [x] 3.5 `sharedMatchesSeparateAtEveryChunkSize` runs 1, 3, 127, 512, 1 024, 2 048, 4 096, 8 192 and
+      65 536 frames per chunk, plus `sharedMatchesSeparateInASingleChunk` for the whole file at once.
+      Each compares the shared read against separate reads **fed the identical chunk sequence**, which
+      is what isolates this task's question from the accumulators' own chunking guarantees — and lets
+      the comparison be **full equality with no tolerance**, for both analyses.
+      **The task's true-peak clause is not satisfiable here and is not pretended to be**: that consumer
+      does not exist on this branch. It moves to `add-true-peak-measurement` group 6, which adds it.
+- [x] 3.6 Three tests asserted the mechanism and were rewritten in group 2; this group audited what each
+      had protected and confirmed the guarantee now has its **own** test rather than riding on the
+      rewrite. `decoder.spy.callCount == 1` protects deduplication and **nothing else** — isolation,
+      cancellation and failure semantics are proved by the tests above, not by it.
+      **Three negative controls, each reverted in full** (`diff` against a pre-mutation copy showed no
+      residue): coupling a spectrogram fault to the signal level metrics broke exactly the three
+      isolation tests; ignoring `Task.isCancelled` broke exactly the two deterministic cancellation
+      tests; publishing a partial model after a producer failure broke exactly the two producer-failure
+      tests. Each control broke the tests that name that property and no others.
 
 ## 4. Confirming the saving against production code
 
