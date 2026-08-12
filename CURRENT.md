@@ -16,34 +16,35 @@
 >   session protocol in `CLAUDE.md`).
 
 ---
-**Focus:** `add-true-peak-measurement`, groups 1–6 done. **True peak is wired as a third consumer of
-the shared PCM read**, which is exactly what group 5's stop rule was holding out for: it refused a
-fourth *decode*, never a fourth analysis.
+**Focus:** `add-true-peak-measurement`, groups 1–7 done. **The measurement is on screen**, in its own
+section beneath *Signal levels*, quoted in **dBTP** and produced from the shared PCM read rather than
+from a fourth decode.
 
-**What that cost, measured rather than hoped.** An inspection reads the samples **twice** — the
-waveform's own read and the shared one, now feeding three analyses — and the third consumer costs its
-DSP and **no decode**: the same delta in every format, where a decode would have differed by format.
-The decode count is asserted at the port, not inferred from the composition's shape, and a control that
-gives true peak its own decoder makes that test fail.
+**What the surface says, and what it refuses to say.** A true peak above full scale reads `+0.83 dBTP`
+— signed, unclamped, uncoloured, unflagged. There is no warning, no badge, no comparison against the
+sample peak and none of the vocabulary that turns a number into a diagnosis; a sweep over every string
+the section can produce pins that, aimed at the value most likely to attract one. Absence stays
+distinct from a measured zero: a channel that carried no samples has no maximum, while a silent one has
+a real value that floors like every other level in the report.
 
-**One thing became provable that was not before.** True peak is the only consumer with a failure a
-*valid* chunk can trigger, so the isolation case that had no input under two consumers now has one: it
-fails alone, the other two settle exactly as separate reads settle on the same audio, and the read runs
-to the end. The bit-exact chunk independence `add-shared-pcm-read` recorded as owed to true peak is
-also paid — nine chunk sizes and whole-file, against an independent reference, no tolerance.
+**The method travels with the value**, in words, taken from the measurement's own recorded factor and
+filter rather than from constants repeated in the surface — so a file measured under a different method
+could not be described under this one. **No standard is claimed anywhere**, because this filter was
+designed to recorded parameters and validated against analytic truth and an independent meter, not
+built from BS.1770 Annex 2's own coefficients.
 
-**Deliberately not done here.** No interface and no export: the value travels beside the report, the
-waveform, the spectrogram and the signal levels, and stops at the flow state. `TruePeakMeasurement` is
-untouched and `TruePeakAccumulator` changed only in visibility — four `public` keywords, to match the
-two sibling accumulators; no constant, no signature and no DSP moved.
+**Deliberately not done.** No export: the value stops at the flow state and the screen, and the JSON
+contract, the DTO and the exporter are untouched. `TruePeakMeasurement` and `TruePeakAccumulator` are
+unchanged.
 
-**ADR-0019 stays `Proposed`,** and wiring does not promote it: its own criteria are agreement with the
-oracle demonstrated **against production code** and a manual validation on a file whose true peak
-genuinely exceeds its sample peak. Neither is what this group did.
+**ADR-0019 stays `Proposed`,** and presentation does not promote it either. Its criteria are agreement
+with the oracle demonstrated **against production code** and a manual validation on a file whose true
+peak genuinely exceeds its sample peak — the surface that validation needs now exists, but the
+validation itself has not happened.
 
-**Next step:** group 7 — presentation. The value is linear in the domain and dBTP is a presentation
-unit, so the conversion, the section beneath *Signal levels*, the method stated in words, and the
-forbidden-word sweep all belong there.
+**Next step:** group 8 — proving that true peak and the clipped-sample count are independent: a file
+with zero clipped samples and a true peak above full scale, a file with both, and a quiet file with
+neither, plus a search and a test that no code path derives one from the other.
 
 **Other open threads** (see `openspec list` for their real task counts, not restated here):
 `add-static-spectrogram-visualization` (manual validation battery deferred by product decision) and
