@@ -441,7 +441,7 @@ touched in this group**.
       form than a second export: the exported value is **bit-identical** to an independent run of the
       same pipeline in another process. **VoiceOver was not exercised** and none is claimed — the known
       traversal gap is inherited, not introduced.
-- [ ] 10.3 **Three of four done.** **ADR-0019 is `Accepted`**, promoted on its own two conditions and
+- [x] 10.3 **ADR-0019 is `Accepted`**, promoted on its own two conditions and
       nothing else: the oracle agreement demonstrated **against the production path** — a new gate drives
       the real decoder and the shared read, not the accumulator in isolation — at **0.0005 dB** against
       FFmpeg 8.1.2 where the pinned tolerance is 0.05 dB, and the manual validation above. Its
@@ -450,8 +450,9 @@ touched in this group**.
       `Spike/validate-true-peak/` is **deleted**, its own criterion having been met (ADR Accepted, and
       the slice's tests covering what it observed); the durable report in `docs/spikes/` stays. Nothing
       imports it and no build references it. `CURRENT.md` is updated. **`openspec archive` runs after
-      the merge**, so this task stays open until then rather than being marked on three quarters of its
-      content.
+      the merge**, and it has: this task waited for the condition it names rather than being marked on
+      three quarters of its content, and is marked here, on `main`, in the same commit that archives the
+      change.
 
 ## 11. Deferred, and named so it is not quietly dropped
 
