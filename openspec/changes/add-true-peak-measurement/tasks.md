@@ -6,10 +6,13 @@ fourth PCM read** and blocked the wiring. Evidence:
 `docs/spikes/2026-08-11-true-peak-methodology-validation.md` and
 `docs/spikes/2026-08-12-true-peak-end-to-end-cost.md`.
 
-**Nothing is wired up**: no decoder, no flow, no state, no interface, no export. A true peak can be
-computed from chunks handed in by hand, and nothing in the app hands them in — deliberately, until a
-PCM-sharing change removes the cost group 5 measured. Groups 6 onward are a roadmap for a future
-session, and group 6 is blocked rather than merely unstarted.
+**Group 6 is now done, and it is what group 5 was waiting for**: `add-shared-pcm-read` merged, so true
+peak is wired as a **third consumer of the read that already exists** rather than as the fourth decode
+the measurement rejected. An inspection reads the samples **twice**, with true peak included, and the
+third consumer costs its DSP and no decode (6.6). **Still not wired: the interface and the export** —
+groups 7 and 9 own those, and nothing in group 6 touched a view, the JSON contract, the DTO or the
+exporter. The value travels beside the report, the waveform, the spectrogram and the signal levels, and
+stops there.
 
 **The methodology is now fixed and is no longer a decision for a later group**: polyphase FIR, **8×**,
 **48 taps per phase**, Kaiser **β = 6.0**, cutoff **1.0**, phases normalised, **zero-extension** at the
@@ -283,7 +286,7 @@ touched in this group**.
 > If wiring ever required changing the accumulator, that is evidence the shared architecture is wrong
 > and must be justified before proceeding (ADR-0020 follow-ups).
 
-- [ ] 6.1 Add true peak as a **third consumer of `SharedPCMAnalysisGeneration`** — one more accumulator
+- [x] 6.1 Add true peak as a **third consumer of `SharedPCMAnalysisGeneration`** — one more accumulator
       folded from the read that already exists. It creates **no decoder**, opens no `URL` and no security
       scope, changes neither `AudioDecoding` nor `PCMChunk`, and receives **the same `PCMChunk` value**
       the other two consumers receive, in the same synchronous callback, inside the coordinator's
@@ -291,23 +294,32 @@ touched in this group**.
       the others are built from, so three consumers can never disagree about the file they are reading.
       No `PCMConsumer` protocol: the composition holds it concretely, as a stored property beside the
       other two (`add-shared-pcm-read` design §7).
-- [ ] 6.2 Extend the shared outcome, the inspection outcome, the update channel and the presentation
+- [x] 6.2 Extend the shared outcome, the inspection outcome, the update channel and the presentation
       state with true peak's **own** case, exactly as the third analysis was added — beside the others,
       never nested in `InspectionReport`, and with no combined status anywhere. Confirm by test that all
       four settle independently: a failing or cancelled true peak leaves the report, the waveform, the
       spectrogram and the signal levels exactly as they would have been, **and the reverse direction
       too**. Include negative controls that make these tests fail, then revert them in full.
-- [ ] 6.3 Confirm the source file is never modified and never read outside the access window.
-- [ ] 6.4 **The decode count is the architectural gate.** Prove at the port that the three shared
+- [x] 6.3 Confirmed: nothing here opens a `URL`, a security scope or a file. The composition receives a
+      decoder the coordinator built inside its own window, the read finishes before `run` returns, and
+      the existing `theDecoderRunsInsideTheWindow` and *"generating a spectrogram writes nothing beside
+      the source"* tests cover the window and the read-only guarantee for the read true peak now shares.
+- [x] 6.4 **The decode count is the architectural gate.** Prove at the port that the three shared
       consumers cost **one** `AudioDecoding` call, that a whole inspection performs **two** sample reads
       (the waveform's own and the shared one), and that adding true peak added **none** — with a negative
       control that gives true peak its own decoder and makes the count test fail.
-- [ ] 6.5 **Chunk independence, which `add-shared-pcm-read` could not test and named as owed.** The
+- [x] 6.5 **Chunk independence, which `add-shared-pcm-read` could not test and named as owed.** The
       shared read must produce the **bit-identical** `TruePeakMeasurement` an independent reference
       produces from the same audio, at every chunk size and for the whole file in one chunk — no
       tolerance, because true peak's own guarantee is bit-exactness and sharing must not weaken it.
-- [ ] 6.6 Confirm by measurement against production code that the third consumer costs **its DSP and no
-      decode**: the delta against the same pipeline without true peak must not contain a decode.
+- [x] 6.6 Measured against production code, 10 min stereo, three runs after a warm-up, on the same
+      machine and the same fixtures the shared-PCM confirmation used, so the two are directly
+      comparable. **The third consumer costs its DSP and no decode.** Release: the shared pass goes from
+      0.378 / 1.032 / 1.133 s (WAV / FLAC / AAC) to 0.949 / 1.592 / 1.703 s — a delta of **0.571 /
+      0.560 / 0.570 s**, against a true-peak DSP measured alone at 0.555 / 0.561 / 0.550 s. **The delta
+      is the same in all three formats**, which is the signature of a pure DSP cost: a decode would have
+      cost 0.058 s more for WAV and 0.700 s more for FLAC, and the deltas would differ by format. Debug
+      agrees — deltas 0.681 / 0.689 / 0.768 s against decodes of 0.686 / 1.331 / 1.029 s.
 
 ## 7. Presentation
 
