@@ -245,7 +245,13 @@ public struct ReportView: View {
             }
 
             Button("Export JSON…") {
-                Task { await exportModel.export(report, signalLevelMetrics: exportableSignalLevelMetrics) }
+                Task {
+                    await exportModel.export(
+                        report,
+                        signalLevelMetrics: exportableSignalLevelMetrics,
+                        truePeak: exportableTruePeak
+                    )
+                }
             }
             .disabled(exportModel.phase == .exporting)
         }
@@ -257,6 +263,15 @@ public struct ReportView: View {
     private var exportableSignalLevelMetrics: SignalLevelMetrics? {
         guard case let .metrics(metrics) = signalLevelMetrics else { return nil }
         return metrics
+    }
+
+    /// The same rule for the true peak: `loading`, `absent` and `failed` all collapse to `nil`, so the
+    /// export layer never has to decide what a UI-only state would mean on the wire. **The JSON
+    /// describes measurements, not lifecycle**, and a failure message in particular is a fact about this
+    /// run rather than about the file.
+    private var exportableTruePeak: TruePeakMeasurement? {
+        guard case let .measurement(measurement) = truePeak else { return nil }
+        return measurement
     }
 }
 
@@ -433,7 +448,7 @@ private extension TruePeakPresentation {
 #Preview {
     ReportView(
         report: .preview, waveform: .preview, spectrogram: .preview, signalLevelMetrics: .preview,
-        truePeak: .preview, export: { _, _ in .succeeded }
+        truePeak: .preview, export: { _, _, _ in .succeeded }
     )
 }
 #endif

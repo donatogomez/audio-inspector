@@ -179,20 +179,25 @@ func report(
 func exportData(
     _ report: InspectionReport,
     signalLevelMetrics: SignalLevelMetrics? = nil,
+    truePeak: TruePeakMeasurement? = nil,
     now: Date = fixedNow,
     generator: ReportGenerator = fixedGenerator
 ) throws -> Data {
-    try JSONReportExporter(generator: generator, now: { now }).export(report, signalLevelMetrics: signalLevelMetrics)
+    try JSONReportExporter(generator: generator, now: { now })
+        .export(report, signalLevelMetrics: signalLevelMetrics, truePeak: truePeak)
 }
 
 /// Exports and decodes into a typed `JSONValue` tree (via `JSONDecoder`) for structural assertions.
 func exportValue(
     _ report: InspectionReport,
     signalLevelMetrics: SignalLevelMetrics? = nil,
+    truePeak: TruePeakMeasurement? = nil,
     now: Date = fixedNow,
     generator: ReportGenerator = fixedGenerator
 ) throws -> JSONValue {
-    let data = try exportData(report, signalLevelMetrics: signalLevelMetrics, now: now, generator: generator)
+    let data = try exportData(
+        report, signalLevelMetrics: signalLevelMetrics, truePeak: truePeak, now: now, generator: generator
+    )
     return try JSONDecoder().decode(JSONValue.self, from: data)
 }
 

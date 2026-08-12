@@ -16,7 +16,7 @@ struct ReportExportCoordinatorTests {
     /// An exporter that always throws — proves the exporter is (or isn't) reached.
     private struct ThrowingExporter: ReportExporting {
         struct Failure: Error {}
-        func export(_: InspectionReport, signalLevelMetrics _: SignalLevelMetrics?) throws -> Data { throw Failure() }
+        func export(_: InspectionReport, signalLevelMetrics _: SignalLevelMetrics?, truePeak _: TruePeakMeasurement?) throws -> Data { throw Failure() }
     }
 
     /// Signals each encode through an injected `@Sendable` callback, so "invoked exactly once" is
@@ -24,9 +24,13 @@ struct ReportExportCoordinatorTests {
     private struct ConfirmingExporter: ReportExporting {
         let inner: JSONReportExporter
         let onExport: @Sendable () -> Void
-        func export(_ report: InspectionReport, signalLevelMetrics: SignalLevelMetrics?) throws -> Data {
+        func export(
+            _ report: InspectionReport,
+            signalLevelMetrics: SignalLevelMetrics?,
+            truePeak: TruePeakMeasurement?
+        ) throws -> Data {
             onExport()
-            return try inner.export(report, signalLevelMetrics: signalLevelMetrics)
+            return try inner.export(report, signalLevelMetrics: signalLevelMetrics, truePeak: truePeak)
         }
     }
 
@@ -45,7 +49,7 @@ struct ReportExportCoordinatorTests {
     @Test func cancellationDoesNotEncodeOrWrite() async {
         // A throwing exporter would surface `.encodingFailed` if reached; `.cancelled` proves it wasn't.
         let coordinator = ReportExportCoordinator(exporter: ThrowingExporter(), chooseDestination: { _ in nil })
-        let outcome = await coordinator.export(report(status: .completed), signalLevelMetrics: nil)
+        let outcome = await coordinator.export(report(status: .completed), signalLevelMetrics: nil, truePeak: nil)
         #expect(outcome == .cancelled)
     }
 
@@ -67,7 +71,7 @@ struct ReportExportCoordinatorTests {
                 exporter: ConfirmingExporter(inner: exporter, onExport: { confirmed() }),
                 chooseDestination: { name in capturedName = name; return destination }
             )
-            outcome = await coordinator.export(subject, signalLevelMetrics: nil)
+            outcome = await coordinator.export(subject, signalLevelMetrics: nil, truePeak: nil)
         }
 
         #expect(outcome == .succeeded)
@@ -75,7 +79,7 @@ struct ReportExportCoordinatorTests {
 
         // The bytes on disk are exactly the exporter's output (deterministic clock + sorted keys).
         let written = try Data(contentsOf: destination)
-        #expect(written == (try exporter.export(subject, signalLevelMetrics: nil)))
+        #expect(written == (try exporter.export(subject, signalLevelMetrics: nil, truePeak: nil)))
 
         // And they decode as JSON v1 via Codable.
         let decoded = try JSONDecoder().decode(JSONValue.self, from: written)
@@ -100,11 +104,11 @@ struct ReportExportCoordinatorTests {
         let coordinator = ReportExportCoordinator(exporter: exporter, chooseDestination: { _ in destination })
         let subject = report(status: .completed)
 
-        let outcome = await coordinator.export(subject, signalLevelMetrics: nil)
+        let outcome = await coordinator.export(subject, signalLevelMetrics: nil, truePeak: nil)
 
         #expect(outcome == .succeeded)
         let written = try Data(contentsOf: destination)
-        #expect(written == (try exporter.export(subject, signalLevelMetrics: nil))) // fully replaced with the new content
+        #expect(written == (try exporter.export(subject, signalLevelMetrics: nil, truePeak: nil))) // fully replaced with the new content
     }
 
     // MARK: - Failures
@@ -115,7 +119,7 @@ struct ReportExportCoordinatorTests {
         let destination = dir.appendingPathComponent("out.json")
 
         let coordinator = ReportExportCoordinator(exporter: ThrowingExporter(), chooseDestination: { _ in destination })
-        let outcome = await coordinator.export(report(status: .completed), signalLevelMetrics: nil)
+        let outcome = await coordinator.export(report(status: .completed), signalLevelMetrics: nil, truePeak: nil)
 
         #expect(outcome == .encodingFailed)
         #expect(!FileManager.default.fileExists(atPath: destination.path)) // nothing written
@@ -128,7 +132,7 @@ struct ReportExportCoordinatorTests {
         let destination = dir.appendingPathComponent("missing-subdir", isDirectory: true).appendingPathComponent("out.json")
 
         let coordinator = ReportExportCoordinator(exporter: realExporter(), chooseDestination: { _ in destination })
-        let outcome = await coordinator.export(report(status: .completed), signalLevelMetrics: nil)
+        let outcome = await coordinator.export(report(status: .completed), signalLevelMetrics: nil, truePeak: nil)
 
         #expect(outcome == .writeFailed)
         #expect(!FileManager.default.fileExists(atPath: destination.path))

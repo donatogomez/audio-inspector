@@ -55,8 +55,10 @@ public struct AppContainer {
                 await ReportExportDestination.choose(suggestedName: suggestedName)
             }
         )
-        return { report, signalLevelMetrics in
-            await coordinator.export(report, signalLevelMetrics: signalLevelMetrics)
+        return { report, signalLevelMetrics, truePeak in
+            await coordinator.export(
+                report, signalLevelMetrics: signalLevelMetrics, truePeak: truePeak
+            )
         }
     }
 }

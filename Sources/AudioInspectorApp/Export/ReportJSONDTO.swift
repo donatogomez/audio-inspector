@@ -266,14 +266,87 @@ struct SignalLevelsDTO: Encodable {
     }
 }
 
-/// The `measurements` object itself. A struct rather than `SignalLevelsDTO` directly at the top level,
-/// so a future measurement (e.g. true peak, once designed) adds a sibling key rather than replacing
-/// this one or forcing a new top-level field.
-struct MeasurementsDTO: Encodable {
-    let signalLevels: SignalLevelsDTO
+/// The wire form of one channel's own true peak. `sampleCount` travels with it for the same reason it
+/// does under `signalLevels`: it is what lets a consumer tell **"not computable"** (`sampleCount == 0`,
+/// `truePeak` `null`) from a genuinely measured, computed zero. The domain enforces that rule in both
+/// directions, and this carries it faithfully rather than collapsing it into one missing-value
+/// convention.
+///
+/// `truePeak` is the domain's own **linear** amplitude, never dBTP: the wire exports what was measured
+/// in the unit it was measured in, and the decibel conversion belongs to presentation
+/// (`FeatureAnalysis`, which this layer does not import). Values above `1.0` are exported exactly as
+/// measured — a reconstruction that exceeds full scale is the fact this measurement exists to reveal.
+struct TruePeakChannelDTO: Encodable {
+    let sampleCount: Int
+    let truePeak: Double?
+
+    private enum CodingKeys: String, CodingKey {
+        case sampleCount, truePeak
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(sampleCount, forKey: .sampleCount)
+        try encodeExplicit(truePeak, forKey: .truePeak, into: &container)
+    }
+}
+
+/// How the measurement was produced: the oversampling factor and the filter's stable identifier
+/// (ADR-0006's "factor and filter recorded with the result", ADR-0019's decision that they live inside
+/// the measurement).
+///
+/// **It is an identity, not a configuration.** No taps, no window, no cutoff and no coefficients: a
+/// consumer is told *which* methodology ran, not how to re-run one, because a wire object carrying the
+/// design would be a DSP configuration wearing a result's name. Both fields are always present — a
+/// measurement that exists was produced by some method.
+struct TruePeakMethodDTO: Encodable {
+    let oversamplingFactor: Int
+    let filter: String
 
     enum CodingKeys: String, CodingKey {
-        case signalLevels
+        case oversamplingFactor, filter
+    }
+}
+
+/// `measurements.truePeak`: the whole-file value, one entry per channel in the stream's own order, and
+/// the method that produced them.
+///
+/// `overall` is a **number or an explicit `null`**, not an object — unlike `signalLevels.overall`,
+/// which groups four figures. There is one number here, and wrapping it would invent a shape the
+/// domain does not have. `null` means no channel carried a sample; it is never a fabricated `0`, which
+/// is what a genuinely silent file reports instead.
+struct TruePeakDTO: Encodable {
+    let overall: Double?
+    let channels: [TruePeakChannelDTO]
+    let method: TruePeakMethodDTO
+
+    private enum CodingKeys: String, CodingKey {
+        case overall, channels, method
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try encodeExplicit(overall, forKey: .overall, into: &container)
+        try container.encode(channels, forKey: .channels)
+        try container.encode(method, forKey: .method)
+    }
+}
+
+/// The `measurements` object itself. A struct rather than `SignalLevelsDTO` directly at the top level,
+/// so a further measurement adds a sibling key rather than replacing this one or forcing a new
+/// top-level field — which is exactly what `truePeak` did.
+///
+/// **Both keys are optional and each is omitted when its measurement does not exist**, so the four
+/// combinations are all representable and none is faked: signal levels alone (byte-identical to before
+/// true peak existed), true peak alone, both, or — when neither exists — no `measurements` object at
+/// all. There is deliberately **no aggregate**: nothing here says "the measurements succeeded", because
+/// nothing downstream should be able to ask a question about them together.
+struct MeasurementsDTO: Encodable {
+    let signalLevels: SignalLevelsDTO?
+    let truePeak: TruePeakDTO?
+
+    enum CodingKeys: String, CodingKey {
+        case signalLevels, truePeak
     }
 }
 

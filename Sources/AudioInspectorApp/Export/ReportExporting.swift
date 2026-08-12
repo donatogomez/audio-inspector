@@ -12,10 +12,20 @@ import Foundation
 /// protocol in `AudioInspectorDomain` would be a port with no domain consumer (ADR-0009). It depends
 /// only on `AudioInspectorDomain`, so it can be extracted into its own target later untouched.
 protocol ReportExporting: Sendable {
-    /// Encodes `report` into `schemaVersion` 1 JSON bytes. `signalLevelMetrics` is `nil` when there is
-    /// nothing to report under the additive `measurements` object — the caller has already collapsed
-    /// any non-measurement state to `nil` before this is reached. Throws on an encoding failure.
-    func export(_ report: InspectionReport, signalLevelMetrics: SignalLevelMetrics?) throws -> Data
+    /// Encodes `report` into `schemaVersion` 1 JSON bytes. Each measurement is `nil` when there is
+    /// nothing to report for it under the additive `measurements` object — the caller has already
+    /// collapsed any non-measurement state to `nil` before this is reached, so no lifecycle state ever
+    /// reaches the wire. Throws on an encoding failure.
+    ///
+    /// **Two optionals rather than a context object**, deliberately: they are independent measurements
+    /// and the signature says so. It is also the shape's comfortable limit — a third would be the moment
+    /// to introduce a container, and that is a change of its own rather than a side effect of adding a
+    /// measurement.
+    func export(
+        _ report: InspectionReport,
+        signalLevelMetrics: SignalLevelMetrics?,
+        truePeak: TruePeakMeasurement?
+    ) throws -> Data
 }
 
 /// The identity of whatever produced an export — the envelope's `generator` object.

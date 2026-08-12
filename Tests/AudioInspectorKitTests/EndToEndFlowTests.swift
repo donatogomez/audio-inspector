@@ -134,8 +134,10 @@ struct EndToEndFlowTests {
                 exporter: JSONReportExporter(generator: fixedGenerator, now: { fixedNow }),
                 chooseDestination: { name in suggestedName = name; return destination }
             )
-            let exportModel = ReportExportModel(action: { report, metrics in await exportCoordinator.export(report, signalLevelMetrics: metrics) })
-            await exportModel.export(report, signalLevelMetrics: nil)
+            let exportModel = ReportExportModel(action: { report, metrics, peak in
+                await exportCoordinator.export(report, signalLevelMetrics: metrics, truePeak: peak)
+            })
+            await exportModel.export(report, signalLevelMetrics: nil, truePeak: nil)
 
             #expect(exportModel.phase == .succeeded)
             #expect(suggestedName == "fixture-inspection.json")
@@ -224,8 +226,10 @@ struct EndToEndFlowTests {
                     exporter: JSONReportExporter(generator: fixedGenerator, now: { fixedNow }),
                     chooseDestination: { _ in destination }
                 )
-                let exportModel = ReportExportModel(action: { report, metrics in await exportCoordinator.export(report, signalLevelMetrics: metrics) })
-                await exportModel.export(presentation.report, signalLevelMetrics: nil)
+                let exportModel = ReportExportModel(action: { report, metrics, peak in
+                await exportCoordinator.export(report, signalLevelMetrics: metrics, truePeak: peak)
+            })
+                await exportModel.export(presentation.report, signalLevelMetrics: nil, truePeak: nil)
                 #expect(exportModel.phase == .succeeded)
 
                 return (presentation, try Data(contentsOf: destination))
@@ -290,8 +294,10 @@ struct EndToEndFlowTests {
                     exporter: JSONReportExporter(generator: fixedGenerator, now: { fixedNow }),
                     chooseDestination: { _ in destination }
                 )
-                let exportModel = ReportExportModel(action: { report, metrics in await exportCoordinator.export(report, signalLevelMetrics: metrics) })
-                await exportModel.export(presentation.report, signalLevelMetrics: nil)
+                let exportModel = ReportExportModel(action: { report, metrics, peak in
+                await exportCoordinator.export(report, signalLevelMetrics: metrics, truePeak: peak)
+            })
+                await exportModel.export(presentation.report, signalLevelMetrics: nil, truePeak: nil)
                 #expect(exportModel.phase == .succeeded)
 
                 return (presentation, try Data(contentsOf: destination))
@@ -372,7 +378,9 @@ struct EndToEndFlowTests {
                 exporter: JSONReportExporter(generator: fixedGenerator, now: { fixedNow }),
                 chooseDestination: { _ in destination }
             )
-            let exportModel = ReportExportModel(action: { report, metrics in await exportCoordinator.export(report, signalLevelMetrics: metrics) })
+            let exportModel = ReportExportModel(action: { report, metrics, peak in
+                await exportCoordinator.export(report, signalLevelMetrics: metrics, truePeak: peak)
+            })
 
             // The composition root's own translation, `RootView.signalLevelMetricsPresentation(for:)`,
             // then the same extraction the button performs — the two seams between the flow's state and
@@ -380,13 +388,71 @@ struct EndToEndFlowTests {
             let toExport = exportableSignalLevelMetrics(
                 RootView.signalLevelMetricsPresentation(for: presentation.signalLevelMetrics)
             )
-            await exportModel.export(presentation.report, signalLevelMetrics: toExport)
+            await exportModel.export(presentation.report, signalLevelMetrics: toExport, truePeak: nil)
             #expect(exportModel.phase == .succeeded)
 
             let json = try JSONDecoder().decode(JSONValue.self, from: Data(contentsOf: destination))
             let signalLevels = try #require(json["measurements"]?["signalLevels"], "measurements never reached the export")
             #expect(signalLevels["overall"]?["peakSample"]?.double == Double(try #require(metrics.overallPeakSample)))
             #expect(signalLevels["channels"]?.array?.count == 1)
+        }
+    }
+
+    /// The same walk for **true peak**, and for the same reason: the unit tests above export a
+    /// hand-built measurement, so on their own they would pass even if the real value never left the
+    /// flow. This drives the production sequence — real file, real decode, real shared read producing a
+    /// real `TruePeakMeasurement` — through the composition root's own translation and the exact
+    /// extraction the export button performs, and asserts the number that arrives in the document is
+    /// the one that was measured.
+    @Test func theRealTruePeakPathReachesTheExportedDocument() async throws {
+        try await withTemporaryDirectory { directory in
+            let source = directory.appendingPathComponent("fixture.wav")
+            try writePCMFixture(to: source)
+
+            let inspection = SourceInspectionCoordinator(chooseSource: { source })
+            let flow = ImportFlowModel(action: { onUpdate in await inspection.inspect(onUpdate: onUpdate) })
+            await flow.selectAndInspect()
+
+            guard case let .report(presentation) = flow.state else {
+                Issue.record("expected the flow to end in .report, got \(flow.state)"); return
+            }
+            guard case let .available(measured) = presentation.truePeak else {
+                Issue.record("expected an available true peak, got \(presentation.truePeak)"); return
+            }
+            // Something real was measured, so exporting it proves something.
+            #expect(measured.channels.count == 1)
+            let measuredOverall = try #require(measured.overallTruePeak)
+
+            /// The extraction `ReportView.exportableTruePeak` performs, reproduced here because that
+            /// computed property is private to the view and SwiftUI's own button is not reachable
+            /// headlessly.
+            func exportableTruePeak(_ state: TruePeakPresentation) -> TruePeakMeasurement? {
+                guard case let .measurement(measurement) = state else { return nil }
+                return measurement
+            }
+
+            let destination = directory.appendingPathComponent("out-true-peak.json")
+            let exportCoordinator = ReportExportCoordinator(
+                exporter: JSONReportExporter(generator: fixedGenerator, now: { fixedNow }),
+                chooseDestination: { _ in destination }
+            )
+            let exportModel = ReportExportModel(action: { report, metrics, peak in
+                await exportCoordinator.export(report, signalLevelMetrics: metrics, truePeak: peak)
+            })
+
+            let toExport = exportableTruePeak(RootView.truePeakPresentation(for: presentation.truePeak))
+            await exportModel.export(presentation.report, signalLevelMetrics: nil, truePeak: toExport)
+            #expect(exportModel.phase == .succeeded)
+
+            let json = try JSONDecoder().decode(JSONValue.self, from: Data(contentsOf: destination))
+            let truePeak = try #require(json["measurements"]?["truePeak"], "the true peak never reached the export")
+            #expect(truePeak["overall"]?.double == Double(measuredOverall), "the exported value is not the measured one")
+            #expect(truePeak["channels"]?.array?.count == 1)
+            #expect(truePeak["channels"]?.array?[0]["sampleCount"]?.int == measured.channels[0].sampleCount)
+            #expect(truePeak["method"]?["oversamplingFactor"]?.int == 8)
+            #expect(truePeak["method"]?["filter"]?.string == "polyphase_fir_v1")
+            // Linear on the wire: the same number reads as a dBTP figure on screen and must not here.
+            #expect(try #require(truePeak["overall"]?.double) > 0)
         }
     }
 
