@@ -137,8 +137,13 @@ struct SignalLevelMetricsFlowTests {
     /// The spectrogram and signal level metrics both call `makeDecoder`, in a fixed, sequential order
     /// (the coordinator awaits the spectrogram before starting the third operation): the first call
     /// scripts a working spectrogram, the second — signal level metrics' own — fails. This isolates the
-    /// fault to the *third* operation alone, rather than failing both by sharing one scripted decoder.
-    @Test("failing signal level metrics leaves the report, the waveform and the spectrogram intact")
+    /// **Rewritten for the shared read.** It used to script two decoders by call order so only the
+    /// third operation failed. The spectrogram and the signal level metrics now share one read
+    /// (ADR-0020), so a decoder failure is a *producer* failure and reaches both — which is the
+    /// specified behaviour, not a regression. What this test was really protecting is unchanged and is
+    /// what it still asserts: **a failed sample analysis never degrades the report, never disturbs the
+    /// waveform, and never becomes an inspection warning.**
+    @Test("a failed sample analysis leaves the report and the waveform intact")
     func aFailingOperationChangesNothingElse() async throws {
         try await withTemporaryDirectory { directory in
             let url = try fixture(in: directory, frames: 8_192)
@@ -146,14 +151,11 @@ struct SignalLevelMetricsFlowTests {
             let box = OutcomeBox()
             let callCount = Atomic<Int>(0)
 
+            _ = callCount
             let coordinator = SourceInspectionCoordinator(
                 makeWaveformGenerator: { _ in FakeWaveformGenerating(succeedingWith: envelope) },
                 makeDecoder: { _ in
-                    let order = callCount.wrappingAdd(1, ordering: .relaxed).newValue
-                    if order == 1 {
-                        return FakeAudioDecoding(streaming: try! self.stream(frames: 8_192), chunks: [])
-                    }
-                    return FakeAudioDecoding(failingWith: AudioDecodingError(code: .readFailed, message: "boom"))
+                    FakeAudioDecoding(failingWith: AudioDecodingError(code: .readFailed, message: "boom"))
                 }
             )
             let outcome = await coordinator.inspect(url, onUpdate: { box.collect($0) })
@@ -165,8 +167,10 @@ struct SignalLevelMetricsFlowTests {
                 Issue.record("a signal level metrics failure degraded the inspection")
             }
             #expect(waveform == .available(envelope), "a signal level metrics failure disturbed the waveform")
-            guard case .available = spectrogram else {
-                Issue.record("a signal level metrics failure disturbed the spectrogram: \(spectrogram)"); return
+            // A producer failure reaches every consumer of that read — and each still reports its own
+            // outcome rather than deferring to another's.
+            guard case .failed = spectrogram else {
+                Issue.record("expected the spectrogram to report its own failure: \(spectrogram)"); return
             }
             guard case .failed = try #require(box.first) else {
                 Issue.record("expected failed signal level metrics"); return
@@ -265,35 +269,30 @@ struct SignalLevelMetricsFlowTests {
         }
     }
 
-    /// Signal level metrics and the spectrogram both use `makeDecoder`, but each with its own instance
-    /// (in production) or its own scripted double: cancelling one must not cancel the other, since
-    /// neither shares an accumulator or a decoder instance in the coordinator's own wiring.
-    @Test("a cancelled spectrogram leaves signal level metrics' result intact")
-    func aCancelledSpectrogramLeavesTheOperationAlone() async throws {
+    /// **Rewritten for the shared read.** It used to cancel one of two decoders and assert the other
+    /// survived — an assertion about the *arrangement*, which ADR-0020 replaced. With one read there is
+    /// no such thing as cancelling the spectrogram alone: cancellation is the user replacing the whole
+    /// inspection, and the property that matters is that **every analysis reports cancellation and none
+    /// reports a value computed from what was read before it stopped.**
+    @Test("a cancelled read cancels every analysis and leaks no partial model")
+    func aCancelledReadCancelsEveryAnalysis() async throws {
         try await withTemporaryDirectory { directory in
             let url = try fixture(in: directory, frames: 8_192)
             let box = OutcomeBox()
-            let callCount = Atomic<Int>(0)
 
-            // The spectrogram is the first `makeDecoder` call, signal level metrics the second — this
-            // factory scripts them independently by call order, proving the coordinator gives each
-            // operation its own decoder instance rather than passing one decoder to both.
             let coordinator = SourceInspectionCoordinator(makeDecoder: { _ in
-                let order = callCount.wrappingAdd(1, ordering: .relaxed).newValue
-                if order == 1 {
-                    return FakeAudioDecoding(failingWith: AudioDecodingError(code: .cancelled, message: "cancelled"))
-                }
-                return FakeAudioDecoding(streaming: try! self.stream(frames: 8_192), chunks: [])
+                FakeAudioDecoding(failingWith: AudioDecodingError(code: .cancelled, message: "cancelled"))
             })
             let outcome = await coordinator.inspect(url, onUpdate: { box.collect($0) })
 
-            guard case let .inspected(_, _, spectrogram, _) = outcome else {
+            guard case let .inspected(_, _, spectrogram, signalLevels) = outcome else {
                 Issue.record("expected an inspected outcome"); return
             }
             #expect(spectrogram == .cancelled)
-            guard case .available = try #require(box.first) else {
-                Issue.record("cancelling the spectrogram cancelled signal level metrics"); return
-            }
+            #expect(signalLevels == .cancelled)
+            // Cancellation is not absence and not failure: a partial model presented as a result is
+            // exactly what this asserts cannot happen.
+            #expect(try #require(box.first) == .cancelled)
         }
     }
 
@@ -345,9 +344,10 @@ struct SignalLevelMetricsFlowTests {
             let coordinator = SourceInspectionCoordinator(makeDecoder: { _ in decoder })
             _ = await coordinator.inspect(url, onUpdate: { box.collect($0) })
 
-            // Twice: once for the spectrogram, once for signal level metrics — both share this single
-            // injected decoder in this test, but each calls `makeDecoder` independently.
-            #expect(await decoder.spy.callCount == 2, "signal level metrics were not produced")
+            // **One decode, not two.** This is the architectural assertion of ADR-0020: the spectrogram
+            // and the signal level metrics are produced from a single read of the file. Before the
+            // shared read this was 2, and a regression to separate decodes fails here first.
+            #expect(await decoder.spy.callCount == 1, "the analyses did not share one read")
             #expect(box.outcomes.count == 1, "the result never reached the channel")
         }
     }

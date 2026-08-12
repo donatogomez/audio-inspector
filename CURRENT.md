@@ -16,30 +16,40 @@
 >   session protocol in `CLAUDE.md`).
 
 ---
-**Focus:** nothing in flight. `add-computed-technical-properties` is merged into `main` and **archived**;
-its capability specs are now canonical, so `openspec` and `git` — not this file — describe the state.
+**Focus:** `add-shared-pcm-read` is **finished and published, waiting on review and merge.** The
+spectrogram and the signal level metrics are produced from **one** PCM read instead of two; the
+waveform keeps its own, so an inspection reads the file twice rather than three times.
 
-**What landed.** `averageFileBitrate` (calculated from size and duration, always `uncertain`, never
-`available`, living beside `declaredBitrate`/`estimatedBitrate` without being conflated with either);
-`SignalLevelMetrics` (peak, RMS, DC offset, clipped-sample count) as its own domain value type produced
-by an independent operation over the shared `AudioDecoding` port, presented in the report beneath the
-waveform with dBFS conversion only at the presentation layer; and the export, which carries the metrics
-additively under `measurements.signalLevels` in the domain's own linear amplitude, omitting the key
-entirely when there is nothing to report. `TechnicalProperties` still carries no DSP, `InspectionReport`
-still carries no `SignalLevelMetrics`, and the domain still knows nothing of JSON or `schemaVersion`.
-**ADR-0018 is `Accepted`** — both promotion conditions were met against production code and a manual pass
-on a build whose process identity was verified rather than assumed.
+> **This line of work carries only the shared-PCM thread.** `add-true-peak-measurement` is a separate,
+> active thread on its own branch: its change, **ADR-0019**, `TruePeakMeasurement`, `TruePeakAccumulator`
+> and their tests are **not here**, so `openspec list` and `docs/adr/` will not show them, and the ADR
+> index has a gap where 0019 will land. **It stays blocked until shared PCM reaches `main`**, and then
+> resumes by wiring true peak as a third consumer of the shared read — not by redesigning anything it
+> already finished.
 
-**Known, deliberate debt from that change** (named at archive time, not dropped): true peak, significant
-max frequency, crest factor, and any single named dynamic-range metric were all deferred with reasons —
-each needs its own methodology decision under ADR-0006, not a one-line addition to this slice. A generic
-`dynamicRange` field stays rejected outright, not deferred. Separately, whether `averageFileBitrate`
-should generate a warning like its siblings is still open, because doing so needs a deliberate pass over
-every affected fixture rather than a silent addition.
+**What holds this up, in one line each.** Independence is now a property of the composition rather than
+of separate decoders, and it is proved by tests that fail when it breaks — a consumer's failure, a
+producer's failure, and a cancellation forced deterministically while the read is provably mid-flight.
+The saving was re-measured against production code, not against the spike's harness, and one decode's
+worth of time disappears in every format and both build configurations. A person then looked at the
+real app on a confirmed-fresh instance, over a real uncompressed and a real compressed file, and found
+the surface unchanged.
 
-**Next step:** pick the next slice. True peak is the natural head of the deferred queue and already has
-its methodology governed by ADR-0006, so it is the obvious candidate — but it needs its own OpenSpec
-change before any code, per the spec-driven rule.
+**ADR-0020 is `Accepted`.** Its own promotion criteria were met and were not softened to fit; its
+`Promotion` section also records where the evidence is weaker than promised — the "no consumer starves
+another" rule has no reachable input today, so it stays contract text rather than a test.
+
+**Two things deliberately left undone, so they are not mistaken for oversights.** The waveform still
+reads the file for itself: migrating it is its own change and would take two reads to one.
+`SpectrogramGeneration` and `SignalLevelMetricsGeneration` are no longer wired into an inspection but
+are **kept**, because they are the independent implementation the equivalence tests compare the shared
+read against; deleting them is a separate decision, not a tidy-up at the end of this one.
+
+**Next step:** review, then merge. **`openspec archive` runs only after the merge** — that is the one
+part of the task list still open, and it stays open on purpose. One cosmetic defect was seen during
+validation and left alone: on a 64 kHz file the spectrogram's frequency axis draws its Nyquist label
+over the next tick. It lives in presentation, predates this change, and fixing it here would widen a
+finished diff.
 
 **Other open threads** (see `openspec list` for their real task counts, not restated here):
 `add-static-spectrogram-visualization` (manual validation battery deferred by product decision) and
@@ -47,4 +57,4 @@ change before any code, per the spec-driven rule.
 traversal gap shared with ADR-0015). Neither was touched this session.
 
 ---
-_Last touched: 2026-08-11. Overwrite freely; empty is fine._
+_Last touched: 2026-08-12. Overwrite freely; empty is fine._

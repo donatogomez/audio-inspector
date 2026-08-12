@@ -301,9 +301,10 @@ struct SpectrogramFlowTests {
             let coordinator = SourceInspectionCoordinator(makeDecoder: { _ in decoder })
             _ = await coordinator.inspect(url, onUpdate: { box.collect($0) })
 
-            // Twice: once for the spectrogram, once for the signal level metrics — both share this
-            // single injected decoder in this test, but each calls `makeDecoder` independently.
-            #expect(await decoder.spy.callCount == 2, "the spectrogram was not produced")
+            // **One decode, not two.** The spectrogram and the signal level metrics are produced from a
+            // single read of the file (ADR-0020). Before the shared read this was 2, and a regression
+            // to separate decodes fails here first.
+            #expect(await decoder.spy.callCount == 1, "the analyses did not share one read")
             #expect(box.outcomes.count == 1, "its result never reached the channel")
         }
     }

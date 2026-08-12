@@ -5,6 +5,15 @@ import FeatureImport
 
 /// One spectrogram generation: decode → accumulate → finish, and nothing else.
 ///
+/// ## No longer wired into an inspection — kept as the equivalence reference
+///
+/// `SourceInspectionCoordinator` now produces this analysis through `SharedPCMAnalysisGeneration`, which
+/// reads the file once for several analyses (ADR-0020). This type is retained deliberately, not
+/// forgotten: `SharedPCMAnalysisTests.equivalenceWithSeparateReads` runs it against the same input and
+/// asserts the shared read produces **exactly** the same outcome, which is the evidence that sharing
+/// changed the transport and not the analysis. Deleting it would remove that oracle, so it is a separate
+/// decision rather than a side effect of this change.
+///
 /// ## Why this is not a domain port
 ///
 /// `docs/architecture.md` names a `SpectrogramGenerating` port, and task 2.7 declined to create it with

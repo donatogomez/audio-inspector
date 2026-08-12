@@ -110,50 +110,47 @@ struct SourceInspectionCoordinator {
             )
         }
 
-        // Each visualisation is reported the moment it settles, so whichever finishes first is shown
-        // first and none waits on another. They are separate operations over separate ports: a
-        // separate decode, a fresh accumulator, and no shared state. Sequential is not the same as
-        // coupled — none can cancel or fail another, which is what ADR-0016 decision 15 requires.
-        // Group 9 may or may not move the waveform onto the shared seam; until then two of these three
-        // reads is a declared cost, not an oversight.
+        // The waveform keeps its own read: it uses a different port, and its accumulator needs frame
+        // position and throws where the shared consumers neither need nor do. Migrating it is a change
+        // of its own (ADR-0016 left it deliberately undone), so this is a declared cost rather than an
+        // oversight — and it is why an inspection reads the file twice rather than once.
         let waveformOutcome = await waveform(for: reference, at: url)
         onUpdate(.waveform(waveformOutcome))
 
-        let spectrogramOutcome = await spectrogram(for: reference, at: url)
-        onUpdate(.spectrogram(spectrogramOutcome))
-
-        // The third independent operation over the shared `AudioDecoding` port (ADR-0018,
-        // design.md §10). Its own decoder instance, its own cancellation — it does not hook into the
-        // waveform's own, deliberately-unmigrated generator, and shares no accumulator with the
-        // spectrogram.
-        let signalLevelMetricsOutcome = await signalLevelMetrics(for: reference, at: url)
-        onUpdate(.signalLevelMetrics(signalLevelMetricsOutcome))
+        // **One read, several analyses.** The spectrogram and the signal level metrics used to decode
+        // the file once each; they now share a single pass, because a redundant read of a compressed
+        // file costs about a quarter of an inspection (ADR-0020,
+        // `docs/spikes/2026-08-12-shared-pcm-analysis-architecture.md`).
+        //
+        // Nothing about what they *are* changed. Each still has its own accumulator, its own failure
+        // and its own outcome, each is still emitted as its own update, and one failing leaves the
+        // other exactly as it would have been — which is the independence ADR-0016 protects, now held
+        // by construction rather than by separate decoders.
+        let shared = await sharedAnalyses(for: reference, at: url)
+        onUpdate(.spectrogram(shared.spectrogram))
+        onUpdate(.signalLevelMetrics(shared.signalLevelMetrics))
 
         return .inspected(
             report,
             waveform: waveformOutcome,
-            spectrogram: spectrogramOutcome,
-            signalLevelMetrics: signalLevelMetricsOutcome
+            spectrogram: shared.spectrogram,
+            signalLevelMetrics: shared.signalLevelMetrics
         )
     }
 
-    /// Produces the spectrogram inside the window the caller already holds.
+    /// Produces every sample-based analysis from **one** read, inside the window the caller already
+    /// holds.
     ///
     /// The `defer` that releases the scope runs when `inspect` returns, and this is awaited before
     /// that — so the decoder can open the file for as long as the read takes, and nothing survives the
-    /// window (ADR-0010). A fresh decoder and a fresh accumulator per operation: nothing is retained
-    /// between two inspections.
-    private func spectrogram(for reference: AudioFileReference, at url: URL) async -> SpectrogramOutcome {
-        await SpectrogramGeneration(decoder: makeDecoder(url)).run(for: reference)
-    }
-
-    /// Produces the signal level metrics inside the window the caller already holds.
+    /// window (ADR-0010). One decoder and fresh accumulators per inspection: nothing is retained
+    /// between two of them.
     ///
-    /// A fresh decoder and a fresh accumulator per operation, exactly like `spectrogram(for:at:)` above
-    /// — `makeDecoder(url)` is called again here rather than reusing the spectrogram's instance, so the
-    /// two operations share no state (ADR-0016 decision 15).
-    private func signalLevelMetrics(for reference: AudioFileReference, at url: URL) async -> SignalLevelMetricsOutcome {
-        await SignalLevelMetricsGeneration(decoder: makeDecoder(url)).run(for: reference)
+    /// `makeDecoder(url)` is called **once** here, where it used to be called once per analysis. That
+    /// is the whole change, and it is why the returned outcomes are read apart immediately: nothing
+    /// downstream is given a way to ask a question about the analyses together.
+    private func sharedAnalyses(for reference: AudioFileReference, at url: URL) async -> SharedPCMAnalysisOutcome {
+        await SharedPCMAnalysisGeneration(decoder: makeDecoder(url)).run(for: reference)
     }
 
     /// Produces the waveform and translates its outcome, keeping the three meanings apart.
