@@ -1,11 +1,15 @@
 # Implementation Tasks
 
-**Groups 1–4 are done: the contract, the measurements that turned its open questions into constants,
-the domain model, and the accumulator that produces one.** Group 2's evidence lives in
-`Spike/validate-true-peak/` (outside the production graph) and
-`docs/spikes/2026-08-11-true-peak-methodology-validation.md`. **Nothing is wired up yet**: no decoder,
-no flow, no state, no interface, no export — a true peak can be computed from chunks handed in by hand,
-and nothing in the app hands them in. Every task from group 5 onward is a roadmap for a future session.
+**Groups 1–5 are done, and group 5's stop rule fired.** The contract, the methodology, the domain
+model and the accumulator are finished and tested; the end-to-end cost measurement then **rejected a
+fourth PCM read** and blocked the wiring. Evidence:
+`docs/spikes/2026-08-11-true-peak-methodology-validation.md` and
+`docs/spikes/2026-08-12-true-peak-end-to-end-cost.md`.
+
+**Nothing is wired up**: no decoder, no flow, no state, no interface, no export. A true peak can be
+computed from chunks handed in by hand, and nothing in the app hands them in — deliberately, until a
+PCM-sharing change removes the cost group 5 measured. Groups 6 onward are a roadmap for a future
+session, and group 6 is blocked rather than merely unstarted.
 
 **The methodology is now fixed and is no longer a decision for a later group**: polyphase FIR, **8×**,
 **48 taps per phase**, Kaiser **β = 6.0**, cutoff **1.0**, phases normalised, **zero-extension** at the
@@ -227,18 +231,44 @@ untouched**: this group added two files and modified none.
 
 ## 5. Cost — measured before the architecture is committed to
 
-- [ ] 5.1 Measure with a **disposable harness** (created, measured, deleted — never committed to
-      `Sources/` or `Tests/`), following `add-computed-technical-properties` task 3.4's own form: 1 min
-      and 10 min, mono and stereo, Debug (`-Onone`) and Release (`-O`), against a decode-only baseline,
-      for the naive scalar implementation and the vDSP one — and for each surviving candidate factor and
-      filter. Publish the table in the spike report.
-- [ ] 5.2 Measure the **whole-inspection** wall time with three operations versus four, in Debug (the
-      build a developer actually runs), because that number — not the accumulator's own — is what
-      decides whether a fourth read is acceptable.
-- [ ] 5.3 Apply the stop rule from `design.md` §8 rather than improvising: if the fourth decode is not
-      clearly insignificant beside the rest of an inspection, **do not** fold operations together inside
-      this change — record the number and open a separate deduplication change, as ADR-0016 provides
-      for.
+**Done, and the stop rule fired.** Evidence:
+`docs/spikes/2026-08-12-true-peak-end-to-end-cost.md`. The harness drove the real
+`SourceInspectionCoordinator` with its production defaults, real files, real AVFoundation decode and
+the real `TruePeakAccumulator`; it was created, measured and **deleted**, and **no production file was
+touched in this group**.
+
+- [x] 5.1 Measured with a disposable harness, 1 min and 10 min, mono and stereo, Debug and Release,
+      against a decode-only baseline. The candidate sweep this task also asked for was already done in
+      group 2 (factors 2–16, six filter designs, three implementations), so it is not repeated; what was
+      missing and is now measured is the **real** decode path rather than synthetic buffers. Added
+      beyond the task: FLAC and AAC, which turned out to be the rows that decide the outcome.
+- [x] 5.2 Whole-inspection wall time, three operations versus four. Ten minutes of stereo: **3.804 s →
+      4.956 s in Debug (+30.3 %)** and **0.728 s → 1.288 s in Release (+76.8 %)** for WAV; **5.082 s →
+      6.658 s** and **2.011 s → 2.986 s** for FLAC. The delta equals the isolated operation in every row
+      (1.152 against 1.152; 0.560 against 0.557), so the total is the sum and no contention, cache or
+      setup anomaly appears.
+- [x] 5.3 **Stop rule applied, and triggered.** Isolating the decode from the measurement — the
+      distinction the rule turns on — the fourth read alone costs **23.5 % of a FLAC inspection and
+      23.6 % of an AAC one in Release**, and 16–21 % in Debug. That is not "clearly insignificant".
+      **The design's own premise was wrong by more than an order of magnitude**: §8 accepted the fourth
+      read partly on a cited 0.035 s per decode, which describes the cheapest uncompressed case; the
+      real figure against the port is 0.473–0.534 s for a compressed file in Release. §8 kept an escape
+      hatch for exactly this — *"remains the escape hatch if group 5's numbers against the real decode
+      path disagree"* — and it is used rather than argued away.
+      Per the rule: nothing was folded, merged or migrated, the number is recorded, and **a separate PCM
+      -sharing change is the next step** (ADR-0016 already permits one *on top of* the seam once
+      measurement justifies it — this is that measurement).
+      Recorded alongside, because it has a different remedy: the true-peak **DSP** costs about 0.51 s
+      Release / 0.53 s Debug for the same file and **no amount of sharing removes it**. That is the
+      feature's own price, not the architecture's, and the stop rule does not govern it.
+
+## 6. Wiring — a fourth independent operation
+
+> **BLOCKED by group 5's stop rule.** The measurement rejected a fourth **read**, not a fourth
+> consumer: ADR-0016's independent-operation shape stands, and a sharing seam feeding several
+> accumulators from one pass keeps the independent cancellation and independent failure that rule
+> actually protects. This group resumes once a PCM-sharing change lands, and its tasks below are
+> otherwise unchanged. **Nothing in it is started, and nothing in it is marked.**
 
 ## 6. Wiring — a fourth independent operation
 
