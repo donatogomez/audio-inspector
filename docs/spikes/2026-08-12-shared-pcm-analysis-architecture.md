@@ -297,3 +297,183 @@ minimum architecture that answers the measurement.
   taste.
 - **Nothing here was measured through the app's interface**, so no claim is made about perceived
   responsiveness beyond the report timing already measured.
+
+---
+
+# 15. Production confirmation — `add-shared-pcm-read` group 4
+
+> **Nothing above is amended.** §§1–14 are the evaluation that decided the change, measured on a
+> hand-composed harness before any production code existed. This section is the separate question
+> group 4 exists to answer: **does the saving reproduce against the code that actually shipped on this
+> branch?** Where the two disagree, both figures stand and the difference is explained rather than
+> averaged away.
+
+- **Date measured**: 2026-08-12
+- **What is being measured**: the real `SourceInspectionCoordinator`, the real
+  `AVFoundationAudioFilePropertyReader`, the real `AVFoundationWaveformGenerator`, the real
+  `AVFoundationAudioDecoder`, the real `SharedPCMAnalysisGeneration` and the real accumulators. No
+  fake, no mock, no stub on the critical path.
+- **Harness**: temporary, in the test target, disabled unless `AI_BENCH` is set — **created, measured,
+  deleted**, and never committed, exactly as §§1–14's was. Production was not instrumented: every
+  measurement wraps a call rather than reaching inside one.
+
+## 15.1 What is comparable, and what is not
+
+**This branch has no true peak.** §8's headline compared *four* reads against *two*; here the pipeline
+goes from **three reads to two**, so exactly **one** redundant decode is removed rather than two. The
+comparable claim is therefore not §8's absolute seconds but its finding about what the saving *is*:
+
+> the saving is precisely the redundant decode removed — no more, no less.
+
+The fixture is also this session's, not §8's, so the seconds differ by construction. §14 already
+predicted this: *ratios carry forward; seconds do not*.
+
+## 15.2 Environment and fixtures
+
+| | |
+| --- | --- |
+| Machine | Apple M1 Pro, macOS 26.3, otherwise idle |
+| Toolchain | Apple Swift 6.3.3, Xcode 26.6 |
+| Release | `swift test -c release -Xswiftc -enable-testing` |
+| Debug | `swift test` |
+| Fixtures | 10 min stereo 44.1 kHz, written by `AudioFixtureSupport` — the same validated path the suite uses |
+| Signal | `perChannelSine(frequencies: [440, 660], amplitude: 0.5)` — **chosen before any number was seen**, because different content per channel stops a codec folding the stereo image away and making the decode unrepresentatively cheap |
+| Sizes | WAV 105.8 MB · FLAC 54.1 MB (51 % of WAV) · AAC 7.9 MB — 26 460 000 frames each, verified by read-back |
+| Runs | **6 per cell**: two independent passes of three runs, each pass preceded by a discarded warm-up |
+
+## 15.3 Release — 10 min stereo
+
+Each cell is the median of six runs. "Saving" is the median of the **per-run paired** differences
+(baseline and shared are measured back-to-back inside one run), which is what makes it immune to drift
+between passes; "one decode" is a full read of the same file computing nothing on it.
+
+| format | baseline (3 reads) | production shared (2 reads) | saving | one decode | recovered |
+| --- | --- | --- | --- | --- | --- |
+| WAV | 0.810 s | 0.748 s | **0.060 s** | 0.057 s | **106 %** |
+| FLAC | 2.799 s | 2.077 s | **0.725 s** | 0.721 s | **101 %** |
+| AAC | 2.426 s | 1.912 s | **0.563 s** | 0.573 s | **98 %** |
+
+## 15.4 Debug — 10 min stereo
+
+| format | baseline (3 reads) | production shared (2 reads) | saving | one decode | recovered |
+| --- | --- | --- | --- | --- | --- |
+| WAV | 4.114 s | 3.436 s | **0.687 s** | 0.663 s | **104 %** |
+| FLAC | 6.121 s | 4.832 s | **1.394 s** | 1.298 s | **107 %** |
+| AAC | 5.152 s | 4.097 s | **1.103 s** | 1.040 s | **106 %** |
+
+**Debug is where a developer lives, and it is where the change is felt most**: an inspection of a
+ten-minute FLAC loses 1.39 s, an AAC 1.10 s, a WAV 0.69 s. Not one format is slower.
+
+## 15.5 The recovery figures exceed 100 %, and that is measurement noise — not extra saving
+
+Six cells land between 98 % and 107 %, averaging 103.6 %. The run-to-run coefficient of variation is
+1–7 % depending on cell, so a ±5 % band around 100 % is exactly what these six numbers occupy. **No
+cell recovers materially less than one decode, and none recovers a second decode that was never
+removed.** Claiming a 103.6 % recovery would be reading noise as signal; the honest statement is: *the
+saving equals one decode, to within the precision of the measurement.*
+
+## 15.6 Where the time goes — the decomposition
+
+Release medians. `spec DSP` and `levels DSP` are each analysis's own cost with the decode subtracted.
+
+| format | waveform (own read) | one decode | spec DSP | levels DSP | shared pass measured | shared pass expected | difference |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| WAV | 0.361 s | 0.057 s | 0.292 s | 0.035 s | 0.378 s | 0.383 s | **−0.005 s** |
+| FLAC | 1.017 s | 0.721 s | 0.299 s | 0.034 s | 1.032 s | 1.054 s | **−0.022 s** |
+| AAC | 0.739 s | 0.573 s | 0.536 s | 0.027 s | 1.133 s | 1.135 s | **−0.002 s** |
+
+The whole-pipeline totals reconcile the same way: measured against `report + waveform + …`, every
+configuration agrees to within 0.09 s (≤ 2 %), and the largest single residual in Debug is FLAC's
++0.09 s, inside that format's own run-to-run spread.
+
+**Two things follow, and they are the ones §6 predicted.** The fan-out is free — the shared pass costs
+the sum of its parts and nothing more, reproducing §6's 0.765 s-against-0.764 s finding against
+production code. And **no new cost appeared anywhere**: there is no unexplained 300 ms, in any format,
+in either configuration.
+
+## 15.7 The report still arrives first
+
+Measured inside the real coordinator, as the interval from entering `inspect(_:onUpdate:)` to the
+`.report` update being handed to the caller:
+
+| format | report emitted at | first PCM read finishes at (waveform) |
+| --- | --- | --- |
+| WAV | 1.5 ms | ≈ 361 ms |
+| FLAC | 1.8 ms | ≈ 1 017 ms |
+| AAC | 2.0 ms | ≈ 739 ms |
+
+The report is delivered two to three orders of magnitude before any sample analysis settles, and
+sharing did not move it: it is emitted before the waveform's read starts, which is before the shared
+read exists at all. The waveform still progresses on its own read, unchanged and first.
+
+**Stated as a limit rather than a claim**: the *order* is guaranteed structurally (the coordinator
+emits `.report` before it calls either read, on one task, with no concurrency) and confirmed by this
+measurement, but **no test pins the ordering itself** — the suite proves the early report is the one
+in the outcome, and that a global failure starts no read at all, not that `.report` precedes the first
+chunk. That gap predates this change and is unchanged by it.
+
+## 15.8 The results did not change
+
+Task 4.3, checked on **real files** rather than on a scripted chunk sequence: for each format the
+production (shared) outcome was compared against the pre-change outcome — `SpectrogramGeneration` and
+`SignalLevelMetricsGeneration`, each with its own decoder, over the same file — with `==` on the whole
+outcome.
+
+| format | spectrogram | signal level metrics |
+| --- | --- | --- |
+| WAV | identical | identical |
+| FLAC | identical | identical |
+| AAC | identical | identical |
+
+## 15.9 The number of reads, counted rather than assumed
+
+The real coordinator was run over a real file with the real adapters wrapped in counters:
+
+```
+decodersMade=1  decodeCalls=1  waveformGenerators=1  waveformReads=1  totalSampleReads=2
+```
+
+**Two sample reads, exactly as designed** — the waveform's own, and the shared one. No hidden third
+decoder exists: `makeDecoder` is constructed at exactly one call site in the coordinator, and the
+property reader opens no samples.
+
+## 15.10 Memory does not scale with duration
+
+Structural audit first — nothing changed since §8: no PCM is stored, no array grows with duration, the
+chunk is dropped after the callback, `SpectrogramAccumulator` retains `O(fftSize × channels)` of
+pending plus a grid **capped at 1 024 × 512** whatever the file's length,
+`SignalLevelMetricsAccumulator` retains five totals per channel, and the shared pass adds no queue —
+it holds two accumulators and two optional fault strings.
+
+Measured against that audit, with the process footprint sampled **at every chunk** during the read:
+
+| audio | chunks | peak footprint during the read |
+| --- | --- | --- |
+| 1 min FLAC | 646 | 17 MB |
+| 10 min FLAC | 6 460 | 22 MB |
+
+Ten times the audio costs 5 MB more, not ten times more. For reference, the buffering alternative
+(option D, §4) would have needed **212 MB** for the ten-minute file alone.
+
+## 15.11 Anomalies, and what was done about them
+
+Nothing was discarded. All 6 runs per cell are in the medians above, and the choice of statistic —
+median of paired differences — is what absorbs the noise instead of deleting it.
+
+- **AAC Release drifted between passes** (baseline 2.51–2.56 s in pass 1, 2.27–2.34 s in pass 2). Taken
+  as unpaired medians this reads as 89.6 % recovery; paired within each run it is 98 %. The drift moves
+  both sides of the comparison together, which is precisely why the paired statistic is the one
+  reported.
+- **The first run of a pass is occasionally slow** (WAV Release 0.891 s, FLAC Debug 6.980 s, both ≈ 10–14 %
+  above their median) despite the discarded warm-up. Kept, and visible in the spreads.
+- **`decode-only` is the noisiest cell** (cv up to 7.4 %), being the shortest measurement.
+
+## 15.12 Verdict
+
+**The saving reproduces against production code.** One redundant decode was removed and one decode's
+worth of time disappeared — 0.06 s (WAV), 0.73 s (FLAC), 0.56 s (AAC) in Release, and 0.69 / 1.39 /
+1.10 s in Debug — with the results unchanged value for value, the report still first, memory still
+flat in duration, and no cost appearing anywhere else. Group 4's stop rule did not fire.
+
+What remains untested here, and is deliberately not claimed: the **second** redundant decode, which
+only exists once true peak is wired as a third consumer in `add-true-peak-measurement` group 6.
