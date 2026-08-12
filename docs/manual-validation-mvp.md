@@ -80,6 +80,13 @@ The **spectrogram's** manual validation (change `add-static-spectrogram-visualiz
 **deliberately deferred**, and the section below states exactly what that leaves standing and what it
 does not.
 
+The **true peak's** validation (change `add-true-peak-measurement`, task 10.2) **passed** on a
+confirmed-fresh instance launched by executable path, on an analytic fixture whose waveform crosses full
+scale **between** samples: *Peak sample* −1.43 dBFS, *Clipped samples* 0 and *True peak* +1.58 dBTP were
+seen together, with no warning or diagnosis attached, and the exported document carried the value
+linearly. The section at the end of this document records it, including that VoiceOver was not
+exercised.
+
 The **shared PCM read's** validation (change `add-shared-pcm-read`, task 5.2) **passed** on a
 confirmed-fresh instance over two real files, one uncompressed and one compressed: report, waveform,
 spectrogram and signal levels all present and unchanged, the replacement of one file by another clean,
@@ -833,3 +840,72 @@ it.
   is new to evaluate.
 - The evidence is screenshots plus the observer's answers, not an instrumented recording; the ordering
   and timing claims above rest on the measurements in the spike's §15, not on this pass.
+
+## True peak — passed, including the case the measurement exists for (2026-08-12)
+
+Change `add-true-peak-measurement`, task 10.2, and the second half of **ADR-0019**'s own promotion
+criterion. Recorded here because the first half — agreement with an independent meter — is evidence a
+machine can gather, and this one is not.
+
+### Process identity
+
+Task 10.2 asks for an instance launched **by executable path, never `open`**, and that is what happened:
+the app was rebuilt, every reachable `AudioInspector` process was stopped, and the freshly built binary
+was started directly from
+`…/Build/Products/Debug/AudioInspector.app/Contents/MacOS/AudioInspector`, confirming a new PID. The
+unkillable process from 2026-08-10 that this document already blames for a false defect is **still
+alive** and still cannot be terminated from an unattended session; it holds no window, and launching by
+path is immune to it in a way `open` is not.
+
+### The fixture, and why it is generated rather than chosen
+
+A real music file would prove nothing in particular: whether its waveform crosses full scale between
+samples is an accident of that master. The fixture is therefore **analytic** — a 10 s, 44.1 kHz, float
+WAV of a tone at a quarter of the sample rate, shifted an eighth of a cycle so every stored sample lands
+at `amplitude/√2`, with the second channel 6 dB below the first so the per-channel breakdown carries
+information. Its continuous maximum is exactly its amplitude, which is what makes the expected answer
+knowable in advance rather than merely plausible. It is generated, measured and deleted; no audio binary
+enters the repository.
+
+### What was observed on screen
+
+| | Observed |
+| --- | --- |
+| Peak sample | **−1.43 dBFS** — below full scale |
+| Clipped samples | **0** |
+| True peak | **+1.58 dBTP** — above full scale |
+| Per channel | `Channel 1: +1.58 dBTP · Channel 2: −4.44 dBTP` |
+| Method | *"Estimated by reconstructing the waveform between the stored samples, at 8× oversampling with a polyphase FIR reconstruction filter."* |
+
+**That row is the whole point of the measurement, seen rather than argued**: a file with no clipped
+sample whatsoever, whose waveform nonetheless rises above full scale between the samples that were
+stored. The two facts sit beside each other and neither is presented as a consequence of the other.
+
+Also confirmed by eye: the report, waveform, signal levels, true peak and spectrogram all present, none
+stuck loading and none blanking another; **no warning, no colour, no badge and no diagnosis** on a
+positive value; no claim of conformance to any standard; and the section holding its layout in light,
+dark and at different window sizes.
+
+### The exported document
+
+Exported from that same inspection and read in full. `schemaVersion` 1; `measurements.truePeak` beside
+`measurements.signalLevels`; `overall` **1.1999318599700928** — linear, where the screen shows
+`+1.58 dBTP`, which is exactly the separation the contract requires; channels linear with their frame
+counts; `"method": {"filter": "polyphase_fir_v1", "oversamplingFactor": 8}`. No path, no URL, no
+bookmark, no lifecycle state, and no warning invented by the measurement — the three warnings present
+are pre-existing property-level ones about the container and the bitrates.
+
+**Reproducibility** was checked in a stronger form than exporting twice from one session: the value in
+the document is **bit-identical** to what an independent run of the same pipeline produced through a
+separate harness, on the same file, in a different process.
+
+### Limits of this pass
+
+- One machine, one fixture class (smooth at its boundaries, 44.1 kHz).
+- **VoiceOver was not exercised.** The known traversal gap recorded earlier in this document — interactive
+  VoiceOver reaching only the export and file-picking actions, never the report's contents — is
+  unchanged and untested here; this change adds a section to that same scrolling area, so it inherits the
+  gap rather than fixing or worsening it. ADR-0019's criterion asks for a person looking at the surface,
+  which happened; it does not ask for VoiceOver, and none is claimed.
+- Screen Recording and Accessibility remain denied to the session that drove the build, so there is no
+  screenshot and no scripted traversal — the observations above are a person's, reported back.
