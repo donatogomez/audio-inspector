@@ -108,7 +108,7 @@ struct SignalLevelMetricsFlowStateTests {
         #expect(shown.report == action.report)
         #expect(shown.signalLevelMetrics == .loading, "the report was withheld or the state fabricated")
 
-        action.finish(.inspected(action.report, waveform: .unavailable, spectrogram: .unavailable, signalLevelMetrics: .unavailable))
+        action.finish(.inspected(action.report, waveform: .unavailable, spectrogram: .unavailable, signalLevelMetrics: .unavailable, truePeak: .unavailable))
         await running.value
     }
 
@@ -131,7 +131,7 @@ struct SignalLevelMetricsFlowStateTests {
         #expect(shown.signalLevelMetrics == .available(measured))
         #expect(shown.report.status == .completed, "the report was disturbed")
 
-        action.finish(.inspected(action.report, waveform: .unavailable, spectrogram: .unavailable, signalLevelMetrics: .available(measured)))
+        action.finish(.inspected(action.report, waveform: .unavailable, spectrogram: .unavailable, signalLevelMetrics: .available(measured), truePeak: .unavailable))
         await running.value
     }
 
@@ -153,7 +153,7 @@ struct SignalLevelMetricsFlowStateTests {
         #expect(shown.signalLevelMetrics == .failed(message: "boom"))
         #expect(shown.report.status == .completed, "a measurement failure degraded the inspection")
 
-        action.finish(.inspected(action.report, waveform: .unavailable, spectrogram: .unavailable, signalLevelMetrics: .failed(message: "boom")))
+        action.finish(.inspected(action.report, waveform: .unavailable, spectrogram: .unavailable, signalLevelMetrics: .failed(message: "boom"), truePeak: .unavailable))
         await running.value
     }
 
@@ -174,7 +174,7 @@ struct SignalLevelMetricsFlowStateTests {
         #expect(presentation(of: model)?.signalLevelMetrics == .loading, "cancellation was rendered as a state")
         #expect(SignalLevelMetricsState(.cancelled) == nil)
 
-        action.finish(.inspected(action.report, waveform: .unavailable, spectrogram: .unavailable, signalLevelMetrics: .cancelled))
+        action.finish(.inspected(action.report, waveform: .unavailable, spectrogram: .unavailable, signalLevelMetrics: .cancelled, truePeak: .unavailable))
         await running.value
     }
 
@@ -202,14 +202,17 @@ struct SignalLevelMetricsFlowStateTests {
         // The first operation now finishes, late. Nothing of it may reach the second's presentation.
         first.deliver(signalLevelMetrics: .available(metrics()))
         await Task.yield()
-        first.finish(.inspected(first.report, waveform: .unavailable, spectrogram: .unavailable, signalLevelMetrics: .available(metrics())))
+        first.finish(.inspected(
+            first.report, waveform: .unavailable, spectrogram: .unavailable,
+            signalLevelMetrics: .available(metrics()), truePeak: .unavailable
+        ))
         await Task.yield()
 
         let shown = try #require(presentation(of: model))
         #expect(shown.report.file.displayName == "second", "a stale operation replaced the current report")
         #expect(shown.signalLevelMetrics == .loading, "a stale reading landed on the current operation")
 
-        second.finish(.inspected(second.report, waveform: .unavailable, spectrogram: .unavailable, signalLevelMetrics: .unavailable))
+        second.finish(.inspected(second.report, waveform: .unavailable, spectrogram: .unavailable, signalLevelMetrics: .unavailable, truePeak: .unavailable))
         await secondRun.value
         await firstRun.value
     }

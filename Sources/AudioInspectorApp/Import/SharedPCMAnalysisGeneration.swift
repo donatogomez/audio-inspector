@@ -9,11 +9,16 @@ import FeatureImport
 /// It is **not** a domain aggregate and never becomes one. It carries no value of its own — no combined
 /// status, no shared error, no "the analyses succeeded" — because nothing downstream should be able to
 /// ask a question about the analyses *together*. The coordinator destructures it immediately and emits
-/// the same two updates it always emitted, so presentation, flow state and export never learn that the
-/// read is shared.
+/// the same three updates it would have emitted from three separate reads, so presentation, flow state
+/// and export never learn that the read is shared.
+///
+/// **A third analysis was added by adding a field**, which is the property the design claimed for this
+/// shape and is now demonstrated rather than asserted: no protocol, no generic machinery, no widening
+/// of an existing analysis.
 struct SharedPCMAnalysisOutcome {
     let spectrogram: SpectrogramOutcome
     let signalLevelMetrics: SignalLevelMetricsOutcome
+    let truePeak: TruePeakOutcome
 }
 
 /// Reads a file's PCM **once** and folds every chunk into several analyses, each of which keeps its own
@@ -34,7 +39,7 @@ struct SharedPCMAnalysisOutcome {
 ///   other consumer settles exactly as it would have on its own. Nothing about one consumer's state is
 ///   readable by another — they share a loop, not a result.
 /// - **The read ends when nobody needs it**, never when *someone* is done: `.stop` is returned only
-///   once every consumer has failed, or on cancellation. Today both consumers need every sample, so
+///   once every consumer has failed, or on cancellation. Today all three consumers need every sample, so
 ///   that condition is not reachable through normal completion — it is written so the contract does not
 ///   quietly depend on that staying true.
 /// - **A decoder failure is not a consumer failure.** No more PCM will exist, so every unfinished
@@ -47,8 +52,9 @@ struct SharedPCMAnalysisOutcome {
 /// them to the folds, take the results", so a port would have one implementer and one consumer. And the
 /// consumers are held **concretely** rather than behind a `PCMConsumer` abstraction: their `finish()`
 /// results are unrelated types with unrelated optionality rules, so a protocol would need an associated
-/// type and would buy generic machinery for two known consumers (`design.md` §7). A third consumer adds
-/// a field and a call, not an abstraction.
+/// type and would buy generic machinery for known consumers (`add-shared-pcm-read` design §7). That
+/// design said a third consumer would cost a field and a call rather than an abstraction; true peak is
+/// that third consumer, and it cost exactly that.
 ///
 /// ## It opens nothing
 ///
@@ -112,13 +118,17 @@ struct SharedPCMAnalysisGeneration {
             // by the callback ends the decode *normally*, so without this each fault would arrive as a
             // description and be turned into a model of whatever had been read so far.
             if cancelled {
-                return SharedPCMAnalysisOutcome(spectrogram: .cancelled, signalLevelMetrics: .cancelled)
+                return SharedPCMAnalysisOutcome(
+                    spectrogram: .cancelled, signalLevelMetrics: .cancelled, truePeak: .cancelled
+                )
             }
             guard let stream else {
                 // The file exposed no usable frame count, so there was nothing to size an analysis
                 // against. An absence caused by the file, never dressed up as a failure — and it is
                 // every consumer's absence, because none of them got a stream.
-                return SharedPCMAnalysisOutcome(spectrogram: .unavailable, signalLevelMetrics: .unavailable)
+                return SharedPCMAnalysisOutcome(
+                    spectrogram: .unavailable, signalLevelMetrics: .unavailable, truePeak: .unavailable
+                )
             }
             return consumers.finish(stream: stream)
         } catch {
@@ -126,14 +136,17 @@ struct SharedPCMAnalysisGeneration {
             // reports its own outcome rather than a shared one — a caller reading one result must not
             // have to consult another to learn what happened.
             if error.code == .cancelled {
-                return SharedPCMAnalysisOutcome(spectrogram: .cancelled, signalLevelMetrics: .cancelled)
+                return SharedPCMAnalysisOutcome(
+                    spectrogram: .cancelled, signalLevelMetrics: .cancelled, truePeak: .cancelled
+                )
             }
             // Human, neutral, and carrying no path, no framework text and no stable code — those stay
             // where they are meaningful (ADR-0011). Each analysis keeps the wording it had when it read
             // the file alone, so nothing downstream can tell the difference.
             return SharedPCMAnalysisOutcome(
                 spectrogram: .failed(message: "The spectrogram for this file could not be produced."),
-                signalLevelMetrics: .failed(message: "The signal level metrics for this file could not be produced.")
+                signalLevelMetrics: .failed(message: "The signal level metrics for this file could not be produced."),
+                truePeak: .failed(message: "The true peak for this file could not be measured.")
             )
         }
     }
@@ -152,13 +165,17 @@ private extension SharedPCMAnalysisGeneration {
     struct Consumers {
         private var spectrogram: SpectrogramAccumulator?
         private var signalLevelMetrics: SignalLevelMetricsAccumulator?
+        private var truePeak: TruePeakAccumulator?
         private var spectrogramFault: String?
         private var signalLevelMetricsFault: String?
+        private var truePeakFault: String?
         private var prepared = false
 
         /// Whether no consumer can still use a chunk. The read ends only on this, never on one
         /// consumer being done.
-        var allFailed: Bool { spectrogramFault != nil && signalLevelMetricsFault != nil }
+        var allFailed: Bool {
+            spectrogramFault != nil && signalLevelMetricsFault != nil && truePeakFault != nil
+        }
 
         /// Builds each accumulator once, from the one stream description the read reports.
         ///
@@ -179,12 +196,28 @@ private extension SharedPCMAnalysisGeneration {
             if signalLevelMetrics == nil {
                 signalLevelMetricsFault = "The file describes a stream no analysis can be built for."
             }
+            // The methodology is the accumulator's own and is not configurable: 8× oversampling and
+            // `polyphase_fir_v1` are constants it owns and records inside the measurement it returns
+            // (ADR-0006, ADR-0019). Nothing here chooses them, passes them, or repeats them — the only
+            // thing this composition knows is how many channels the stream has, exactly as for the
+            // other two.
+            truePeak = TruePeakAccumulator(channelCount: stream.channelCount)
+            if truePeak == nil {
+                truePeakFault = "The file describes a stream no analysis can be built for."
+            }
         }
 
         /// Hands the same chunk to every consumer still in the read.
+        ///
+        /// **The same value, not a copy per consumer**: `PCMChunk` is an immutable struct over
+        /// copy-on-write arrays, so a third consumer costs a few more words of struct and not one more
+        /// sample. Nothing here converts, re-lays-out or re-materialises the audio for true peak — its
+        /// 8× reconstruction is evaluated phase by phase inside the accumulator and never built as a
+        /// buffer.
         mutating func accumulate(_ chunk: PCMChunk) {
             if spectrogramFault == nil { spectrogram?.accumulate(chunk) }
             if signalLevelMetricsFault == nil { signalLevelMetrics?.accumulate(chunk) }
+            if truePeakFault == nil { truePeak?.accumulate(chunk) }
         }
 
         /// Faults every consumer at once. Used only when the fault is in the audio itself, which none
@@ -192,6 +225,7 @@ private extension SharedPCMAnalysisGeneration {
         mutating func failAll(with message: String) {
             if spectrogramFault == nil { spectrogramFault = message }
             if signalLevelMetricsFault == nil { signalLevelMetricsFault = message }
+            if truePeakFault == nil { truePeakFault = message }
         }
 
         /// Each consumer's own result, computed independently of the others.
@@ -202,7 +236,8 @@ private extension SharedPCMAnalysisGeneration {
         func finish(stream: PCMStreamDescription) -> SharedPCMAnalysisOutcome {
             SharedPCMAnalysisOutcome(
                 spectrogram: finishSpectrogram(stream: stream),
-                signalLevelMetrics: finishSignalLevelMetrics(stream: stream)
+                signalLevelMetrics: finishSignalLevelMetrics(stream: stream),
+                truePeak: finishTruePeak(stream: stream)
             )
         }
 
@@ -226,6 +261,30 @@ private extension SharedPCMAnalysisGeneration {
             )
             guard let model = accumulator?.finish() else {
                 return .failed(message: "The signal level metrics for this file could not be produced.")
+            }
+            return .available(model)
+        }
+
+        /// True peak's own result.
+        ///
+        /// **This is the one consumer whose `finish()` can fail on audio the port accepts**, and the
+        /// difference is arithmetic rather than care: `PCMChunk` refuses `NaN` and infinity at the
+        /// boundary, but it keeps finite samples of any magnitude, and a 48-tap convolution over
+        /// finite-but-enormous values can overflow to a value the domain model refuses. The accumulator
+        /// says so by returning `nil`, and it becomes **true peak's** failure and nobody else's — the
+        /// spectrogram and the signal level metrics settle from the same chunks exactly as they would
+        /// have.
+        ///
+        /// The accumulator is a `var` because its `finish()` flushes the tail through the trailing
+        /// zero-extension, which mutates. It is a struct, so this works on this function's own copy and
+        /// leaves the stored one alone.
+        private func finishTruePeak(stream: PCMStreamDescription) -> TruePeakOutcome {
+            if let truePeakFault { return .failed(message: truePeakFault) }
+            guard var accumulator = truePeak ?? TruePeakAccumulator(channelCount: stream.channelCount) else {
+                return .failed(message: "The true peak for this file could not be measured.")
+            }
+            guard let model = accumulator.finish() else {
+                return .failed(message: "The true peak for this file could not be measured.")
             }
             return .available(model)
         }

@@ -138,6 +138,32 @@ enum HumanFormat {
         return "\(formatted) dBFS"
     }
 
+    /// A linear amplitude as **dBTP** — the unit a true peak is quoted in, and deliberately not the unit
+    /// beside it.
+    ///
+    /// The arithmetic is identical to `decibelsFullScale`, and the unit is not: dBFS describes the
+    /// largest **stored sample**, dBTP an estimate of the reconstructed waveform **between** samples.
+    /// They are normally different numbers produced by different methods, so showing one of them under
+    /// the other's unit would quietly claim a measurement that was never made. The two formatters stay
+    /// separate for that reason alone — not because the maths differs.
+    ///
+    /// Reference points, pinned by test: `1.0` → `0.00 dBTP`, `0.5` → `-6.02 dBTP`, `1.1` → `+0.83 dBTP`
+    /// (**explicitly signed and never clamped** — a reconstruction that genuinely exceeds full scale is
+    /// the fact this measurement exists to reveal), and exact silence floors at the project's own
+    /// `Spectrogram.floorDecibels` rather than showing `log10(0)`'s `-∞`.
+    ///
+    /// **A value this formatter cannot be given is `nil`.** "Not computable" is the caller's word for a
+    /// channel that carried no samples, and it never arrives here as a fabricated zero.
+    static func decibelsTruePeak(_ linearAmplitude: Float) -> String {
+        let magnitude = Double(abs(linearAmplitude))
+        let decibels = magnitude > 0 ? 20 * log10(magnitude) : -Double.infinity
+        let floored = max(Double(Spectrogram.floorDecibels), decibels)
+        let formatted = floored.formatted(
+            .number.precision(.fractionLength(2)).sign(strategy: .always(includingZero: false)).locale(locale)
+        )
+        return "\(formatted) dBTP"
+    }
+
     /// A linear, signed value with no unit — DC offset has no good behaviour on a decibel scale, since
     /// it can be negative and sits naturally near zero. Four decimal places: `Float`'s own roughly seven
     /// significant digits give a comfortable margin at this magnitude, and four places already resolve

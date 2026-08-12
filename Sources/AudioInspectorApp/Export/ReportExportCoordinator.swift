@@ -23,7 +23,11 @@ struct ReportExportCoordinator {
         self.chooseDestination = chooseDestination
     }
 
-    func export(_ report: InspectionReport, signalLevelMetrics: SignalLevelMetrics?) async -> ExportOutcome {
+    func export(
+        _ report: InspectionReport,
+        signalLevelMetrics: SignalLevelMetrics?,
+        truePeak: TruePeakMeasurement?
+    ) async -> ExportOutcome {
         let suggestedName = SuggestedExportName.forReport(report)
 
         // Ask for the destination first: on cancellation, nothing is encoded or written.
@@ -33,7 +37,7 @@ struct ReportExportCoordinator {
 
         let data: Data
         do {
-            data = try exporter.export(report, signalLevelMetrics: signalLevelMetrics)
+            data = try exporter.export(report, signalLevelMetrics: signalLevelMetrics, truePeak: truePeak)
         } catch {
             return .encodingFailed // encoding failure is distinct from a write failure
         }

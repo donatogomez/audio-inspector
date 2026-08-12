@@ -115,6 +115,13 @@ measurement is byte-identical to one exported before this object existed. Its ab
 warning and never changes `inspectionStatus`; a measurement is orthogonal to whether the file's
 metadata could be read.
 
+It currently holds two **siblings** — `signalLevels` and `truePeak` — and **each is independently
+omitted** when its own measurement does not exist. All four combinations are therefore representable
+and none is faked: either alone, both, or neither (in which case `measurements` itself is absent).
+There is deliberately **no aggregate** over them: nothing says "the measurements succeeded", because
+each answers only for itself. A new measurement adds a sibling key, which is additive and needs no
+version bump.
+
 ### `measurements.signalLevels`
 
 Peak, RMS, DC offset and clipped-sample count, overall and per channel — the wire form of the domain's
@@ -159,6 +166,66 @@ Example, added to the realistic export below when signal level metrics are avail
 Pinned by `JSONReportExportMeasurementsTests` (overall/per-channel/multichannel shape, the
 not-computable-vs-zero distinction, values beyond full scale, determinism, and that the key is fully
 absent — not `null` — when there is nothing to report).
+
+### `measurements.truePeak`
+
+The maximum of the waveform **reconstructed between** the stored samples — the wire form of the
+domain's `TruePeakMeasurement`. Present only when a measurement was actually produced (`loading`,
+`unavailable`, `failed` and a cancelled operation all collapse to the key being absent before export is
+reached: this document describes measurements, never lifecycle).
+
+**It is a different measurement from `signalLevels.peakSample`, not a refinement of it.** That value is
+the largest **stored** sample, exact and directly reduced; this one is an estimate produced by an
+interpolation filter, and it is normally larger. Neither is derived from the other, and neither implies
+anything about `clippedSampleCount`: a file can have zero clipped samples and a true peak above `1.0`,
+which is the inter-sample case this measurement exists to reveal.
+
+**Values are the domain's own linear amplitude, never dBTP.** The decibel form (`20 · log10(value)`,
+shown as `dBTP`) is a presentation concern applied only in the app's UI layer — the same rule
+`signalLevels` follows for dBFS. No unit string travels with the numbers; this contract states the unit.
+
+| Field | Type | Null? | Notes |
+| --- | --- | --- | --- |
+| `overall` | number | yes | Linear amplitude, **not** an object — there is one number here. `null` iff every channel has `sampleCount == 0` ("not computable", never a fabricated `0`). Can exceed `1.0` and is never clamped: a reconstruction above full scale is the fact this measurement exists to report. |
+| `channels` | array | no | One entry per channel, in the stream's own order. Channels are identified by position only — no name, no layout. |
+| `channels[].sampleCount` | integer | no | Frames this channel's measurement covered. `0` **iff** `truePeak` is `null`, in both directions. |
+| `channels[].truePeak` | number | yes | Linear amplitude, same rules as `overall`. A genuinely silent channel that *was* measured reports a real `0`; a channel that carried no samples reports `null`. |
+| `method.oversamplingFactor` | integer | no | Points per input sample the reconstruction was evaluated at (`8` for the current methodology). |
+| `method.filter` | string | no | Stable identifier of the reconstruction filter (`"polyphase_fir_v1"`). |
+
+`method` sits **inside** `truePeak` rather than at `measurements` level: it describes this measurement,
+and hoisting it would imply it covers `signalLevels`, which has no such methodology. Its two fields
+come from the measurement's own record, so a document always describes the methodology that actually
+ran.
+
+**The filter is an identity, not a recipe.** The tap count, window, cutoff and coefficients are
+deliberately absent: a consumer is told *which* methodology produced the number, not how to re-run one.
+**No conformance to a standard is claimed** — this filter was designed to recorded parameters and
+validated against analytic ground truth and an independent R128 implementation, not built from
+ITU-R BS.1770 Annex 2's own coefficients (ADR-0019 §6) — so no `bs1770`, `ebu`, `r128` or `compliant`
+token appears anywhere in the document.
+
+Example, beside `signalLevels` when both are available:
+
+```json
+"measurements": {
+  "truePeak": {
+    "overall": 1.087,
+    "channels": [
+      { "sampleCount": 13230000, "truePeak": 1.087 },
+      { "sampleCount": 13230000, "truePeak": 0.932 }
+    ],
+    "method": { "oversamplingFactor": 8, "filter": "polyphase_fir_v1" }
+  }
+}
+```
+
+Pinned by `JSONReportExportTruePeakTests` (linear unit with no dBTP anywhere, the zero-vs-null
+distinction, values beyond full scale, channel order, exact key sets, the method following the
+measurement rather than a constant, coexistence with `signalLevels` as siblings, byte-identity when
+absent, determinism, and `schemaVersion` staying `1`) and by
+`EndToEndFlowTests.theRealTruePeakPathReachesTheExportedDocument`, which drives a real file through the
+real decode and asserts the exported number is the measured one.
 
 ## Stable codes
 

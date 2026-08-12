@@ -48,7 +48,7 @@ struct WaveformReportIsolationTests {
             makeWaveformGenerator: { _ in FakeWaveformGenerating(waveform) }
         )
         let outcome = await coordinator.inspect(url, onUpdate: { _ in })
-        guard case let .inspected(report, waveform, _, _) = outcome else {
+        guard case let .inspected(report, waveform, _, _, _) = outcome else {
             throw InspectionDidNotComplete()
         }
         return (report, waveform)

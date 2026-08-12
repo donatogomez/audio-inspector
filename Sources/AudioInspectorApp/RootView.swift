@@ -115,6 +115,20 @@ public struct RootView: View {
         }
     }
 
+    /// Translates the flow's true peak state into the report surface's own, in the shape the three
+    /// analyses before it already established.
+    ///
+    /// Total by construction, with no default case — every state the flow can hold has exactly one
+    /// presentation, and none is invented.
+    nonisolated static func truePeakPresentation(for state: TruePeakState) -> TruePeakPresentation {
+        switch state {
+        case .loading: .loading
+        case let .available(measurement): .measurement(measurement)
+        case .unavailable: .absent
+        case let .failed(message): .failed(message: message)
+        }
+    }
+
     /// The inspected report plus the way back to picking another file. `ReportView` is used exactly as
     /// group 5 shipped it — the export action is passed straight through, unchanged.
     /// The comparison's own controls, beside the existing way to pick another file.
@@ -163,6 +177,7 @@ public struct RootView: View {
                 waveform: Self.waveformPresentation(for: presentation.waveform),
                 spectrogram: Self.spectrogramPresentation(for: presentation.spectrogram),
                 signalLevelMetrics: Self.signalLevelMetricsPresentation(for: presentation.signalLevelMetrics),
+                truePeak: Self.truePeakPresentation(for: presentation.truePeak),
                 comparison: Self.comparisonPresentation(for: flow.comparison),
                 export: export
             )

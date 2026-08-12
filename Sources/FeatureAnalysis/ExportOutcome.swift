@@ -23,4 +23,4 @@ public enum ExportOutcome: Sendable, Equatable {
 /// level metrics are currently shown (`nil` when there is nothing to report — the Feature collapses
 /// loading/absent/failed itself before calling), and reacts to the returned `ExportOutcome`. It knows
 /// nothing about how the destination is chosen, written, or how a measurement becomes wire bytes.
-public typealias ReportExportAction = @MainActor (InspectionReport, SignalLevelMetrics?) async -> ExportOutcome
+public typealias ReportExportAction = @MainActor (InspectionReport, SignalLevelMetrics?, TruePeakMeasurement?) async -> ExportOutcome

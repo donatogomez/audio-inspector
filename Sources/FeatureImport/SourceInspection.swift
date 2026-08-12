@@ -11,13 +11,20 @@ import AudioInspectorDomain
 public enum SourceInspectionOutcome: Sendable, Equatable {
     /// The user dismissed the picker — **not** an error.
     case cancelled
-    /// A file was inspected; the report carries the outcome, including a global failure. All three
+    /// A file was inspected; the report carries the outcome, including a global failure. All four
     /// travel **beside** it, and whatever became of any of them never changes the report.
+    ///
+    /// **Four labelled payloads is the honest shape and also the last comfortable one.** Each analysis
+    /// genuinely settles on its own, so a combined value would be a lie; but a fifth would make this
+    /// case hard to read and hard to extend safely, and the pressure is worth naming rather than
+    /// discovering later. Introducing a container is a change of its own — it would touch every call
+    /// site in the flow — and doing it while wiring a new analysis would hide one change inside another.
     case inspected(
         InspectionReport,
         waveform: WaveformOutcome,
         spectrogram: SpectrogramOutcome,
-        signalLevelMetrics: SignalLevelMetricsOutcome
+        signalLevelMetrics: SignalLevelMetricsOutcome,
+        truePeak: TruePeakOutcome
     )
     /// The selection could not be turned into an inspectable file at all.
     case preparationFailed
@@ -38,6 +45,8 @@ public enum InspectionUpdate: Sendable {
     case spectrogram(SpectrogramOutcome)
     /// What became of the signal level metrics.
     case signalLevelMetrics(SignalLevelMetricsOutcome)
+    /// What became of the true peak measurement.
+    case truePeak(TruePeakOutcome)
 }
 
 /// Receives each part of an inspection as it settles, on the main actor.

@@ -20,6 +20,7 @@ enum InspectionReportMapper {
     static func envelope(
         for report: InspectionReport,
         signalLevelMetrics: SignalLevelMetrics?,
+        truePeak: TruePeakMeasurement?,
         generatedAt: Date,
         generator: ReportGenerator
     ) -> ReportEnvelopeDTO {
@@ -31,7 +32,7 @@ enum InspectionReportMapper {
             technicalProperties: technicalProperties(from: report),
             warnings: report.warnings.map(warning(from:)),
             inspectionStatus: status(from: report.status),
-            measurements: measurements(from: signalLevelMetrics)
+            measurements: measurements(from: signalLevelMetrics, truePeak: truePeak)
         )
     }
 
@@ -121,13 +122,46 @@ enum InspectionReportMapper {
 
     // MARK: - measurements (additive — DSP-derived, never metadata; ADR-0018)
 
-    /// `nil` when there is nothing to report — the resulting envelope omits `measurements` entirely
-    /// (`ReportEnvelopeDTO`'s own synthesized `Encodable` drops a `nil` optional key), so a report
-    /// exported without signal level metrics is byte-identical to one from before this capability
+    /// `nil` when there is **nothing at all** to report — the resulting envelope omits `measurements`
+    /// entirely (`ReportEnvelopeDTO`'s own synthesized `Encodable` drops a `nil` optional key), so a
+    /// report exported without any measurement is byte-identical to one from before these capabilities
     /// existed.
-    private static func measurements(from metrics: SignalLevelMetrics?) -> MeasurementsDTO? {
-        guard let metrics else { return nil }
-        return MeasurementsDTO(signalLevels: signalLevels(from: metrics))
+    ///
+    /// Each measurement is independently optional inside it, so adding true peak did not make signal
+    /// levels conditional on it or the other way round: a report with only one of them carries only
+    /// that one, and neither key is ever present as `null`.
+    private static func measurements(
+        from metrics: SignalLevelMetrics?,
+        truePeak measurement: TruePeakMeasurement?
+    ) -> MeasurementsDTO? {
+        guard metrics != nil || measurement != nil else { return nil }
+        return MeasurementsDTO(
+            signalLevels: metrics.map(signalLevels(from:)),
+            truePeak: measurement.map(truePeak(from:))
+        )
+    }
+
+    /// `Float` → `Double` for the wire only, exactly as `signalLevels` does, and **linear throughout**:
+    /// the dBTP conversion lives in `FeatureAnalysis` and this layer does not import it.
+    ///
+    /// The factor and the filter are read from the measurement's **own** recorded method rather than
+    /// from the accumulator's constants, so the document describes the measurement that actually
+    /// happened. Nothing about the filter's design is exported — the identifier is a stable name for a
+    /// methodology, not a recipe for re-running one.
+    private static func truePeak(from measurement: TruePeakMeasurement) -> TruePeakDTO {
+        TruePeakDTO(
+            overall: measurement.overallTruePeak.map(Double.init),
+            channels: measurement.channels.map { channel in
+                TruePeakChannelDTO(
+                    sampleCount: channel.sampleCount,
+                    truePeak: channel.truePeak.map(Double.init)
+                )
+            },
+            method: TruePeakMethodDTO(
+                oversamplingFactor: measurement.method.oversamplingFactor,
+                filter: measurement.method.filter.rawValue
+            )
+        )
     }
 
     /// `Float` → `Double` for the wire only; the domain keeps `Float` throughout (matching

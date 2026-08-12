@@ -105,8 +105,13 @@ struct SourceInspectionCoordinator {
             onUpdate(.waveform(.unavailable))
             onUpdate(.spectrogram(.unavailable))
             onUpdate(.signalLevelMetrics(.unavailable))
+            onUpdate(.truePeak(.unavailable))
             return .inspected(
-                report, waveform: .unavailable, spectrogram: .unavailable, signalLevelMetrics: .unavailable
+                report,
+                waveform: .unavailable,
+                spectrogram: .unavailable,
+                signalLevelMetrics: .unavailable,
+                truePeak: .unavailable
             )
         }
 
@@ -117,24 +122,29 @@ struct SourceInspectionCoordinator {
         let waveformOutcome = await waveform(for: reference, at: url)
         onUpdate(.waveform(waveformOutcome))
 
-        // **One read, several analyses.** The spectrogram and the signal level metrics used to decode
-        // the file once each; they now share a single pass, because a redundant read of a compressed
-        // file costs about a quarter of an inspection (ADR-0020,
+        // **One read, several analyses.** The spectrogram, the signal level metrics and the true peak
+        // each used to mean a decode of their own; they share a single pass, because a redundant read of
+        // a compressed file costs about a quarter of an inspection (ADR-0020,
         // `docs/spikes/2026-08-12-shared-pcm-analysis-architecture.md`).
         //
-        // Nothing about what they *are* changed. Each still has its own accumulator, its own failure
-        // and its own outcome, each is still emitted as its own update, and one failing leaves the
-        // other exactly as it would have been — which is the independence ADR-0016 protects, now held
-        // by construction rather than by separate decoders.
+        // **True peak is the third consumer, and it added no read.** That is the whole point of the
+        // shape: `add-true-peak-measurement`'s group 5 measured a fourth decode at 0.47–0.53 s for a
+        // compressed file and refused it, and this is what it was waiting for. Nothing about what any
+        // analysis *is* changed. Each still has its own accumulator, its own failure and its own
+        // outcome, each is still emitted as its own update, and one failing leaves the others exactly as
+        // they would have been — the independence ADR-0016 protects, held by construction rather than
+        // by separate decoders.
         let shared = await sharedAnalyses(for: reference, at: url)
         onUpdate(.spectrogram(shared.spectrogram))
         onUpdate(.signalLevelMetrics(shared.signalLevelMetrics))
+        onUpdate(.truePeak(shared.truePeak))
 
         return .inspected(
             report,
             waveform: waveformOutcome,
             spectrogram: shared.spectrogram,
-            signalLevelMetrics: shared.signalLevelMetrics
+            signalLevelMetrics: shared.signalLevelMetrics,
+            truePeak: shared.truePeak
         )
     }
 

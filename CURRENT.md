@@ -16,24 +16,33 @@
 >   session protocol in `CLAUDE.md`).
 
 ---
-**Shared PCM is done: merged and archived.** An inspection reads the file **twice**, not three times —
-the spectrogram and the signal level metrics are folded from **one** decode, each keeping its own
-accumulation, its own failure and its own outcome. The waveform still reads for itself, deliberately:
-it uses a different port and its accumulator needs frame position, so migrating it is its own change
-and remains the obvious next reduction. `AudioDecoding` and `PCMChunk` were not touched, and the
-capability that says a file's samples are read once now lives in the canonical specs.
+**Focus:** `add-true-peak-measurement` is **finished and ready to publish.** True peak exists end to
+end: measured from the shared PCM read with **no decode of its own**, shown in **dBTP** with its method
+stated in words, exported **linearly** under `measurements.truePeak`, and demonstrated to be
+independent of the clipped-sample count.
 
-**ADR-0020 is `Accepted`** — *independent analyses* is the invariant, *independent decodes* was only the
-implementation ADR-0016 chose while a decode looked free. Its `Promotion` section carries the evidence
-and, honestly, the one place the evidence is thinner than promised.
+**ADR-0019 is `Accepted`**, promoted on its own two conditions and nothing else. The oracle agreement
+was demonstrated against the **production path** — a gate that drives the real decoder and the shared
+read rather than the accumulator in isolation — at **0.0005 dB** against FFmpeg where the pinned
+tolerance is 0.05 dB. And a person saw the surface: on an analytic fixture whose waveform crosses full
+scale *between* samples, *Peak sample* −1.43 dBFS, *Clipped samples* 0 and *True peak* +1.58 dBTP were
+read together, with no warning, colour or diagnosis attached. Its `Promotion` section records what the
+evidence does **not** cover — the 192 kHz exclusion, the smooth-boundary signal class, the standing
+refusal to claim BS.1770 conformance, and the finding that is still not authorised.
 
-**True peak is the next thread, and it is no longer blocked.** Its work sits on its own branch: the
-model, the accumulator, the methodology and their tests are finished, ADR-0019 is still `Proposed`, and
-its groups 1–5 are closed. Only its group 6 remained, and it was waiting for exactly one thing — a
-shared read existing in `main` — which now exists. The step is to reconcile that branch with `main` and
-then wire true peak as a **third consumer** of the shared read: no fourth decode, and no redesign of an
-accumulator or a model that is already finished. If wiring it ever required changing the accumulator,
-that is evidence the architecture is wrong and has to be justified before proceeding.
+**The spike package is deleted**, its own criterion met; the durable report stays in `docs/spikes/`.
+
+**What this change deliberately does not contain**: no LUFS, no loudness range, no crest factor, no
+significant maximum frequency, no `findings`, no inter-sample-clipping flag, no score, no new decoder
+and no external dependency. A positive true peak is a value, and turning it into a verdict needs a
+structure that does not exist yet.
+
+**One thing is inherited rather than fixed**: interactive VoiceOver still does not enter the report's
+contents — a gap this document's runbook has recorded since the waveform slice. True peak adds a section
+to that same area, so it neither worsens nor repairs it, and nothing here claims a VoiceOver pass.
+
+**Next step:** publish — push the branch and open the PR, then merge. **`openspec archive` runs only
+after the merge**; that is the one part of the task list still open, and it stays open on purpose.
 
 **Other open threads** (see `openspec list` for their real task counts, not restated here):
 `add-static-spectrogram-visualization` (manual validation battery deferred by product decision) and
