@@ -14,16 +14,18 @@ public struct ReportView: View {
     private let waveform: WaveformPresentation
     private let spectrogram: SpectrogramPresentation
     private let signalLevelMetrics: SignalLevelMetricsPresentation
+    private let truePeak: TruePeakPresentation
     private let comparison: ComparisonPresentation
     @State private var exportModel: ReportExportModel
 
-    /// All three visualisations are **required** parameters with no default. A default would let a
+    /// Every sample-based analysis is a **required** parameter with no default. A default would let a
     /// caller forget one and ship a report that silently shows nothing where a state belongs.
     public init(
         report: InspectionReport,
         waveform: WaveformPresentation,
         spectrogram: SpectrogramPresentation,
         signalLevelMetrics: SignalLevelMetricsPresentation,
+        truePeak: TruePeakPresentation,
         comparison: ComparisonPresentation = .none,
         export: @escaping ReportExportAction
     ) {
@@ -31,6 +33,7 @@ public struct ReportView: View {
         self.waveform = waveform
         self.spectrogram = spectrogram
         self.signalLevelMetrics = signalLevelMetrics
+        self.truePeak = truePeak
         self.comparison = comparison
         _exportModel = State(initialValue: ReportExportModel(action: export))
     }
@@ -44,6 +47,12 @@ public struct ReportView: View {
                 // together — the waveform shows it as a picture, these rows summarise it as numbers.
                 // The spectrogram, which concerns frequency rather than level, follows both.
                 signalLevelMetricsSection
+                // **Beneath the signal levels, above the spectrogram.** It belongs with them because it
+                // is amplitude, and after them because it is a different kind of amplitude: those rows
+                // summarise the samples as stored, this estimates what the waveform reaches *between*
+                // them. It is a section of its own rather than a fifth row up there, because it is
+                // produced by a different method and that method has to travel with it (ADR-0019).
+                truePeakSection
                 spectrogramSection
                 propertiesSection
                 // **After this file's own facts, before its warnings.** A comparison is a statement
@@ -123,6 +132,17 @@ public struct ReportView: View {
     private var signalLevelMetricsSection: some View {
         ReportSection(SignalLevelMetricsCopy.title) {
             SignalLevelMetricsSection(presentation: signalLevelMetrics)
+        }
+    }
+
+    // MARK: - True peak — what the waveform reaches between the samples
+
+    /// Present in **every** state, including when nothing was measured, so an absent or failed
+    /// measurement is a sentence rather than a gap the reader has to interpret — the same rule every
+    /// other analysis section already follows.
+    private var truePeakSection: some View {
+        ReportSection(TruePeakCopy.title) {
+            TruePeakSection(presentation: truePeak)
         }
     }
 
@@ -396,10 +416,24 @@ private extension SignalLevelMetricsPresentation {
     }
 }
 
+private extension TruePeakPresentation {
+    /// A stereo file whose reconstruction crosses full scale on one channel and not the other — the
+    /// case this measurement exists for, shown as the plain fact it is.
+    static var preview: TruePeakPresentation {
+        guard let method = TruePeakMethod(oversamplingFactor: 8, filter: .polyphaseFIRv1),
+              let left = TruePeakMeasurement.Channel(sampleCount: 13_230_000, truePeak: 1.087),
+              let right = TruePeakMeasurement.Channel(sampleCount: 13_230_000, truePeak: 0.932),
+              let measurement = TruePeakMeasurement(channels: [left, right], method: method) else {
+            return .absent
+        }
+        return .measurement(measurement)
+    }
+}
+
 #Preview {
     ReportView(
         report: .preview, waveform: .preview, spectrogram: .preview, signalLevelMetrics: .preview,
-        export: { _, _ in .succeeded }
+        truePeak: .preview, export: { _, _ in .succeeded }
     )
 }
 #endif
