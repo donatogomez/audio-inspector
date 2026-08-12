@@ -249,7 +249,7 @@ struct TruePeakMeasurementTests {
     func methodParticipatesInEquality() throws {
         let eightTimesMethod = try #require(TruePeakMethod(oversamplingFactor: 8, filter: .polyphaseFIRv1))
         let fourTimesMethod = try #require(TruePeakMethod(oversamplingFactor: 4, filter: .polyphaseFIRv1))
-        let measured = try [try channel(100, 0.9)]
+        let measured = [try channel(100, 0.9)]
         let eightTimes = try #require(TruePeakMeasurement(channels: measured, method: eightTimesMethod))
         let fourTimes = try #require(TruePeakMeasurement(channels: measured, method: fourTimesMethod))
         // The same number produced two ways is not the same measurement — which is the whole reason
