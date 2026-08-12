@@ -16,40 +16,24 @@
 >   session protocol in `CLAUDE.md`).
 
 ---
-**Focus:** `add-shared-pcm-read` is **finished and published, waiting on review and merge.** The
-spectrogram and the signal level metrics are produced from **one** PCM read instead of two; the
-waveform keeps its own, so an inspection reads the file twice rather than three times.
+**Shared PCM is done: merged and archived.** An inspection reads the file **twice**, not three times —
+the spectrogram and the signal level metrics are folded from **one** decode, each keeping its own
+accumulation, its own failure and its own outcome. The waveform still reads for itself, deliberately:
+it uses a different port and its accumulator needs frame position, so migrating it is its own change
+and remains the obvious next reduction. `AudioDecoding` and `PCMChunk` were not touched, and the
+capability that says a file's samples are read once now lives in the canonical specs.
 
-> **This line of work carries only the shared-PCM thread.** `add-true-peak-measurement` is a separate,
-> active thread on its own branch: its change, **ADR-0019**, `TruePeakMeasurement`, `TruePeakAccumulator`
-> and their tests are **not here**, so `openspec list` and `docs/adr/` will not show them, and the ADR
-> index has a gap where 0019 will land. **It stays blocked until shared PCM reaches `main`**, and then
-> resumes by wiring true peak as a third consumer of the shared read — not by redesigning anything it
-> already finished.
+**ADR-0020 is `Accepted`** — *independent analyses* is the invariant, *independent decodes* was only the
+implementation ADR-0016 chose while a decode looked free. Its `Promotion` section carries the evidence
+and, honestly, the one place the evidence is thinner than promised.
 
-**What holds this up, in one line each.** Independence is now a property of the composition rather than
-of separate decoders, and it is proved by tests that fail when it breaks — a consumer's failure, a
-producer's failure, and a cancellation forced deterministically while the read is provably mid-flight.
-The saving was re-measured against production code, not against the spike's harness, and one decode's
-worth of time disappears in every format and both build configurations. A person then looked at the
-real app on a confirmed-fresh instance, over a real uncompressed and a real compressed file, and found
-the surface unchanged.
-
-**ADR-0020 is `Accepted`.** Its own promotion criteria were met and were not softened to fit; its
-`Promotion` section also records where the evidence is weaker than promised — the "no consumer starves
-another" rule has no reachable input today, so it stays contract text rather than a test.
-
-**Two things deliberately left undone, so they are not mistaken for oversights.** The waveform still
-reads the file for itself: migrating it is its own change and would take two reads to one.
-`SpectrogramGeneration` and `SignalLevelMetricsGeneration` are no longer wired into an inspection but
-are **kept**, because they are the independent implementation the equivalence tests compare the shared
-read against; deleting them is a separate decision, not a tidy-up at the end of this one.
-
-**Next step:** review, then merge. **`openspec archive` runs only after the merge** — that is the one
-part of the task list still open, and it stays open on purpose. One cosmetic defect was seen during
-validation and left alone: on a 64 kHz file the spectrogram's frequency axis draws its Nyquist label
-over the next tick. It lives in presentation, predates this change, and fixing it here would widen a
-finished diff.
+**True peak is the next thread, and it is no longer blocked.** Its work sits on its own branch: the
+model, the accumulator, the methodology and their tests are finished, ADR-0019 is still `Proposed`, and
+its groups 1–5 are closed. Only its group 6 remained, and it was waiting for exactly one thing — a
+shared read existing in `main` — which now exists. The step is to reconcile that branch with `main` and
+then wire true peak as a **third consumer** of the shared read: no fourth decode, and no redesign of an
+accumulator or a model that is already finished. If wiring it ever required changing the accumulator,
+that is evidence the architecture is wrong and has to be justified before proceeding.
 
 **Other open threads** (see `openspec list` for their real task counts, not restated here):
 `add-static-spectrogram-visualization` (manual validation battery deferred by product decision) and
