@@ -16,36 +16,44 @@
 >   session protocol in `CLAUDE.md`).
 
 ---
-**Focus:** `add-true-peak-measurement`, groups 1–5 done — and **group 5's stop rule fired, so the
-wiring is blocked.** The measurement, its model and its accumulator are finished and tested; nothing in
-the app produces a true peak, and nothing should until a separate change lands.
+**Focus:** a new change, **`add-shared-pcm-read`** — contract only, nothing built.
+`add-true-peak-measurement` is finished up to its accumulator and **blocked at group 6** by its own
+stop rule; this change is what unblocks it. Nothing of the true-peak work is lost or redesigned.
 
-**What the end-to-end measurement found.** Reading the file a **fourth time** — computing nothing on it
-— costs about **a quarter of a whole inspection** for FLAC and AAC, which are this product's actual
-subject. The design had accepted the fourth read partly on a cited figure of 0.035 s per decode; that
-number describes the cheapest uncompressed case, and against the real port a compressed file costs an
-order of magnitude more. `design.md` §8 kept an escape hatch for exactly this disagreement, and it is
-used rather than argued around: nothing was folded, merged or migrated, and the number is recorded in
-`docs/spikes/2026-08-12-true-peak-end-to-end-cost.md`.
+**Why this change exists.** An inspection decodes the same file three times today, and would decode it
+four times to add true peak. Measured against the real pipeline, one more read costs about a quarter of
+a compressed inspection, and the existing three already spend most of a FLAC inspection decoding the
+same bytes over and over. ADR-0016 rejected a shared pass at the time *and wrote the condition for
+revisiting it* — "possible on top of this seam if measurement ever justifies one". The measurement now
+exists, so the condition is met rather than argued around.
 
-**The two costs have different remedies, and only one is the architecture's.** The fourth *decode* is
-what a PCM-sharing seam removes — and it would speed up the existing three operations too, since a FLAC
-inspection already spends most of its time decoding the same file three times. The true-peak **DSP**
-(about half a second for ten minutes of stereo) is the feature's own price and no sharing touches it.
+**The distinction the whole change rests on**, recorded in **ADR-0020** (`Proposed`): *independent
+analyses* is the invariant ADR-0016 protects; *independent decodes* was the implementation it chose
+while a decode looked free. One analysis must not fail, cancel or delay another — none of which
+requires a decoder each.
 
-**What the verdict does not overturn**: ADR-0016's independent-operation rule stands. The objection is
-to a fourth *read*, not to a fourth *consumer* — one pass feeding several accumulators keeps the
-independent cancellation and failure that rule protects. Also confirmed while measuring: the report is
-emitted before any sample read (~1 ms), so a later operation cannot delay the report, the waveform, the
-spectrogram or the signal level metrics; and the accumulator's memory stays bounded by the chunk, never
-by duration.
+**What the architecture spike settled, so it is not re-argued.** One read feeds the spectrogram, the
+signal level metrics and true peak, **sequentially, in the same task**, composed in the app layer.
+`AudioDecoding` and `PCMChunk` are audited and unchanged; no protocol is introduced for three known
+consumers; concurrency is rejected on a measured ceiling (~0.28 s against three deliberately
+non-`Sendable` accumulators and a synchronous callback that exists for a sandbox reason); PCM buffering
+is rejected outright because it would make memory scale with duration. **The waveform keeps its own
+read** — different port, different accumulator shape, and migrating it is a change of its own — so
+reads go from three (or four) to two, not to one.
 
-**Next step:** a **new OpenSpec change for PCM sharing** — one read of the file feeding the existing
-consumers, built *on top of* the `AudioDecoding` seam rather than by changing it, exactly as ADR-0016
-permits once measurement justifies one. Group 6 of the true-peak change resumes after it, unchanged.
+**The measured saving is exactly the redundant decodes removed, 97–100 % of them.** For the compressed
+formats this product exists to examine, that pays for the entire true-peak feature; in Debug every
+measured format ends up faster than today *with* true peak included. Uncompressed files gain almost
+nothing, because their decode was already nearly free — stated rather than averaged away.
 
-**ADR-0019 stays `Proposed`**, and this verdict does not touch it: it is about what a true peak is and
-how it is reported, not about how many times the file is read.
+**The known cost, named in advance**: several existing tests assert the *mechanism* — they script two
+decoders by call order and state that each operation gets its own decoder instance. That sentence stops
+being true, and rewriting them to assert the *property* instead, with a negative control proving the
+rewrite still discriminates, is real work and the main risk in this change.
+
+**Next step:** group 2 of `add-shared-pcm-read` — the composition itself. After it merges,
+`add-true-peak-measurement` resumes at its group 6, wiring true peak as a consumer of the shared read
+with its model, accumulator, methodology and tests untouched.
 
 **Other open threads** (see `openspec list` for their real task counts, not restated here):
 `add-static-spectrogram-visualization` (manual validation battery deferred by product decision) and
