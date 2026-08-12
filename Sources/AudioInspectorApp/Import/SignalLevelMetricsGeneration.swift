@@ -5,6 +5,15 @@ import FeatureImport
 
 /// One signal-level-metrics generation: decode → accumulate → finish, and nothing else.
 ///
+/// ## No longer wired into an inspection — kept as the equivalence reference
+///
+/// `SourceInspectionCoordinator` now produces this analysis through `SharedPCMAnalysisGeneration`, which
+/// reads the file once for several analyses (ADR-0020). This type is retained deliberately, not
+/// forgotten: `SharedPCMAnalysisTests.equivalenceWithSeparateReads` runs it against the same input and
+/// asserts the shared read produces **exactly** the same outcome, which is the evidence that sharing
+/// changed the transport and not the analysis. Deleting it would remove that oracle, so it is a separate
+/// decision rather than a side effect of this change.
+///
 /// Mirrors `SpectrogramGeneration` line for line — same composition, same reasons (task 4.1 of
 /// `add-computed-technical-properties` names this mechanical composition explicitly). It is not a
 /// domain port for the same reason `SpectrogramGeneration` is not one: the composition holds no logic
