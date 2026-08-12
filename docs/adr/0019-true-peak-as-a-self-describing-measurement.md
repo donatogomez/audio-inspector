@@ -1,12 +1,10 @@
 # ADR-0019: True peak as a self-describing measurement, reported as a value rather than a flag
 
-- **Status**: **Proposed.** The tolerance its promotion conditions referred to is now pinned by
-  measurement — **0.05 dB** against FFmpeg `ebur128` for signals smooth at their boundaries up to
-  96 kHz, 0.0042 dB against analytic truth
-  (`docs/spikes/2026-08-11-true-peak-methodology-validation.md`). It stays Proposed until that agreement
-  is demonstrated **against production code** rather than a spike, and the resulting surface passes
-  manual validation on a file whose true peak genuinely exceeds its sample peak. Partial evidence does
-  not promote it.
+- **Status**: **Accepted** (2026-08-12). Promoted on the two conditions this record set for itself and
+  on nothing else: the agreement was demonstrated **against production code** rather than a spike —
+  0.0005 dB against FFmpeg `ebur128`, inside the 0.05 dB tolerance by two orders of magnitude — and the
+  resulting surface passed manual validation on a file whose true peak genuinely exceeds its sample
+  peak. The evidence, and what it does **not** cover, is in **Promotion** below.
 - **Date**: 2026-08-11
 - **Deciders**: Project maintainer
 - **Related**: **ADR-0006** (loudness/true-peak methodology — this ADR *applies and narrows* it;
@@ -165,6 +163,52 @@ what an ADR is for.
   operation shape and the certainty conventions are all existing decisions, applied to a new value.
 - Leaves ADR-0006 fully in force for LUFS, LRA and the rest of the loudness suite; nothing here narrows
   anything beyond this one metric's presentation.
+
+## Promotion — what was demonstrated, and what it does not cover
+
+Recorded when this moved from `Proposed` to `Accepted`, on `add-true-peak-measurement`'s group 10.
+
+**The oracle agreement, against the production path.** Every earlier comparison measured
+`TruePeakAccumulator` directly, with samples handed to it from an array — production code, but not the
+production *path*. The gate added here drives what the app actually does: the real
+`AVFoundationAudioDecoder` opens a file, `SharedPCMAnalysisGeneration` folds each chunk into the three
+consumers, and the value compared is the one the interface and the export read from. On a tone whose
+stored samples all sit below full scale while the waveform between them crosses it:
+
+| Source | Sample peak | True peak |
+| --- | --- | --- |
+| Production pipeline | 0.848528 (−1.4267 dBFS) | 1.199932 (**+1.5831 dBTP**) |
+| FFmpeg 8.1.2 `ebur128` | 0.849000 (−1.4218 dBFS) | 1.200000 (+1.5836 dBTP) |
+| Analytic truth | 0.848528 (−1.4267 dBFS) | 1.200000 (+1.5836 dBTP) |
+
+**Δ 0.0005 dB** against the oracle and against analytic truth, where the pinned tolerance is 0.05 dB.
+The tolerance was **not** widened to fit; it was met with a hundredfold margin.
+
+**The manual validation.** A person inspected that file in a confirmed-fresh instance — launched by
+executable path, never `open`, because this project has already been caught by a stale process — and
+saw the three numbers together: *Peak sample* **−1.43 dBFS**, *Clipped samples* **0**, *True peak*
+**+1.58 dBTP** with its per-channel breakdown. That is decision 4 observed rather than argued: a
+positive true peak on a file with no clipped sample, printed as a value, with no warning, no colour, no
+badge and no diagnosis anywhere. The method line was read on screen and claims no standard. Light,
+dark and resizing were checked. The exported document was read and carries the value **linearly**
+(`1.1999318599700928`) beside `"method":{"filter":"polyphase_fir_v1","oversamplingFactor":8}`, under
+`schemaVersion` 1 — and that number is bit-identical to what an independent run of the same pipeline
+produced, which is a stronger reproducibility check than exporting twice from one session.
+
+**What this promotion does not cover, and is not claimed to.**
+
+- **192 kHz is outside the oracle gate.** FFmpeg does not oversample there, so a comparison would
+  measure the oracle's limitation rather than this code. Coverage at that rate is analytic only, and the
+  test suite says so where it excludes it.
+- **The tolerance class is signals smooth at their boundaries.** A file that starts or ends on a
+  discontinuity rings at that edge in both meters, and the agreement observed here is not evidence about
+  that class.
+- **No conformance to ITU-R BS.1770 Annex 2 is claimed, and decision 6 still governs.** The filter was
+  designed to recorded parameters and validated against analytic truth and an independent R128
+  implementation, because the standard's own coefficients were unavailable. Comparing against them, if
+  the text becomes available, remains the bounded follow-up it always was.
+- **The inter-sample-clipping finding is still not authorised.** A verdict needs `findings`, with
+  evidence, alternative explanations and a confidence level, and that object is still unused.
 
 ## Follow-ups
 
