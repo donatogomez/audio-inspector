@@ -1,6 +1,7 @@
 # Implementation Tasks
 
-**Groups 1–3 are done: the contract, the composition, and the proof that it keeps its guarantees.**
+**Groups 1–4 are done: the contract, the composition, the proof that it keeps its guarantees, and the
+saving measured against production code.**
 Group 1's evidence lives in `docs/spikes/2026-08-12-shared-pcm-analysis-architecture.md`. Group 2 added
 one production file and changed one call sequence; group 3 proved the isolation with a deterministic
 cancellation harness and three negative controls, and needed **no change to the composition** — no
@@ -122,14 +123,32 @@ changed something").
 
 ## 4. Confirming the saving against production code
 
-- [ ] 4.1 Re-measure the end-to-end cost against the real composition, in the same form as the spike:
-      10 min stereo, WAV/FLAC/AAC, Debug and Release, minimum of three runs after a warm-up. Publish the
-      table beside the spike's own so the two can be compared directly.
-- [ ] 4.2 Confirm the measured saving reproduces — 97–100 % of the redundant decode — and that memory
-      still does not scale with duration. **If it does not reproduce, stop**: the honest outcome is to
-      record the difference and reconsider, not to keep the architecture because the spike liked it.
-- [ ] 4.3 Confirm the report is still emitted before any sample read, and that no analysis's result
-      changed value as a result of sharing — compared against the pre-change results, file by file.
+**Done, and the stop rule did not fire.** The measurements live in the spike's **§15**, appended
+rather than overwriting §§1–14, so the pre-implementation evaluation and its production confirmation
+can be read against each other. The harness was temporary, in the test target, and is deleted.
+
+- [x] 4.1 Measured against the **real** coordinator, property reader, waveform generator, decoder,
+      `SharedPCMAnalysisGeneration` and accumulators — no fake on the critical path, and production not
+      instrumented. 10 min stereo 44.1 kHz WAV/FLAC/AAC, Debug and Release, **six runs per cell** (two
+      independent passes of three, each after a discarded warm-up). Published as §15 beside §8's own
+      tables. **What is comparable is stated first**: this branch has no true peak, so the pipeline
+      goes from three reads to two and removes **one** redundant decode where §8 removed two — the
+      claim carried forward is §8's finding about what the saving *is*, not its absolute seconds.
+- [x] 4.2 **It reproduces.** Release saves 0.06 s (WAV), 0.73 s (FLAC), 0.56 s (AAC); Debug saves
+      0.69 / 1.39 / 1.10 s — between **98 % and 107 %** of one measured decode across the six cells,
+      averaging 103.6 % against a 1–7 % run-to-run spread. **The figures above 100 % are noise and are
+      named as such**, not banked as extra saving: only one decode was removed. The decomposition
+      reconciles to ≤ 0.09 s everywhere, so no cost appeared elsewhere, and the fan-out is free — the
+      shared pass costs the sum of its parts, reproducing §6's finding against production code.
+      Memory: peak footprint **17 MB for one minute against 22 MB for ten**, sampled at every chunk,
+      versus the 212 MB option D would have needed.
+- [x] 4.3 The report is emitted at **1.5–2.0 ms**, two to three orders of magnitude before the first
+      sample analysis settles, and sharing did not move it. Results are **identical value for value**
+      to the pre-change results on real files of each format — the whole outcome compared with `==`,
+      spectrogram and signal level metrics, WAV/FLAC/AAC. Also counted rather than assumed: the real
+      pipeline opens **exactly two** sample reads. **One limit is recorded rather than glossed**: the
+      report's *ordering* is guaranteed structurally and confirmed by measurement, but no test pins it
+      — a gap that predates this change and is unchanged by it.
 
 ## 5. Gates and closure
 
