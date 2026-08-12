@@ -264,11 +264,27 @@ touched in this group**.
 
 ## 6. Wiring — a fourth independent operation
 
-> **BLOCKED by group 5's stop rule.** The measurement rejected a fourth **read**, not a fourth
-> consumer: ADR-0016's independent-operation shape stands, and a sharing seam feeding several
-> accumulators from one pass keeps the independent cancellation and independent failure that rule
-> actually protects. This group resumes once a PCM-sharing change lands, and its tasks below are
-> otherwise unchanged. **Nothing in it is started, and nothing in it is marked.**
+> **UNBLOCKED (2026-08-12).** Group 5's stop rule rejected a fourth **read**, not a fourth consumer,
+> and named its own release condition: *this group resumes once a PCM-sharing change lands*. It has.
+> `add-shared-pcm-read` is merged and archived, the capability that says a file's samples are read once
+> is in the canonical specs, and `SharedPCMAnalysisGeneration` — the composition that folds one decode
+> into several accumulators — is ordinary code on this branch now. **ADR-0020 is `Accepted`**:
+> *independent analyses* is the invariant, *independent decodes* was only the implementation.
+>
+> **The shape of this group changed with it, and its tasks below have not caught up yet.** True peak
+> becomes a **third consumer of the shared read** — one more accumulator folded from the pass that
+> already exists, costing its own DSP and **no additional decode** — where 6.1 still says "a fourth
+> independent operation … with its own decoder instance", which is exactly what the measurement
+> rejected. That wording is superseded by ADR-0020 and is revised when this group is started, not
+> before: rewriting tasks nobody is executing would be a second guess at a design that is already
+> recorded. The independence properties 6.2 demands are unchanged and are now held by construction —
+> a consumer's failure leaves the others untouched, a producer failure ends each with its own outcome,
+> and cancellation lets no partial model escape.
+>
+> **Nothing in it is started, and nothing in it is marked.** `TruePeakMeasurement`,
+> `TruePeakAccumulator`, the methodology and their tests are finished and are **not** redesigned; if
+> wiring ever required changing the accumulator, that is evidence the shared architecture is wrong and
+> must be justified before proceeding (ADR-0020 follow-ups).
 
 - [ ] 6.1 Add the generation as a **fourth** independent operation over the existing `AudioDecoding`
       port, with its own decoder instance and its own cancellation, mirroring `SignalLevelMetricsGeneration`
