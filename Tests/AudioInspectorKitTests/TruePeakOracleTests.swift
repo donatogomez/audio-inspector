@@ -2,8 +2,11 @@ import Foundation
 import Testing
 
 import AudioInspectorDomain
+import AudioInspectorMedia
+import FeatureImport
 
 @testable import AudioInspectorAnalysis
+@testable import AudioInspectorApp
 
 /// Cross-checks the production reconstruction against **FFmpeg's `ebur128`** — an independent
 /// implementation of the same standard, used strictly as a development/test reference oracle and never
@@ -240,6 +243,62 @@ struct TruePeakOracleTests {
         // And ours agrees with the oracle's own sample peak about what the samples contain.
         let ourSamplePeak = Double(samples.reduce(Float(0)) { max($0, abs($1)) })
         #expect(abs(ourSamplePeak - reading.samplePeak) < 0.001)
+    }
+
+    // MARK: - Against the production path, not only the production accumulator
+
+    /// **The comparison ADR-0019's promotion criterion actually asks for.** Every test above measures
+    /// the accumulator directly, with samples handed to it from an array in memory — which is
+    /// production code, but not the production *path*. This one drives what the app really does: the
+    /// real `AVFoundationAudioDecoder` opens the file, `SharedPCMAnalysisGeneration` folds each chunk
+    /// into the three consumers, and the true peak comes out of the same composition the interface and
+    /// the export read from.
+    ///
+    /// It uses the decisive fixture: a tone whose stored samples all sit **below** full scale while the
+    /// waveform between them crosses it, so agreement here is about the reconstruction rather than about
+    /// reading an array back.
+    @Test("the production pipeline agrees with the oracle on a file whose true peak exceeds its samples")
+    func theProductionPipelineAgreesWithTheOracle() async throws {
+        let directory = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("true-peak-oracle-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let samples = fadedTone(
+            frequency: 11_025, sampleRate: 44_100, amplitude: 1.2, phase: .pi / 4, frames: 44_100
+        )
+        let url = directory.appendingPathComponent("decisive.wav")
+        try writeWAV([samples], sampleRate: 44_100, to: url)
+
+        // The whole production sequence, with no port scripted.
+        let reference = AudioFileReferenceMapper.reference(for: url)
+        let outcome = await SharedPCMAnalysisGeneration(
+            decoder: AVFoundationAudioDecoder(resolveURL: { _ in url })
+        ).run(for: reference)
+
+        guard case let .available(measurement) = outcome.truePeak,
+              case let .available(levels) = outcome.signalLevelMetrics else {
+            Issue.record("the production pipeline produced no measurement: \(outcome.truePeak)"); return
+        }
+        let measured = try #require(measurement.overallTruePeak)
+        let storedPeak = try #require(levels.overallPeakSample)
+        let reading = try oracle(for: url)
+
+        // The phenomenon is real in this fixture, or the agreement below would be trivial.
+        #expect(storedPeak < 1, "the fixture stored a sample at full scale")
+        #expect(measured > 1, "the reconstruction did not exceed full scale")
+        #expect(levels.overallClippedSampleCount == 0)
+
+        // The gate: the production path and an independent R128 implementation agree within the
+        // tolerance group 2 pinned, on the same file, read by each meter for itself.
+        let difference = abs(decibels(Double(measured)) - decibels(reading.truePeak))
+        #expect(
+            difference < Self.toleranceDecibels,
+            "production \(measured), oracle \(reading.truePeak), Δ \(difference) dB"
+        )
+        // And both meters agree about what the stored samples contain, which is the other half of
+        // "sample peak and true peak are different measurements of the same file".
+        #expect(abs(Double(storedPeak) - reading.samplePeak) < 0.001)
     }
 
     @Test("the FFmpeg build used is recorded with the evidence")
