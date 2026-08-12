@@ -61,7 +61,41 @@ public struct SignalLevelMetrics: Sendable, Equatable {
         /// plain count, defined even when `sampleCount == 0` (an empty count is `0`, not absent).
         public let clippedSampleCount: Int
 
-        public init(sampleCount: Int, peakSample: Float?, rms: Float?, dcOffset: Float?, clippedSampleCount: Int) {
+        /// Fails on any combination that could not describe a measured channel.
+        ///
+        /// Failable rather than throwing, for the reason `WaveformBucket` and
+        /// `TruePeakMeasurement.Channel` already state: a channel knows nothing about which file or
+        /// stream produced it, so it cannot say *why* the values were wrong. Whoever does know turns the
+        /// `nil` into an error carrying that context.
+        ///
+        /// **This type used to accept anything, and that is how a real defect reached the surface.** An
+        /// accumulator whose partial sums overflowed produced `rms == +infinity` and
+        /// `dcOffset == NaN` from samples that were individually finite, and nothing between there and
+        /// the export refused them. The cause is fixed where it belongs — in the accumulator — and this
+        /// guard exists so a future change cannot reintroduce it silently. It is the same guard its two
+        /// sibling value types have had all along; the asymmetry was an oversight, not a decision.
+        ///
+        /// **Values beyond `1.0` are still accepted**, and deliberately: a file genuinely carrying a
+        /// sample beyond full scale is a fact this type exists to report, exactly as its own
+        /// documentation says. Only the *impossible* is refused — a non-finite value, a negative
+        /// maximum-of-magnitudes, a negative root-mean-square, and the two directions of the
+        /// `nil`-iff-empty rule.
+        public init?(sampleCount: Int, peakSample: Float?, rms: Float?, dcOffset: Float?, clippedSampleCount: Int) {
+            guard sampleCount >= 0, clippedSampleCount >= 0, clippedSampleCount <= max(sampleCount, 0) else {
+                return nil
+            }
+            // The rule in both directions. Either half alone would leave a contradictory channel
+            // representable: measured-but-unreported, or unmeasured-yet-reported.
+            let measured = sampleCount > 0
+            guard (peakSample == nil) != measured,
+                  (rms == nil) != measured,
+                  (dcOffset == nil) != measured else { return nil }
+            // A `NaN` or an infinity here would mean something upstream let a broken computation
+            // through; `dcOffset` may be negative (it is a signed mean), the other two may not.
+            if let peakSample { guard peakSample.isFinite, peakSample >= 0 else { return nil } }
+            if let rms { guard rms.isFinite, rms >= 0 else { return nil } }
+            if let dcOffset { guard dcOffset.isFinite else { return nil } }
+
             self.sampleCount = sampleCount
             self.peakSample = peakSample
             self.rms = rms
@@ -84,13 +118,28 @@ public struct SignalLevelMetrics: Sendable, Equatable {
     /// The sum of every channel's own `clippedSampleCount`.
     public let overallClippedSampleCount: Int
 
-    public init(
+    /// Fails when the parts do not describe a measured stream.
+    ///
+    /// A stream has at least one channel, so an empty `channels` describes a measurement of nothing and
+    /// is refused rather than left to read as a file whose every channel was empty — which is a
+    /// different and representable thing. The overall values obey the same `nil`-iff-nothing-was-measured
+    /// rule the channels do, and the same finiteness guard, for the same reason.
+    public init?(
         channels: [Channel],
         overallPeakSample: Float?,
         overallRMS: Float?,
         overallDCOffset: Float?,
         overallClippedSampleCount: Int
     ) {
+        guard !channels.isEmpty, overallClippedSampleCount >= 0 else { return nil }
+        let measured = channels.contains { $0.sampleCount > 0 }
+        guard (overallPeakSample == nil) != measured,
+              (overallRMS == nil) != measured,
+              (overallDCOffset == nil) != measured else { return nil }
+        if let overallPeakSample { guard overallPeakSample.isFinite, overallPeakSample >= 0 else { return nil } }
+        if let overallRMS { guard overallRMS.isFinite, overallRMS >= 0 else { return nil } }
+        if let overallDCOffset { guard overallDCOffset.isFinite else { return nil } }
+
         self.channels = channels
         self.overallPeakSample = overallPeakSample
         self.overallRMS = overallRMS

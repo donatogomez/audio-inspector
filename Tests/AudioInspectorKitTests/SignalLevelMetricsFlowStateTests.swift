@@ -78,11 +78,12 @@ struct SignalLevelMetricsFlowStateTests {
         )
     }
 
-    private func metrics() -> SignalLevelMetrics {
-        SignalLevelMetrics(
-            channels: [SignalLevelMetrics.Channel(sampleCount: 100, peakSample: 0.5, rms: 0.2, dcOffset: 0, clippedSampleCount: 0)],
+    private func metrics() throws -> SignalLevelMetrics {
+        let channel1 = try #require(SignalLevelMetrics.Channel(sampleCount: 100, peakSample: 0.5, rms: 0.2, dcOffset: 0, clippedSampleCount: 0))
+        return try #require(SignalLevelMetrics(
+            channels: [channel1],
             overallPeakSample: 0.5, overallRMS: 0.2, overallDCOffset: 0, overallClippedSampleCount: 0
-        )
+        ))
     }
 
     private func presentation(of model: ImportFlowModel) -> InspectionPresentation? {
@@ -118,7 +119,7 @@ struct SignalLevelMetricsFlowStateTests {
     func availableSettlesWithoutTouchingTheReport() async throws {
         let action = SteppedAction(report: report())
         let model = ImportFlowModel(action: action.run)
-        let measured = metrics()
+        let measured = try metrics()
 
         let running = Task { await model.selectAndInspect() }
         await action.waitUntilStarted()
@@ -200,11 +201,11 @@ struct SignalLevelMetricsFlowStateTests {
         #expect(presentation(of: model)?.report.file.displayName == "second")
 
         // The first operation now finishes, late. Nothing of it may reach the second's presentation.
-        first.deliver(signalLevelMetrics: .available(metrics()))
+        first.deliver(signalLevelMetrics: .available(try metrics()))
         await Task.yield()
         first.finish(.inspected(
             first.report, waveform: .unavailable, spectrogram: .unavailable,
-            signalLevelMetrics: .available(metrics()), truePeak: .unavailable
+            signalLevelMetrics: .available(try metrics()), truePeak: .unavailable
         ))
         await Task.yield()
 

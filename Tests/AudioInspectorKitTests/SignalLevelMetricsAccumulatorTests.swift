@@ -24,7 +24,8 @@ struct SignalLevelMetricsAccumulatorTests {
             accumulator.accumulate(piece)
             start = end
         }
-        return accumulator.finish()
+        let finished = accumulator.finish()
+        return try #require(finished, "the accumulator refused its own result")
     }
 
     // MARK: - Known signals, known answers
@@ -127,7 +128,7 @@ struct SignalLevelMetricsAccumulatorTests {
 
     @Test func zeroFramesIsNotComputableNotZero() throws {
         let accumulator = try #require(SignalLevelMetricsAccumulator(channelCount: 2))
-        let metrics = accumulator.finish() // never fed a single chunk
+        let metrics = try #require(accumulator.finish()) // never fed a single chunk
         for channel in metrics.channels {
             #expect(channel.sampleCount == 0)
             #expect(channel.peakSample == nil)
@@ -188,11 +189,11 @@ struct SignalLevelMetricsAccumulatorTests {
         var accumulator = try #require(SignalLevelMetricsAccumulator(channelCount: 2))
         let good = try PCMChunk(startFrame: 0, channels: [[0.3, 0.3], [0.3, 0.3]])
         accumulator.accumulate(good)
-        let before = accumulator.finish()
+        let before = try #require(accumulator.finish())
 
         let mismatched = try PCMChunk(startFrame: 2, channels: [[0.9, 0.9, 0.9]]) // one channel, not two
         accumulator.accumulate(mismatched)
-        let after = accumulator.finish()
+        let after = try #require(accumulator.finish())
 
         #expect(before == after) // the mismatched chunk changed nothing
     }
@@ -284,7 +285,7 @@ struct SignalLevelMetricsAccumulatorTests {
             accumulator.accumulate(chunk)
             start = end
         }
-        let metrics = accumulator.finish()
+        let metrics = try #require(accumulator.finish())
         let dcOffset = try #require(metrics.channels.first?.dcOffset)
         #expect(abs(dcOffset - value) < 5e-6)
     }

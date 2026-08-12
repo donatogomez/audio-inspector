@@ -19,10 +19,10 @@ struct JSONReportExportMeasurementsTests {
         rms: Float? = 0.25,
         dcOffset: Float? = 0.001,
         clipped: Int = 0
-    ) -> SignalLevelMetrics.Channel {
-        SignalLevelMetrics.Channel(
+    ) throws -> SignalLevelMetrics.Channel {
+        try #require(SignalLevelMetrics.Channel(
             sampleCount: sampleCount, peakSample: peak, rms: rms, dcOffset: dcOffset, clippedSampleCount: clipped
-        )
+        ))
     }
 
     private func metrics(
@@ -31,23 +31,23 @@ struct JSONReportExportMeasurementsTests {
         overallRMS: Float?,
         overallDCOffset: Float?,
         overallClipped: Int
-    ) -> SignalLevelMetrics {
-        SignalLevelMetrics(
+    ) throws -> SignalLevelMetrics {
+        try #require(SignalLevelMetrics(
             channels: channels,
             overallPeakSample: overallPeak,
             overallRMS: overallRMS,
             overallDCOffset: overallDCOffset,
             overallClippedSampleCount: overallClipped
-        )
+        ))
     }
 
-    private var monoMetrics: SignalLevelMetrics {
-        metrics(channels: [channel()], overallPeak: 0.5, overallRMS: 0.25, overallDCOffset: 0.001, overallClipped: 0)
+    private func monoMetrics() throws -> SignalLevelMetrics {
+        try metrics(channels: [try channel()], overallPeak: 0.5, overallRMS: 0.25, overallDCOffset: 0.001, overallClipped: 0)
     }
 
-    private var stereoMetrics: SignalLevelMetrics {
-        metrics(
-            channels: [channel(peak: 0.708, rms: 0.3, dcOffset: 0.002, clipped: 3), channel(peak: 0.5, rms: 0.2, dcOffset: -0.001, clipped: 0)],
+    private func stereoMetrics() throws -> SignalLevelMetrics {
+        try metrics(
+            channels: [try channel(peak: 0.708, rms: 0.3, dcOffset: 0.002, clipped: 3), try channel(peak: 0.5, rms: 0.2, dcOffset: -0.001, clipped: 0)],
             overallPeak: 0.708, overallRMS: 0.25, overallDCOffset: 0.0005, overallClipped: 3
         )
     }
@@ -55,7 +55,7 @@ struct JSONReportExportMeasurementsTests {
     // MARK: 1-2. Overall + per-channel mono
 
     @Test func overallAndMonoChannelExportTheLinearDomainValues() throws {
-        let object = try exportValue(report(status: .completed), signalLevelMetrics: monoMetrics)
+        let object = try exportValue(report(status: .completed), signalLevelMetrics: try monoMetrics())
         let signalLevels = try #require(object["measurements"]?["signalLevels"])
 
         let overall = try #require(signalLevels["overall"])
@@ -73,7 +73,7 @@ struct JSONReportExportMeasurementsTests {
     // MARK: 3. Per-channel stereo
 
     @Test func stereoExportsOneEntryPerChannelInOrder() throws {
-        let object = try exportValue(report(status: .completed), signalLevelMetrics: stereoMetrics)
+        let object = try exportValue(report(status: .completed), signalLevelMetrics: try stereoMetrics())
         let channels = try #require(object["measurements"]?["signalLevels"]?["channels"]?.array)
 
         #expect(channels.count == 2)
@@ -86,8 +86,8 @@ struct JSONReportExportMeasurementsTests {
     // MARK: 4. Multichannel
 
     @Test func multichannelExportsEveryChannelExactlyOnce() throws {
-        let six = metrics(
-            channels: (1 ... 6).map { channel(peak: Float($0) / 10) },
+        let six = try metrics(
+            channels: (1 ... 6).map { try channel(peak: Float($0) / 10) },
             overallPeak: 0.6, overallRMS: 0.25, overallDCOffset: 0.001, overallClipped: 0
         )
         let object = try exportValue(report(status: .completed), signalLevelMetrics: six)
@@ -101,8 +101,8 @@ struct JSONReportExportMeasurementsTests {
     // MARK: 5. Zero frames — null, never a fabricated zero
 
     @Test func zeroFramesExportsExplicitNullNeverAFabricatedZero() throws {
-        let empty = channel(sampleCount: 0, peak: nil, rms: nil, dcOffset: nil, clipped: 0)
-        let zeroFrame = metrics(channels: [empty], overallPeak: nil, overallRMS: nil, overallDCOffset: nil, overallClipped: 0)
+        let empty = try channel(sampleCount: 0, peak: nil, rms: nil, dcOffset: nil, clipped: 0)
+        let zeroFrame = try metrics(channels: [empty], overallPeak: nil, overallRMS: nil, overallDCOffset: nil, overallClipped: 0)
 
         let object = try exportValue(report(status: .completed), signalLevelMetrics: zeroFrame)
         let signalLevels = try #require(object["measurements"]?["signalLevels"])
@@ -122,8 +122,8 @@ struct JSONReportExportMeasurementsTests {
     /// The key must be **present with `null`**, not omitted — distinguishing "not computable" from a
     /// value this schema version simply doesn't define, the same convention `PropertyDTO` already uses.
     @Test func notComputableKeysArePresentWithExplicitNullNotOmitted() throws {
-        let empty = channel(sampleCount: 0, peak: nil, rms: nil, dcOffset: nil, clipped: 0)
-        let zeroFrame = metrics(channels: [empty], overallPeak: nil, overallRMS: nil, overallDCOffset: nil, overallClipped: 0)
+        let empty = try channel(sampleCount: 0, peak: nil, rms: nil, dcOffset: nil, clipped: 0)
+        let zeroFrame = try metrics(channels: [empty], overallPeak: nil, overallRMS: nil, overallDCOffset: nil, overallClipped: 0)
         let object = try exportValue(report(status: .completed), signalLevelMetrics: zeroFrame)
         let overall = try #require(object["measurements"]?["signalLevels"]?["overall"])
         #expect(overall.keys?.isSuperset(of: ["peakSample", "rms", "dcOffset", "clippedSampleCount"]) == true)
@@ -132,7 +132,7 @@ struct JSONReportExportMeasurementsTests {
     // MARK: 6. Peak > 1 preserved
 
     @Test func aPeakBeyondFullScaleExportsExactlyAsMeasuredNeverClamped() throws {
-        let outOfRange = metrics(channels: [channel(peak: 1.5)], overallPeak: 1.5, overallRMS: 0.3, overallDCOffset: 0, overallClipped: 0)
+        let outOfRange = try metrics(channels: [try channel(peak: 1.5)], overallPeak: 1.5, overallRMS: 0.3, overallDCOffset: 0, overallClipped: 0)
         let object = try exportValue(report(status: .completed), signalLevelMetrics: outOfRange)
         let overall = try #require(object["measurements"]?["signalLevels"]?["overall"])
         #expect(overall["peakSample"]?.double == 1.5)
@@ -141,7 +141,7 @@ struct JSONReportExportMeasurementsTests {
     // MARK: 7. RMS 0 — real computed silence, not absence
 
     @Test func realSilenceExportsAGenuineZeroNeverNull() throws {
-        let silent = metrics(channels: [channel(peak: 0, rms: 0, dcOffset: 0, clipped: 0)], overallPeak: 0, overallRMS: 0, overallDCOffset: 0, overallClipped: 0)
+        let silent = try metrics(channels: [try channel(peak: 0, rms: 0, dcOffset: 0, clipped: 0)], overallPeak: 0, overallRMS: 0, overallDCOffset: 0, overallClipped: 0)
         let object = try exportValue(report(status: .completed), signalLevelMetrics: silent)
         let overall = try #require(object["measurements"]?["signalLevels"]?["overall"])
         #expect(overall["rms"]?.double == 0)
@@ -151,8 +151,8 @@ struct JSONReportExportMeasurementsTests {
     // MARK: 8-9. DC offset sign
 
     @Test func dcOffsetExportsPositiveAndNegativeExactly() throws {
-        let positive = metrics(channels: [channel(dcOffset: 0.0023)], overallPeak: 0.5, overallRMS: 0.2, overallDCOffset: 0.0023, overallClipped: 0)
-        let negative = metrics(channels: [channel(dcOffset: -0.0041)], overallPeak: 0.5, overallRMS: 0.2, overallDCOffset: -0.0041, overallClipped: 0)
+        let positive = try metrics(channels: [try channel(dcOffset: 0.0023)], overallPeak: 0.5, overallRMS: 0.2, overallDCOffset: 0.0023, overallClipped: 0)
+        let negative = try metrics(channels: [try channel(dcOffset: -0.0041)], overallPeak: 0.5, overallRMS: 0.2, overallDCOffset: -0.0041, overallClipped: 0)
 
         let positiveObject = try exportValue(report(status: .completed), signalLevelMetrics: positive)
         let negativeObject = try exportValue(report(status: .completed), signalLevelMetrics: negative)
@@ -164,8 +164,8 @@ struct JSONReportExportMeasurementsTests {
     // MARK: 10-11. Clipped sample count
 
     @Test func clippedCountExportsZeroAndPositiveAsPlainIntegers() throws {
-        let none = metrics(channels: [channel(clipped: 0)], overallPeak: 0.5, overallRMS: 0.2, overallDCOffset: 0, overallClipped: 0)
-        let many = metrics(channels: [channel(clipped: 12_431)], overallPeak: 0.5, overallRMS: 0.2, overallDCOffset: 0, overallClipped: 12_431)
+        let none = try metrics(channels: [try channel(clipped: 0)], overallPeak: 0.5, overallRMS: 0.2, overallDCOffset: 0, overallClipped: 0)
+        let many = try metrics(channels: [try channel(clipped: 12_431)], overallPeak: 0.5, overallRMS: 0.2, overallDCOffset: 0, overallClipped: 12_431)
 
         let noneObject = try exportValue(report(status: .completed), signalLevelMetrics: none)
         let manyObject = try exportValue(report(status: .completed), signalLevelMetrics: many)
@@ -177,7 +177,7 @@ struct JSONReportExportMeasurementsTests {
     // MARK: 12. No absolute paths, no filesystem metadata
 
     @Test func noPathOrFilesystemMetadataLeaksThroughMeasurements() throws {
-        let object = try exportValue(report(status: .completed), signalLevelMetrics: stereoMetrics)
+        let object = try exportValue(report(status: .completed), signalLevelMetrics: try stereoMetrics())
         let keys = allKeys(object)
         for forbidden in ["path", "url", "bookmark", "directory", "filename"] {
             #expect(!keys.contains { $0.lowercased().contains(forbidden) }, "“\(forbidden)” is a key in the export")
@@ -187,7 +187,7 @@ struct JSONReportExportMeasurementsTests {
     // MARK: 13. Exact keys
 
     @Test func measurementsUsesExactlyTheDocumentedKeys() throws {
-        let object = try exportValue(report(status: .completed), signalLevelMetrics: stereoMetrics)
+        let object = try exportValue(report(status: .completed), signalLevelMetrics: try stereoMetrics())
         #expect(object.keys?.contains("measurements") == true)
         #expect(object["measurements"]?.keys == ["signalLevels"])
         #expect(object["measurements"]?["signalLevels"]?.keys == ["overall", "channels"])
@@ -199,8 +199,8 @@ struct JSONReportExportMeasurementsTests {
     // MARK: 14. Determinism
 
     @Test func theSameMetricsExportByteIdenticalDataTwice() throws {
-        let once = try exportData(report(status: .completed), signalLevelMetrics: stereoMetrics)
-        let twice = try exportData(report(status: .completed), signalLevelMetrics: stereoMetrics)
+        let once = try exportData(report(status: .completed), signalLevelMetrics: try stereoMetrics())
+        let twice = try exportData(report(status: .completed), signalLevelMetrics: try stereoMetrics())
         #expect(once == twice)
     }
 
@@ -208,7 +208,7 @@ struct JSONReportExportMeasurementsTests {
 
     @Test func measurementsDoNotChangeAnyExistingField() throws {
         let withoutMetrics = try exportValue(report(status: .completed))
-        let withMetrics = try exportValue(report(status: .completed), signalLevelMetrics: stereoMetrics)
+        let withMetrics = try exportValue(report(status: .completed), signalLevelMetrics: try stereoMetrics())
 
         for key in ["schemaVersion", "generatedAt", "generator", "inspectedFile", "technicalProperties", "warnings", "inspectionStatus"] {
             #expect(withoutMetrics[key] == withMetrics[key], "\(key) changed when measurements were added")
@@ -218,7 +218,7 @@ struct JSONReportExportMeasurementsTests {
     // MARK: 16. TechnicalProperties never carries a DSP key
 
     @Test func technicalPropertiesNeverContainsADSPKey() throws {
-        let object = try exportValue(report(status: .completed), signalLevelMetrics: stereoMetrics)
+        let object = try exportValue(report(status: .completed), signalLevelMetrics: try stereoMetrics())
         let technicalKeys = try #require(object["technicalProperties"]?.keys)
         for dspKey in ["peakSample", "rms", "dcOffset", "clippedSampleCount", "signalLevels", "measurements"] {
             #expect(!technicalKeys.contains(dspKey), "\(dspKey) leaked into technicalProperties")
@@ -242,25 +242,48 @@ struct JSONReportExportMeasurementsTests {
     // MARK: 18. schemaVersion unchanged
 
     @Test func schemaVersionStaysOneWithMeasurementsPresent() throws {
-        let object = try exportValue(report(status: .completed), signalLevelMetrics: stereoMetrics)
+        let object = try exportValue(report(status: .completed), signalLevelMetrics: try stereoMetrics())
         #expect(object["schemaVersion"]?.int == 1)
     }
 
     // MARK: 19. A non-finite value fails encoding rather than emitting a fiction
 
-    /// The domain's own public initializer does not itself forbid a non-finite value (that guarantee
-    /// lives upstream, at `PCMChunk`'s construction boundary) — so this constructs one directly to
-    /// audit the export layer's own behaviour if that upstream guarantee were ever bypassed: it must
-    /// fail loudly, never emit `"NaN"`/`"Infinity"` as if they were real JSON numbers.
-    @Test func aNonFiniteValueFailsEncodingRatherThanProducingAFiction() {
-        let corrupted = metrics(
-            channels: [channel(peak: .infinity)], overallPeak: .infinity, overallRMS: 0.2, overallDCOffset: 0, overallClipped: 0
-        )
+    /// **A non-finite measurement can no longer reach the export, because it can no longer exist.**
+    ///
+    /// This test used to construct one directly and assert that the encoder refused it, on the stated
+    /// premise that "the domain's own public initializer does not itself forbid a non-finite value".
+    /// That premise was true, and it was the gap: an accumulator whose partial sums overflowed produced
+    /// `rms == +infinity` and `dcOffset == NaN` from individually finite samples, and nothing between
+    /// there and the wire objected. The initializer now refuses them, so the case is proved one step
+    /// earlier — where a value that cannot describe a measurement is rejected rather than carried.
+    @Test func aNonFiniteValueCannotBeBuiltAndSoCannotBeExported() throws {
+        // Every non-finite shape the old defect produced, refused at construction.
+        #expect(SignalLevelMetrics.Channel(
+            sampleCount: 10, peakSample: .infinity, rms: 0.2, dcOffset: 0, clippedSampleCount: 0
+        ) == nil)
+        #expect(SignalLevelMetrics.Channel(
+            sampleCount: 10, peakSample: 0.5, rms: .infinity, dcOffset: 0, clippedSampleCount: 0
+        ) == nil)
+        #expect(SignalLevelMetrics.Channel(
+            sampleCount: 10, peakSample: 0.5, rms: 0.2, dcOffset: .nan, clippedSampleCount: 0
+        ) == nil)
+
+        let valid = try #require(SignalLevelMetrics.Channel(
+            sampleCount: 10, peakSample: 0.5, rms: 0.2, dcOffset: 0, clippedSampleCount: 0
+        ))
+        #expect(SignalLevelMetrics(
+            channels: [valid], overallPeakSample: .infinity, overallRMS: 0.2,
+            overallDCOffset: 0, overallClippedSampleCount: 0
+        ) == nil)
+
+        // And the encoder's own configuration is still the one that refuses a non-finite number rather
+        // than emitting `"Infinity"` as if it were JSON — the second half of the original guarantee,
+        // asserted without needing a model that can no longer be built.
+        struct Corrupt: Encodable { let value: Double }
         #expect(throws: (any Error).self) {
-            try exportData(report(status: .completed), signalLevelMetrics: corrupted)
+            try JSONReportExporter.makeEncoder().encode(Corrupt(value: .infinity))
         }
     }
-
 }
 
 private extension Double {

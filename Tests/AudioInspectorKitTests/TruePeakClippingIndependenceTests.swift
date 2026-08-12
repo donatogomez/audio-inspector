@@ -190,7 +190,8 @@ struct TruePeakClippingIndependenceTests {
         soloLevels.accumulate(whole)
         soloPeak.accumulate(whole)
         let soloPeakResult = soloPeak.finish()
-        #expect(soloLevels.finish().overallClippedSampleCount == levels.overallClippedSampleCount)
+        let soloLevelsResult = try #require(soloLevels.finish())
+        #expect(soloLevelsResult.overallClippedSampleCount == levels.overallClippedSampleCount)
         #expect(try #require(soloPeakResult).overallTruePeak == reconstructed)
 
         expectNoDiagnosis(levels: levels, truePeak: truePeak)
@@ -290,7 +291,7 @@ struct TruePeakClippingIndependenceTests {
         let peakAloneResult = peakAlone.finish()
 
         // Value for value, not merely "close": sharing a read fed them the same audio and nothing else.
-        #expect(levelsAlone.finish() == shared.levels)
+        #expect(try #require(levelsAlone.finish()) == shared.levels)
         #expect(try #require(peakAloneResult) == shared.truePeak)
     }
 
@@ -309,6 +310,6 @@ struct TruePeakClippingIndependenceTests {
     private func clippedCount(of samples: [Float]) throws -> Int {
         var accumulator = try #require(SignalLevelMetricsAccumulator(channelCount: 1))
         accumulator.accumulate(try PCMChunk(startFrame: 0, channels: [samples]))
-        return accumulator.finish().overallClippedSampleCount
+        return try #require(accumulator.finish()).overallClippedSampleCount
     }
 }

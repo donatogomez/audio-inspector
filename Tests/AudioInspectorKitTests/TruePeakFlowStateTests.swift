@@ -87,11 +87,12 @@ struct TruePeakFlowStateTests {
         return try #require(TruePeakMeasurement(channels: [channel], method: method))
     }
 
-    private func metrics() -> SignalLevelMetrics {
-        SignalLevelMetrics(
-            channels: [SignalLevelMetrics.Channel(sampleCount: 100, peakSample: 0.5, rms: 0.2, dcOffset: 0, clippedSampleCount: 0)],
+    private func metrics() throws -> SignalLevelMetrics {
+        let channel1 = try #require(SignalLevelMetrics.Channel(sampleCount: 100, peakSample: 0.5, rms: 0.2, dcOffset: 0, clippedSampleCount: 0))
+        return try #require(SignalLevelMetrics(
+            channels: [channel1],
             overallPeakSample: 0.5, overallRMS: 0.2, overallDCOffset: 0, overallClippedSampleCount: 0
-        )
+        ))
     }
 
     private func presentation(of model: ImportFlowModel) -> InspectionPresentation? {
@@ -138,7 +139,7 @@ struct TruePeakFlowStateTests {
         await Task.yield()
         // The signal levels settle first, so the assertion below is about a neighbour that is really
         // there rather than one that was still loading anyway.
-        action.deliver(signalLevelMetrics: .available(metrics()))
+        action.deliver(signalLevelMetrics: .available(try metrics()))
         await Task.yield()
         action.deliver(truePeak: .available(measured))
         await Task.yield()
@@ -146,13 +147,13 @@ struct TruePeakFlowStateTests {
         let shown = try #require(presentation(of: model))
         #expect(shown.truePeak == .available(measured))
         #expect(shown.report == action.report, "the report changed when the true peak settled")
-        #expect(shown.signalLevelMetrics == .available(metrics()), "a settled neighbour was disturbed")
+        #expect(shown.signalLevelMetrics == .available(try metrics()), "a settled neighbour was disturbed")
         #expect(shown.waveform == .loading)
         #expect(shown.spectrogram == .loading)
 
         action.finish(.inspected(
             action.report, waveform: .unavailable, spectrogram: .unavailable,
-            signalLevelMetrics: .available(metrics()), truePeak: .available(measured)
+            signalLevelMetrics: .available(try metrics()), truePeak: .available(measured)
         ))
         await running.value
     }
@@ -189,7 +190,7 @@ struct TruePeakFlowStateTests {
         await action.waitUntilStarted()
         action.deliverReport()
         await Task.yield()
-        action.deliver(signalLevelMetrics: .available(metrics()))
+        action.deliver(signalLevelMetrics: .available(try metrics()))
         await Task.yield()
         action.deliver(truePeak: .failed(message: "The true peak for this file could not be measured."))
         await Task.yield()
@@ -198,11 +199,11 @@ struct TruePeakFlowStateTests {
         #expect(shown.truePeak == .failed(message: "The true peak for this file could not be measured."))
         #expect(shown.report.status == .completed, "a failed measurement degraded the inspection status")
         #expect(shown.report.warnings.isEmpty, "a failed measurement added a warning to the report")
-        #expect(shown.signalLevelMetrics == .available(metrics()))
+        #expect(shown.signalLevelMetrics == .available(try metrics()))
 
         action.finish(.inspected(
             action.report, waveform: .unavailable, spectrogram: .unavailable,
-            signalLevelMetrics: .available(metrics()),
+            signalLevelMetrics: .available(try metrics()),
             truePeak: .failed(message: "The true peak for this file could not be measured.")
         ))
         await running.value

@@ -267,13 +267,12 @@ private extension SharedPCMAnalysisGeneration {
 
         /// True peak's own result.
         ///
-        /// **This is the one consumer whose `finish()` can fail on audio the port accepts**, and the
-        /// difference is arithmetic rather than care: `PCMChunk` refuses `NaN` and infinity at the
-        /// boundary, but it keeps finite samples of any magnitude, and a 48-tap convolution over
-        /// finite-but-enormous values can overflow to a value the domain model refuses. The accumulator
-        /// says so by returning `nil`, and it becomes **true peak's** failure and nobody else's — the
-        /// spectrogram and the signal level metrics settle from the same chunks exactly as they would
-        /// have.
+        /// **A `finish()` that can refuse its own result**, like both of its siblings now: `PCMChunk`
+        /// refuses `NaN` and infinity at the boundary but keeps finite samples of any magnitude, and a
+        /// 48-tap convolution over finite-but-enormous values can overflow to a value the domain model
+        /// refuses. The accumulator says so by returning `nil`, and it becomes **true peak's** failure
+        /// and nobody else's — the spectrogram and the signal level metrics settle from the same chunks
+        /// exactly as they would have.
         ///
         /// The accumulator is a `var` because its `finish()` flushes the tail through the trailing
         /// zero-extension, which mutates. It is a struct, so this works on this function's own copy and
