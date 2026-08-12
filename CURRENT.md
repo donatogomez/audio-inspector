@@ -16,33 +16,38 @@
 >   session protocol in `CLAUDE.md`).
 
 ---
-**Focus:** `add-true-peak-measurement` is **finished and ready to publish.** True peak exists end to
-end: measured from the shared PCM read with **no decode of its own**, shown in **dBTP** with its method
-stated in words, exported **linearly** under `measurements.truePeak`, and demonstrated to be
-independent of the clipped-sample count.
+**True peak is done: merged and archived.** It exists end to end — a domain value that carries its own
+method, an Accelerate accumulator, a **third consumer of the shared PCM read** that costs its DSP and
+no extra decode, a *True peak* section quoting **dBTP**, and `measurements.truePeak` on the wire in
+**linear** amplitude beside the method that produced it, still under `schemaVersion` 1.
 
-**ADR-0019 is `Accepted`**, promoted on its own two conditions and nothing else. The oracle agreement
-was demonstrated against the **production path** — a gate that drives the real decoder and the shared
-read rather than the accumulator in isolation — at **0.0005 dB** against FFmpeg where the pinned
-tolerance is 0.05 dB. And a person saw the surface: on an analytic fixture whose waveform crosses full
-scale *between* samples, *Peak sample* −1.43 dBFS, *Clipped samples* 0 and *True peak* +1.58 dBTP were
-read together, with no warning, colour or diagnosis attached. Its `Promotion` section records what the
-evidence does **not** cover — the 192 kHz exclusion, the smooth-boundary signal class, the standing
-refusal to claim BS.1770 conformance, and the finding that is still not authorised.
+**ADR-0019 is `Accepted`**, promoted on its own two conditions and nothing else: the oracle agreement
+demonstrated against the **production path** rather than a spike — 0.0005 dB where the pinned tolerance
+is 0.05 dB — and a person reading the surface on a file whose true peak genuinely exceeds its sample
+peak. Its `Promotion` section records what that evidence does *not* cover, including the 192 kHz
+exclusion and the standing refusal to claim BS.1770 conformance.
 
-**The spike package is deleted**, its own criterion met; the durable report stays in `docs/spikes/`.
+**No true-peak thread is open.** A positive value is reported as a value, never a flag; turning one
+into a verdict needs the `findings` structure, which does not exist yet.
 
-**What this change deliberately does not contain**: no LUFS, no loudness range, no crest factor, no
-significant maximum frequency, no `findings`, no inter-sample-clipping flag, no score, no new decoder
-and no external dependency. A positive true peak is a value, and turning it into a verdict needs a
-structure that does not exist yet.
+**Debt this left standing, none of it created by that work:**
 
-**One thing is inherited rather than fixed**: interactive VoiceOver still does not enter the report's
-contents — a gap this document's runbook has recorded since the waveform slice. True peak adds a section
-to that same area, so it neither worsens nor repairs it, and nothing here claims a VoiceOver pass.
+- **`SignalLevelMetrics` accepts `inf`/`NaN`** when a file carries finite-but-extreme samples — found in
+  passing while proving consumer isolation, and worth its own decision rather than a quiet patch.
+- **The waveform still reads the file for itself**, so an inspection performs two sample reads rather
+  than one. Migrating it onto the shared seam is the obvious next reduction and is tracked in
+  `add-shared-pcm-read`'s deferred section.
+- **VoiceOver still does not enter the report's contents** — a gap recorded since the waveform slice.
+  Every section added since inherits it, and no pass has ever been claimed.
+- **Deferred metrics**, each named rather than forgotten: LUFS and loudness range, crest factor,
+  significant maximum frequency, an analysis-engine-version field, and the inter-sample-clipping
+  finding.
+- **One unexplained test failure**, seen exactly once immediately after switching branches and never
+  reproduced in twenty subsequent runs, including a first run after a full rebuild. Its name was not
+  captured, which is a gap in how it was observed rather than a known defect; the same tree is green in
+  CI. Worth watching rather than hunting blind.
 
-**Next step:** publish — push the branch and open the PR, then merge. **`openspec archive` runs only
-after the merge**; that is the one part of the task list still open, and it stays open on purpose.
+**Next step:** nothing is in flight. The open threads below are the candidates.
 
 **Other open threads** (see `openspec list` for their real task counts, not restated here):
 `add-static-spectrogram-visualization` (manual validation battery deferred by product decision) and
