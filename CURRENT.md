@@ -16,37 +16,36 @@
 >   session protocol in `CLAUDE.md`).
 
 ---
-**Focus:** `add-true-peak-measurement`, groups 1–4 done. **A true peak can now be computed; nothing
-computes one.** `TruePeakAccumulator` takes `PCMChunk`s handed to it by hand and returns a
-`TruePeakMeasurement`; no decoder, no flow, no state, no interface and no export reference it, and
-nothing in the app produces one.
+**Focus:** `add-true-peak-measurement`, groups 1–5 done — and **group 5's stop rule fired, so the
+wiring is blocked.** The measurement, its model and its accumulator are finished and tested; nothing in
+the app produces a true peak, and nothing should until a separate change lands.
 
-**The two guarantees that shaped the implementation, and that any change to it must preserve.** First,
-`truePeak >= samplePeak` is **structural, not clamped**: phase 0's taps are exactly `0, …, 1, …, 0`
-because `sinc` is evaluated with its integer zeros used as the definition they are, so the stored
-samples are already inside the set the maximum is taken over. There is no `max(samplePeak, …)` anywhere
-in the file, and there must never be — it would hide a broken filter instead of failing on it. Second,
-the result is **bit-exact under any chunking**, which is a stronger contract than the RMS in
-`SignalLevelMetrics` can offer, and it holds because a maximum accumulates nothing.
+**What the end-to-end measurement found.** Reading the file a **fourth time** — computing nothing on it
+— costs about **a quarter of a whole inspection** for FLAC and AAC, which are this product's actual
+subject. The design had accepted the fourth read partly on a cited figure of 0.035 s per decode; that
+number describes the cheapest uncompressed case, and against the real port a compressed file costs an
+order of magnitude more. `design.md` §8 kept an escape hatch for exactly this disagreement, and it is
+used rather than argued around: nothing was folded, merged or migrated, and the number is recorded in
+`docs/spikes/2026-08-12-true-peak-end-to-end-cost.md`.
 
-**One number worth carrying forward.** The samples that must cross a chunk boundary are
-`tapsPerPhase − 1` = **47**, not the 23 the task list first named: 23 is the left context a position
-reads, and 24 more are the lookahead that holds back the last positions of a chunk. Carrying only 23
-loses them, which the third negative control demonstrated by collapsing chunk independence outright.
+**The two costs have different remedies, and only one is the architecture's.** The fourth *decode* is
+what a PCM-sharing seam removes — and it would speed up the existing three operations too, since a FLAC
+inspection already spends most of its time decoding the same file three times. The true-peak **DSP**
+(about half a second for ten minutes of stereo) is the feature's own price and no sharing touches it.
 
-**Performance is better than the spike predicted, not worse**: 10 min stereo costs **0.57 s in Release
-and 1.06 s in Debug**, against the spike's 0.69 s and 5.24 s. The difference is that production keeps
-`Float` natively and reuses its buffers where the spike converted from `Double` per chunk — the caveat
-the spike report already flagged. Memory stays bounded by the chunk, never by duration.
+**What the verdict does not overturn**: ADR-0016's independent-operation rule stands. The objection is
+to a fourth *read*, not to a fourth *consumer* — one pass feeding several accumulators keeps the
+independent cancellation and failure that rule protects. Also confirmed while measuring: the report is
+emitted before any sample read (~1 ms), so a later operation cannot delay the report, the waveform, the
+spectrogram or the signal level metrics; and the accumulator's memory stays bounded by the chunk, never
+by duration.
 
-**Next step:** group 5 — measure the **whole inspection** with three operations versus four, against the
-real decode path, in Debug. Group 4's numbers are DSP only on synthesised buffers; the stop rule in
-`design.md` §8 is still the escape hatch if the end-to-end figure disagrees. Only after that does group 6
-wire the fourth operation in.
+**Next step:** a **new OpenSpec change for PCM sharing** — one read of the file feeding the existing
+consumers, built *on top of* the `AudioDecoding` seam rather than by changing it, exactly as ADR-0016
+permits once measurement justifies one. Group 6 of the true-peak change resumes after it, unchanged.
 
-**ADR-0019 stays `Proposed`.** The oracle now agrees within the pinned 0.05 dB against *production*
-code, which is one of its two promotion conditions; the other is a manual pass over a real surface, and
-no surface exists yet.
+**ADR-0019 stays `Proposed`**, and this verdict does not touch it: it is about what a true peak is and
+how it is reported, not about how many times the file is read.
 
 **Other open threads** (see `openspec list` for their real task counts, not restated here):
 `add-static-spectrogram-visualization` (manual validation battery deferred by product decision) and
