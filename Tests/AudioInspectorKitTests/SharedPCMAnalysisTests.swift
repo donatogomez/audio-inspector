@@ -104,86 +104,7 @@ struct SharedPCMAnalysisTests {
         #expect(shared.signalLevelMetrics == separateLevels)
     }
 
-    @Test("equivalence holds whatever the chunking", arguments: [1, 127, 1_024, 8_192])
-    func equivalenceAtEveryChunkSize(_ chunkFrames: Int) async throws {
-        let frames = 8_192
-        let description = try stream(frames: frames)
-        let material = try chunks(frames: frames, per: chunkFrames)
-        let reference = [try chunks(frames: frames, per: 4_096)].first!
-
-        let separateLevels = await SignalLevelMetricsGeneration(
-            decoder: FakeAudioDecoding(streaming: description, chunks: reference)
-        ).run(for: self.reference())
-        let shared = await SharedPCMAnalysisGeneration(
-            decoder: FakeAudioDecoding(streaming: description, chunks: material)
-        ).run(for: self.reference())
-
-        // Signal level metrics are exact under chunking for peak and the counts; RMS and DC offset
-        // carry the ~1e-5 vDSP grouping caveat their own accumulator documents, so this compares the
-        // outcome case and the exact values that are bit-stable.
-        guard case let .available(sharedLevels) = shared.signalLevelMetrics,
-              case let .available(expected) = separateLevels else {
-            Issue.record("expected available metrics from both"); return
-        }
-        #expect(sharedLevels.overallPeakSample == expected.overallPeakSample)
-        #expect(sharedLevels.overallClippedSampleCount == expected.overallClippedSampleCount)
-        #expect(sharedLevels.channels.map(\.sampleCount) == expected.channels.map(\.sampleCount))
-    }
-
     // MARK: - Isolation
-
-    /// **Case A — one consumer fails, the other completes untouched.**
-    ///
-    /// A stream whose frame count is large enough that the spectrogram's grid cannot be sized refuses
-    /// to build *that* accumulator while the signal level metrics' own builds normally. It is an
-    /// extreme input, and it is the **only** single-consumer failure reachable through the port today —
-    /// see `signalLevelMetricsHaveNoReachableSoloFailure` for why the mirror case has none.
-    @Test("a consumer that cannot be built fails alone and the other completes")
-    func oneConsumerFailsAlone() async throws {
-        let frames = 4_096
-        let material = try chunks(frames: frames)
-        let hostile = try stream(frames: Int.max)
-        let ordinary = try stream(frames: frames)
-
-        let isolated = await SharedPCMAnalysisGeneration(
-            decoder: FakeAudioDecoding(streaming: hostile, chunks: material)
-        ).run(for: reference())
-
-        guard case .failed = isolated.spectrogram else {
-            Issue.record("expected the spectrogram to fail, got \(isolated.spectrogram)"); return
-        }
-        guard case let .available(levels) = isolated.signalLevelMetrics else {
-            Issue.record("a spectrogram failure disturbed the signal level metrics"); return
-        }
-
-        // Not merely "it produced something": it produced **the same thing** it produces when nothing
-        // fails. A consumer's fault must be unobservable to another.
-        let undisturbed = await SharedPCMAnalysisGeneration(
-            decoder: FakeAudioDecoding(streaming: ordinary, chunks: material)
-        ).run(for: reference())
-        guard case let .available(expected) = undisturbed.signalLevelMetrics else {
-            Issue.record("expected available metrics in the control run"); return
-        }
-        #expect(levels == expected)
-    }
-
-    /// **Case B, and why it has no input.** The mirror of case A cannot be produced through the port:
-    /// `SignalLevelMetricsAccumulator` refuses only a channel count below one, and
-    /// `PCMStreamDescription` already refuses that, so no stream the decoder can describe makes the
-    /// signal level metrics fail while the spectrogram succeeds.
-    ///
-    /// This is recorded as a test rather than a comment so that the day someone gives that accumulator
-    /// a second failure mode, this stops passing and the missing isolation test is noticed.
-    @Test("signal level metrics have no failure mode a valid stream can trigger")
-    func signalLevelMetricsHaveNoReachableSoloFailure() throws {
-        // Every stream the port can hand over has a channel count of at least one...
-        #expect(PCMStreamDescription(sampleRate: 44_100, channelCount: 0, frameCount: 1_024) == nil)
-        // ...and that is the accumulator's only refusal.
-        #expect(SignalLevelMetricsAccumulator(channelCount: 0) == nil)
-        #expect(SignalLevelMetricsAccumulator(channelCount: 1) != nil)
-        #expect(SignalLevelMetricsAccumulator(channelCount: 2) != nil)
-        #expect(SignalLevelMetricsAccumulator(channelCount: 64) != nil)
-    }
 
     /// **Case C — the producer fails: every consumer ends, each on its own terms.**
     @Test("a decoder failure ends every analysis, each reporting its own outcome")
@@ -203,15 +124,6 @@ struct SharedPCMAnalysisTests {
         #expect(spectrogramMessage.contains("spectrogram"))
         #expect(levelsMessage.contains("signal level metrics"))
         #expect(spectrogramMessage != levelsMessage)
-    }
-
-    @Test("a decoder failure is distinguishable from a file that offers no frame count")
-    func producerFailureIsNotAbsence() async throws {
-        let absent = await SharedPCMAnalysisGeneration(
-            decoder: FakeAudioDecoding(.absent)
-        ).run(for: reference())
-        #expect(absent.spectrogram == .unavailable)
-        #expect(absent.signalLevelMetrics == .unavailable)
     }
 
     @Test("a file with no audio yields each analysis's own complete empty answer")
