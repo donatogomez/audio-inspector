@@ -167,11 +167,12 @@ can be read against each other. The harness was temporary, in the test target, a
       pass was not timed and the timings belong to §15 of the spike. One cosmetic defect was seen and
       **not** fixed here: on the 64 kHz file the spectrogram's axis draws `32 kHz` over `30 kHz`. It
       lives in presentation, which this change does not touch, and would occur on `main`.
-- [ ] 5.3 **Two of three done.** ADR-0020 was decided from what was measured against production code
-      and is now **Accepted**, with its `Promotion` section recording the evidence and the one respect
-      in which it is weaker than promised; `CURRENT.md` is updated. **`openspec archive` is deliberately
-      not run**: it belongs after the merge, so this task stays open until then rather than being marked
-      on two thirds of its content.
+- [x] 5.3 ADR-0020 was decided from what was measured against production code and is **Accepted**, with
+      its `Promotion` section recording the evidence and the one respect in which it is weaker than
+      promised; `CURRENT.md` was updated. The third action waited for the condition it names —
+      `openspec archive` runs **after** the merge — and this task was left open on two thirds of its
+      content until that happened rather than marked early. It is marked here, on `main`, in the same
+      commit that archives the change.
 
 ## 6. Deferred, and named so it is not quietly dropped
 
