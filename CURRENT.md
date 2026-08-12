@@ -17,8 +17,16 @@
 
 ---
 **Focus:** a new change, **`add-shared-pcm-read`** — contract only, nothing built.
-`add-true-peak-measurement` is finished up to its accumulator and **blocked at group 6** by its own
-stop rule; this change is what unblocks it. Nothing of the true-peak work is lost or redesigned.
+
+> **This branch carries only the shared-PCM thread.** `add-true-peak-measurement` is a separate,
+> active thread on its own branch: its change, **ADR-0019**, `TruePeakMeasurement`,
+> `TruePeakAccumulator` and their tests are **not here**, so `openspec list` and `docs/adr/` on this
+> branch will not show them, and the ADR index has a gap where 0019 will land. That is the separation
+> working, not something missing.
+
+True peak is finished up to its accumulator and **blocked at group 6** by its own stop rule, and this
+change is what unblocks it. Nothing of that work is lost or redesigned — it simply lives elsewhere
+until both threads reach `main`.
 
 **Why this change exists.** An inspection decodes the same file three times today, and would decode it
 four times to add true peak. Measured against the real pipeline, one more read costs about a quarter of
