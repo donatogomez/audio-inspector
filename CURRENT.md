@@ -16,37 +16,34 @@
 >   session protocol in `CLAUDE.md`).
 
 ---
-**Focus:** `add-true-peak-measurement`, groups 1–8 done. **True peak and the clipped-sample count are
-now demonstrated to be independent measurements**, not one measurement and its consequence.
+**Focus:** `add-true-peak-measurement`, groups 1–9 done. **The measurement is now visible *and*
+exportable**: `measurements.truePeak`, a sibling of `measurements.signalLevels`, added without a
+`schemaVersion` bump.
 
-**What the demonstration rests on.** They observe different things: the clipped count looks at stored
-samples at or beyond full scale, the true peak at the waveform reconstructed *between* them, where
-seven of every eight points examined are values no array position holds. The case that proves it is a
-tone whose every stored sample sits at 0.85 while the waveform reaches 1.2 — **zero clipped samples and
-a true peak above full scale, both truthful at once**. A file with both, and a file with neither, are
-tested beside it, and measured silence is kept apart from a file with no frames because collapsing them
-would lose the distinction both domain types exist to preserve.
+**Linear on the wire, dBTP only on screen.** The same number reads as `-6.02 dBTP` in the interface and
+travels as `0.5` in the document — a test sweeps the bytes to keep it that way. The method travels with
+the value, taken from the measurement's own record so a document always describes the methodology that
+actually ran, and the filter is an **identity rather than a recipe**: no taps, no window, no
+coefficients, and no claim of conformance to a standard whose coefficients this project does not use.
 
-**Non-derivation is proved by consequence**, since Swift cannot be asked to show a type lacks a member:
-each result equals what its own accumulator produces from the same audio with the other never
-constructed. A search backs it — every mention of one metric inside the other's files is a comment, and
-no code path, warning or comparison joins them.
+**The distinctions the domain refuses to lose survive the wire.** A silent file that was measured
+exports a real `0`; a file with no frames exports an explicit `null` with `sampleCount: 0` beside it,
+and the key is present in both cases. A value above full scale is exported unclamped, because that is
+the fact the measurement exists to reveal.
 
-**No diagnosis anywhere.** A positive true peak is a value, never a flag. That implements **ADR-0019**,
-which narrows ADR-0006's "flagged when true peak > 0" sentence rather than contradicting it: a flag is
-an inference and belongs to `findings`, with evidence and confidence attached — and `findings` does not
-exist yet.
+**Nothing else moved.** A report without a true peak is byte-identical to before; `measurements` is
+still omitted entirely when neither measurement exists; both children are independently optional, so
+none of the four combinations is faked. The real path is proved end to end — real file, real decode,
+real shared read, real export — because this project has already been caught by unit tests passing
+while the wiring was broken.
 
-**Deliberately not done.** No export: the value stops at the flow state and the screen, and the JSON
-contract, the DTO and the exporter are untouched.
+**ADR-0019 stays `Proposed`.** Export does not promote it: its criteria are agreement with the oracle
+demonstrated **against production code** and a manual validation on a file whose true peak genuinely
+exceeds its sample peak. Neither has happened.
 
-**ADR-0019 stays `Proposed`.** Its criteria are agreement with the oracle demonstrated **against
-production code** and a manual validation on a file whose true peak genuinely exceeds its sample peak.
-Neither has happened; the surface that validation needs now exists.
-
-**Next step:** group 9 — export. `measurements.truePeak` beside `measurements.signalLevels`, its null
-rules, its unit, the isolation `signalLevels` already proves for a report without one, and the schema
-document updated in the same form.
+**Next step:** group 10 — the gates, the manual validation on a confirmed-fresh instance, and the
+decision on ADR-0019's status from what was actually implemented. The spike package is deleted there,
+per its own rule, once this slice's tests cover what it observed.
 
 **Other open threads** (see `openspec list` for their real task counts, not restated here):
 `add-static-spectrogram-visualization` (manual validation battery deferred by product decision) and
