@@ -16,29 +16,34 @@
 >   session protocol in `CLAUDE.md`).
 
 ---
-**Focus:** `add-true-peak-measurement`, groups 1–5 done and **group 6 no longer blocked.**
+**Focus:** `add-true-peak-measurement`, groups 1–6 done. **True peak is wired as a third consumer of
+the shared PCM read**, which is exactly what group 5's stop rule was holding out for: it refused a
+fourth *decode*, never a fourth analysis.
 
-**What unblocked it.** Group 5's stop rule refused a fourth *read* of the file, not a fourth consumer,
-and said this group resumes once a PCM-sharing change lands. It has: shared PCM is merged, archived,
-and its capability is in the canonical specs, so `SharedPCMAnalysisGeneration` now exists here as
-ordinary `main` code. **ADR-0020** is `Accepted` — *independent analyses* is the invariant,
-*independent decodes* was only the implementation ADR-0016 chose while a decode looked free.
+**What that cost, measured rather than hoped.** An inspection reads the samples **twice** — the
+waveform's own read and the shared one, now feeding three analyses — and the third consumer costs its
+DSP and **no decode**: the same delta in every format, where a decode would have differed by format.
+The decode count is asserted at the port, not inferred from the composition's shape, and a control that
+gives true peak its own decoder makes that test fail.
 
-**What group 6 now is, and what its own text still says.** True peak becomes a **third consumer of the
-shared read** — one more accumulator folded from the pass that already exists, costing its own DSP and
-**no additional decode**. The tasks below it were written before that decision and still describe a
-fourth operation with its own decoder instance; that wording is superseded by ADR-0020 and gets revised
-when the group is actually started. **Nothing in it is started and nothing in it is marked.**
+**One thing became provable that was not before.** True peak is the only consumer with a failure a
+*valid* chunk can trigger, so the isolation case that had no input under two consumers now has one: it
+fails alone, the other two settle exactly as separate reads settle on the same audio, and the read runs
+to the end. The bit-exact chunk independence `add-shared-pcm-read` recorded as owed to true peak is
+also paid — nine chunk sizes and whole-file, against an independent reference, no tolerance.
 
-**What must not happen while wiring it.** `TruePeakMeasurement`, `TruePeakAccumulator`, the methodology
-and their tests are finished and are **not** redesigned. If wiring true peak ever required changing the
-accumulator, that is evidence the shared architecture is wrong, and it has to be justified before
-proceeding rather than absorbed. **ADR-0019 stays `Proposed`**: its promotion needs the oracle agreement
-and a manual validation of the surface, neither of which this wiring supplies.
+**Deliberately not done here.** No interface and no export: the value travels beside the report, the
+waveform, the spectrogram and the signal levels, and stops at the flow state. `TruePeakMeasurement` is
+untouched and `TruePeakAccumulator` changed only in visibility — four `public` keywords, to match the
+two sibling accumulators; no constant, no signature and no DSP moved.
 
-**Next step:** group 6 — wire true peak as the third consumer, keeping every independence property the
-other two already prove: one consumer's failure leaves the others untouched, a producer failure ends
-each with its own outcome, and cancellation cancels everything without letting a partial model escape.
+**ADR-0019 stays `Proposed`,** and wiring does not promote it: its own criteria are agreement with the
+oracle demonstrated **against production code** and a manual validation on a file whose true peak
+genuinely exceeds its sample peak. Neither is what this group did.
+
+**Next step:** group 7 — presentation. The value is linear in the domain and dBTP is a presentation
+unit, so the conversion, the section beneath *Signal levels*, the method stated in words, and the
+forbidden-word sweep all belong there.
 
 **Other open threads** (see `openspec list` for their real task counts, not restated here):
 `add-static-spectrogram-visualization` (manual validation battery deferred by product decision) and
