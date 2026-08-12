@@ -16,53 +16,40 @@
 >   session protocol in `CLAUDE.md`).
 
 ---
-**Focus:** `add-shared-pcm-read`, groups 1–4 done. **One read feeds both analyses, the isolation that
-read has to preserve is proved rather than argued, and the saving is now measured against production
-code rather than against a spike's harness.**
+**Focus:** `add-shared-pcm-read` is **finished and published, waiting on review and merge.** The
+spectrogram and the signal level metrics are produced from **one** PCM read instead of two; the
+waveform keeps its own, so an inspection reads the file twice rather than three times.
 
-> **This branch carries only the shared-PCM thread.** `add-true-peak-measurement` is a separate, active
-> thread on its own branch: its change, **ADR-0019**, `TruePeakMeasurement`, `TruePeakAccumulator` and
-> their tests are **not here**, so `openspec list` and `docs/adr/` on this branch will not show them,
-> and the ADR index has a gap where 0019 will land. It stays blocked until this change merges.
+> **This line of work carries only the shared-PCM thread.** `add-true-peak-measurement` is a separate,
+> active thread on its own branch: its change, **ADR-0019**, `TruePeakMeasurement`, `TruePeakAccumulator`
+> and their tests are **not here**, so `openspec list` and `docs/adr/` will not show them, and the ADR
+> index has a gap where 0019 will land. **It stays blocked until shared PCM reaches `main`**, and then
+> resumes by wiring true peak as a third consumer of the shared read — not by redesigning anything it
+> already finished.
 
-**What group 3 established, and what it deliberately did not.** The composition needed **no change** —
-no defect was found — so this was almost entirely tests. A consumer that fails leaves the other's whole
-outcome identical to a control run where nothing failed, and the read still runs to the end, counted at
-the port. A producer failure is tested with a *different* fixture that fails after real audio has been
-accumulated, so "no partial model escapes" is a claim about state that actually existed.
+**What holds this up, in one line each.** Independence is now a property of the composition rather than
+of separate decoders, and it is proved by tests that fail when it breaks — a consumer's failure, a
+producer's failure, and a cancellation forced deterministically while the read is provably mid-flight.
+The saving was re-measured against production code, not against the spike's harness, and one decode's
+worth of time disappears in every format and both build configurations. A person then looked at the
+real app on a confirmed-fresh instance, over a real uncompressed and a real compressed file, and found
+the surface unchanged.
 
-**Cancellation is deterministic now.** A scripted decoder suspends inside the read at a chosen chunk,
-signals that it has arrived, and continues only once released — so the test cancels while the read is
-provably mid-flight. No sleep, no polling, no `Task.yield()`. The racy test written earlier was deleted
-rather than tuned; this replaces it.
+**ADR-0020 is `Accepted`.** Its own promotion criteria were met and were not softened to fit; its
+`Promotion` section also records where the evidence is weaker than promised — the "no consumer starves
+another" rule has no reachable input today, so it stays contract text rather than a test.
 
-**One asymmetry still worth knowing.** Only the spectrogram has a failure a valid stream can trigger, so
-the mirror isolation case has no input. That is pinned as a test that starts failing the day
-`SignalLevelMetricsAccumulator` gains a second failure mode — which is the moment symmetric coverage
-becomes owed.
+**Two things deliberately left undone, so they are not mistaken for oversights.** The waveform still
+reads the file for itself: migrating it is its own change and would take two reads to one.
+`SpectrogramGeneration` and `SignalLevelMetricsGeneration` are no longer wired into an inspection but
+are **kept**, because they are the independent implementation the equivalence tests compare the shared
+read against; deleting them is a separate decision, not a tidy-up at the end of this one.
 
-**Four superseded tests were removed, not left beside their replacements.** One of them compared the
-shared read at chunk size *N* against separate reads at 4 096, which conflates "sharing changed
-something" with "chunking changed something"; every chunk-size comparison now feeds both sides the
-identical sequence, which is what lets it assert full equality with no tolerance.
-
-**What group 4 measured, and what it refused to claim.** The saving reproduces against the real
-coordinator and the real adapters: one redundant decode was removed and one decode's worth of time
-disappeared, in every format and in both build configurations. Several cells recover slightly *more*
-than 100 % of a decode; that is measurement spread and is written down as spread, not banked as a
-second decode that was never removed. The results are identical value for value to the pre-change
-ones on real files, the report still arrives first, and the footprint barely moves when the audio
-grows ten-fold. **The stop rule did not fire, so the architecture stands on evidence rather than on
-the spike having liked it.** Numbers live in the spike's §15, appended beside §§1–14 rather than over
-them; the harness was temporary and is deleted.
-
-**ADR-0020 is now `Accepted`** — its two stated conditions are met, and its `Promotion` section
-records the one respect in which the evidence is weaker than promised: the "no consumer starves
-another" property has no reachable input today, so it stays contract text rather than a test.
-
-**Next step:** group 5 — the four gates plus the Xcode build on a confirmed-fresh process, then manual
-validation that a real compressed file still produces the same report, waveform, spectrogram and
-signal levels, visibly sooner. **Do not archive before merge.**
+**Next step:** review, then merge. **`openspec archive` runs only after the merge** — that is the one
+part of the task list still open, and it stays open on purpose. One cosmetic defect was seen during
+validation and left alone: on a 64 kHz file the spectrogram's frequency axis draws its Nyquist label
+over the next tick. It lives in presentation, predates this change, and fixing it here would widen a
+finished diff.
 
 **Other open threads** (see `openspec list` for their real task counts, not restated here):
 `add-static-spectrogram-visualization` (manual validation battery deferred by product decision) and
