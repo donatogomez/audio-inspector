@@ -424,16 +424,34 @@ touched in this group**.
 
 ## 10. Gates, validation and closure
 
-- [ ] 10.1 Four gates green — `./Scripts/check-boundaries.sh`, `swift build -Xswiftc -warnings-as-errors`,
-      `swift test`, `OPENSPEC_TELEMETRY=0 openspec validate --all --strict` — plus the Xcode app build
+- [x] 10.1 All six green over the final tree: `./Scripts/check-boundaries.sh`,
+      `swift build -Xswiftc -warnings-as-errors`, `swift test` (run twice, no flake),
+      `OPENSPEC_TELEMETRY=0 openspec validate --all --strict`, the Xcode `AudioInspector` Debug build,
       and `git diff --check`.
-- [ ] 10.2 Manual validation on a **confirmed-fresh** process instance (launched by executable path,
-      never `open` — the stale-instance trap `docs/manual-validation-mvp.md` already documents): the
-      on-screen *True peak* section and the exported `measurements.truePeak` both correct, on a file
-      whose true peak genuinely exceeds its sample peak, reproducibly.
-- [ ] 10.3 Decide **ADR-0019**'s status from what was actually implemented, delete the spike per its own
-      criterion once the slice's tests cover its observations, update `CURRENT.md`, and archive through
-      `openspec archive` **after merge**.
+- [x] 10.2 **Passed** (`docs/manual-validation-mvp.md`). Launched by executable path from the freshly
+      built binary, never `open` — the process this project has been caught by before is still alive and
+      still unkillable, and launching by path is immune to it. The fixture is **analytic rather than
+      chosen**: a tone shifted an eighth of a cycle so every stored sample lands at `amplitude/√2`,
+      because whether a real master crosses full scale between samples is an accident of that master.
+      Seen together on screen: *Peak sample* **−1.43 dBFS**, *Clipped samples* **0**, *True peak*
+      **+1.58 dBTP** with its per-channel breakdown and its method line — the case this measurement
+      exists for, observed rather than argued, with no warning, colour, badge or diagnosis attached.
+      The exported document carries `1.1999318599700928` **linearly** where the screen shows `+1.58`,
+      with `method` intact, `schemaVersion` 1 and no path. Reproducibility was checked in a stronger
+      form than a second export: the exported value is **bit-identical** to an independent run of the
+      same pipeline in another process. **VoiceOver was not exercised** and none is claimed — the known
+      traversal gap is inherited, not introduced.
+- [ ] 10.3 **Three of four done.** **ADR-0019 is `Accepted`**, promoted on its own two conditions and
+      nothing else: the oracle agreement demonstrated **against the production path** — a new gate drives
+      the real decoder and the shared read, not the accumulator in isolation — at **0.0005 dB** against
+      FFmpeg 8.1.2 where the pinned tolerance is 0.05 dB, and the manual validation above. Its
+      `Promotion` section records the evidence and the four things it does **not** cover, including the
+      192 kHz exclusion and the standing refusal to claim BS.1770 conformance. The spike package
+      `Spike/validate-true-peak/` is **deleted**, its own criterion having been met (ADR Accepted, and
+      the slice's tests covering what it observed); the durable report in `docs/spikes/` stays. Nothing
+      imports it and no build references it. `CURRENT.md` is updated. **`openspec archive` runs after
+      the merge**, so this task stays open until then rather than being marked on three quarters of its
+      content.
 
 ## 11. Deferred, and named so it is not quietly dropped
 
