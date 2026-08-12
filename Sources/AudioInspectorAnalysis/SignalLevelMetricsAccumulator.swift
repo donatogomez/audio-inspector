@@ -22,7 +22,7 @@ import AudioInspectorDomain
 /// assumption, per this project's own precedent for exactly this question (`SpectrogramAccumulator`,
 /// `PCMChunk.isProvablyAllFinite`).
 ///
-/// ## Accumulates in `Double`, stores in `Float`
+/// ## Accumulates in `Double`, stores in `Float` — **and widens before reducing, not after**
 ///
 /// Measured to cost nothing extra: the combined pass above was **0.071 s in Release accumulating in
 /// Double versus 0.077 s accumulating in Float** — memory bandwidth and per-sample overhead dominate,
@@ -32,6 +32,23 @@ import AudioInspectorDomain
 /// accumulate visible rounding error one sample at a time. The running totals are `Double`; only the
 /// final per-channel and overall values, in `finish()`, are narrowed to the `Float` the domain type
 /// already uses for every other amplitude.
+///
+/// **Where the widening happens is not a detail, and getting it wrong produced a real defect.** The
+/// first implementation ran `vDSP_sve`/`vDSP_svesq` over the `Float` samples and widened each chunk's
+/// *result*, which meant every partial sum was formed in `Float32`. `PCMChunk` refuses `NaN` and
+/// infinity at the boundary but deliberately keeps finite samples of **any** magnitude, and a partial
+/// sum of those overflows long before the answer would: measured, the sum of squares went non-finite
+/// from about `1e18` and the plain sum from about `1e37`, with alternating signs turning `+inf + -inf`
+/// into a `NaN`. It was also **chunk-dependent** — the same file measured at one frame per chunk stayed
+/// finite where the same file at 4 096 did not — which contradicted this type's own independence
+/// guarantee.
+///
+/// The mathematics never justified any of that. Both results are bounded by the largest magnitude the
+/// input contains: `|mean| ≤ max|x|` and `RMS = sqrt(mean(x²)) ≤ max|x|`, so **a finite `Float` input
+/// always has a finite `Float` answer**. The overflow was purely intermediate, and the fix is to widen
+/// each chunk to `Double` *before* reducing it. In `Double` the intermediates cannot overflow either:
+/// the largest `Float` squared is ~1.16e77, and even 2⁵³ of them sum to ~1e93 against `Double`'s own
+/// ~1.8e308 ceiling.
 ///
 /// ## One pass, `O(channelCount)` memory
 ///
@@ -59,6 +76,11 @@ public struct SignalLevelMetricsAccumulator {
     private var sumOfSquares: [Double]
     private var clippedCount: [Int]
     private var sampleCount: [Int]
+
+    /// The chunk widened to `Double`, grown to the largest chunk seen and then reused — so the widening
+    /// costs no allocation per chunk and memory stays a function of the caller's buffer size, never of
+    /// the file's duration. The same technique `TruePeakAccumulator` already uses for its own scratch.
+    private var widened: [Double] = []
 
     /// Fails only on a channel count no stream can have.
     public init?(channelCount: Int) {
@@ -99,43 +121,63 @@ public struct SignalLevelMetricsAccumulator {
         guard !samples.isEmpty else { return }
         let count = vDSP_Length(samples.count)
 
+        // The maximum is taken in `Float`: a maximum of magnitudes cannot overflow, since its result is
+        // one of the inputs. The two *sums* are the ones that can, so they are formed in `Double`.
         var maxMagnitude: Float = 0
         vDSP_maxmgv(samples, 1, &maxMagnitude, count)
         peak[channel] = max(peak[channel], Double(maxMagnitude))
 
-        var sampleSum: Float = 0
-        vDSP_sve(samples, 1, &sampleSum, count)
-        sum[channel] += Double(sampleSum)
+        if widened.count < samples.count { widened = [Double](repeating: 0, count: samples.count) }
+        widened.withUnsafeMutableBufferPointer { destination in
+            guard let target = destination.baseAddress else { return }
+            vDSP_vspdp(samples, 1, target, 1, count)
 
-        var sampleSumOfSquares: Float = 0
-        vDSP_svesq(samples, 1, &sampleSumOfSquares, count)
-        sumOfSquares[channel] += Double(sampleSumOfSquares)
+            var sampleSum = 0.0
+            vDSP_sveD(target, 1, &sampleSum, count)
+            sum[channel] += sampleSum
+
+            var sampleSumOfSquares = 0.0
+            vDSP_svesqD(target, 1, &sampleSumOfSquares, count)
+            sumOfSquares[channel] += sampleSumOfSquares
+        }
 
         clippedCount[channel] += Self.clippedCount(in: samples)
         sampleCount[channel] += samples.count
     }
 
-    /// The finished metrics: per channel, plus the overall values computed from these same running
-    /// totals — never by re-deriving them from the already-narrowed `Float` values below, which would
-    /// compound rounding that computing directly from the `Double` totals avoids.
-    public func finish() -> SignalLevelMetrics {
-        let channels = (0 ..< channelCount).map { channel -> SignalLevelMetrics.Channel in
+    /// The finished metrics, or `nil` when they could not be described honestly.
+    ///
+    /// Optional for the reason `SpectrogramAccumulator.finish()` and `TruePeakAccumulator.finish()`
+    /// already are, and this type was the odd one out: the domain model refuses states it cannot
+    /// describe, and a producer that cannot satisfy it must say so rather than hand back something
+    /// contradictory. With the widening fixed above, every guard the model applies is met by
+    /// construction — `|mean| ≤ max|x|` and `RMS ≤ max|x|`, both finite for finite input — so this is a
+    /// **backstop**, not a path the arithmetic can reach. Whoever holds the context turns the `nil` into
+    /// a failed outcome; nothing invents a number to avoid it.
+    public func finish() -> SignalLevelMetrics? {
+        var channels: [SignalLevelMetrics.Channel] = []
+        channels.reserveCapacity(channelCount)
+        for channel in 0 ..< channelCount {
             let n = sampleCount[channel]
-            guard n > 0 else {
-                return SignalLevelMetrics.Channel(
+            let made: SignalLevelMetrics.Channel?
+            if n > 0 {
+                let mean = sum[channel] / Double(n)
+                let meanSquare = sumOfSquares[channel] / Double(n)
+                made = SignalLevelMetrics.Channel(
+                    sampleCount: n,
+                    peakSample: Float(peak[channel]),
+                    rms: Float(meanSquare.squareRoot()),
+                    dcOffset: Float(mean),
+                    clippedSampleCount: clippedCount[channel]
+                )
+            } else {
+                made = SignalLevelMetrics.Channel(
                     sampleCount: 0, peakSample: nil, rms: nil, dcOffset: nil,
                     clippedSampleCount: clippedCount[channel]
                 )
             }
-            let mean = sum[channel] / Double(n)
-            let meanSquare = sumOfSquares[channel] / Double(n)
-            return SignalLevelMetrics.Channel(
-                sampleCount: n,
-                peakSample: Float(peak[channel]),
-                rms: Float(meanSquare.squareRoot()),
-                dcOffset: Float(mean),
-                clippedSampleCount: clippedCount[channel]
-            )
+            guard let made else { return nil }
+            channels.append(made)
         }
 
         let totalSamples = sampleCount.reduce(0, +)

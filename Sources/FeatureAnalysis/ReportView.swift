@@ -417,17 +417,22 @@ private extension SignalLevelMetricsPresentation {
     /// A stereo signal with an asymmetric peak between channels, so the preview shows the per-channel
     /// breakdown rather than two identical numbers.
     static var preview: SignalLevelMetricsPresentation {
-        let channels = [
-            SignalLevelMetrics.Channel(sampleCount: 13_230_000, peakSample: 0.708, rms: 0.25, dcOffset: 0.0006, clippedSampleCount: 0),
-            SignalLevelMetrics.Channel(sampleCount: 13_230_000, peakSample: 0.501, rms: 0.18, dcOffset: -0.0011, clippedSampleCount: 12),
-        ]
-        return .metrics(SignalLevelMetrics(
-            channels: channels,
-            overallPeakSample: 0.708,
-            overallRMS: 0.22,
-            overallDCOffset: -0.0003,
-            overallClippedSampleCount: 12
-        ))
+        guard let left = SignalLevelMetrics.Channel(
+                  sampleCount: 13_230_000, peakSample: 0.708, rms: 0.25, dcOffset: 0.0006, clippedSampleCount: 0
+              ),
+              let right = SignalLevelMetrics.Channel(
+                  sampleCount: 13_230_000, peakSample: 0.501, rms: 0.18, dcOffset: -0.0011, clippedSampleCount: 12
+              ),
+              let metrics = SignalLevelMetrics(
+                  channels: [left, right],
+                  overallPeakSample: 0.708,
+                  overallRMS: 0.22,
+                  overallDCOffset: -0.0003,
+                  overallClippedSampleCount: 12
+              ) else {
+            return .absent
+        }
+        return .metrics(metrics)
     }
 }
 

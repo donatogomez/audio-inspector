@@ -29,13 +29,14 @@ struct JSONReportExportTruePeakTests {
         return try #require(TruePeakMeasurement(channels: channels, method: built))
     }
 
-    private func signalLevels() -> SignalLevelMetrics {
-        SignalLevelMetrics(
-            channels: [SignalLevelMetrics.Channel(
+    private func signalLevels() throws -> SignalLevelMetrics {
+        let channel1 = try #require(SignalLevelMetrics.Channel(
                 sampleCount: 44_100, peakSample: 0.5, rms: 0.25, dcOffset: 0.001, clippedSampleCount: 0
-            )],
+            ))
+        return try #require(SignalLevelMetrics(
+            channels: [channel1],
             overallPeakSample: 0.5, overallRMS: 0.25, overallDCOffset: 0.001, overallClippedSampleCount: 0
-        )
+        ))
     }
 
     // MARK: 1-2. The object, and its overall value
@@ -201,7 +202,7 @@ struct JSONReportExportTruePeakTests {
     /// No measurement, no key — never `"truePeak": null`, which a consumer could not tell apart from a
     /// measurement that failed to encode.
     @Test func anAbsentMeasurementOmitsTheKeyEntirely() throws {
-        let object = try exportValue(report(status: .completed), signalLevelMetrics: signalLevels())
+        let object = try exportValue(report(status: .completed), signalLevelMetrics: try signalLevels())
         let measurements = try #require(object["measurements"])
         #expect(measurements["signalLevels"] != nil)
         #expect(measurements["truePeak"] == nil, "an absent measurement appeared as a key")
@@ -220,8 +221,8 @@ struct JSONReportExportTruePeakTests {
         let subject = report(status: .completed)
         #expect(try exportData(subject) == (try exportData(subject, truePeak: nil)))
         #expect(
-            try exportData(subject, signalLevelMetrics: signalLevels())
-                == (try exportData(subject, signalLevelMetrics: signalLevels(), truePeak: nil))
+            try exportData(subject, signalLevelMetrics: try signalLevels())
+                == (try exportData(subject, signalLevelMetrics: try signalLevels(), truePeak: nil))
         )
     }
 
@@ -232,7 +233,7 @@ struct JSONReportExportTruePeakTests {
     /// measurements together.
     @Test func bothMeasurementsCoexistAsSiblings() throws {
         let object = try exportValue(
-            report(status: .completed), signalLevelMetrics: signalLevels(), truePeak: try measurement([1.2])
+            report(status: .completed), signalLevelMetrics: try signalLevels(), truePeak: try measurement([1.2])
         )
         let measurements = try #require(object["measurements"])
 
@@ -245,9 +246,9 @@ struct JSONReportExportTruePeakTests {
 
     /// Exporting a true peak changes **not one byte** of the signal levels object beside it.
     @Test func addingTruePeakLeavesTheSignalLevelsObjectUntouched() throws {
-        let without = try exportValue(report(status: .completed), signalLevelMetrics: signalLevels())
+        let without = try exportValue(report(status: .completed), signalLevelMetrics: try signalLevels())
         let with = try exportValue(
-            report(status: .completed), signalLevelMetrics: signalLevels(), truePeak: try measurement([1.2])
+            report(status: .completed), signalLevelMetrics: try signalLevels(), truePeak: try measurement([1.2])
         )
         #expect(without["measurements"]?["signalLevels"] == with["measurements"]?["signalLevels"])
     }
@@ -303,8 +304,8 @@ struct JSONReportExportTruePeakTests {
         let measured = try measurement([1.2, 0.5])
         let subject = report(status: .completed)
         #expect(
-            try exportData(subject, signalLevelMetrics: signalLevels(), truePeak: measured)
-                == (try exportData(subject, signalLevelMetrics: signalLevels(), truePeak: measured))
+            try exportData(subject, signalLevelMetrics: try signalLevels(), truePeak: measured)
+                == (try exportData(subject, signalLevelMetrics: try signalLevels(), truePeak: measured))
         )
     }
 

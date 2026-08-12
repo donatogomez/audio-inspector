@@ -106,13 +106,17 @@ struct SignalLevelMetricsGeneration {
             // a complete, empty answer — every channel reports "not computable" — rather than a missing
             // one.
             guard let accumulator else {
-                guard let empty = SignalLevelMetricsAccumulator(channelCount: stream.channelCount) else {
+                guard let empty = SignalLevelMetricsAccumulator(channelCount: stream.channelCount),
+                      let model = empty.finish() else {
                     return .failed(message: "The signal level metrics for this file could not be produced.")
                 }
-                return .available(empty.finish())
+                return .available(model)
             }
 
-            return .available(accumulator.finish())
+            guard let model = accumulator.finish() else {
+                return .failed(message: "The signal level metrics for this file could not be produced.")
+            }
+            return .available(model)
         } catch {
             // Cancellation is the user replacing this operation, so it says nothing about the file and
             // must not be dressed up as a limitation of it.

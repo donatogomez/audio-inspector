@@ -16,38 +16,37 @@
 >   session protocol in `CLAUDE.md`).
 
 ---
-**True peak is done: merged and archived.** It exists end to end — a domain value that carries its own
-method, an Accelerate accumulator, a **third consumer of the shared PCM read** that costs its DSP and
-no extra decode, a *True peak* section quoting **dBTP**, and `measurements.truePeak` on the wire in
-**linear** amplitude beside the method that produced it, still under `schemaVersion` 1.
+**Focus:** a small robustness fix — **`SignalLevelMetrics` can no longer publish a value that is not a
+number.**
 
-**ADR-0019 is `Accepted`**, promoted on its own two conditions and nothing else: the oracle agreement
-demonstrated against the **production path** rather than a spike — 0.0005 dB where the pinned tolerance
-is 0.05 dB — and a person reading the surface on a file whose true peak genuinely exceeds its sample
-peak. Its `Promotion` section records what that evidence does *not* cover, including the 192 kHz
-exclusion and the standing refusal to claim BS.1770 conformance.
+**What was wrong, and what was not.** From samples that were individually finite, the accumulator
+produced `rms == +infinity` and `dcOffset == NaN`, and the model accepted them as measurements. The
+input was valid: `PCMChunk` refuses non-finite samples at the boundary but deliberately keeps finite
+ones of any magnitude, because a file may genuinely carry a sample beyond full scale. The cause was an
+implementation detail — each chunk's partial sums were formed in `Float32` before being widened — and it
+was **chunk-dependent**, which contradicted this capability's own independence guarantee.
 
-**No true-peak thread is open.** A positive value is reported as a value, never a flag; turning one
-into a verdict needs the `findings` structure, which does not exist yet.
+**Why the fix is a repair rather than a clamp.** The answer always fits: the mean and the RMS are both
+bounded by the largest magnitude in the input, so a finite `Float` input has a finite `Float` result.
+The overflow was purely intermediate, so each chunk is now widened *before* it is reduced, where no
+intermediate can overflow. **The measurement is preserved exactly** — nothing is clamped, substituted or
+invented — and the tests assert the values are correct rather than merely finite, which is the
+difference between the two.
 
-**Debt this left standing, none of it created by that work:**
+**The model now refuses what cannot describe a measurement**, as its two sibling value types already
+did, and `finish()` became optional like theirs so an impossible result reaches the existing `failed`
+outcome instead of a new state. With the reduction fixed, that path is a backstop the arithmetic cannot
+reach. Measured cost: 0.043 s → 0.064 s in Release over ten minutes of stereo.
 
-- **`SignalLevelMetrics` accepts `inf`/`NaN`** when a file carries finite-but-extreme samples — found in
-  passing while proving consumer isolation, and worth its own decision rather than a quiet patch.
-- **The waveform still reads the file for itself**, so an inspection performs two sample reads rather
-  than one. Migrating it onto the shared seam is the obvious next reduction and is tracked in
-  `add-shared-pcm-read`'s deferred section.
-- **VoiceOver still does not enter the report's contents** — a gap recorded since the waveform slice.
-  Every section added since inherits it, and no pass has ever been claimed.
-- **Deferred metrics**, each named rather than forgotten: LUFS and loudness range, crest factor,
-  significant maximum frequency, an analysis-engine-version field, and the inter-sample-clipping
-  finding.
-- **One unexplained test failure**, seen exactly once immediately after switching branches and never
-  reproduced in twenty subsequent runs, including a first run after a full rebuild. Its name was not
-  captured, which is a gap in how it was observed rather than a known defect; the same tree is green in
-  CI. Worth watching rather than hunting blind.
+**A second, unrelated finding came out of this work, and it is now identified rather than mysterious.**
+The intermittent test failure recorded earlier is the flow-state suites' own pattern: they deliver an
+update and wait with a single `Task.yield()` for another task to apply it. Stressed, the spectrogram's
+suite fails about two runs in eight and true peak's about one in eight — signal levels' did not fail in
+the same sample. **It predates this change and is not touched by it**; the fix belongs with those
+suites, replacing the yield with the deterministic handshake the shared-PCM cancellation tests already
+use.
 
-**Next step:** nothing is in flight. The open threads below are the candidates.
+**Next step:** review and merge this fix; `openspec archive` runs after that.
 
 **Other open threads** (see `openspec list` for their real task counts, not restated here):
 `add-static-spectrogram-visualization` (manual validation battery deferred by product decision) and

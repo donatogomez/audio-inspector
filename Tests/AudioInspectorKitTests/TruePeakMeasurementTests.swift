@@ -21,7 +21,7 @@ struct TruePeakMeasurementTests {
 
     @Test("a mono measurement reports one channel and takes its value as the overall")
     func mono() throws {
-        let measured = try measurement([channel(44_100, 0.9)])
+        let measured = try measurement([try channel(44_100, 0.9)])
         #expect(measured.channels.count == 1)
         #expect(measured.channels[0].truePeak == 0.9)
         #expect(measured.overallTruePeak == 0.9)
@@ -29,7 +29,7 @@ struct TruePeakMeasurementTests {
 
     @Test("a stereo measurement keeps each channel's own value, in order")
     func stereo() throws {
-        let measured = try measurement([channel(44_100, 0.9), channel(44_100, 0.3)])
+        let measured = try measurement([try channel(44_100, 0.9), try channel(44_100, 0.3)])
         #expect(measured.channels.map(\.truePeak) == [0.9, 0.3])
         #expect(measured.overallTruePeak == 0.9)
     }
@@ -37,8 +37,8 @@ struct TruePeakMeasurementTests {
     @Test("a multichannel measurement takes the maximum across every channel")
     func multichannel() throws {
         let measured = try measurement([
-            channel(1_000, 0.1), channel(1_000, 0.55), channel(1_000, 0.2),
-            channel(1_000, 0.44), channel(1_000, 0.3), channel(1_000, 0.05),
+            try channel(1_000, 0.1), try channel(1_000, 0.55), try channel(1_000, 0.2),
+            try channel(1_000, 0.44), try channel(1_000, 0.3), try channel(1_000, 0.05),
         ])
         #expect(measured.channels.count == 6)
         #expect(measured.overallTruePeak == 0.55)
@@ -46,7 +46,7 @@ struct TruePeakMeasurementTests {
 
     @Test("the channel index is positional, and the type asserts no layout")
     func positionalChannels() throws {
-        let measured = try measurement([channel(10, 0.2), channel(10, 0.8)])
+        let measured = try measurement([try channel(10, 0.2), try channel(10, 0.8)])
         // The only way to identify a channel is its position — there is nothing named left or right to
         // read, which is what keeps a stereo pair from being asserted for a file that never declared one.
         #expect(measured.channels.first?.truePeak == 0.2)
@@ -72,13 +72,13 @@ struct TruePeakMeasurementTests {
 
     @Test("every channel empty leaves the overall with nothing to report")
     func allChannelsEmpty() throws {
-        let measured = try measurement([channel(0, nil), channel(0, nil)])
+        let measured = try measurement([try channel(0, nil), try channel(0, nil)])
         #expect(measured.overallTruePeak == nil)
     }
 
     @Test("an empty channel beside a measured one does not drag the overall down")
     func oneEmptyOneMeasured() throws {
-        let measured = try measurement([channel(0, nil), channel(44_100, 0.75)])
+        let measured = try measurement([try channel(0, nil), try channel(44_100, 0.75)])
         // An absence contributes nothing; it must not be read as a zero that a maximum would ignore
         // anyway, nor as a value that lowers the answer.
         #expect(measured.overallTruePeak == 0.75)
@@ -86,7 +86,7 @@ struct TruePeakMeasurementTests {
 
     @Test("an empty channel beside a silent one keeps them distinguishable")
     func emptyBesideSilent() throws {
-        let measured = try measurement([channel(0, nil), channel(1_000, 0)])
+        let measured = try measurement([try channel(0, nil), try channel(1_000, 0)])
         #expect(measured.overallTruePeak == 0)
         #expect(measured.channels[0].truePeak == nil)
         #expect(measured.channels[1].truePeak == 0)
@@ -98,22 +98,22 @@ struct TruePeakMeasurementTests {
         Float(0), 0.5, 0.9999999, 1.0, 1.0000001, 1.05, 1.5, 8.0, 1_000.0,
     ] as [Float])
     func valuesSurviveUnchanged(_ value: Float) throws {
-        let measured = try measurement([channel(1_000, value)])
+        let measured = try measurement([try channel(1_000, value)])
         #expect(measured.channels[0].truePeak == value)
         #expect(measured.overallTruePeak == value)
     }
 
     @Test("a value beyond full scale is kept, never clamped to one")
     func beyondFullScaleIsNotClamped() throws {
-        let measured = try measurement([channel(1_000, 1.5)])
+        let measured = try measurement([try channel(1_000, 1.5)])
         #expect(measured.overallTruePeak == 1.5)
         #expect(measured.overallTruePeak != 1.0)
     }
 
     @Test("nothing is normalised: two measurements of different level stay different")
     func nothingIsNormalised() throws {
-        let quiet = try measurement([channel(1_000, 0.1)])
-        let loud = try measurement([channel(1_000, 1.2)])
+        let quiet = try measurement([try channel(1_000, 0.1)])
+        let loud = try measurement([try channel(1_000, 1.2)])
         #expect(quiet.overallTruePeak == 0.1)
         #expect(loud.overallTruePeak == 1.2)
         // A type that normalised would make these compare equal, which would destroy exactly the
@@ -125,8 +125,8 @@ struct TruePeakMeasurementTests {
     func valuesAreLinear() throws {
         // 1.0 is full scale and would be 0 dBTP; 0.5 would be −6.02 dBTP. A model holding decibels
         // would have to represent full scale as 0, which is the value linear scale uses for silence.
-        let fullScale = try measurement([channel(1_000, 1.0)])
-        let silence = try measurement([channel(1_000, 0)])
+        let fullScale = try measurement([try channel(1_000, 1.0)])
+        let silence = try measurement([try channel(1_000, 0)])
         #expect(fullScale.overallTruePeak == 1.0)
         #expect(silence.overallTruePeak == 0)
         #expect(fullScale != silence)
@@ -179,7 +179,7 @@ struct TruePeakMeasurementTests {
     func negativeZeroIsAccepted() throws {
         // `-0.0 >= 0` is true in IEEE 754, so the guard admits it. It compares equal to zero, so it
         // cannot be mistaken for a negative value by any consumer.
-        let measured = try measurement([channel(10, -0.0)])
+        let measured = try measurement([try channel(10, -0.0)])
         #expect(measured.overallTruePeak == 0)
     }
 
@@ -187,7 +187,7 @@ struct TruePeakMeasurementTests {
 
     @Test("the overall is derived, so there is no way to construct one that disagrees")
     func overallIsDerived() throws {
-        let measured = try measurement([channel(100, 0.2), channel(100, 0.9), channel(100, 0.4)])
+        let measured = try measurement([try channel(100, 0.2), try channel(100, 0.9), try channel(100, 0.4)])
         // The only source of the overall is the channels themselves: the type exposes no initialiser
         // argument and no stored property for it, so a producer cannot fill in a different number.
         #expect(measured.overallTruePeak == measured.channels.compactMap(\.truePeak).max())
@@ -196,7 +196,7 @@ struct TruePeakMeasurementTests {
 
     @Test("the overall is the maximum, never a mean")
     func overallIsNotAMean() throws {
-        let measured = try measurement([channel(100, 0.2), channel(100, 1.0)])
+        let measured = try measurement([try channel(100, 0.2), try channel(100, 1.0)])
         #expect(measured.overallTruePeak == 1.0)
         // The mean would be 0.6 — a level neither channel reached.
         #expect(measured.overallTruePeak != 0.6)
@@ -204,8 +204,8 @@ struct TruePeakMeasurementTests {
 
     @Test("the overall ignores channel order")
     func overallIgnoresOrder() throws {
-        let ascending = try measurement([channel(100, 0.1), channel(100, 0.7)])
-        let descending = try measurement([channel(100, 0.7), channel(100, 0.1)])
+        let ascending = try measurement([try channel(100, 0.1), try channel(100, 0.7)])
+        let descending = try measurement([try channel(100, 0.7), try channel(100, 0.1)])
         #expect(ascending.overallTruePeak == descending.overallTruePeak)
     }
 
@@ -213,7 +213,7 @@ struct TruePeakMeasurementTests {
 
     @Test("the method records the factor and the filter that produced the value")
     func methodTravelsWithTheValue() throws {
-        let measured = try measurement([channel(100, 0.9)])
+        let measured = try measurement([try channel(100, 0.9)])
         #expect(measured.method.oversamplingFactor == 8)
         #expect(measured.method.filter == .polyphaseFIRv1)
     }
@@ -249,7 +249,7 @@ struct TruePeakMeasurementTests {
     func methodParticipatesInEquality() throws {
         let eightTimesMethod = try #require(TruePeakMethod(oversamplingFactor: 8, filter: .polyphaseFIRv1))
         let fourTimesMethod = try #require(TruePeakMethod(oversamplingFactor: 4, filter: .polyphaseFIRv1))
-        let measured = try [channel(100, 0.9)]
+        let measured = [try channel(100, 0.9)]
         let eightTimes = try #require(TruePeakMeasurement(channels: measured, method: eightTimesMethod))
         let fourTimes = try #require(TruePeakMeasurement(channels: measured, method: fourTimesMethod))
         // The same number produced two ways is not the same measurement — which is the whole reason
@@ -261,11 +261,11 @@ struct TruePeakMeasurementTests {
 
     @Test("equality reproduces the linear values exactly")
     func equalityIsByValue() throws {
-        let left = try measurement([channel(100, 1.0500001), channel(0, nil)])
-        let right = try measurement([channel(100, 1.0500001), channel(0, nil)])
+        let left = try measurement([try channel(100, 1.0500001), try channel(0, nil)])
+        let right = try measurement([try channel(100, 1.0500001), try channel(0, nil)])
         #expect(left == right)
 
-        let nudged = try measurement([channel(100, 1.0500002), channel(0, nil)])
+        let nudged = try measurement([try channel(100, 1.0500002), try channel(0, nil)])
         #expect(left != nudged)
     }
 
@@ -301,7 +301,7 @@ struct TruePeakMeasurementTests {
         // Compile-time evidence: a non-`Sendable` type cannot satisfy this generic constraint under
         // Swift 6, so this failing to build *is* the assertion.
         func requireSendable(_ value: some Sendable) -> Bool { _ = value; return true }
-        #expect(requireSendable(try measurement([channel(10, 0.5)])))
+        #expect(requireSendable(try measurement([try channel(10, 0.5)])))
         #expect(requireSendable(TruePeakMethod(oversamplingFactor: 8, filter: .polyphaseFIRv1)!))
         #expect(requireSendable(TruePeakFilterIdentifier.polyphaseFIRv1))
     }
