@@ -262,7 +262,7 @@ touched in this group**.
       Release / 0.53 s Debug for the same file and **no amount of sharing removes it**. That is the
       feature's own price, not the architecture's, and the stop rule does not govern it.
 
-## 6. Wiring — a fourth independent operation
+## 6. Wiring — a third consumer of the shared read
 
 > **UNBLOCKED (2026-08-12).** Group 5's stop rule rejected a fourth **read**, not a fourth consumer,
 > and named its own release condition: *this group resumes once a PCM-sharing change lands*. It has.
@@ -271,32 +271,43 @@ touched in this group**.
 > into several accumulators — is ordinary code on this branch now. **ADR-0020 is `Accepted`**:
 > *independent analyses* is the invariant, *independent decodes* was only the implementation.
 >
-> **The shape of this group changed with it, and its tasks below have not caught up yet.** True peak
-> becomes a **third consumer of the shared read** — one more accumulator folded from the pass that
-> already exists, costing its own DSP and **no additional decode** — where 6.1 still says "a fourth
-> independent operation … with its own decoder instance", which is exactly what the measurement
-> rejected. That wording is superseded by ADR-0020 and is revised when this group is started, not
-> before: rewriting tasks nobody is executing would be a second guess at a design that is already
-> recorded. The independence properties 6.2 demands are unchanged and are now held by construction —
-> a consumer's failure leaves the others untouched, a producer failure ends each with its own outcome,
-> and cancellation lets no partial model escape.
+> **6.1 and 6.2 are rewritten below, and the original wording is quoted so the change is auditable
+> rather than silent.** They said *"Add the generation as a **fourth** independent operation over the
+> existing `AudioDecoding` port, with its own decoder instance and its own cancellation"* and *"Extend
+> the inspection outcome and the presentation state with a **fourth** case … each of the four
+> operations"*. **Superseded by ADR-0020**: a fourth *read* is exactly what group 5's measurement
+> rejected, and independence no longer comes from owning a decoder. Only the mechanism changed — every
+> property those tasks demanded is still demanded, and 6.3 is untouched.
 >
-> **Nothing in it is started, and nothing in it is marked.** `TruePeakMeasurement`,
-> `TruePeakAccumulator`, the methodology and their tests are finished and are **not** redesigned; if
-> wiring ever required changing the accumulator, that is evidence the shared architecture is wrong and
-> must be justified before proceeding (ADR-0020 follow-ups).
+> **`TruePeakMeasurement`, `TruePeakAccumulator`, the methodology and their tests are not redesigned.**
+> If wiring ever required changing the accumulator, that is evidence the shared architecture is wrong
+> and must be justified before proceeding (ADR-0020 follow-ups).
 
-- [ ] 6.1 Add the generation as a **fourth** independent operation over the existing `AudioDecoding`
-      port, with its own decoder instance and its own cancellation, mirroring `SignalLevelMetricsGeneration`
-      (which itself mirrors `SpectrogramGeneration`) — the same fault/cancellation/absence/empty-answer
-      handling and the same two-guard fault check. It opens no `URL` and no security scope; it runs
-      inside the coordinator's existing window (ADR-0010).
-- [ ] 6.2 Extend the inspection outcome and the presentation state with a fourth case, exactly as the
-      third was added, and confirm by test that each of the four operations stays independently
-      cancellable and independently presentable: a failing or cancelled true peak leaves the report, the
-      waveform, the spectrogram and the signal levels untouched, **and the reverse direction too**.
-      Include a negative control that makes the wiring's own tests fail, then revert it.
+- [ ] 6.1 Add true peak as a **third consumer of `SharedPCMAnalysisGeneration`** — one more accumulator
+      folded from the read that already exists. It creates **no decoder**, opens no `URL` and no security
+      scope, changes neither `AudioDecoding` nor `PCMChunk`, and receives **the same `PCMChunk` value**
+      the other two consumers receive, in the same synchronous callback, inside the coordinator's
+      existing window (ADR-0010). Its accumulator is built once, from the same single stream description
+      the others are built from, so three consumers can never disagree about the file they are reading.
+      No `PCMConsumer` protocol: the composition holds it concretely, as a stored property beside the
+      other two (`add-shared-pcm-read` design §7).
+- [ ] 6.2 Extend the shared outcome, the inspection outcome, the update channel and the presentation
+      state with true peak's **own** case, exactly as the third analysis was added — beside the others,
+      never nested in `InspectionReport`, and with no combined status anywhere. Confirm by test that all
+      four settle independently: a failing or cancelled true peak leaves the report, the waveform, the
+      spectrogram and the signal levels exactly as they would have been, **and the reverse direction
+      too**. Include negative controls that make these tests fail, then revert them in full.
 - [ ] 6.3 Confirm the source file is never modified and never read outside the access window.
+- [ ] 6.4 **The decode count is the architectural gate.** Prove at the port that the three shared
+      consumers cost **one** `AudioDecoding` call, that a whole inspection performs **two** sample reads
+      (the waveform's own and the shared one), and that adding true peak added **none** — with a negative
+      control that gives true peak its own decoder and makes the count test fail.
+- [ ] 6.5 **Chunk independence, which `add-shared-pcm-read` could not test and named as owed.** The
+      shared read must produce the **bit-identical** `TruePeakMeasurement` an independent reference
+      produces from the same audio, at every chunk size and for the whole file in one chunk — no
+      tolerance, because true peak's own guarantee is bit-exactness and sharing must not weaken it.
+- [ ] 6.6 Confirm by measurement against production code that the third consumer costs **its DSP and no
+      decode**: the delta against the same pipeline without true peak must not contain a decode.
 
 ## 7. Presentation
 
