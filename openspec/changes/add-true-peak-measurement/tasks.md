@@ -11,9 +11,9 @@ peak is wired as a **third consumer of the read that already exists** rather tha
 the measurement rejected. An inspection reads the samples **twice**, with true peak included, and the
 third consumer costs its DSP and no decode (6.6). **Groups 7 and 8 are done too**: the value is on screen
 in its own section, in **dBTP**, with the method stated in words and no verdict attached to it, and its
-independence from `clippedSampleCount` is demonstrated rather than asserted. **Still not wired: the
-export** — group 9 owns it, and nothing in groups 6, 7 or 8 touched the JSON contract, the DTO or the
-exporter.
+independence from `clippedSampleCount` is demonstrated rather than asserted. **Group 9 is done as well**: the value is exported under
+`measurements.truePeak`, linear, with its method, and without a `schemaVersion` bump. What remains is
+group 10 — the gates, the manual validation, and ADR-0019's own status decision.
 
 **The methodology is now fixed and is no longer a decision for a later group**: polyphase FIR, **8×**,
 **48 taps per phase**, Kaiser **β = 6.0**, cutoff **1.0**, phases normalised, **zero-extension** at the
@@ -394,17 +394,33 @@ touched in this group**.
 
 ## 9. Export
 
-- [ ] 9.1 Add `measurements.truePeak` beside `measurements.signalLevels`: `overall` (number or explicit
-      `null` for "not computable", never a fabricated `0`), `channels[]` under the same null rule, and a
-      `method` object carrying the oversampling factor and the filter identifier. **Linear, never
-      dBTP.** No `schemaVersion` bump — additive, per the schema's own evolution rule.
-- [ ] 9.2 Confirm isolation the way `signalLevels` did: a report without a true peak exports
-      byte-identically to today, `measurements` stays **omitted entirely** (never `null`) when nothing
-      is present, and no existing field moves or changes. Include the negative controls that pattern
-      established — a DSP key smuggled into `technicalProperties`, and a dBTP value exported where a
-      linear one belongs — both reverted in full.
-- [ ] 9.3 Update `docs/json-schema-v1.md` with the new object, its null rules and its unit, in the same
-      table form the existing `signalLevels` rows use.
+- [x] 9.1 `measurements.truePeak` ships as a sibling of `signalLevels`: `overall` as a **number or an
+      explicit `null`** (not an object — there is one number here), `channels[]` carrying each channel's
+      frame count beside its value under the same rule, and `method` **inside** `truePeak` with the
+      factor and the filter identifier read from the measurement's own record rather than from the
+      accumulator's constants. **Linear on the wire, dBTP only on screen** — pinned by a test that
+      exports 1.0, 0.5 and 1.2 as themselves and sweeps the bytes for `dBTP`, `dBFS` and `-6.02`.
+      `schemaVersion` stays **1**. The filter travels as an identity, never a recipe: no taps, window,
+      cutoff or coefficients, and no `bs1770`/`ebu`/`r128`/`compliant` token anywhere.
+- [x] 9.2 Isolation holds in every direction. A report without a true peak is **byte-identical** to
+      before, with and without signal levels beside it; `measurements` is still omitted entirely when
+      neither measurement exists; adding a true peak changes **not one byte** of the `signalLevels`
+      object or of any envelope field. Both keys are independently optional, so all four combinations
+      are representable and none is `null`. Lifecycle never reaches the wire: `loading`, `unavailable`,
+      `failed` and `cancelled` all collapse to `nil` in the view before the export layer sees them.
+      **Five negative controls, each reverted in full:** dBTP on the wire broke four tests including the
+      end-to-end one; a zero-frame channel exported as `0` broke the null tests; a DSP key in
+      `technicalProperties` broke that guard; `"truePeak": null` for an absent measurement broke the
+      omission test; and a hardcoded method broke the test that ties it to the measurement.
+      **The end-to-end path is proved separately**, because this project has already been caught by
+      unit tests passing while the real wiring was broken: a real file is decoded, measured through the
+      shared read, translated by the composition root and exported, and the number in the document is
+      asserted to be the measured one.
+- [x] 9.3 `docs/json-schema-v1.md` gains a `measurements.truePeak` section in the same table form:
+      every field with its type and null rule, the linear unit stated explicitly, `method`'s placement
+      and why it is not hoisted, the identity-not-recipe rule, the absence of any conformance claim, a
+      worked example, and the tests that pin each of them. The `measurements` preamble now states that
+      its children are independently optional. Nothing about `signalLevels` was reworded.
 
 ## 10. Gates, validation and closure
 
