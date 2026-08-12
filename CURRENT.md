@@ -16,35 +16,37 @@
 >   session protocol in `CLAUDE.md`).
 
 ---
-**Focus:** `add-true-peak-measurement`, groups 1–7 done. **The measurement is on screen**, in its own
-section beneath *Signal levels*, quoted in **dBTP** and produced from the shared PCM read rather than
-from a fourth decode.
+**Focus:** `add-true-peak-measurement`, groups 1–8 done. **True peak and the clipped-sample count are
+now demonstrated to be independent measurements**, not one measurement and its consequence.
 
-**What the surface says, and what it refuses to say.** A true peak above full scale reads `+0.83 dBTP`
-— signed, unclamped, uncoloured, unflagged. There is no warning, no badge, no comparison against the
-sample peak and none of the vocabulary that turns a number into a diagnosis; a sweep over every string
-the section can produce pins that, aimed at the value most likely to attract one. Absence stays
-distinct from a measured zero: a channel that carried no samples has no maximum, while a silent one has
-a real value that floors like every other level in the report.
+**What the demonstration rests on.** They observe different things: the clipped count looks at stored
+samples at or beyond full scale, the true peak at the waveform reconstructed *between* them, where
+seven of every eight points examined are values no array position holds. The case that proves it is a
+tone whose every stored sample sits at 0.85 while the waveform reaches 1.2 — **zero clipped samples and
+a true peak above full scale, both truthful at once**. A file with both, and a file with neither, are
+tested beside it, and measured silence is kept apart from a file with no frames because collapsing them
+would lose the distinction both domain types exist to preserve.
 
-**The method travels with the value**, in words, taken from the measurement's own recorded factor and
-filter rather than from constants repeated in the surface — so a file measured under a different method
-could not be described under this one. **No standard is claimed anywhere**, because this filter was
-designed to recorded parameters and validated against analytic truth and an independent meter, not
-built from BS.1770 Annex 2's own coefficients.
+**Non-derivation is proved by consequence**, since Swift cannot be asked to show a type lacks a member:
+each result equals what its own accumulator produces from the same audio with the other never
+constructed. A search backs it — every mention of one metric inside the other's files is a comment, and
+no code path, warning or comparison joins them.
+
+**No diagnosis anywhere.** A positive true peak is a value, never a flag. That implements **ADR-0019**,
+which narrows ADR-0006's "flagged when true peak > 0" sentence rather than contradicting it: a flag is
+an inference and belongs to `findings`, with evidence and confidence attached — and `findings` does not
+exist yet.
 
 **Deliberately not done.** No export: the value stops at the flow state and the screen, and the JSON
-contract, the DTO and the exporter are untouched. `TruePeakMeasurement` and `TruePeakAccumulator` are
-unchanged.
+contract, the DTO and the exporter are untouched.
 
-**ADR-0019 stays `Proposed`,** and presentation does not promote it either. Its criteria are agreement
-with the oracle demonstrated **against production code** and a manual validation on a file whose true
-peak genuinely exceeds its sample peak — the surface that validation needs now exists, but the
-validation itself has not happened.
+**ADR-0019 stays `Proposed`.** Its criteria are agreement with the oracle demonstrated **against
+production code** and a manual validation on a file whose true peak genuinely exceeds its sample peak.
+Neither has happened; the surface that validation needs now exists.
 
-**Next step:** group 8 — proving that true peak and the clipped-sample count are independent: a file
-with zero clipped samples and a true peak above full scale, a file with both, and a quiet file with
-neither, plus a search and a test that no code path derives one from the other.
+**Next step:** group 9 — export. `measurements.truePeak` beside `measurements.signalLevels`, its null
+rules, its unit, the isolation `signalLevels` already proves for a report without one, and the schema
+document updated in the same form.
 
 **Other open threads** (see `openspec list` for their real task counts, not restated here):
 `add-static-spectrogram-visualization` (manual validation battery deferred by product decision) and
