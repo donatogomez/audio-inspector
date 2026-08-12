@@ -270,8 +270,6 @@ touched in this group**.
 > actually protects. This group resumes once a PCM-sharing change lands, and its tasks below are
 > otherwise unchanged. **Nothing in it is started, and nothing in it is marked.**
 
-## 6. Wiring — a fourth independent operation
-
 - [ ] 6.1 Add the generation as a **fourth** independent operation over the existing `AudioDecoding`
       port, with its own decoder instance and its own cancellation, mirroring `SignalLevelMetricsGeneration`
       (which itself mirrors `SpectrogramGeneration`) — the same fault/cancellation/absence/empty-answer
