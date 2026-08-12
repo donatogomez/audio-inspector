@@ -465,7 +465,12 @@ touched in this group**.
       `findings` object and a capability of its own. Scoped out here by ADR-0019, not dropped.
 - [ ] 11.4 **An analysis-engine-version field** in the domain and on the wire — cross-cutting, tied by
       ADR-0006 to *stored* results, and there is no store yet (ADR-0004, Phase 2).
-- [ ] 11.5 **Decode deduplication across the four operations** — permitted by ADR-0016 *on top of* the
-      seam once measurement justifies it; opened only by 5.3's stop rule, never folded in silently.
+- [x] 11.5 **Decode deduplication across the operations — done, and this change is what consumed it.**
+      Opened by 5.3's stop rule, it was answered by `add-shared-pcm-read` (merged, archived, **ADR-0020**
+      `Accepted`), and group 6 then wired true peak as the third consumer of that one read. An
+      inspection performs **two** sample reads — the waveform's own and the shared one — so this is no
+      longer deferred work and is marked rather than left claiming a debt that no longer exists. The
+      waveform's own migration remains genuinely open, and it is tracked where it belongs:
+      `add-shared-pcm-read`'s own deferred section, not here.
 - [ ] 11.6 **Significant max frequency** — unchanged from where `add-computed-technical-properties` left
       it: it needs its own noise-floor/persistence methodology, and is not part of this slice.
