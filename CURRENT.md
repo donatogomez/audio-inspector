@@ -16,37 +16,30 @@
 >   session protocol in `CLAUDE.md`).
 
 ---
-**Focus:** a small robustness fix — **`SignalLevelMetrics` can no longer publish a value that is not a
-number.**
+**Focus:** the next thread is the **flow-state test flake**, now that finite signal level metrics are an
+integrated guarantee rather than work in progress.
 
-**What was wrong, and what was not.** From samples that were individually finite, the accumulator
-produced `rms == +infinity` and `dcOffset == NaN`, and the model accepted them as measurements. The
-input was valid: `PCMChunk` refuses non-finite samples at the boundary but deliberately keeps finite
-ones of any magnitude, because a file may genuinely carry a sample beyond full scale. The cause was an
-implementation detail — each chunk's partial sums were formed in `Float32` before being widened — and it
-was **chunk-dependent**, which contradicted this capability's own independence guarantee.
+**What just landed, stated as a property rather than as history.** `SignalLevelMetrics` cannot publish a
+value that is not a number. Every reduction is widened to `Double` *before* it is accumulated, so no
+intermediate can overflow on the way to a result that was always representable — the mean and the RMS
+are bounded by the largest magnitude in the input. The domain model refuses non-finite values outright,
+as its two sibling value types already did, and a result that genuinely could not be described reaches
+the **existing `failed` outcome** rather than a new state or a substituted number. Nothing is clamped,
+and amplitudes beyond full scale are still reported, because that is a real fact about a file. The
+export and `schemaVersion` 1 are semantically unchanged: the same fields, the same bytes, now
+guaranteed to be numbers. Its change is merged and archived; the finiteness guarantee lives in the
+`audio-signal-level-metrics` capability.
 
-**Why the fix is a repair rather than a clamp.** The answer always fits: the mean and the RMS are both
-bounded by the largest magnitude in the input, so a finite `Float` input has a finite `Float` result.
-The overflow was purely intermediate, so each chunk is now widened *before* it is reduced, where no
-intermediate can overflow. **The measurement is preserved exactly** — nothing is clamped, substituted or
-invented — and the tests assert the values are correct rather than merely finite, which is the
-difference between the two.
+**The open thread: the flow-state suites synchronise on timing, not on a happens-before.** They deliver
+an update and wait with a single `Task.yield()` for another task to apply it, so under load the
+assertion can run before the state it inspects has settled. Observed intermittently in the spectrogram
+and true peak suites; the signal level suite shares the pattern without having been seen to fail. It is
+**pre-existing and independent of the metrics work** — deliberately left untouched there so the fix
+would not ride along in an unrelated diff. Shared PCM already uses a deterministic handshake for the
+same problem, which is the first candidate to reuse rather than a new helper.
 
-**The model now refuses what cannot describe a measurement**, as its two sibling value types already
-did, and `finish()` became optional like theirs so an impossible result reaches the existing `failed`
-outcome instead of a new state. With the reduction fixed, that path is a backstop the arithmetic cannot
-reach. Measured cost: 0.043 s → 0.064 s in Release over ten minutes of stereo.
-
-**A second, unrelated finding came out of this work, and it is now identified rather than mysterious.**
-The intermittent test failure recorded earlier is the flow-state suites' own pattern: they deliver an
-update and wait with a single `Task.yield()` for another task to apply it. Stressed, the spectrogram's
-suite fails about two runs in eight and true peak's about one in eight — signal levels' did not fail in
-the same sample. **It predates this change and is not touched by it**; the fix belongs with those
-suites, replacing the yield with the deterministic handshake the shared-PCM cancellation tests already
-use.
-
-**Next step:** review and merge this fix; `openspec archive` runs after that.
+**Next step:** reproduce the flake with the code intact, establish the actual happens-before before
+assuming the yield is the cause, and only then replace the probabilistic synchronisation.
 
 **Other open threads** (see `openspec list` for their real task counts, not restated here):
 `add-static-spectrogram-visualization` (manual validation battery deferred by product decision) and
@@ -54,4 +47,4 @@ use.
 traversal gap shared with ADR-0015). Neither was touched this session.
 
 ---
-_Last touched: 2026-08-12. Overwrite freely; empty is fine._
+_Last touched: 2026-08-13. Overwrite freely; empty is fine._
