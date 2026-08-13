@@ -16,8 +16,8 @@
 >   session protocol in `CLAUDE.md`).
 
 ---
-**Focus:** the next thread is the **flow-state test flake**, now that finite signal level metrics are an
-integrated guarantee rather than work in progress.
+**Focus:** nothing is in flight. The two guarantees below are integrated; the candidate next thread is
+named at the end.
 
 **What just landed, stated as a property rather than as history.** `SignalLevelMetrics` cannot publish a
 value that is not a number. Every reduction is widened to `Double` *before* it is accumulated, so no
@@ -30,16 +30,22 @@ export and `schemaVersion` 1 are semantically unchanged: the same fields, the sa
 guaranteed to be numbers. Its change is merged and archived; the finiteness guarantee lives in the
 `audio-signal-level-metrics` capability.
 
-**The open thread: the flow-state suites synchronise on timing, not on a happens-before.** They deliver
-an update and wait with a single `Task.yield()` for another task to apply it, so under load the
-assertion can run before the state it inspects has settled. Observed intermittently in the spectrogram
-and true peak suites; the signal level suite shares the pattern without having been seen to fail. It is
-**pre-existing and independent of the metrics work** — deliberately left untouched there so the fix
-would not ride along in an unrelated diff. Shared PCM already uses a deterministic handshake for the
-same problem, which is the first candidate to reuse rather than a new helper.
+**The flow-state suites now synchronise on a happens-before rather than on timing.** They used to
+release an update and wait one `Task.yield()` for another task to apply it, which guarantees nothing:
+resuming a continuation makes the other task *runnable*, not *run*. The scripted actions complete the
+round trip instead — `deliver` returns only once the handler has actually been called — reusing the
+continuation handshake those same test classes already had. **Production was not touched**, and the
+argument for the fix is a negative control rather than a count of green runs: with the acknowledgement
+removed the affected tests fail, and with an extra scheduling hop inside the producer the handshake
+still passes where the yield fails deterministically. That debt is closed.
 
-**Next step:** reproduce the flake with the code intact, establish the actual happens-before before
-assuming the yield is the cause, and only then replace the probabilistic synchronisation.
+**Next step (candidate, not yet decided):** whether the waveform can stop decoding the file a second
+time and become a fourth consumer of the shared PCM read. It is the last redundant decode per
+inspection. ADR-0016 declined this once, so the first move is reading what it actually decided and
+against what evidence — not implementing.
+
+**Minor follow-up, not a thread:** `ImportFlowComparisonTests` has one `Task.yield()` that was never
+audited in depth; same shape as the ones above, no failure ever attributed to it.
 
 **Other open threads** (see `openspec list` for their real task counts, not restated here):
 `add-static-spectrogram-visualization` (manual validation battery deferred by product decision) and
