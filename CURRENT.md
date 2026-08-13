@@ -39,10 +39,31 @@ argument for the fix is a negative control rather than a count of green runs: wi
 removed the affected tests fail, and with an extra scheduling hop inside the producer the handshake
 still passes where the yield fails deterministically. That debt is closed.
 
-**Next step (candidate, not yet decided):** whether the waveform can stop decoding the file a second
-time and become a fourth consumer of the shared PCM read. It is the last redundant decode per
-inspection. ADR-0016 declined this once, so the first move is reading what it actually decided and
-against what evidence — not implementing.
+**Focus: the waveform's own PCM read is the last redundant decode, and the case for removing it is now
+made rather than assumed.** `share-waveform-pcm-read` is open and **ADR-0021 is written but Proposed**;
+nothing is implemented. Three findings, all measured before any code, decided the design:
+
+- **The recorded blocker was about a different shape.** Two decoding faults have no honest waveform
+  error counterpart, which blocks *reimplementing the port over `AudioDecoding`*. It does not apply to
+  the waveform becoming a **consumer** of the shared pass, because a consumer translates no error space
+  at all. `PCMChunk`, `AudioDecoding` and `WaveformEnvelopeAccumulator` need no change — `startFrame` is
+  already the absolute frame the reduction asks for. (The deferral being revisited is **ADR-0020's**,
+  not ADR-0016's: that one scheduled the migration as conditional and last.)
+- **Equivalence is not uniform, and the asymmetry is the platform's.** Bit-identical envelopes for WAV
+  and FLAC; AAC differs in most buckets by about one ULP, because a lossy decoder does not return
+  identical samples for a different read granularity. So the criterion is bit-exact for lossless and a
+  justified tolerance for lossy — derived, not chosen.
+- **How the samples are handed over is worth 12×.** Passing the chunk's array costs ~3.8 s where an
+  `UnsafeBufferPointer` view of it costs ~0.3 s for ten minutes of stereo. Written the obvious way the
+  migration would be a slowdown, so this belongs to the decision rather than to a later optimisation.
+
+Saving once done: ~0.41 s (FLAC) and ~0.39 s (AAC) per ten-minute inspection, and almost nothing on WAV.
+The riskiest part is not the fold — it is the test surface that scripts the waveform generator seam,
+several of which assert an arrangement rather than a property.
+
+**Next step:** implement group 2 (the waveform as the fourth consumer) before group 3 (retiring the
+port), so the saving and the equivalence stay provable while the old path still exists to compare
+against.
 
 **Minor follow-up, not a thread:** `ImportFlowComparisonTests` has one `Task.yield()` that was never
 audited in depth; same shape as the ones above, no failure ever attributed to it.
