@@ -23,6 +23,9 @@ private final class SteppedAction {
     private var pendingOutcome: SourceInspectionOutcome?
     private var gate: CheckedContinuation<Void, Never>?
     private var startContinuation: CheckedContinuation<Void, Never>?
+    /// Resumed once everything released so far has been handed to the handler, which is what lets
+    /// `deliver` return only after the update has actually been applied. See `release(_:)`.
+    private var applied: CheckedContinuation<Void, Never>?
     private(set) var runCount = 0
 
     init(report: InspectionReport) {
@@ -44,6 +47,10 @@ private final class SteppedAction {
                 pendingOutcome = nil
                 return outcome
             }
+            // Everything released has now been applied. Releasing the waiting `deliver` here — rather
+            // than leaving it to guess — is the whole handshake.
+            applied?.resume()
+            applied = nil
             await withCheckedContinuation { gate = $0 }
         }
     }
@@ -54,14 +61,22 @@ private final class SteppedAction {
         await withCheckedContinuation { startContinuation = $0 }
     }
 
-    func deliverReport() { release(.report(report)) }
-    func deliver(waveform: WaveformOutcome) { release(.waveform(waveform)) }
-    func deliver(spectrogram: SpectrogramOutcome) { release(.spectrogram(spectrogram)) }
+    func deliverReport() async { await release(.report(report)) }
+    func deliver(waveform: WaveformOutcome) async { await release(.waveform(waveform)) }
+    func deliver(spectrogram: SpectrogramOutcome) async { await release(.spectrogram(spectrogram)) }
 
-    private func release(_ update: InspectionUpdate) {
+    /// Releases an update and returns **only once the handler has been called with it**.
+    ///
+    /// Resuming the action's gate makes it *runnable*, not *run*: both tasks are then queued on the main
+    /// actor and their order is unspecified, so the `await Task.yield()` this used to rely on lost the
+    /// race roughly once in three hundred deliveries — measured, and enough to fail these suites a few
+    /// runs in a hundred. The return trip is the fix: the action resumes `applied` at the point where it
+    /// has drained everything, which is a real happens-before rather than a hope about scheduling.
+    private func release(_ update: InspectionUpdate) async {
         pending.append(update)
         gate?.resume()
         gate = nil
+        await withCheckedContinuation { applied = $0 }
     }
 
     func finish(_ outcome: SourceInspectionOutcome) {
@@ -113,8 +128,7 @@ struct SpectrogramFlowStateTests {
 
         let running = Task { await model.selectAndInspect() }
         await action.waitUntilStarted()
-        action.deliverReport()
-        await Task.yield()
+        await action.deliverReport()
 
         let shown = try #require(presentation(of: model))
         #expect(shown.report == action.report)
@@ -154,10 +168,8 @@ struct SpectrogramFlowStateTests {
 
         let running = Task { await model.selectAndInspect() }
         await action.waitUntilStarted()
-        action.deliverReport()
-        await Task.yield()
-        action.deliver(spectrogram: outcome)
-        await Task.yield()
+        await action.deliverReport()
+        await action.deliver(spectrogram: outcome)
 
         let shown = try #require(presentation(of: model))
         action.finish(.inspected(action.report, waveform: .unavailable, spectrogram: outcome, signalLevelMetrics: .unavailable, truePeak: .unavailable))
@@ -174,10 +186,8 @@ struct SpectrogramFlowStateTests {
 
         let running = Task { await model.selectAndInspect() }
         await action.waitUntilStarted()
-        action.deliverReport()
-        await Task.yield()
-        action.deliver(spectrogram: .cancelled)
-        await Task.yield()
+        await action.deliverReport()
+        await action.deliver(spectrogram: .cancelled)
 
         #expect(presentation(of: model)?.spectrogram == .loading, "cancellation was rendered as a state")
         #expect(SpectrogramState(.cancelled) == nil, "cancellation has no state to settle into")
@@ -197,10 +207,8 @@ struct SpectrogramFlowStateTests {
 
         let running = Task { await model.selectAndInspect() }
         await action.waitUntilStarted()
-        action.deliverReport()
-        await Task.yield()
-        action.deliver(waveform: .available(try envelope()))
-        await Task.yield()
+        await action.deliverReport()
+        await action.deliver(waveform: .available(try envelope()))
 
         let shown = try #require(presentation(of: model))
         #expect(shown.waveform == .available(try envelope()))
@@ -217,10 +225,8 @@ struct SpectrogramFlowStateTests {
 
         let running = Task { await model.selectAndInspect() }
         await action.waitUntilStarted()
-        action.deliverReport()
-        await Task.yield()
-        action.deliver(spectrogram: .available(try spectrogram()))
-        await Task.yield()
+        await action.deliverReport()
+        await action.deliver(spectrogram: .available(try spectrogram()))
 
         let shown = try #require(presentation(of: model))
         #expect(shown.spectrogram == .available(try spectrogram()))
@@ -238,12 +244,9 @@ struct SpectrogramFlowStateTests {
 
         let running = Task { await model.selectAndInspect() }
         await action.waitUntilStarted()
-        action.deliverReport()
-        await Task.yield()
-        action.deliver(waveform: .available(try envelope()))
-        await Task.yield()
-        action.deliver(spectrogram: .failed(message: "no model"))
-        await Task.yield()
+        await action.deliverReport()
+        await action.deliver(waveform: .available(try envelope()))
+        await action.deliver(spectrogram: .failed(message: "no model"))
 
         let shown = try #require(presentation(of: model))
         #expect(shown.waveform == .available(try envelope()))
@@ -265,10 +268,8 @@ struct SpectrogramFlowStateTests {
 
         let running = Task { await model.selectAndInspect() }
         await action.waitUntilStarted()
-        action.deliverReport()
-        await Task.yield()
-        action.deliver(spectrogram: .available(try spectrogram()))
-        await Task.yield()
+        await action.deliverReport()
+        await action.deliver(spectrogram: .available(try spectrogram()))
 
         // A final outcome that disagrees — as a cancelled one would — must not replace the model
         // already on screen with a fallback.
@@ -290,25 +291,23 @@ struct SpectrogramFlowStateTests {
 
         let firstRun = Task { await model.selectAndInspect() }
         await first.waitUntilStarted()
-        first.deliverReport()
-        await Task.yield()
+        await first.deliverReport()
         #expect(presentation(of: model)?.report.file.displayName == "first")
 
         // The user picks another file while the first's visualisations are still pending.
         let second = SteppedAction(report: report(named: "second"))
         let secondRun = Task { await model.inspectDroppedSource(using: second.run) }
         await second.waitUntilStarted()
-        second.deliverReport()
-        await Task.yield()
+        await second.deliverReport()
         #expect(presentation(of: model)?.report.file.displayName == "second")
 
         // The first operation now finishes, late. Nothing of it may reach the second's presentation.
-        first.deliver(spectrogram: .available(try spectrogram()))
-        await Task.yield()
-        first.deliver(waveform: .available(try envelope()))
-        await Task.yield()
+        await first.deliver(spectrogram: .available(try spectrogram()))
+        await first.deliver(waveform: .available(try envelope()))
         first.finish(.inspected(first.report, waveform: .available(try envelope()), spectrogram: .available(try spectrogram()), signalLevelMetrics: .unavailable, truePeak: .unavailable))
-        await Task.yield()
+        // The stale operation is awaited to completion, so what follows is asserted against a first
+        // operation that is entirely over rather than one that merely had a scheduling hop to finish in.
+        await firstRun.value
 
         let shown = try #require(presentation(of: model))
         #expect(shown.report.file.displayName == "second", "a stale operation replaced the current report")
@@ -317,7 +316,6 @@ struct SpectrogramFlowStateTests {
 
         second.finish(.inspected(second.report, waveform: .unavailable, spectrogram: .unavailable, signalLevelMetrics: .unavailable, truePeak: .unavailable))
         await secondRun.value
-        await firstRun.value
     }
 
     /// The distinction the accepted specification draws, restated for the spectrogram: while the
@@ -329,7 +327,9 @@ struct SpectrogramFlowStateTests {
         let model = ImportFlowModel(action: first.run)
 
         let firstRun = Task { await model.selectAndInspect() }
-        await Task.yield()
+        // The action is invoked only after `inspect` has set `.working`, so its own start signal is
+        // proof the transition happened — where a `Task.yield()` merely hoped one hop was enough.
+        await first.waitUntilStarted()
         #expect(model.state == .working)
 
         // No report yet, so the inspection is still running: this must not start a second one.
@@ -339,8 +339,7 @@ struct SpectrogramFlowStateTests {
         #expect(second.runCount == 0, "a second inspection started while one was running")
         #expect(model.state == .working)
 
-        first.deliverReport()
-        await Task.yield()
+        await first.deliverReport()
         first.finish(.inspected(first.report, waveform: .unavailable, spectrogram: .unavailable, signalLevelMetrics: .unavailable, truePeak: .unavailable))
         await firstRun.value
         #expect(presentation(of: model)?.report.file.displayName == "first")
@@ -354,8 +353,7 @@ struct SpectrogramFlowStateTests {
 
         let firstRun = Task { await model.selectAndInspect() }
         await first.waitUntilStarted()
-        first.deliverReport()
-        await Task.yield()
+        await first.deliverReport()
 
         let second = SteppedAction(report: report(named: "second"))
         let secondRun = Task { await model.inspectDroppedSource(using: second.run) }
@@ -366,8 +364,7 @@ struct SpectrogramFlowStateTests {
 
         #expect(second.runCount == 1, "the second selection was refused after the report existed")
 
-        second.deliverReport()
-        await Task.yield()
+        await second.deliverReport()
         second.finish(.inspected(second.report, waveform: .unavailable, spectrogram: .unavailable, signalLevelMetrics: .unavailable, truePeak: .unavailable))
         await secondRun.value
         first.finish(.inspected(first.report, waveform: .cancelled, spectrogram: .cancelled, signalLevelMetrics: .unavailable, truePeak: .unavailable))
