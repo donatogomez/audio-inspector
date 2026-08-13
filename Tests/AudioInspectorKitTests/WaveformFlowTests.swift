@@ -29,6 +29,10 @@ private final class SuspendedAction {
     private(set) var cancellationsObserved = 0
     private var startContinuation: CheckedContinuation<Void, Never>?
     private var cancellationContinuation: CheckedContinuation<Void, Never>?
+    /// Resumed once the handler has actually been called with the report, which is what lets
+    /// `deliverReport()` return only after it has been applied. See `deliverReport()`.
+    private var reportApplied: CheckedContinuation<Void, Never>?
+    private var hasAppliedReport = false
 
     let report: InspectionReport
     /// Whether being cancelled should settle the call. `false` lets a test hold a superseded operation
@@ -55,6 +59,9 @@ private final class SuspendedAction {
         }
         pendingDeliver = false
         onUpdate(.report(report))
+        hasAppliedReport = true
+        reportApplied?.resume()
+        reportApplied = nil
 
         if let pendingOutcome {
             self.pendingOutcome = nil
@@ -89,14 +96,22 @@ private final class SuspendedAction {
         }
     }
 
-    /// Releases the report, leaving the waveform still in flight.
-    func deliverReport() {
-        guard let continuation = deliverContinuation else {
+    /// Releases the report, leaving the waveform still in flight, and returns **only once the handler
+    /// has been called with it**.
+    ///
+    /// Resuming the action's continuation makes it *runnable*, not *run*: both tasks are then queued on
+    /// the main actor and their order is unspecified, so the `await Task.yield()` this used to rely on
+    /// lost the race roughly once in three hundred deliveries — measured. The return trip is a real
+    /// happens-before rather than a hope about scheduling.
+    func deliverReport() async {
+        if let continuation = deliverContinuation {
+            deliverContinuation = nil
+            continuation.resume()
+        } else {
             pendingDeliver = true
-            return
         }
-        deliverContinuation = nil
-        continuation.resume()
+        guard !hasAppliedReport else { return }
+        await withCheckedContinuation { reportApplied = $0 }
     }
 
     func finish(_ outcome: SourceInspectionOutcome) {
@@ -327,9 +342,8 @@ struct WaveformFlowStateTests {
         let model = ImportFlowModel(action: action.run)
 
         let running = Task { await model.selectAndInspect() }
-        await Task.yield()
-        action.deliverReport()
-        await Task.yield()
+        await action.waitUntilStarted()
+        await action.deliverReport()
 
         #expect(model.state == .report(InspectionPresentation(report: action.report, waveform: .loading)))
 
@@ -348,9 +362,8 @@ struct WaveformFlowStateTests {
         let model = ImportFlowModel(action: action.run)
 
         let running = Task { await model.selectAndInspect() }
-        await Task.yield()
-        action.deliverReport()
-        await Task.yield()
+        await action.waitUntilStarted()
+        await action.deliverReport()
         action.finish(.inspected(action.report, waveform: .unavailable, spectrogram: .unavailable, signalLevelMetrics: .unavailable, truePeak: .unavailable))
         await running.value
 
@@ -366,9 +379,8 @@ struct WaveformFlowStateTests {
         let model = ImportFlowModel(action: action.run)
 
         let running = Task { await model.selectAndInspect() }
-        await Task.yield()
-        action.deliverReport()
-        await Task.yield()
+        await action.waitUntilStarted()
+        await action.deliverReport()
         action.finish(.inspected(action.report, waveform: .failed(message: "The waveform could not be produced."), spectrogram: .unavailable, signalLevelMetrics: .unavailable, truePeak: .unavailable))
         await running.value
 
@@ -388,7 +400,7 @@ struct WaveformFlowStateTests {
         let model = ImportFlowModel(action: first.run)
 
         let running = Task { await model.selectAndInspect() }
-        await Task.yield()
+        await first.waitUntilStarted()
 
         // No report delivered yet, so the state is still `.working`.
         #expect(model.state == .working)
@@ -397,7 +409,7 @@ struct WaveformFlowStateTests {
         #expect(second.callCount == 0, "the second selection never started")
 
         // Let the first one complete so the test can end; the assertions above already hold.
-        first.deliverReport()
+        await first.deliverReport()
         first.finish(.inspected(first.report, waveform: .unavailable, spectrogram: .unavailable, signalLevelMetrics: .unavailable, truePeak: .unavailable))
         await running.value
         #expect(first.callCount == 1)
@@ -412,9 +424,8 @@ struct WaveformFlowStateTests {
         let model = ImportFlowModel(action: first.run)
 
         let firstRun = Task { await model.selectAndInspect() }
-        await Task.yield()
-        first.deliverReport()
-        await Task.yield()
+        await first.waitUntilStarted()
+        await first.deliverReport()
         #expect(model.state == .report(InspectionPresentation(report: first.report, waveform: .loading)))
 
         // Accepted: the inspection has finished, only the samples are still being read.
@@ -424,8 +435,7 @@ struct WaveformFlowStateTests {
         #expect(second.callCount == 1, "the second selection did start")
         #expect(first.cancellationsObserved == 1, "the pending generation was cancelled")
 
-        second.deliverReport()
-        await Task.yield()
+        await second.deliverReport()
         second.finish(.inspected(second.report, waveform: .available(envelope()), spectrogram: .unavailable, signalLevelMetrics: .unavailable, truePeak: .unavailable))
         await secondRun.value
         _ = await firstRun.value
@@ -444,14 +454,12 @@ struct WaveformFlowStateTests {
         let model = ImportFlowModel(action: first.run)
 
         let firstRun = Task { await model.selectAndInspect() }
-        await Task.yield()
-        first.deliverReport()
-        await Task.yield()
+        await first.waitUntilStarted()
+        await first.deliverReport()
 
         let secondRun = Task { await model.inspectDroppedSource(using: second.run) }
         await second.waitUntilStarted()
-        second.deliverReport()
-        await Task.yield()
+        await second.deliverReport()
         second.finish(.inspected(second.report, waveform: .unavailable, spectrogram: .unavailable, signalLevelMetrics: .unavailable, truePeak: .unavailable))
         await secondRun.value
 
@@ -472,9 +480,8 @@ struct WaveformFlowStateTests {
         let model = ImportFlowModel(action: first.run)
 
         let firstRun = Task { await model.selectAndInspect() }
-        await Task.yield()
-        first.deliverReport()
-        await Task.yield()
+        await first.waitUntilStarted()
+        await first.deliverReport()
         first.finish(.inspected(first.report, waveform: .unavailable, spectrogram: .unavailable, signalLevelMetrics: .unavailable, truePeak: .unavailable))
         await firstRun.value
 

@@ -23,6 +23,9 @@ private final class SteppedTruePeakAction {
     private var pendingOutcome: SourceInspectionOutcome?
     private var gate: CheckedContinuation<Void, Never>?
     private var startContinuation: CheckedContinuation<Void, Never>?
+    /// Resumed once everything released so far has been handed to the handler, which is what lets
+    /// `deliver` return only after the update has actually been applied. See `release(_:)`.
+    private var applied: CheckedContinuation<Void, Never>?
     private(set) var runCount = 0
 
     init(report: InspectionReport) { self.report = report }
@@ -40,6 +43,10 @@ private final class SteppedTruePeakAction {
                 pendingOutcome = nil
                 return outcome
             }
+            // Everything released has now been applied. Releasing the waiting `deliver` here — rather
+            // than leaving it to guess — is the whole handshake.
+            applied?.resume()
+            applied = nil
             await withCheckedContinuation { gate = $0 }
         }
     }
@@ -49,14 +56,22 @@ private final class SteppedTruePeakAction {
         await withCheckedContinuation { startContinuation = $0 }
     }
 
-    func deliverReport() { release(.report(report)) }
-    func deliver(truePeak: TruePeakOutcome) { release(.truePeak(truePeak)) }
-    func deliver(signalLevelMetrics: SignalLevelMetricsOutcome) { release(.signalLevelMetrics(signalLevelMetrics)) }
+    func deliverReport() async { await release(.report(report)) }
+    func deliver(truePeak: TruePeakOutcome) async { await release(.truePeak(truePeak)) }
+    func deliver(signalLevelMetrics: SignalLevelMetricsOutcome) async { await release(.signalLevelMetrics(signalLevelMetrics)) }
 
-    private func release(_ update: InspectionUpdate) {
+    /// Releases an update and returns **only once the handler has been called with it**.
+    ///
+    /// Resuming the action's gate makes it *runnable*, not *run*: both tasks are then queued on the main
+    /// actor and their order is unspecified, so the `await Task.yield()` this used to rely on lost the
+    /// race roughly once in three hundred deliveries — measured, and enough to fail these suites a few
+    /// runs in a hundred. The return trip is the fix: the action resumes `applied` at the point where it
+    /// has drained everything, which is a real happens-before rather than a hope about scheduling.
+    private func release(_ update: InspectionUpdate) async {
         pending.append(update)
         gate?.resume()
         gate = nil
+        await withCheckedContinuation { applied = $0 }
     }
 
     func finish(_ outcome: SourceInspectionOutcome) {
@@ -111,8 +126,7 @@ struct TruePeakFlowStateTests {
 
         let running = Task { await model.selectAndInspect() }
         await action.waitUntilStarted()
-        action.deliverReport()
-        await Task.yield()
+        await action.deliverReport()
 
         let shown = try #require(presentation(of: model))
         #expect(shown.report == action.report)
@@ -135,14 +149,11 @@ struct TruePeakFlowStateTests {
 
         let running = Task { await model.selectAndInspect() }
         await action.waitUntilStarted()
-        action.deliverReport()
-        await Task.yield()
+        await action.deliverReport()
         // The signal levels settle first, so the assertion below is about a neighbour that is really
         // there rather than one that was still loading anyway.
-        action.deliver(signalLevelMetrics: .available(try metrics()))
-        await Task.yield()
-        action.deliver(truePeak: .available(measured))
-        await Task.yield()
+        await action.deliver(signalLevelMetrics: .available(try metrics()))
+        await action.deliver(truePeak: .available(measured))
 
         let shown = try #require(presentation(of: model))
         #expect(shown.truePeak == .available(measured))
@@ -165,10 +176,8 @@ struct TruePeakFlowStateTests {
 
         let running = Task { await model.selectAndInspect() }
         await action.waitUntilStarted()
-        action.deliverReport()
-        await Task.yield()
-        action.deliver(truePeak: .unavailable)
-        await Task.yield()
+        await action.deliverReport()
+        await action.deliver(truePeak: .unavailable)
 
         #expect(try #require(presentation(of: model)).truePeak == .unavailable)
 
@@ -188,12 +197,9 @@ struct TruePeakFlowStateTests {
 
         let running = Task { await model.selectAndInspect() }
         await action.waitUntilStarted()
-        action.deliverReport()
-        await Task.yield()
-        action.deliver(signalLevelMetrics: .available(try metrics()))
-        await Task.yield()
-        action.deliver(truePeak: .failed(message: "The true peak for this file could not be measured."))
-        await Task.yield()
+        await action.deliverReport()
+        await action.deliver(signalLevelMetrics: .available(try metrics()))
+        await action.deliver(truePeak: .failed(message: "The true peak for this file could not be measured."))
 
         let shown = try #require(presentation(of: model))
         #expect(shown.truePeak == .failed(message: "The true peak for this file could not be measured."))
@@ -218,10 +224,8 @@ struct TruePeakFlowStateTests {
 
         let running = Task { await model.selectAndInspect() }
         await action.waitUntilStarted()
-        action.deliverReport()
-        await Task.yield()
-        action.deliver(truePeak: .cancelled)
-        await Task.yield()
+        await action.deliverReport()
+        await action.deliver(truePeak: .cancelled)
 
         #expect(try #require(presentation(of: model)).truePeak == .loading, "a cancellation was shown as a state")
 
@@ -243,18 +247,15 @@ struct TruePeakFlowStateTests {
 
         let firstRun = Task { await model.selectAndInspect() }
         await first.waitUntilStarted()
-        first.deliverReport()
-        await Task.yield()
+        await first.deliverReport()
 
         // The user picks another file before the first inspection's true peak has settled.
         let secondRun = Task { await model.selectAndInspect() }
         await second.waitUntilStarted()
-        second.deliverReport()
-        await Task.yield()
+        await second.deliverReport()
 
         // The superseded operation now answers.
-        first.deliver(truePeak: .available(try measurement(0.9)))
-        await Task.yield()
+        await first.deliver(truePeak: .available(try measurement(0.9)))
 
         let shown = try #require(presentation(of: model))
         #expect(shown.report == second.report, "the superseded operation replaced the file on screen")
