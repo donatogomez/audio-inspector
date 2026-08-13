@@ -43,6 +43,25 @@ belongs to a channel which carried no samples.
 - **THEN** the clipped-sample count is reported as zero, distinct from a metric that could not be
   computed at all
 
+#### Scenario: Silence is reported honestly
+
+- **WHEN** a channel's samples are all zero
+- **THEN** its peak and RMS are reported as zero and its DC offset is reported as zero, with no
+  characterisation of the audio as empty, broken, or of any particular quality
+
+#### Scenario: The metrics do not depend on how the file was read
+
+- **WHEN** the same file's samples are decoded in different chunk sizes
+- **THEN** every metric is identical regardless of chunk size, matching the order-independence already
+  proven for the waveform envelope
+
+#### Scenario: Level metrics never alter the report, the export, or the other visualisations
+
+- **WHEN** level metrics are computed alongside the report, the waveform and the spectrogram
+- **THEN** none of the technical properties, the warnings, the global status, the waveform, or the
+  spectrogram change as a result, and the `schemaVersion` 1 export's existing fields remain
+  byte-identical
+
 #### Scenario: Samples of extreme magnitude still produce finite metrics
 
 - **WHEN** a file's samples are finite but of extreme magnitude, up to the largest value the sample

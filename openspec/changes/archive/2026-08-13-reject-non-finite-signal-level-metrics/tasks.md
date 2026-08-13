@@ -49,5 +49,10 @@
 
 ## 5. Gates and closure
 
-- [ ] 5.1 Four gates green plus the Xcode build and `git diff --check`.
-- [ ] 5.2 Update `CURRENT.md` and archive through `openspec archive` **after merge**.
+- [x] 5.1 Four gates green plus the Xcode build and `git diff --check`. Run on the branch head before
+      publishing and again on `main` after the merge; the pre-existing flow-state flake did not appear in
+      either.
+- [x] 5.2 Update `CURRENT.md` and archive through `openspec archive` **after merge**. The delta's
+      modified requirement was corrected first: it restated the requirement without three scenarios it
+      never intended to touch (silence, chunk independence, non-interference), and `MODIFIED` replaces a
+      requirement wholesale, so archiving as written would have deleted three live, tested guarantees.
