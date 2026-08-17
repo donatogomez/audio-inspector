@@ -16,54 +16,41 @@
 >   session protocol in `CLAUDE.md`).
 
 ---
-**Focus:** nothing is in flight. The two guarantees below are integrated; the candidate next thread is
-named at the end.
+**Already integrated, so not threads:** `SignalLevelMetrics` cannot publish a value that is not a
+number — every reduction widens to `Double` before it accumulates, the domain model refuses non-finite
+values, and an impossible result reaches the existing `failed` outcome rather than a substituted one.
+And the flow-state test suites synchronise on a happens-before instead of a `Task.yield()`, which
+guarantees nothing: their scripted actions now complete the round trip. Both are merged; the first is
+archived.
 
-**What just landed, stated as a property rather than as history.** `SignalLevelMetrics` cannot publish a
-value that is not a number. Every reduction is widened to `Double` *before* it is accumulated, so no
-intermediate can overflow on the way to a result that was always representable — the mean and the RMS
-are bounded by the largest magnitude in the input. The domain model refuses non-finite values outright,
-as its two sibling value types already did, and a result that genuinely could not be described reaches
-the **existing `failed` outcome** rather than a new state or a substituted number. Nothing is clamped,
-and amplitudes beyond full scale are still reported, because that is a real fact about a file. The
-export and `schemaVersion` 1 are semantically unchanged: the same fields, the same bytes, now
-guaranteed to be numbers. Its change is merged and archived; the finiteness guarantee lives in the
-`audio-signal-level-metrics` capability.
+**Focus: `share-waveform-pcm-read`, group 2 is done — the shared pass can now produce the waveform.**
+The waveform is the fourth consumer of `SharedPCMAnalysisGeneration`: same chunks, its own accumulator,
+its own outcome. **The legacy `WaveformGenerating` read is still alive and is still what the user sees**,
+deliberately — it is the oracle every equivalence test compares against, and retiring it is group 3's
+cut, not this one's.
 
-**The flow-state suites now synchronise on a happens-before rather than on timing.** They used to
-release an update and wait one `Task.yield()` for another task to apply it, which guarantees nothing:
-resuming a continuation makes the other task *runnable*, not *run*. The scripted actions complete the
-round trip instead — `deliver` returns only once the handler has actually been called — reusing the
-continuation handshake those same test classes already had. **Production was not touched**, and the
-argument for the fix is a negative control rather than a count of green runs: with the acknowledgement
-removed the affected tests fail, and with an extra scheduling hop inside the producer the handshake
-still passes where the yield fails deterministically. That debt is closed.
+- **Equivalence is exact, for every format measured — including AAC.** The pre-implementation probe had
+  reported AAC drifting by about one ULP and the design and ADR-0021 were written expecting a tolerance
+  there. Measured against the shipped composition, at the probe's own ten-minute length and with a signal
+  the encoder cannot fold together, the worst bucket error is **zero**. The hypothesis fell; the records
+  were corrected rather than defended, and the tests assert exact equality.
+- **Position comes from `chunk.startFrame`, not from arrival order** — proven by feeding the chunks
+  backwards and getting the identical envelope.
+- **Failure and absence stay the waveform's own.** An incompletely covered read fails the waveform while
+  the other three settle exactly as accumulators fed the same chunks directly; a resolution the stream
+  cannot be mapped to is an *absence*, never a failure. Cancellation, including a deterministic
+  mid-read cancellation, cancels all four and publishes nothing partial.
+- **The buffer must be borrowed, and that is now confirmed against production code**: the fold costs
+  0.29–0.34 s through `withUnsafeBufferPointer` and 4.21–4.23 s through the array — ~13×, on all three
+  formats.
 
-**Focus: the waveform's own PCM read is the last redundant decode, and the case for removing it is now
-made rather than assumed.** `share-waveform-pcm-read` is open and **ADR-0021 is written but Proposed**;
-nothing is implemented. Three findings, all measured before any code, decided the design:
+Four negative controls discriminate: dropping `startFrame`, skipping a chunk, coupling the waveform's
+failure or its absence to the others, and ignoring cancellation for it.
 
-- **The recorded blocker was about a different shape.** Two decoding faults have no honest waveform
-  error counterpart, which blocks *reimplementing the port over `AudioDecoding`*. It does not apply to
-  the waveform becoming a **consumer** of the shared pass, because a consumer translates no error space
-  at all. `PCMChunk`, `AudioDecoding` and `WaveformEnvelopeAccumulator` need no change — `startFrame` is
-  already the absolute frame the reduction asks for. (The deferral being revisited is **ADR-0020's**,
-  not ADR-0016's: that one scheduled the migration as conditional and last.)
-- **Equivalence is not uniform, and the asymmetry is the platform's.** Bit-identical envelopes for WAV
-  and FLAC; AAC differs in most buckets by about one ULP, because a lossy decoder does not return
-  identical samples for a different read granularity. So the criterion is bit-exact for lossless and a
-  justified tolerance for lossy — derived, not chosen.
-- **How the samples are handed over is worth 12×.** Passing the chunk's array costs ~3.8 s where an
-  `UnsafeBufferPointer` view of it costs ~0.3 s for ten minutes of stereo. Written the obvious way the
-  migration would be a slowdown, so this belongs to the decision rather than to a later optimisation.
-
-Saving once done: ~0.41 s (FLAC) and ~0.39 s (AAC) per ten-minute inspection, and almost nothing on WAV.
-The riskiest part is not the fold — it is the test surface that scripts the waveform generator seam,
-several of which assert an arrangement rather than a property.
-
-**Next step:** implement group 2 (the waveform as the fourth consumer) before group 3 (retiring the
-port), so the saving and the equivalence stay provable while the old path still exists to compare
-against.
+**Next step:** group 3 — retire the legacy read. Stop calling `makeWaveformGenerator` in the coordinator,
+publish the shared waveform instead, and delete `WaveformGenerating` and its adapter. The risk there is
+not the fold; it is the test surface that scripts that seam, several of which assert an arrangement
+rather than a property.
 
 **Minor follow-up, not a thread:** `ImportFlowComparisonTests` has one `Task.yield()` that was never
 audited in depth; same shape as the ones above, no failure ever attributed to it.
@@ -74,4 +61,4 @@ audited in depth; same shape as the ones above, no failure ever attributed to it
 traversal gap shared with ADR-0015). Neither was touched this session.
 
 ---
-_Last touched: 2026-08-13. Overwrite freely; empty is fine._
+_Last touched: 2026-08-17. Overwrite freely; empty is fine._
