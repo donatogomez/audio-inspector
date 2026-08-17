@@ -16,45 +16,33 @@
 >   session protocol in `CLAUDE.md`).
 
 ---
-**Already integrated, so not threads:** `SignalLevelMetrics` cannot publish a value that is not a
-number — every reduction widens to `Double` before it accumulates, the domain model refuses non-finite
-values, and an impossible result reaches the existing `failed` outcome rather than a substituted one.
-And the flow-state test suites synchronise on a happens-before instead of a `Task.yield()`, which
-guarantees nothing: their scripted actions now complete the round trip. Both are merged; the first is
-archived.
+**Focus:** nothing is in flight. The three properties below are integrated; the open threads are named
+at the end.
 
-**Focus: `share-waveform-pcm-read`, group 7 is done and ADR-0021 is `Accepted`.** An inspection reads a
-file's samples once, measured end to end against a clean `main` worktree — ten minutes of stereo,
-Release, three runs, medians:
+**An inspection reads a file's samples once.** One shared pass decodes the file and hands the same
+chunks to the waveform, the spectrogram, the signal level metrics and the true peak, each keeping its
+own accumulation, its own failure and its own reported outcome. The report is still produced from
+metadata alone and emitted before any sample is read. The envelope is **identical** to the one the
+waveform's own read produced — exactly, for every container measured, including a lossy one — and no
+domain type, port or reduction rule changed to get there.
 
-| format | before | after | saving |
-| --- | --- | --- | --- |
-| WAV | 1.243 s | 1.198 s | 0.045 s (3.7 %) |
-| FLAC | 2.465 s | 1.788 s | **0.677 s (27.5 %)** |
-| AAC | 2.324 s | 1.964 s | **0.359 s (15.5 %)** |
+A consumer's failure stays its own and the read outlives it; a producer's failure ends every unfinished
+consumer, each on its own terms; cancellation is global; an absence stays distinct from a failure; and
+nothing partial escapes. Measured on ten minutes of stereo, a compressed inspection is 15–27 % faster
+and memory does not grow with duration.
 
-- **The task's own success rule was the wrong comparison.** "Saving ≈ the eliminated decode" would have
-  raised a false alarm on AAC at 68 %. What is removed is a whole legacy *read* — decode and fold —
-  while a fold is added back inside the shared pass; against that the arithmetic closes at 128/101/97 %.
-- **No hidden cost**: the waveform's fold is 0.297–0.309 s, unchanged. Memory is flat — a tenfold longer
-  file moved the peak footprint by 0.2 MB.
-- **The waveform is visible 0.8–1.3 s later than it used to be**, because it settles with the one read
-  instead of after a read of its own. No spec requires it earlier and the report still precedes the read
-  by three orders of magnitude, so nothing is broken — but it is a real change in what a user sees, it
-  was not predicted, and it is written into ADR-0021's Promotion section. Progressive delivery inside the
-  shared pass is the obvious remedy and is deliberately **not** designed: it would reopen a callback
-  contract ADR-0020 closed, and that is a product decision, not a reflex.
-- **A negative control found a hole**: nothing was testing that the report precedes the *read* — only its
-  order relative to the other updates. A test that asks the decoder whether it had been invoked yet now
-  covers it.
+**The known consequence:** the waveform now becomes visible **0.8–1.3 s later**, because it settles when
+the one read finishes rather than after a read of its own. The report is unaffected at ~1–2 ms, no
+specification requires the waveform before the other analyses, and progressive delivery inside the
+shared pass was deliberately not designed — it would reopen a callback contract ADR-0020 closed, and
+that is a product judgement. Recorded in ADR-0021, which is `Accepted`.
 
-**The change is ready to publish.** All six gates are green on the head being proposed, and every group
-is closed except the archive, which belongs after the merge. ADR-0021 is `Accepted`, the legacy
-generator survives only as a test oracle with a gate against its return, and the waveform's later
-arrival is recorded as a known consequence rather than smoothed over.
+**`AVFoundationWaveformGenerator` survives with no production consumer, on purpose**: it is the
+independent implementation the equivalence tests compare against, and a source-level gate fails if any
+production target so much as names a waveform-reading port.
 
-**Next step:** review the pull request. On merge, `openspec archive share-waveform-pcm-read` and refresh
-this snapshot — nothing else is outstanding.
+**Also integrated, so not threads:** `SignalLevelMetrics` cannot publish a value that is not a number,
+and the flow-state test suites synchronise on a happens-before instead of a `Task.yield()`.
 
 **Minor follow-up, not a thread:** `ImportFlowComparisonTests` has one `Task.yield()` that was never
 audited in depth; same shape as the ones above, no failure ever attributed to it.
