@@ -44,26 +44,42 @@ order is chosen so the risky part is provable before the irreversible part happe
       and its default. The typealias, the stored closure, the init parameter and the private
       `waveform(for:at:)` helper are gone, so the composition root has no way to open a second read.
 - [ ] 3.2 Delete `WaveformGenerating`, `AVFoundationWaveformGenerator` and `FakeWaveformGenerating`
-      once nothing calls them. **Deferred on its own precondition, deliberately.** Production calls none
-      of them — audited, zero references in `AudioInspectorApp`, `FeatureImport` or `FeatureAnalysis` —
-      but the tests do: `AVFoundationWaveformGenerator` is the **oracle** every equivalence assertion in
-      group 4 compares the shared envelope against, and deleting it would delete the evidence ADR-0021's
-      promotion depends on. `FakeWaveformGenerating` survives only in `WaveformErrorTests`. Both go once
-      group 4 is closed and the equivalence is recorded, not before.
-      The constant **was** moved: `AVFoundationAudioDecoder.defaultChunkFrames` no longer derives from
-      `AVFoundationWaveformGenerator.defaultChunkFrames`, and the value is still **4 096**.
+      once nothing calls them. **Still deferred, and the reason has changed — this is now a judgement
+      call rather than a precondition.** Production calls none of them (audited: zero references in
+      `AudioInspectorApp`, `FeatureImport`, `FeatureAnalysis`). Group 4 is closed, so they are no longer
+      needed to *produce* evidence. What they still provide is **standing regression protection**: every
+      equivalence assertion compares the shared fold against an independent implementation of the same
+      reduction, and deleting the oracle makes those tests self-referential — they would then only prove
+      the shared path agrees with itself.
+      Against that, ADR-0021 decision 4 says a port with no caller invites a second read to come back
+      without a decision. That risk is already covered from another direction: group 3 added a
+      source-level gate that fails if `AudioInspectorApp` so much as names a waveform-reading port.
+      **Recommendation: keep the oracle, and rewrite the task rather than the tests.** Nothing in groups
+      5–8 needs it, so this can be settled at closure; it should be settled deliberately, not by drift.
+      `FakeWaveformGenerating` is a separate and smaller question — only `WaveformErrorTests` still uses
+      it, and that suite can be rewritten without losing a guarantee.
 - [x] 3.3 Keep `WaveformEnvelope`, `WaveformBucket`, `WaveformBucketMapping`,
       `WaveformEnvelopeAccumulator` and `WaveformError` **untouched** — verified byte-identical. The reduction's rules are what
       this change preserves; only the thing that used to own a read goes.
 
 ## 4. Equivalence, proved rather than asserted
 
-- [ ] 4.1 Prove the envelope is **bit-identical** to the pre-change one for WAV and FLAC, over: mono,
+- [x] 4.1 Prove the envelope is **bit-identical** to the pre-change one for WAV and FLAC, over: mono,
       stereo, silence, a peak above full scale, a very short file, and a file whose final chunk is
-      short.
-- [ ] 4.2 Prove chunk-size independence at several chunk sizes, using the guarantee
-      `WaveformEnvelopeAccumulator` already documents — not a widened tolerance.
-- [ ] 4.3 For **AAC**, assert equality **exactly**, like the lossless containers. ~~Within a stated
+      short. `SharedWaveformEquivalenceTests` compares the **whole `WaveformEnvelope` with `==`** against
+      the legacy generator on the same file: 14 container/channel/signal rows (WAV 1/2/4 channels, FLAC
+      1/2, AIFF, ALAC, AAC, float WAV), silence, zero frames, four very short files (1, 2, 7, 512
+      frames) and the tail case. Every fixture is **44 101 frames** — prime, so a short final chunk and
+      a length that divides no chunk size are properties of every row rather than of one.
+      A peak above full scale needed a new fixture format: every existing container quantises to 16-bit
+      integer and clamps it, so **32-bit float WAV** was added, and a 2.5 amplitude round-trips at
+      2.4999995 and survives both paths unclamped.
+- [x] 4.2 Prove chunk-size independence at several chunk sizes, using the guarantee
+      `WaveformEnvelopeAccumulator` already documents — not a widened tolerance. Nine sizes from one
+      frame to the whole file, each compared against the legacy read. **Resolution independence too**,
+      which the task did not ask for and the mapping deserves: five `maximumBucketCount` values
+      including 1, production's 2 048 and one larger than the file has frames.
+- [x] 4.3 For **AAC**, assert equality **exactly**, like the lossless containers. ~~Within a stated
       tolerance~~ — **the hypothesis fell.** The pre-implementation probe reported 1778 of 2048 buckets
       differing by about one ULP; measured again through the production composition, on the same file,
       with the same decoder, accumulator and bucket count, and at the probe's own ten-minute length, the
@@ -71,8 +87,20 @@ order is chosen so the risky part is provable before the irreversible part happe
       cannot fold together. The probe's finding does not reproduce and is recorded as an artefact of that
       throwaway harness. The test still computes and prints the worst error, so a future platform change
       reports its magnitude rather than only failing.
-- [ ] 4.4 Record the deliberate behaviour change on a file that **over-reads** its declared length: the
+- [x] 4.4 Record the deliberate behaviour change on a file that **over-reads** its declared length: the
       legacy loop trimmed silently, the shared read refuses. Stricter on purpose.
+      **Measured first: no writable container over-reads.** WAV, AIFF, ALAC, FLAC, AAC and float WAV
+      were each read bounded by the declared length and unbounded past it, and every one delivered
+      exactly what it declared in both directions. So the input that separates the two policies cannot
+      be produced natively, and a legacy-versus-shared comparison for it would test a fixture that does
+      not exist.
+      `WaveformDeclaredLengthTests` therefore pins the **shared** policy where a misbehaving decoder is
+      expressible — at the port: *the declared frame count sizes the reduction and bounds the read;
+      frames delivered beyond it are a fault of the read, reported as one, never trimmed away and never
+      folded in.* It also pins the boundary (a run ending exactly at the declared length is fine) and
+      the opposite direction (a shortfall fails the waveform alone and invents nothing). The suite is
+      deliberately **not** named for equivalence, and the legacy clamp is recorded from its source
+      rather than exercised.
 
 ## 5. The properties, each with a negative control
 
