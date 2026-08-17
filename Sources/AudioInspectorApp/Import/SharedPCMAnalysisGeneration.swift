@@ -14,8 +14,15 @@ import FeatureImport
 ///
 /// **A third analysis was added by adding a field**, which is the property the design claimed for this
 /// shape and is now demonstrated rather than asserted: no protocol, no generic machinery, no widening
-/// of an existing analysis.
+/// of an existing analysis. **A fourth cost the same**, and it is the one that reduces an inspection to
+/// a single read of the file.
 struct SharedPCMAnalysisOutcome {
+    /// **Not yet what the user sees.** The waveform still has its own read in
+    /// `SourceInspectionCoordinator`, and that one is what reaches the surface; this is the same
+    /// envelope produced from the shared chunks, kept beside it so the two can be compared on real
+    /// files before the old path is retired (`share-waveform-pcm-read`, groups 2 and 3). Retiring it is
+    /// a separate change precisely so the equivalence is provable while both exist.
+    let waveform: WaveformOutcome
     let spectrogram: SpectrogramOutcome
     let signalLevelMetrics: SignalLevelMetricsOutcome
     let truePeak: TruePeakOutcome
@@ -66,17 +73,26 @@ struct SharedPCMAnalysisOutcome {
 struct SharedPCMAnalysisGeneration {
     private let decoder: any AudioDecoding
     private let chunkFrames: Int
+    /// The waveform's resolution, taken from the same place the legacy generator takes it so the two
+    /// produce the same envelope. Exposed only so a test can vary it exactly as
+    /// `AVFoundationWaveformGenerator` already allows; production passes neither.
+    private let maximumBucketCount: Int
 
-    init(decoder: any AudioDecoding, chunkFrames: Int = AVFoundationAudioDecoder.defaultChunkFrames) {
+    init(
+        decoder: any AudioDecoding,
+        chunkFrames: Int = AVFoundationAudioDecoder.defaultChunkFrames,
+        maximumBucketCount: Int = WaveformBucketMapping.defaultMaximumBucketCount
+    ) {
         self.decoder = decoder
         self.chunkFrames = chunkFrames
+        self.maximumBucketCount = maximumBucketCount
     }
 
     func run(for file: AudioFileReference) async -> SharedPCMAnalysisOutcome {
         // One `Consumers` value holds every analysis's accumulator and its own recorded fault. It is a
         // plain `var` on this call's stack: nothing here is `Sendable`, nothing escapes, and the
         // compiler enforces both.
-        var consumers = Consumers()
+        var consumers = Consumers(maximumBucketCount: maximumBucketCount)
         var cancelled = false
 
         do {
@@ -119,15 +135,18 @@ struct SharedPCMAnalysisGeneration {
             // description and be turned into a model of whatever had been read so far.
             if cancelled {
                 return SharedPCMAnalysisOutcome(
-                    spectrogram: .cancelled, signalLevelMetrics: .cancelled, truePeak: .cancelled
+                    waveform: .cancelled, spectrogram: .cancelled,
+                    signalLevelMetrics: .cancelled, truePeak: .cancelled
                 )
             }
             guard let stream else {
                 // The file exposed no usable frame count, so there was nothing to size an analysis
                 // against. An absence caused by the file, never dressed up as a failure — and it is
-                // every consumer's absence, because none of them got a stream.
+                // every consumer's absence, because none of them got a stream. It is also exactly what
+                // the waveform's own port reports for this file: `makeWaveform` returns `nil`.
                 return SharedPCMAnalysisOutcome(
-                    spectrogram: .unavailable, signalLevelMetrics: .unavailable, truePeak: .unavailable
+                    waveform: .unavailable, spectrogram: .unavailable,
+                    signalLevelMetrics: .unavailable, truePeak: .unavailable
                 )
             }
             return consumers.finish(stream: stream)
@@ -137,13 +156,16 @@ struct SharedPCMAnalysisGeneration {
             // have to consult another to learn what happened.
             if error.code == .cancelled {
                 return SharedPCMAnalysisOutcome(
-                    spectrogram: .cancelled, signalLevelMetrics: .cancelled, truePeak: .cancelled
+                    waveform: .cancelled, spectrogram: .cancelled,
+                    signalLevelMetrics: .cancelled, truePeak: .cancelled
                 )
             }
             // Human, neutral, and carrying no path, no framework text and no stable code — those stay
             // where they are meaningful (ADR-0011). Each analysis keeps the wording it had when it read
-            // the file alone, so nothing downstream can tell the difference.
+            // the file alone, so nothing downstream can tell the difference — the waveform's sentence is
+            // the one `SourceInspectionCoordinator` already produces for a failed generation.
             return SharedPCMAnalysisOutcome(
+                waveform: .failed(message: "The waveform for this file could not be produced."),
                 spectrogram: .failed(message: "The spectrogram for this file could not be produced."),
                 signalLevelMetrics: .failed(message: "The signal level metrics for this file could not be produced."),
                 truePeak: .failed(message: "The true peak for this file could not be measured.")
@@ -166,15 +188,28 @@ private extension SharedPCMAnalysisGeneration {
         private var spectrogram: SpectrogramAccumulator?
         private var signalLevelMetrics: SignalLevelMetricsAccumulator?
         private var truePeak: TruePeakAccumulator?
+        private var waveform: WaveformEnvelopeAccumulator?
         private var spectrogramFault: String?
         private var signalLevelMetricsFault: String?
         private var truePeakFault: String?
+        private var waveformFault: String?
+        /// The waveform's one **absence**, kept apart from its faults on purpose: a stream this
+        /// resolution cannot be mapped to buckets is a file that offered nothing to size an envelope
+        /// against, which its own port reports by returning `nil`. Reporting it as a failure would
+        /// blame the file for a limit that is not one.
+        private var waveformAbsent = false
+        private let maximumBucketCount: Int
         private var prepared = false
+
+        init(maximumBucketCount: Int) {
+            self.maximumBucketCount = maximumBucketCount
+        }
 
         /// Whether no consumer can still use a chunk. The read ends only on this, never on one
         /// consumer being done.
         var allFailed: Bool {
-            spectrogramFault != nil && signalLevelMetricsFault != nil && truePeakFault != nil
+            spectrogramFault != nil && signalLevelMetricsFault != nil
+                && truePeakFault != nil && (waveformFault != nil || waveformAbsent)
         }
 
         /// Builds each accumulator once, from the one stream description the read reports.
@@ -205,6 +240,22 @@ private extension SharedPCMAnalysisGeneration {
             if truePeak == nil {
                 truePeakFault = "The file describes a stream no analysis can be built for."
             }
+            // Sized from the **same** description as the others, which is what makes the shared envelope
+            // comparable to the one the waveform's own read produces: that read sizes itself from
+            // `AVAudioFile.length`, and this stream's `frameCount` is that same number.
+            //
+            // Its failure is an **absence**, not a fault. The only way this initialiser can fail here is
+            // a frame count the bucket mapping cannot be computed for — `channelCount` is at least one
+            // by `PCMStreamDescription`'s own guarantee — and that is exactly the case the legacy port
+            // answers with `nil`.
+            waveform = WaveformEnvelopeAccumulator(
+                totalFrameCount: stream.frameCount,
+                channelCount: stream.channelCount,
+                maximumBucketCount: maximumBucketCount
+            )
+            if waveform == nil {
+                waveformAbsent = true
+            }
         }
 
         /// Hands the same chunk to every consumer still in the read.
@@ -218,6 +269,55 @@ private extension SharedPCMAnalysisGeneration {
             if spectrogramFault == nil { spectrogram?.accumulate(chunk) }
             if signalLevelMetricsFault == nil { signalLevelMetrics?.accumulate(chunk) }
             if truePeakFault == nil { truePeak?.accumulate(chunk) }
+            if waveformFault == nil, !waveformAbsent { accumulateWaveform(chunk) }
+        }
+
+        /// The waveform's fold: the one consumer that takes **runs** rather than whole chunks, and the
+        /// one that can **throw**.
+        ///
+        /// ## The buffer is borrowed, and that is a requirement rather than a flourish
+        ///
+        /// `accumulate` takes `some Collection<Float>`. Handing it `chunk.channels[channel]` — the
+        /// `[Float]` itself — was measured at **3.79–3.81 s** for ten minutes of stereo against
+        /// **0.28–0.33 s** for an `UnsafeBufferPointer` view of that same array: a **12× penalty**,
+        /// constant across WAV, FLAC and AAC and therefore per-sample rather than anything to do with
+        /// decoding. Written the obvious way, sharing the read would make an inspection *slower*. The
+        /// pointer form is also exactly what the legacy generator hands its accumulator, so this is the
+        /// established shape rather than a new trick.
+        ///
+        /// Nothing is copied and nothing is allocated: the pointer borrows the chunk's own storage for
+        /// the duration of a synchronous call, and `accumulate` cannot outlive it.
+        ///
+        /// ## Its `startingAtFrame` is the chunk's own `startFrame`
+        ///
+        /// No parallel counter. `PCMChunk.startFrame` is the absolute frame its first sample sits at,
+        /// counted from the start of the file, which is the number this accumulator asks for — the same
+        /// number the legacy loop tracks as `framesRead`.
+        ///
+        /// ## A throw here is the waveform's own failure
+        ///
+        /// It stops receiving chunks and nothing else changes: the read continues and the other three
+        /// consumers settle exactly as they would have. Given the guards the caller already applies,
+        /// none of the reachable causes should occur — the channel index comes from the chunk, the
+        /// range is checked against the same stream, and `PCMChunk` refuses non-finite samples at
+        /// construction — so this is a backstop rather than a path the arithmetic can reach.
+        private mutating func accumulateWaveform(_ chunk: PCMChunk) {
+            for channel in 0 ..< chunk.channelCount {
+                do {
+                    // Mutated **in place** through the optional. Lifting the accumulator into a local
+                    // would leave two references to its bucket arrays, so the first write would deep-copy
+                    // 2 048 floats twice per chunk — the same class of mistake as passing the array.
+                    try chunk.channels[channel].withUnsafeBufferPointer { samples throws(WaveformError) in
+                        try waveform?.accumulate(
+                            samples, ofChannel: channel, startingAtFrame: chunk.startFrame
+                        )
+                    }
+                } catch {
+                    waveformFault = "The waveform for this file could not be produced."
+                    waveform = nil
+                    return
+                }
+            }
         }
 
         /// Faults every consumer at once. Used only when the fault is in the audio itself, which none
@@ -226,6 +326,10 @@ private extension SharedPCMAnalysisGeneration {
             if spectrogramFault == nil { spectrogramFault = message }
             if signalLevelMetricsFault == nil { signalLevelMetricsFault = message }
             if truePeakFault == nil { truePeakFault = message }
+            // Not applied to a waveform that is **absent**: that is not a fault waiting to be
+            // overwritten, and turning it into one would report a failure for a file that simply
+            // offered nothing to size against.
+            if waveformFault == nil, !waveformAbsent { waveformFault = message }
         }
 
         /// Each consumer's own result, computed independently of the others.
@@ -235,10 +339,40 @@ private extension SharedPCMAnalysisGeneration {
         /// a complete one rather than a missing one — the rule each analysis already followed alone.
         func finish(stream: PCMStreamDescription) -> SharedPCMAnalysisOutcome {
             SharedPCMAnalysisOutcome(
+                waveform: finishWaveform(stream: stream),
                 spectrogram: finishSpectrogram(stream: stream),
                 signalLevelMetrics: finishSignalLevelMetrics(stream: stream),
                 truePeak: finishTruePeak(stream: stream)
             )
+        }
+
+        /// The waveform's own result, mapped onto the three meanings its port already keeps apart.
+        ///
+        /// A file with **no audio** delivers no chunk, so nothing was prepared: the accumulator is built
+        /// here from the stream and finished immediately, which yields an envelope with **no buckets**.
+        /// That is `available`, not absent — the legacy generator takes the identical shortcut
+        /// (`if frameCount == 0 { return try accumulator.finished() }`), and an empty answer is a
+        /// complete one.
+        ///
+        /// A frame count this resolution cannot map to buckets is the **absence** the legacy port
+        /// reports by returning `nil`, and it stays an absence here.
+        ///
+        /// `finished()` throwing is a failure of the waveform alone — it means a bucket went uncovered,
+        /// which is the accumulator refusing to invent a flat stretch the file may not contain.
+        private func finishWaveform(stream: PCMStreamDescription) -> WaveformOutcome {
+            if waveformAbsent { return .unavailable }
+            if let waveformFault { return .failed(message: waveformFault) }
+            guard let accumulator = waveform ?? WaveformEnvelopeAccumulator(
+                totalFrameCount: stream.frameCount,
+                channelCount: stream.channelCount,
+                maximumBucketCount: maximumBucketCount
+            ) else {
+                return .unavailable
+            }
+            guard let envelope = try? accumulator.finished() else {
+                return .failed(message: "The waveform for this file could not be produced.")
+            }
+            return .available(envelope)
         }
 
         private func finishSpectrogram(stream: PCMStreamDescription) -> SpectrogramOutcome {
