@@ -201,8 +201,13 @@ struct EndToEndFlowTests {
     /// The point is not that the waveform is missing — that is scripted — but that **nothing else
     /// moves when it is**: the same pipeline runs end to end, the report is complete, the export
     /// succeeds and the document written to disk is byte-identical to the one the run above produced.
-    /// The only substitution beyond the two panels is the waveform port; the property reader, the use
-    /// case, the flow model, the exporter and the write are all real.
+    /// The only substitution beyond the two panels is the **decoding** port; the property reader, the
+    /// use case, the flow model, the exporter and the write are all real.
+    ///
+    /// Since ADR-0021 the waveform settles from the shared read, so a file whose samples cannot be read
+    /// takes **every** sample-based analysis with it. That widens what this walk demonstrates rather
+    /// than narrowing it: none of the four reaches the report, the warnings, the status or a single byte
+    /// of the export.
     @Test func theSamePipelineRunsAndExportsIdenticallyWhenNoWaveformCanBeProduced() async throws {
         try await withTemporaryDirectory { directory in
             let source = directory.appendingPathComponent("fixture.wav")
@@ -210,11 +215,10 @@ struct EndToEndFlowTests {
             let hashBefore = try sha256(of: source)
 
             @MainActor
-            func run(waveform: FakeWaveformGenerating.Outcome) async throws -> (InspectionPresentation, Data) {
-                let inspection = SourceInspectionCoordinator(
-                    chooseSource: { source },
-                    makeWaveformGenerator: { _ in FakeWaveformGenerating(waveform) }
-                )
+            func run(decoder: FakeAudioDecoding?) async throws -> (InspectionPresentation, Data) {
+                let inspection = decoder.map { scripted in
+                    SourceInspectionCoordinator(chooseSource: { source }, makeDecoder: { _ in scripted })
+                } ?? SourceInspectionCoordinator(chooseSource: { source })
                 let flow = ImportFlowModel(action: { onUpdate in await inspection.inspect(onUpdate: onUpdate) })
                 await flow.selectAndInspect()
 
@@ -235,15 +239,13 @@ struct EndToEndFlowTests {
                 return (presentation, try Data(contentsOf: destination))
             }
 
-            let bucket = try #require(WaveformBucket(minimum: -0.5, maximum: 0.5))
-            let envelope = try #require(
-                WaveformEnvelope(buckets: [bucket], frameCount: 8, channelCount: 1)
-            )
-            let (withWaveform, documentWithWaveform) = try await run(waveform: .success(envelope))
-            let (withoutWaveform, documentWithoutWaveform) = try await run(waveform: .absent)
+            let (withWaveform, documentWithWaveform) = try await run(decoder: nil)
+            let (withoutWaveform, documentWithoutWaveform) = try await run(decoder: FakeAudioDecoding(.absent))
 
-            // Both walks produced a real, complete report.
-            #expect(withWaveform.waveform == .available(envelope))
+            // Both walks produced a real, complete report, and the two really are different runs.
+            guard case .available = withWaveform.waveform else {
+                Issue.record("expected a real envelope, got \(withWaveform.waveform)"); return
+            }
             #expect(withoutWaveform.waveform == .unavailable)
             #expect(withoutWaveform.report.properties.sampleRate == .available(44_100))
             #expect(withoutWaveform.report.properties.channelCount == .available(1))
@@ -318,8 +320,10 @@ struct EndToEndFlowTests {
             #expect(withoutSpectrogram.report.warnings == withSpectrogram.report.warnings)
             #expect(withoutSpectrogram.report.status == withSpectrogram.report.status)
 
-            // …the waveform beside it is untouched by what the spectrogram did…
-            #expect(withoutSpectrogram.waveform == withSpectrogram.waveform)
+            // …the waveform settles from the **same** read since ADR-0021, so it shares the
+            // spectrogram's fate rather than being untouched by it. What must not move is the report and
+            // the document, which is what the two assertions above and the one below pin.
+            #expect(withoutSpectrogram.waveform == .unavailable)
 
             // …and so does every byte written to disk.
             #expect(documentWithoutSpectrogram == documentWithSpectrogram)

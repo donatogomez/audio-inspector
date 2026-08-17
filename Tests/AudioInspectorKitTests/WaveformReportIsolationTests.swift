@@ -24,29 +24,27 @@ struct WaveformReportIsolationTests {
 
     /// The three outcomes the port can produce, scripted. Cancellation is excluded deliberately: it
     /// never settles into a presented state, so there is no report to compare.
-    private func outcomes(envelope: WaveformEnvelope) -> [(name: String, outcome: FakeWaveformGenerating.Outcome)] {
+    /// The three ways a waveform can turn out, scripted where it now comes from: the decoding port.
+    /// `nil` is the real decoder over the real file, which is the "available" case.
+    private func scripts() -> [(name: String, decoder: FakeAudioDecoding?)] {
         [
-            ("available", .success(envelope)),
-            ("absent", .absent),
-            ("failed", .failure(WaveformError(code: .readFailed, message: "internal"))),
+            ("available", nil),
+            ("absent", FakeAudioDecoding(.absent)),
+            ("failed", FakeAudioDecoding(failingWith: AudioDecodingError(code: .readFailed, message: "internal"))),
         ]
     }
 
-    private func envelope() throws -> WaveformEnvelope {
-        let buckets = (0 ..< 16).map { index in
-            WaveformBucket(minimum: Float(index) / -32, maximum: Float(index) / 32)!
-        }
-        return try #require(WaveformEnvelope(buckets: buckets, frameCount: 4_410, channelCount: 2))
-    }
 
     /// Inspects `url` with the **real** property reader and a scripted waveform port.
+    /// How the waveform is scripted since ADR-0021: through the **decoding** port, because that is where
+    /// its samples now come from. `nil` means the real decoder over the real file.
     private func inspect(
         _ url: URL,
-        waveform: FakeWaveformGenerating.Outcome
+        decoder: FakeAudioDecoding?
     ) async throws -> (report: InspectionReport, waveform: WaveformOutcome) {
-        let coordinator = SourceInspectionCoordinator(
-            makeWaveformGenerator: { _ in FakeWaveformGenerating(waveform) }
-        )
+        let coordinator = decoder.map { scripted in
+            SourceInspectionCoordinator(makeDecoder: { _ in scripted })
+        } ?? SourceInspectionCoordinator()
         let outcome = await coordinator.inspect(url, onUpdate: { _ in })
         guard case let .inspected(report, waveform, _, _, _) = outcome else {
             throw InspectionDidNotComplete()
@@ -68,11 +66,9 @@ struct WaveformReportIsolationTests {
                 ),
                 in: directory
             )
-            let envelope = try envelope()
-
             var reports: [(String, InspectionReport)] = []
-            for (name, outcome) in outcomes(envelope: envelope) {
-                reports.append((name, try await inspect(url, waveform: outcome).report))
+            for (name, decoder) in scripts() {
+                reports.append((name, try await inspect(url, decoder: decoder).report))
             }
 
             let reference = try #require(reports.first)
@@ -102,8 +98,8 @@ struct WaveformReportIsolationTests {
                 in: directory
             )
 
-            for (name, outcome) in outcomes(envelope: try envelope()) {
-                let (report, _) = try await inspect(url, waveform: outcome)
+            for (name, decoder) in scripts() {
+                let (report, _) = try await inspect(url, decoder: decoder)
 
                 let mentionsTheDrawing = report.warnings.contains { warning in
                     let text = "\(warning.code) \(warning.field ?? "") \(warning.message)".lowercased()
@@ -132,11 +128,9 @@ struct WaveformReportIsolationTests {
                 ),
                 in: directory
             )
-            let envelope = try envelope()
-
             var documents: [(String, Data)] = []
-            for (name, outcome) in outcomes(envelope: envelope) {
-                let (report, _) = try await inspect(url, waveform: outcome)
+            for (name, decoder) in scripts() {
+                let (report, _) = try await inspect(url, decoder: decoder)
                 documents.append((name, try exportData(report)))
             }
 
@@ -167,13 +161,15 @@ struct WaveformReportIsolationTests {
                 AudioFixtureSpec(name: "distinct", format: .wav, signal: .silence, frames: 4_410),
                 in: directory
             )
-            let envelope = try envelope()
+            let available = try await inspect(url, decoder: nil).waveform
+            let absent = try await inspect(url, decoder: FakeAudioDecoding(.absent)).waveform
+            let failed = try await inspect(
+                url, decoder: FakeAudioDecoding(failingWith: AudioDecodingError(code: .readFailed, message: "x"))
+            ).waveform
 
-            let available = try await inspect(url, waveform: .success(envelope)).waveform
-            let absent = try await inspect(url, waveform: .absent).waveform
-            let failed = try await inspect(url, waveform: .failure(WaveformError(code: .readFailed, message: "x"))).waveform
-
-            #expect(available == .available(envelope))
+            guard case .available = available else {
+                Issue.record("expected a real envelope, got \(available)"); return
+            }
             #expect(absent == .unavailable)
             guard case .failed = failed else {
                 Issue.record("expected a failed waveform, got \(failed)"); return

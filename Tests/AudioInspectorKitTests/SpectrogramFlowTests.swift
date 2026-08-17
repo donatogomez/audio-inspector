@@ -40,6 +40,21 @@ struct SpectrogramFlowTests {
         try #require(PCMStreamDescription(sampleRate: 44_100, channelCount: 1, frameCount: frames))
     }
 
+    /// Chunks covering only part of the stream they claim to come from — the one input that fails the
+    /// **waveform alone**, because its reduction refuses to invent buckets the file never covered while
+    /// the other three require no coverage at all.
+    private func partialChunks(declaring declared: Int, covering covered: Int) throws -> [PCMChunk] {
+        var built: [PCMChunk] = []
+        var start = 0
+        while start < covered {
+            let count = min(1_024, covered - start)
+            let samples = (0 ..< count).map { Float(0.5 * sin(2 * Double.pi * 997 * Double(start + $0) / 44_100)) }
+            built.append(try PCMChunk(startFrame: start, channels: [samples, samples]))
+            start += count
+        }
+        return built
+    }
+
     // MARK: The security-scoped window
 
     /// The decode must happen while the caller's access window is open. This proves it against the
@@ -105,14 +120,10 @@ struct SpectrogramFlowTests {
             let url = directory.appendingPathComponent("not-audio.wav")
             try Data("definitely not audio".utf8).write(to: url)
 
-            let generator = FakeWaveformGenerating(.absent)
             let decoder = FakeAudioDecoding(streaming: try stream(frames: 40_960), chunks: [])
             let box = OutcomeBox()
 
-            let coordinator = SourceInspectionCoordinator(
-                makeWaveformGenerator: { _ in generator },
-                makeDecoder: { _ in decoder }
-            )
+            let coordinator = SourceInspectionCoordinator(makeDecoder: { _ in decoder })
             let outcome = await coordinator.inspect(url, onUpdate: { box.collect($0) })
 
             guard case let .inspected(report, waveform, _, _, _) = outcome else {
@@ -123,7 +134,6 @@ struct SpectrogramFlowTests {
             }
             #expect(waveform == .unavailable)
             #expect(box.first == .unavailable, "the spectrogram is absent, not failed")
-            #expect(await generator.callCount == 0, "the waveform read samples after a global failure")
             #expect(await decoder.spy.callCount == 0, "the spectrogram read samples after a global failure")
         }
     }
@@ -136,11 +146,9 @@ struct SpectrogramFlowTests {
     func aFailingSpectrogramChangesNothingElse() async throws {
         try await withTemporaryDirectory { directory in
             let url = try fixture(in: directory)
-            let envelope = try #require(WaveformEnvelope.empty(channelCount: 2))
             let box = OutcomeBox()
 
             let coordinator = SourceInspectionCoordinator(
-                makeWaveformGenerator: { _ in FakeWaveformGenerating(succeedingWith: envelope) },
                 makeDecoder: { _ in
                     FakeAudioDecoding(failingWith: AudioDecodingError(code: .readFailed, message: "boom"))
                 }
@@ -153,7 +161,15 @@ struct SpectrogramFlowTests {
             if case .failed = report.status {
                 Issue.record("a spectrogram failure degraded the inspection")
             }
-            #expect(waveform == .available(envelope), "a spectrogram failure disturbed the waveform")
+            // **Since the cutover this is a producer failure, so it ends every analysis.** The
+            // waveform used to survive it only because it held a read of its own; sharing the read
+            // means sharing its fate, which is exactly what ADR-0020 decision 2 says a producer
+            // failure does. What must still hold — and is what this test now pins — is that each
+            // reports its *own* outcome and the report is untouched.
+            guard case let .failed(waveformMessage) = waveform else {
+                Issue.record("expected the waveform to end with the read, got \(waveform)"); return
+            }
+            #expect(waveformMessage.contains("waveform"), "the waveform did not report its own failure")
             guard case .failed = try #require(box.first) else {
                 Issue.record("expected a failed spectrogram"); return
             }
@@ -178,10 +194,16 @@ struct SpectrogramFlowTests {
             let url = try fixture(in: directory)
             let box = OutcomeBox()
 
+            // **The waveform's one reachable solo failure.** The stream declares more frames than the
+            // chunks cover, so its reduction refuses to invent the buckets nothing reached — while the
+            // other analyses, which require no coverage, settle exactly as they would have.
+            let declared = 16_384
+            let partial = try partialChunks(declaring: declared, covering: 8_192)
+            let declaredStream = try #require(
+                PCMStreamDescription(sampleRate: 44_100, channelCount: 2, frameCount: declared)
+            )
             let coordinator = SourceInspectionCoordinator(
-                makeWaveformGenerator: { _ in
-                    FakeWaveformGenerating(failingWith: WaveformError(code: .readFailed, message: "boom"))
-                }
+                makeDecoder: { _ in FakeAudioDecoding(streaming: declaredStream, chunks: partial) }
             )
             let outcome = await coordinator.inspect(url, onUpdate: { box.collect($0) })
 
@@ -199,57 +221,47 @@ struct SpectrogramFlowTests {
         }
     }
 
-    /// Cancelling the spectrogram's decode leaves the waveform's result untouched — they are separate
-    /// operations over separate ports, and neither can reach the other's state.
-    @Test("a cancelled spectrogram leaves the waveform's result intact")
-    func aCancelledSpectrogramLeavesTheWaveformAlone() async throws {
+    /// **Cancellation is global now, and that is the guarantee.**
+    ///
+    /// This test used to assert that cancelling the spectrogram left the waveform untouched — true while each
+    /// held a read of its own. Since ADR-0021 there is one read, so cancelling it cancels every
+    /// analysis. What must still hold is that each reports **cancellation as its own outcome** and that
+    /// none of them is dressed up as an absence, which would tell the user their file lacks something
+    /// it does not.
+    @Test("cancelling the read cancels every analysis, and none becomes an absence")
+    func cancellationEndsEveryAnalysis() async throws {
         try await withTemporaryDirectory { directory in
             let url = try fixture(in: directory)
-            let envelope = try #require(WaveformEnvelope.empty(channelCount: 2))
             let box = OutcomeBox()
 
             let coordinator = SourceInspectionCoordinator(
-                makeWaveformGenerator: { _ in FakeWaveformGenerating(succeedingWith: envelope) },
                 makeDecoder: { _ in
                     FakeAudioDecoding(failingWith: AudioDecodingError(code: .cancelled, message: "cancelled"))
                 }
             )
             let outcome = await coordinator.inspect(url, onUpdate: { box.collect($0) })
 
-            guard case let .inspected(report, waveform, _, _, _) = outcome else {
+            guard case let .inspected(report, waveform, spectrogram, levels, truePeak) = outcome else {
                 Issue.record("expected an inspected outcome"); return
             }
             #expect(box.first == .cancelled)
-            #expect(waveform == .available(envelope), "cancelling one visualisation cancelled the other")
-            if case .failed = report.status {
-                Issue.record("a cancelled spectrogram degraded the inspection")
-            }
-        }
-    }
-
-    /// The mirror: a cancelled waveform leaves the spectrogram alone.
-    @Test("a cancelled waveform leaves the spectrogram's result intact")
-    func aCancelledWaveformLeavesTheSpectrogramAlone() async throws {
-        try await withTemporaryDirectory { directory in
-            let url = try fixture(in: directory)
-            let box = OutcomeBox()
-
-            let coordinator = SourceInspectionCoordinator(
-                makeWaveformGenerator: { _ in
-                    FakeWaveformGenerating(failingWith: WaveformError(code: .cancelled, message: "cancelled"))
-                }
-            )
-            let outcome = await coordinator.inspect(url, onUpdate: { box.collect($0) })
-
-            guard case let .inspected(_, waveform, _, _, _) = outcome else {
-                Issue.record("expected an inspected outcome"); return
-            }
             #expect(waveform == .cancelled)
-            guard case .available = try #require(box.first) else {
-                Issue.record("cancelling the waveform cancelled the spectrogram"); return
+            #expect(spectrogram == .cancelled)
+            #expect(levels == .cancelled)
+            #expect(truePeak == .cancelled)
+            #expect(waveform != .unavailable, "cancellation must not be dressed up as an absence")
+            if case .failed = report.status {
+                Issue.record("a cancelled read degraded the inspection")
             }
         }
     }
+
+    // **Removed: "a cancelled waveform leaves the spectrogram's result intact".**
+    //
+    // It asserted that cancelling the waveform left the spectrogram alone. With a single read there is no
+    // waveform-only cancellation to script — cancelling the read cancels every consumer — so the test
+    // had no reachable input and would have been green for the wrong reason. The live half of what it
+    // protected is the test above.
 
     /// Two operations, two decoders, two accumulators. Nothing is shared, so a second inspection cannot
     /// inherit anything from the first.

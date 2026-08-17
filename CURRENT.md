@@ -16,33 +16,45 @@
 >   session protocol in `CLAUDE.md`).
 
 ---
-**Focus:** nothing is in flight. The two guarantees below are integrated; the candidate next thread is
-named at the end.
+**Already integrated, so not threads:** `SignalLevelMetrics` cannot publish a value that is not a
+number — every reduction widens to `Double` before it accumulates, the domain model refuses non-finite
+values, and an impossible result reaches the existing `failed` outcome rather than a substituted one.
+And the flow-state test suites synchronise on a happens-before instead of a `Task.yield()`, which
+guarantees nothing: their scripted actions now complete the round trip. Both are merged; the first is
+archived.
 
-**What just landed, stated as a property rather than as history.** `SignalLevelMetrics` cannot publish a
-value that is not a number. Every reduction is widened to `Double` *before* it is accumulated, so no
-intermediate can overflow on the way to a result that was always representable — the mean and the RMS
-are bounded by the largest magnitude in the input. The domain model refuses non-finite values outright,
-as its two sibling value types already did, and a result that genuinely could not be described reaches
-the **existing `failed` outcome** rather than a new state or a substituted number. Nothing is clamped,
-and amplitudes beyond full scale are still reported, because that is a real fact about a file. The
-export and `schemaVersion` 1 are semantically unchanged: the same fields, the same bytes, now
-guaranteed to be numbers. Its change is merged and archived; the finiteness guarantee lives in the
-`audio-signal-level-metrics` capability.
+**Focus: `share-waveform-pcm-read`, group 7 is done and ADR-0021 is `Accepted`.** An inspection reads a
+file's samples once, measured end to end against a clean `main` worktree — ten minutes of stereo,
+Release, three runs, medians:
 
-**The flow-state suites now synchronise on a happens-before rather than on timing.** They used to
-release an update and wait one `Task.yield()` for another task to apply it, which guarantees nothing:
-resuming a continuation makes the other task *runnable*, not *run*. The scripted actions complete the
-round trip instead — `deliver` returns only once the handler has actually been called — reusing the
-continuation handshake those same test classes already had. **Production was not touched**, and the
-argument for the fix is a negative control rather than a count of green runs: with the acknowledgement
-removed the affected tests fail, and with an extra scheduling hop inside the producer the handshake
-still passes where the yield fails deterministically. That debt is closed.
+| format | before | after | saving |
+| --- | --- | --- | --- |
+| WAV | 1.243 s | 1.198 s | 0.045 s (3.7 %) |
+| FLAC | 2.465 s | 1.788 s | **0.677 s (27.5 %)** |
+| AAC | 2.324 s | 1.964 s | **0.359 s (15.5 %)** |
 
-**Next step (candidate, not yet decided):** whether the waveform can stop decoding the file a second
-time and become a fourth consumer of the shared PCM read. It is the last redundant decode per
-inspection. ADR-0016 declined this once, so the first move is reading what it actually decided and
-against what evidence — not implementing.
+- **The task's own success rule was the wrong comparison.** "Saving ≈ the eliminated decode" would have
+  raised a false alarm on AAC at 68 %. What is removed is a whole legacy *read* — decode and fold —
+  while a fold is added back inside the shared pass; against that the arithmetic closes at 128/101/97 %.
+- **No hidden cost**: the waveform's fold is 0.297–0.309 s, unchanged. Memory is flat — a tenfold longer
+  file moved the peak footprint by 0.2 MB.
+- **The waveform is visible 0.8–1.3 s later than it used to be**, because it settles with the one read
+  instead of after a read of its own. No spec requires it earlier and the report still precedes the read
+  by three orders of magnitude, so nothing is broken — but it is a real change in what a user sees, it
+  was not predicted, and it is written into ADR-0021's Promotion section. Progressive delivery inside the
+  shared pass is the obvious remedy and is deliberately **not** designed: it would reopen a callback
+  contract ADR-0020 closed, and that is a product decision, not a reflex.
+- **A negative control found a hole**: nothing was testing that the report precedes the *read* — only its
+  order relative to the other updates. A test that asks the decoder whether it had been invoked yet now
+  covers it.
+
+**The change is ready to publish.** All six gates are green on the head being proposed, and every group
+is closed except the archive, which belongs after the merge. ADR-0021 is `Accepted`, the legacy
+generator survives only as a test oracle with a gate against its return, and the waveform's later
+arrival is recorded as a known consequence rather than smoothed over.
+
+**Next step:** review the pull request. On merge, `openspec archive share-waveform-pcm-read` and refresh
+this snapshot — nothing else is outstanding.
 
 **Minor follow-up, not a thread:** `ImportFlowComparisonTests` has one `Task.yield()` that was never
 audited in depth; same shape as the ones above, no failure ever attributed to it.
@@ -53,4 +65,4 @@ audited in depth; same shape as the ones above, no failure ever attributed to it
 traversal gap shared with ADR-0015). Neither was touched this session.
 
 ---
-_Last touched: 2026-08-13. Overwrite freely; empty is fine._
+_Last touched: 2026-08-17. Overwrite freely; empty is fine._

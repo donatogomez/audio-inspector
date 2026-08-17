@@ -171,9 +171,10 @@ struct WaveformCoordinationTests {
                 AudioFixtureSpec(name: "absent", format: .wav, signal: .silence, frames: 4_410),
                 in: directory
             )
-            let coordinator = SourceInspectionCoordinator(
-                makeWaveformGenerator: { _ in FakeWaveformGenerating(.absent) }
-            )
+            // The waveform now settles from the shared read, so the *decoder* is what a test scripts.
+            // A file whose length cannot be established is an absence for every analysis, and the
+            // waveform's is the one asserted here.
+            let coordinator = SourceInspectionCoordinator(makeDecoder: { _ in FakeAudioDecoding(.absent) })
 
             let outcome = await coordinator.inspect(url, onUpdate: { _ in })
 
@@ -193,8 +194,8 @@ struct WaveformCoordinationTests {
                 in: directory
             )
             let coordinator = SourceInspectionCoordinator(
-                makeWaveformGenerator: { _ in
-                    FakeWaveformGenerating(failingWith: WaveformError(code: .readFailed, message: "internal"))
+                makeDecoder: { _ in
+                    FakeAudioDecoding(failingWith: AudioDecodingError(code: .readFailed, message: "internal"))
                 }
             )
 
@@ -223,8 +224,8 @@ struct WaveformCoordinationTests {
                 in: directory
             )
             let coordinator = SourceInspectionCoordinator(
-                makeWaveformGenerator: { _ in
-                    FakeWaveformGenerating(failingWith: WaveformError(code: .cancelled, message: "Cancelled."))
+                makeDecoder: { _ in
+                    FakeAudioDecoding(failingWith: AudioDecodingError(code: .cancelled, message: "Cancelled."))
                 }
             )
 
@@ -244,8 +245,8 @@ struct WaveformCoordinationTests {
             let url = directory.appendingPathComponent("not-audio.wav")
             try Data("definitely not audio".utf8).write(to: url)
 
-            let generator = FakeWaveformGenerating(.absent)
-            let coordinator = SourceInspectionCoordinator(makeWaveformGenerator: { _ in generator })
+            let decoder = FakeAudioDecoding(.absent)
+            let coordinator = SourceInspectionCoordinator(makeDecoder: { _ in decoder })
 
             let outcome = await coordinator.inspect(url, onUpdate: { _ in })
 
@@ -256,38 +257,41 @@ struct WaveformCoordinationTests {
                 Issue.record("expected a globally failed report"); return
             }
             #expect(waveform == .unavailable)
-            #expect(await generator.callCount == 0, "no samples are read when nothing could be read at all")
+            #expect(await decoder.spy.callCount == 0, "no samples are read when nothing could be read at all")
         }
     }
 
-    @Test("the generator receives the same safe reference the use case did")
-    func generatorReceivesTheSameReference() async throws {
+    /// One reference, one operation — asserted against the **decoder**, which is now the only thing an
+    /// inspection hands a file reference to for sample reading.
+    @Test("the decoder receives the same safe reference the use case did")
+    func decoderReceivesTheSameReference() async throws {
         try await withTemporaryDirectory { directory in
             let url = try writeAudioFixture(
                 AudioFixtureSpec(name: "same-reference", format: .wav, signal: .silence, frames: 4_410),
                 in: directory
             )
-            let generator = FakeWaveformGenerating(.absent)
-            let coordinator = SourceInspectionCoordinator(makeWaveformGenerator: { _ in generator })
+            let decoder = FakeAudioDecoding(.absent)
+            let coordinator = SourceInspectionCoordinator(makeDecoder: { _ in decoder })
 
             var delivered: InspectionReport?
             _ = await coordinator.inspect(url, onUpdate: { if case let .report(report) = $0 { delivered = report } })
 
-            #expect(await generator.callCount == 1)
-            #expect(await generator.lastFile == delivered?.file, "one reference, one operation")
+            #expect(await decoder.spy.callCount == 1)
+            #expect(await decoder.spy.lastFile == delivered?.file, "one reference, one operation")
         }
     }
 
-    /// The window has to cover the samples, not just the properties: the generator runs *inside* the
-    /// coordinator's `defer`, so anything it needs is still accessible when it runs.
-    @Test("the security-scoped window is still open while the waveform is generated")
+    /// The window has to cover the samples, not just the properties: the shared read runs *inside* the
+    /// coordinator's `defer`, so anything it needs is still accessible when it runs. Since the cutover
+    /// there is exactly one read to cover, and this is what proves it happens inside the window.
+    @Test("the security-scoped window is still open while the samples are read")
     func scopeCoversTheWaveform() async throws {
         try await withTemporaryDirectory { directory in
             let url = try writeAudioFixture(
                 AudioFixtureSpec(name: "scope", format: .wav, signal: .sine(frequency: 440, amplitude: 0.5), frames: 8_820),
                 in: directory
             )
-            // The real generator opens the file itself. If the coordinator had released access before
+            // The real decoder opens the file itself. If the coordinator had released access before
             // reaching it — or opened a second scope of its own — this could not come back available.
             let coordinator = SourceInspectionCoordinator()
 

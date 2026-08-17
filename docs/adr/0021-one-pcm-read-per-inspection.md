@@ -1,0 +1,235 @@
+# ADR-0021: One PCM read per inspection — the waveform joins the shared read
+
+- **Status**: **Accepted** (2026-08-17). Promoted on the two conditions this record set for itself and
+  on nothing else — the saving reproduced by the real pipeline against a `main` worktree, and each
+  equivalence and isolation property demonstrated by a test that fails when the property is broken. The
+  evidence, **including a user-visible regression it did not predict**, is in **Promotion** below.
+- **Date**: 2026-08-13
+- **Deciders**: Project maintainer
+- **Related**: **ADR-0020** (whose decision 6 this revisits — *referenced, never edited*), **ADR-0016**
+  (which scheduled this migration as conditional and last rather than prohibiting it), ADR-0010,
+  ADR-0011, ADR-0015, change `share-waveform-pcm-read`,
+  `docs/spikes/2026-08-12-shared-pcm-analysis-architecture.md` §7
+
+## Context
+
+ADR-0020 decision 6 reads: *"The waveform stays on its own read for now. It uses a different port, its
+accumulator needs frame position and throws where the others do not, and ADR-0016 deliberately left its
+migration undone. Including it means migrating it first — two risky things in one change."* Its
+follow-ups then name the migration as *"the obvious next reduction once this lands, taking two reads to
+one. Nothing here authorises it."*
+
+**This record is that authorisation, and it is needed precisely because ADR-0020 is `Accepted`.**
+
+Two things are worth stating plainly, because both are easy to get wrong from memory:
+
+- **ADR-0016 did not reject this migration.** It rejected *a single pass producing waveform and
+  spectrogram together* (decision 15) and made the waveform's move onto the seam *conditional and last*
+  (its alternatives section, and `add-static-spectrogram-visualization` group 9's stop rule). The
+  deferral being revisited here is ADR-0020's.
+- **The recorded blocker was about a different shape.** `WaveformDecodingSeamMigrationTests` pins it as
+  executable assertions: two `AudioDecodingErrorCode` values — `invalidStreamDescription` and
+  `invalidChunk` — have no honest `WaveformErrorCode` counterpart, and group 9 required the waveform's
+  error space to stay unchanged. That is a blocker for **reimplementing `WaveformGenerating` on top of
+  `AudioDecoding`**, which is one shape among several.
+
+## Decision
+
+1. **The waveform becomes a consumer of the shared read, not an adapter over the port.** It is fed the
+   same `PCMChunk`s as the spectrogram, the signal level metrics and true peak, and reports its own
+   outcome exactly as they do. An inspection reads the file's samples **once**.
+
+2. **This is why the recorded blocker dissolves rather than being argued around.** A consumer never
+   translates `AudioDecodingError` into `WaveformError`: the shared composition already turns a producer
+   failure into a per-consumer `.failed(message:)` carrying a human sentence, as it does for the other
+   three. The waveform's error space is **not changed** — it stops being on the path between the decoder
+   and the outcome. `WaveformError` remains the accumulator's own space.
+
+3. **Nothing the audit could have justified changing is changed.** `AudioDecoding`, `PCMChunk` and
+   `WaveformEnvelopeAccumulator` are untouched: `chunk.startFrame` is *already* the absolute frame the
+   accumulator asks for, `chunk.channels[c]` is *already* a contiguous planar run, and
+   `PCMStreamDescription` already carries the frame and channel counts it needs at construction. An
+   audit that finds no incapacity is a reason to leave a port alone (ADR-0020 decision 4).
+
+4. **`WaveformGenerating` and its AVFoundation adapter are retired from production, and kept as a
+   test-only oracle.** *(Second half corrected 2026-08-17, while still `Proposed`; this decision
+   originally said they were deleted.)* Their purpose as a *read* is gone — no target under `Sources/`
+   names either of them, and nothing constructs one. What they still do is give the equivalence suites
+   an implementation with its **own** read loop and its own frame accounting to compare against; delete
+   them and those suites keep passing while comparing the shared path with itself, which trades a
+   guarantee for tidiness. Relocating them to the testing-support target was evaluated and is blocked by
+   `check-boundaries.sh` rule 6, which confines AVFoundation to `AudioInspectorMedia`.
+
+   The concern this decision was written around — *a port kept alive with no caller invites a second
+   read to be reintroduced without a decision* — is real and is answered directly rather than by
+   deletion: **no production target may name a waveform-reading port**, asserted over all of `Sources/`
+   and demonstrated to fail on both a reintroduced factory and a direct construction. `FakeWaveformGenerating`
+   *was* deleted, because its only consumer was its own test suite.
+
+   The largest and riskiest part of the change remains the tests that scripted that seam and asserted an
+   *arrangement* rather than a *property*.
+
+5. **A throwing consumer does not become everyone's problem.** The waveform's accumulator is the only
+   one that throws. With the two guards the composition already applies, three of its five errors are
+   unreachable from a valid chunk — `channelOutOfBounds`, `frameRangeOutOfBounds` and `nonFiniteSample`,
+   the last because `PCMChunk` refuses non-finite samples at construction. The reachable ones arise at
+   `finish` and become the **waveform's own** failure, leaving the other three settling exactly as they
+   would have.
+
+6. **The absence/failure distinction is preserved explicitly.** A stream whose frame count cannot be
+   mapped to buckets is reported as `.unavailable` — the file offered nothing to size an envelope
+   against — and never as a failure. The legacy port expressed this by returning `nil`, and losing it
+   in the move would be a silent regression.
+
+7. **Equivalence is bit-exact, for lossy containers too — and this record's first answer was wrong.**
+   *(Corrected 2026-08-17, while still `Proposed`.)* A pre-implementation probe reported AAC differing in
+   1 778 of 2 048 buckets by about one ULP, and this decision was originally written to require a
+   tolerance there. Measured again through the production composition — the same file, the same decoder,
+   the same accumulator, the same bucket count, at the probe's own ten-minute length and at two shorter
+   ones, for a pure sine and for a per-channel signal the encoder cannot fold together — the worst bucket
+   error is **exactly zero** for WAV, FLAC **and AAC**. The probe's figure does not reproduce and is
+   recorded as an artefact of that throwaway harness rather than defended. What the harness did
+   differently was not established; the measurement that stands is the one taken against the code that
+   ships. The equivalence tests still compute and print the worst error, so a platform change that does
+   introduce a difference reports its magnitude instead of only failing.
+
+8. **How the run is handed over is part of this decision, not an optimisation.** Passing
+   `chunk.channels[c]` — the `[Float]` itself — to `accumulate(_:ofChannel:startingAtFrame:)` costs
+   **4.21–4.23 s** for ten minutes of stereo, against **0.29–0.34 s** for an `UnsafeBufferPointer` view
+   of the same array: a **~13× penalty**, constant across all three formats and therefore per-sample
+   rather than decoding-related. Written the obvious way, this migration would make the pipeline
+   *slower* rather than faster. The pointer form is what the legacy generator already used.
+
+   *(These are the figures measured against the shipped composition on 2026-08-17 — the shared pass with
+   the waveform folded versus the same pass with it absent. The pre-implementation probe's 3.79–3.81 s
+   versus 0.28–0.33 s said the same thing from a throwaway harness; unlike decision 7's, this finding
+   reproduced.)* The mechanism — most likely a generic that is not specialised across the module
+   boundary — remains a hypothesis, and the mitigation does not depend on it.
+
+9. **No PCM is buffered and no abstraction is introduced.** Memory stays a function of chunk plus
+   accumulator state. `SharedPCMAnalysisOutcome` gains a fourth field; there is no `PCMConsumer`
+   protocol, for the reason ADR-0020 recorded and one more — a throwing consumer makes the
+   associated-type machinery larger, not smaller.
+
+## Alternatives considered
+
+- **Keep the waveform's own read (ADR-0020's mechanism, unchanged).** Simplest, zero migration risk.
+  Rejected on the measurement: it is the last redundant decode, worth 0.41 s on FLAC and 0.39 s on AAC
+  for a ten-minute file, and the deferral's stated reason — "two risky things in one change" — no longer
+  applies now that the shared read is in production and proven.
+- **Reimplement `WaveformGenerating` over `AudioDecoding`.** The shape ADR-0016 originally imagined.
+  Rejected: it must translate two decoding faults the waveform's error space cannot state honestly,
+  which is exactly what `WaveformDecodingSeamMigrationTests` blocks — and it would keep a port whose
+  only job was owning a read.
+- **Give `WaveformEnvelopeAccumulator` a `PCMChunk`-shaped API.** Tempting because the other three take
+  a chunk. Rejected: it would change a domain value type to suit one caller and discard the per-run
+  generality its order-independence contract is built on, for no measured gain.
+- **A generic `PCMConsumer` abstraction.** Rejected again, and more strongly than in ADR-0020: four
+  unrelated `finish()` types, one of which throws.
+- **Deleting `WaveformDecodingSeamMigrationTests` along with the blocker.** Rejected: the tests are the
+  record of why the deferral happened. They are rewritten to assert what unblocked it, so the reasoning
+  survives the change that ended it.
+
+## Consequences
+
+### Positive
+
+- **One read of the file per inspection**, which is what the shared seam was built to reach. Adding a
+  sample-based analysis has cost no extra read since ADR-0020; now no analysis keeps one either.
+- Measured saving: **0.41 s (FLAC) and 0.39 s (AAC)** on ten minutes of stereo in Release, roughly a
+  fifth of the two-read pipeline.
+- One fewer file open inside the security-scoped window, and one fewer place that could reintroduce a
+  private read.
+
+### Negative / costs
+
+- **WAV gains almost 0.02 s**, which is nothing. The saving is real exactly where decoding is expensive,
+  and this record does not dress that up.
+- **The test surface that scripts the waveform generator is large**, and several of those tests assert
+  an arrangement rather than a property. Rewriting them is where a guarantee could quietly get weaker —
+  the same risk ADR-0020 named for itself, and it is the main reason this change is not small.
+- **A behaviour change on a malformed file.** Where the legacy loop silently trimmed frames delivered
+  beyond the declared length, the shared read refuses them. Stricter on purpose, and recorded rather
+  than smuggled in as equivalence.
+- **A measurement in this record was wrong once already** (decision 7), and the throwaway harness that
+  produced it looked reasonable at the time. The figures here are only as good as the harness that took
+  them; the ones that matter are re-taken against production code before promotion, which is exactly
+  what the Status criteria require.
+- **One OS/SDK, one machine.** The timings do not carry forward; the semantic conclusions do.
+
+### Neutral
+
+- No module boundary moves, no port gains a method, no domain type changes, no export change, no visual
+  change, and `schemaVersion` stays 1.
+- ADR-0020 remains in force in every other respect, including its isolation properties, its rejection of
+  buffering and its measured ceiling for concurrent fan-out.
+
+## Follow-ups
+
+- **Promotion criteria** (see Status): the saving reproduced against production code, and the
+  equivalence and isolation properties each demonstrated by a test that fails when the property is
+  broken.
+- **Confirm the mechanism behind decision 8's 12× penalty.** Generic specialisation across the module
+  boundary is the hypothesis; the mitigation is required either way, but the explanation should be
+  recorded rather than left as folklore.
+- **Concurrent fan-out** stays where ADR-0020 left it: available, with a measured ceiling, reopened only
+  on evidence. A fourth consumer does not by itself change that arithmetic.
+
+## Promotion — what was demonstrated, and the one thing that got worse
+
+Recorded when this moved from `Proposed` to `Accepted`, on `share-waveform-pcm-read` groups 4, 5 and 7.
+
+**The saving reproduced against production code.** The real coordinator, the real property reader, the
+real AVFoundation decoder and the real accumulators, over ten minutes of stereo at 44.1 kHz carrying a
+different frequency in each channel so no encoder can fold them together. Release, three runs after a
+discarded warm-up, formats measured one at a time, medians reported and every reading kept. "Before" is
+a clean worktree at `main`, not a simulation.
+
+| format | before (two reads) | after (one read) | saving | of the total |
+| --- | --- | --- | --- | --- |
+| WAV | 1.2431 s | 1.1977 s | 0.0454 s | 3.7 % |
+| FLAC | 2.4651 s | 1.7880 s | **0.6771 s** | **27.5 %** |
+| AAC | 2.3235 s | 1.9644 s | **0.3591 s** | **15.5 %** |
+
+**The saving reconciles, and the obvious way of checking it is wrong.** Comparing against an isolated
+decode (WAV 0.054 s, FLAC 0.661 s, AAC 0.538 s) makes AAC look like it recovered only 68 %. That
+comparison is not sound: what was removed is a whole legacy *read* — its decode **and** its fold — while
+a fold was added back inside the shared pass. Against that, the arithmetic closes: expected net saving is
+the legacy read minus the shared fold, giving **128 % (WAV), 101 % (FLAC), 97 % (AAC)** of prediction.
+The figures above and below 100 % are the run-to-run spread, not a second decode.
+
+**No hidden cost.** The waveform's fold inside the shared pass costs **0.297–0.309 s**, unchanged from
+the 0.29–0.34 s measured before the cutover, so decision 8's borrowed buffer is still in force. Restoring
+the array form during a control put it at **3.71–3.84 s**, the same ~12× it always was.
+
+**Memory does not grow with duration.** A tenfold longer file moved the peak footprint from 44.0 MB to
+44.2 MB — 0.2 MB for ten times the audio.
+
+**The report still precedes the read.** ~1.5 ms, unchanged. A negative control found that **nothing was
+testing this**: the ordering test compares updates with each other, so a coordinator holding the report
+back until the shared pass finished would still emit them in the same order and still pass. A test that
+asks the decoder whether it had been invoked yet was added, and it is what the control now fails.
+
+**What got worse, and was not predicted.** The waveform now settles when the one read finishes rather
+than after a read of its own:
+
+| format | waveform visible before | after | later by |
+| --- | --- | --- | --- |
+| WAV | 0.344 s | 1.198 s | +0.854 s |
+| FLAC | 0.968 s | 1.788 s | +0.820 s |
+| AAC | 0.686 s | 1.964 s | +1.278 s |
+
+So a ten-minute file shows its waveform roughly **0.8–1.3 s later** while the whole inspection finishes
+sooner. No specification requires the waveform before the other analyses — `audio-sample-reading` requires
+only that the report precede the read, which it does by three orders of magnitude — so this breaks no
+contract. It is nonetheless a real change in what a user sees, it was not anticipated by decision 1, and
+it is recorded here rather than left for someone to discover. **Progressive delivery inside the shared
+pass is the obvious remedy and is deliberately not designed here**: it would reopen the callback contract
+ADR-0020 decision 5 closed, and it should be justified by product judgement rather than adopted because a
+number moved.
+
+**Not claimed.** Debug was not measured — a ten-minute unoptimised run three times over two branches is
+not cheap, and the semantic conclusions do not depend on it. One machine, one OS, one SDK: the timings do
+not carry forward. And one isolation direction has **no reachable input** — "the waveform stops receiving
+chunks once it has failed", whose only reachable failure arrives after the last chunk — so it is asserted
+as an alarm on the three guards that make it unreachable, not as an observed property.

@@ -1,19 +1,26 @@
 import AudioInspectorDomain
 import Testing
 
-// Why the waveform has **not** been migrated onto `AudioDecoding` (change
-// `add-static-spectrogram-visualization`, group 9, stop rule 9.6).
+// **Why the waveform can share the decoding seam after all — and why the record of the blocker is kept
+// rather than deleted.**
 //
-// The migration is conditional by design: it happens only if it preserves `WaveformGenerating`'s
-// contract, its error space and every existing waveform test without coupling the two consumers. It
-// does not, and the reason is mechanical rather than a matter of taste — so it is written here as
-// assertions instead of only as prose. If someone later closes the gap, **these tests fail**, and the
-// deferral is revisited deliberately rather than forgotten.
+// This suite used to assert the opposite: that the migration was blocked because two
+// `AudioDecodingErrorCode` values have no honest `WaveformErrorCode` counterpart, and
+// `add-static-spectrogram-visualization`'s group 9 required the waveform's error space to stay
+// unchanged. That was true, and it is still true — of the shape it was measured against.
 //
-// Nothing here tests production behaviour. It tests the shape of two error spaces, which is exactly
-// what blocks the migration.
+// **The blocker was about reimplementing `WaveformGenerating` on top of `AudioDecoding`**, which means
+// translating one error space into the other. ADR-0021 took a different shape: the waveform became a
+// *consumer* of the shared read, and a consumer translates nothing. The shared composition turns a
+// producer failure into a per-consumer message, exactly as it does for the other three, so no
+// `AudioDecodingError` ever needs a `WaveformErrorCode`.
+//
+// The two untranslatable codes are therefore still untranslatable, and that no longer blocks anything.
+// Both facts are asserted below, because a future reader deserves the reasoning and not just the
+// outcome — and because if the waveform's error space ever grows a counterpart for them, the premise
+// this change was argued from has moved and should be re-read rather than assumed.
 
-@Suite("Domain — the waveform cannot yet be expressed through the decoding seam")
+@Suite("Domain — how the waveform came to share the decoding seam")
 struct WaveformDecodingSeamMigrationTests {
 
     /// Every code an `AudioDecoding` implementation may throw. Listed explicitly, so adding one without
@@ -55,7 +62,8 @@ struct WaveformDecodingSeamMigrationTests {
         )
     }
 
-    /// **The blocker.** Two decoding faults describe something the waveform's space cannot say.
+    /// **What used to be the blocker.** Two decoding faults describe something the waveform's space
+    /// cannot say — and under ADR-0021's shape, nothing ever asks it to.
     ///
     /// - `decoding_invalid_stream_description` — the file describes a stream that cannot exist (a
     ///   non-positive or non-finite sample rate). The waveform adapter does not read the sample rate at
@@ -67,27 +75,32 @@ struct WaveformDecodingSeamMigrationTests {
     ///
     /// Neither can be mapped honestly. `readFailed` would claim the file could not be read to the end it
     /// declared, which is a different thing that did not happen; `invalidConfiguration` would blame the
-    /// caller's configuration for a fault in the file. Task 9.1 requires the waveform's error space to be
-    /// **unchanged**, so inventing `waveform_invalid_stream_description` is not available either — and
-    /// `WaveformErrorTests` is deliberately written to break when a code appears.
+    /// caller's configuration for a fault in the file. Inventing `waveform_invalid_stream_description`
+    /// was not available either — `WaveformErrorTests` is deliberately written to break when a code
+    /// appears.
+    ///
+    /// **This is still true and no longer blocks anything.** A consumer of the shared read never
+    /// translates: when the decoder fails, the composition ends every consumer with its own human
+    /// sentence, and `WaveformError` stays where it always was — inside the accumulator.
     @Test(
-        "two decoding faults have no honest waveform counterpart, which is what defers the migration",
+        "two decoding faults still have no honest waveform counterpart, and no longer need one",
         arguments: [AudioDecodingErrorCode.invalidStreamDescription, .invalidChunk]
     )
     func twoFaultsCannotBeTranslated(code: AudioDecodingErrorCode) {
         #expect(
             Self.waveformCounterpart(of: code) == nil,
             """
-            \(code.rawValue) now has a waveform counterpart. The waveform's error space has changed, so \
-            group 9's stop rule must be re-evaluated: re-read tasks 9.1–9.6 before assuming the \
-            migration is still blocked.
+            \(code.rawValue) now has a waveform counterpart. The waveform's error space has grown, which \
+            is the premise ADR-0021 argued from — re-read its decision 2 before assuming the reasoning \
+            still holds.
             """
         )
     }
 
-    /// The waveform's space is exactly as large as it was when the stop rule was applied. Guards the
+    /// The waveform's space is exactly as large as it was when the stop rule was applied — **and the
+    /// migration did not change it**, which is the property ADR-0021 decision 2 claims. Guards the
     /// premise of the test above from the other direction: a code added anywhere, for any reason, makes
-    /// the deferral's reasoning stale.
+    /// that claim stale.
     @Test("the waveform error space is unchanged")
     func theWaveformSpaceIsUnchanged() {
         #expect(Self.waveformCodes.count == 10)
@@ -115,5 +128,30 @@ struct WaveformDecodingSeamMigrationTests {
         #expect(AudioDecodingErrorCode.cancelled.rawValue == "decoding_cancelled")
         #expect(WaveformErrorCode.cancelled != .readFailed)
         #expect(AudioDecodingErrorCode.cancelled != .readFailed)
+    }
+
+    /// **The capability that made the migration possible, asserted rather than described.**
+    ///
+    /// The deferral rested on the waveform needing something the seam did not carry: an absolute frame
+    /// position per run. `PCMChunk` has always carried exactly that, and this is where that stops being
+    /// a claim in a design document.
+    @Test("a chunk already carries the absolute position the waveform's reduction asks for")
+    func theChunkCarriesThePosition() throws {
+        let samples = [Float](repeating: 0.25, count: 512)
+        let chunk = try PCMChunk(startFrame: 4_096, channels: [samples, samples])
+
+        #expect(chunk.startFrame == 4_096, "the position is the chunk's own, not the caller's bookkeeping")
+        #expect(chunk.frameCount == 512)
+        #expect(chunk.channelCount == 2)
+
+        // And it is exactly what the reduction accepts, for the channel and range it names.
+        var accumulator = try #require(
+            WaveformEnvelopeAccumulator(totalFrameCount: 8_192, channelCount: 2)
+        )
+        for channel in 0 ..< chunk.channelCount {
+            try chunk.channels[channel].withUnsafeBufferPointer { buffer throws(WaveformError) in
+                try accumulator.accumulate(buffer, ofChannel: channel, startingAtFrame: chunk.startFrame)
+            }
+        }
     }
 }

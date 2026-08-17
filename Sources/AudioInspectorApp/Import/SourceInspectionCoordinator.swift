@@ -19,14 +19,11 @@ struct SourceInspectionCoordinator {
     typealias SourceProvider = @MainActor () async -> URL?
     /// Builds the port implementation that reads the file at `url`.
     typealias ReaderFactory = @Sendable (URL) -> any AudioFilePropertyReading
-    /// Builds the port implementation that produces the waveform for the file at `url`.
-    typealias WaveformGeneratorFactory = @Sendable (URL) -> any WaveformGenerating
     /// Builds the port implementation that decodes PCM for the file at `url`.
     typealias DecoderFactory = @Sendable (URL) -> any AudioDecoding
 
     private let chooseSource: SourceProvider
     private let makeReader: ReaderFactory
-    private let makeWaveformGenerator: WaveformGeneratorFactory
     private let makeDecoder: DecoderFactory
 
     /// - Parameters:
@@ -44,16 +41,12 @@ struct SourceInspectionCoordinator {
         makeReader: @escaping ReaderFactory = { url in
             AVFoundationAudioFilePropertyReader { _ in url }
         },
-        makeWaveformGenerator: @escaping WaveformGeneratorFactory = { url in
-            AVFoundationWaveformGenerator(resolveURL: { _ in url })
-        },
         makeDecoder: @escaping DecoderFactory = { url in
             AVFoundationAudioDecoder(resolveURL: { _ in url })
         }
     ) {
         self.chooseSource = chooseSource
         self.makeReader = makeReader
-        self.makeWaveformGenerator = makeWaveformGenerator
         self.makeDecoder = makeDecoder
     }
 
@@ -70,16 +63,16 @@ struct SourceInspectionCoordinator {
     /// after resolving its selection, the drop with the URL the composition root already accepted.
     /// There is no second pipeline.
     /// One selection, start to finish: the properties are read and handed back immediately, and only
-    /// then are the samples read for the waveform — **inside the same security-scoped window**.
+    /// then are the samples read — **once**, inside the same security-scoped window.
     ///
     /// The order is deliberate. The report is complete on its own and metadata is far quicker to read
-    /// than samples, so holding it back until the waveform is done would delay everything that already
+    /// than samples, so holding it back until an analysis is done would delay everything that already
     /// works for the sake of something optional. `onUpdate(.report(_:))` fires the moment it exists,
-    /// and each visualisation follows as it settles.
+    /// and the four sample-based analyses follow.
     ///
     /// The scope is acquired once and released once, covering the mapper, the property reader, the use
-    /// case **and both visualisations**: the `defer` below runs only after the last sample read has
-    /// finished, so neither the generator nor the decoder needs a scope of its own (ADR-0010).
+    /// case **and the single sample read**: the `defer` below runs only after that read has finished, so
+    /// the decoder needs no scope of its own (ADR-0010).
     func inspect(_ url: URL, onUpdate: InspectionUpdateHandler) async -> SourceInspectionOutcome {
         // Filenames and paths are untrusted input: anything that is not a file cannot be inspected.
         guard url.isFileURL else {
@@ -99,8 +92,8 @@ struct SourceInspectionCoordinator {
         let report = await useCase.execute(file: reference)
         onUpdate(.report(report))
 
-        // Nothing could be read at all, so there is nothing to read samples from either. **None** of
-        // the three sample reads starts: the report stands, and all three are simply absent.
+        // Nothing could be read at all, so there is nothing to read samples from either. The read does
+        // not start: the report stands, and all four analyses are simply absent.
         if case .failed = report.status {
             onUpdate(.waveform(.unavailable))
             onUpdate(.spectrogram(.unavailable))
@@ -115,33 +108,32 @@ struct SourceInspectionCoordinator {
             )
         }
 
-        // The waveform keeps its own read: it uses a different port, and its accumulator needs frame
-        // position and throws where the shared consumers neither need nor do. Migrating it is a change
-        // of its own (ADR-0016 left it deliberately undone), so this is a declared cost rather than an
-        // oversight — and it is why an inspection reads the file twice rather than once.
-        let waveformOutcome = await waveform(for: reference, at: url)
-        onUpdate(.waveform(waveformOutcome))
-
-        // **One read, several analyses.** The spectrogram, the signal level metrics and the true peak
-        // each used to mean a decode of their own; they share a single pass, because a redundant read of
-        // a compressed file costs about a quarter of an inspection (ADR-0020,
-        // `docs/spikes/2026-08-12-shared-pcm-analysis-architecture.md`).
+        // **One read, every analysis.** The waveform, the spectrogram, the signal level metrics and the
+        // true peak each used to mean a decode of their own; all four now share a single pass, because a
+        // redundant read of a compressed file costs about a quarter of an inspection (ADR-0020, and
+        // ADR-0021 for the waveform's own move).
         //
-        // **True peak is the third consumer, and it added no read.** That is the whole point of the
-        // shape: `add-true-peak-measurement`'s group 5 measured a fourth decode at 0.47–0.53 s for a
-        // compressed file and refused it, and this is what it was waiting for. Nothing about what any
-        // analysis *is* changed. Each still has its own accumulator, its own failure and its own
-        // outcome, each is still emitted as its own update, and one failing leaves the others exactly as
-        // they would have been — the independence ADR-0016 protects, held by construction rather than
-        // by separate decoders.
+        // **The waveform was the last one holding a read of its own**, and losing it is what takes an
+        // inspection from two reads to one. Nothing about what any analysis *is* changed: each still has
+        // its own accumulator, its own failure and its own outcome, each is still emitted as its own
+        // update in the order it always was, and one failing leaves the others exactly as they would
+        // have been — the independence ADR-0016 protects, held by construction rather than by separate
+        // decoders.
+        //
+        // **What did change is when the waveform arrives**, and it is worth stating rather than
+        // discovering. It used to settle after its own read, before the shared pass had started; now it
+        // settles with its three siblings when the one read finishes. The report is still emitted before
+        // any sample is read — that is the ordering the spec protects — and no analysis waits on
+        // another's *result*. They now share a producer, so they share its duration.
         let shared = await sharedAnalyses(for: reference, at: url)
+        onUpdate(.waveform(shared.waveform))
         onUpdate(.spectrogram(shared.spectrogram))
         onUpdate(.signalLevelMetrics(shared.signalLevelMetrics))
         onUpdate(.truePeak(shared.truePeak))
 
         return .inspected(
             report,
-            waveform: waveformOutcome,
+            waveform: shared.waveform,
             spectrogram: shared.spectrogram,
             signalLevelMetrics: shared.signalLevelMetrics,
             truePeak: shared.truePeak
@@ -163,22 +155,4 @@ struct SourceInspectionCoordinator {
         await SharedPCMAnalysisGeneration(decoder: makeDecoder(url)).run(for: reference)
     }
 
-    /// Produces the waveform and translates its outcome, keeping the three meanings apart.
-    private func waveform(for reference: AudioFileReference, at url: URL) async -> WaveformOutcome {
-        do {
-            guard let envelope = try await makeWaveformGenerator(url).makeWaveform(for: reference) else {
-                // The file opened but offered nothing to size an envelope against — an absence, not a
-                // failure, and never reported as one.
-                return .unavailable
-            }
-            return .available(envelope)
-        } catch {
-            // Cancellation is the user replacing this operation, so it says nothing about the file and
-            // must not be dressed up as a limitation of it.
-            if error.code == .cancelled { return .cancelled }
-            // Human, neutral, and carrying no path, no framework text and no stable code — those stay
-            // where they are meaningful (ADR-0011).
-            return .failed(message: "The waveform for this file could not be produced.")
-        }
-    }
 }
