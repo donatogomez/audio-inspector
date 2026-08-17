@@ -78,6 +78,13 @@ enum AudioFixtureFormat: CaseIterable {
 
 // MARK: - Signals
 
+/// One constant-amplitude region of a `segmentedSine`, measured in frames so a duration is exact
+/// rather than rounded twice.
+struct AudioFixtureSegment: Equatable {
+    var amplitude: Float
+    var frames: Int
+}
+
 /// The content written into a fixture: a pure function of `(channel, frame)`, so the same
 /// specification always produces the same samples.
 enum AudioFixtureSignal {
@@ -102,6 +109,14 @@ enum AudioFixtureSignal {
     /// than of a filter this package would have to implement and then trust. The total amplitude is
     /// divided between the components, so a dense comb stays inside full scale.
     case bandLimitedTones(highest: Double, spacing: Double, lowest: Double, amplitude: Float)
+    /// One sine at a fixed frequency whose **amplitude** steps at segment boundaries, identical in
+    /// every channel. Frames past the last segment are silent.
+    ///
+    /// The phase is taken from the **absolute** frame index rather than restarted per segment, so the
+    /// tone is continuous and only its envelope changes. That matters for a level-based measurement:
+    /// restarting the phase would inject a step whose broadband energy is not part of the signal the
+    /// segments describe.
+    case segmentedSine(frequency: Double, segments: [AudioFixtureSegment])
 
     /// The components of a `bandLimitedTones` signal, highest first.
     var toneFrequencies: [Double] {
@@ -134,6 +149,18 @@ enum AudioFixtureSignal {
             ))
         case let .sine(frequency, amplitude):
             amplitude * Float(sin(2.0 * Double.pi * frequency * Double(frame) / sampleRate))
+        case let .segmentedSine(frequency, segments):
+            {
+                var start = 0
+                for segment in segments {
+                    if frame < start + segment.frames {
+                        return segment.amplitude
+                            * Float(sin(2.0 * Double.pi * frequency * Double(frame) / sampleRate))
+                    }
+                    start += segment.frames
+                }
+                return 0
+            }()
         case let .oppositePolarity(frequency, amplitude):
             (channel.isMultiple(of: 2) ? 1 : -1)
                 * amplitude * Float(sin(2.0 * Double.pi * frequency * Double(frame) / sampleRate))
