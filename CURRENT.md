@@ -23,32 +23,31 @@ And the flow-state test suites synchronise on a happens-before instead of a `Tas
 guarantees nothing: their scripted actions now complete the round trip. Both are merged; the first is
 archived.
 
-**Focus: `share-waveform-pcm-read`, group 3 is done — production reads a file's samples once.**
-The coordinator publishes the waveform the shared pass produced and no longer owns a second read: the
-generator factory, its typealias and its private helper are gone, and `AudioInspectorApp` names no
-waveform-reading port at all. The update order the surface sees is unchanged — report, waveform,
-spectrogram, signal levels, true peak.
+**Focus: `share-waveform-pcm-read`, group 4 is done — the shared waveform is the file's own waveform.**
+The whole `WaveformEnvelope` is compared with `==` against the legacy read of the same file, and it is
+identical everywhere the contract reaches: WAV at one, two and four channels, FLAC at one and two, AIFF,
+ALAC, AAC and 32-bit float WAV; silence, an impulse, opposing polarity, a peak above full scale, files
+of 1, 2, 7 and 512 frames, and zero frames. Nine chunk sizes and five resolutions change nothing. Every
+fixture is 44 101 frames — prime — so a short final chunk is a property of every row.
 
-- **What did change is when the waveform arrives.** It used to settle after its own read, before the
-  shared pass started; now it settles with its three siblings when the one read finishes. The report
-  still precedes every sample read, which is the ordering the spec protects.
-- **The saving, measured against a `main` worktree** (whole inspection, ten minutes of stereo, Release,
-  three rounds): 2.18 s → 1.64 s on FLAC and 2.42 s → 2.04 s on AAC. **WAV's ~0.04 s is inside the
-  measurement's own spread and is not claimed as a gain** — its decode was nearly free to begin with.
-- **Counting reads was not enough to protect this.** Reintroducing the legacy read left every counter
-  happy, because a directly constructed adapter passes through no injected seam. The gate that actually
-  failed is a source-level one, and both now live side by side.
-- **Two tests were removed rather than converted**, each with a note in place: cancelling the waveform
-  alone has no reachable input once there is a single read, and a test with no reachable input is green
-  for the wrong reason.
+- **A peak above full scale needed a new fixture format.** Every container already here quantises to
+  16-bit integer and clamps, so the rule could only be checked against the reduction in isolation. A
+  32-bit float WAV round-trips 2.5 as 2.4999995, and both paths report it unclamped.
+- **AAC is exact.** No tolerance was needed, confirming the correction made in group 2.
+- **The over-read case has no fixture.** Measured across all six writable containers, bounded and
+  unbounded: every one delivers exactly what it declares. So the deliberate difference is pinned at the
+  port instead, where a misbehaving decoder is expressible, and named as an exception rather than as
+  equivalence. **The policy: the declared frame count sizes the reduction and bounds the read; frames
+  delivered beyond it are a fault of the read, reported as one, never trimmed away.** The legacy loop
+  trimmed silently; that is recorded from its source, since no file can make it happen.
 
-**The legacy `WaveformGenerating` and its adapter are deliberately still here.** Production calls
-neither; the equivalence tests use the adapter as their **oracle**, and deleting it would delete the
-evidence ADR-0021's promotion rests on. They go once group 4 is closed. ADR-0021 stays **Proposed** —
-its criteria name groups 4, 5 and 7, and none is finished.
+**The legacy oracle is now a judgement call, not a blocker.** Group 4 no longer needs it to produce
+evidence, but it is what makes the equivalence tests compare against an *independent* implementation
+rather than against the shared path itself. The recommendation written into task 3.2 is to keep it and
+change the task; nothing in groups 5–8 depends on the answer. ADR-0021 stays **Proposed** — its criteria
+name groups 5 and 7 as well.
 
-**Next step:** group 4 — prove the equivalence as tasks 4.1–4.4 state it, including the deliberate
-behaviour change on a file that over-reads its declared length.
+**Next step:** group 5 — the five properties, each with a negative control that is reverted in full.
 
 **Minor follow-up, not a thread:** `ImportFlowComparisonTests` has one `Task.yield()` that was never
 audited in depth; same shape as the ones above, no failure ever attributed to it.
