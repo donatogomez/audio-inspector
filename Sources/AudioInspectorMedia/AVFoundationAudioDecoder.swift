@@ -25,11 +25,15 @@ import AudioInspectorDomain
 public struct AVFoundationAudioDecoder: AudioDecoding {
     /// Frames requested per read when a caller expresses no preference.
     ///
-    /// Deliberately *the waveform adapter's* constant rather than a second one: both read the same
-    /// files through the same API, the 4 096 was measured for that (four AAC packets of 1 024 frames,
-    /// 32 KB of float32 stereo), and two independently drifting defaults would make the two readers
-    /// quietly incomparable.
-    public static let defaultChunkFrames = Int(AVFoundationWaveformGenerator.defaultChunkFrames)
+    /// **4 096, measured**: four AAC packets of 1 024 frames, and 32 KB of float32 stereo — substantial
+    /// enough to amortise a read while the buffer stays irrelevant beside any accumulator's state.
+    ///
+    /// It used to be *derived* from `AVFoundationWaveformGenerator.defaultChunkFrames`, because both
+    /// adapters read the same files through the same API and two drifting defaults would have made the
+    /// two readers quietly incomparable. Since ADR-0021 there is only one reader, so this owns the
+    /// number outright rather than borrowing it from a type production no longer uses. **The value is
+    /// unchanged**, which is what keeps every existing chunking result comparable.
+    public static let defaultChunkFrames = 4_096
 
     /// The largest read this adapter will size a buffer for, whatever a caller asks.
     ///
