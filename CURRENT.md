@@ -23,30 +23,28 @@ And the flow-state test suites synchronise on a happens-before instead of a `Tas
 guarantees nothing: their scripted actions now complete the round trip. Both are merged; the first is
 archived.
 
-**Focus: `share-waveform-pcm-read`, group 5 is done — the waveform's isolation is observed, not assumed.**
-Every survivor is compared as a **whole outcome** against its own accumulator fed the identical chunks
-against the identical stream, which shares no line of the composition. "Not nil" and "is available"
-appear nowhere.
+**Focus: `share-waveform-pcm-read`, group 6 is done — the legacy seam is retired from production and
+kept, deliberately, as a test-only oracle.** Production reads a file's samples once; no target under
+`Sources/` names a waveform-reading port; nothing constructs one.
 
-- **The waveform failing is its own failure**, and the read outlives it — counted at the port, not
-  inferred from a result that looks complete.
-- **The other direction is observed too.** True peak is the one sibling with a reachable solo failure,
-  so "a sibling fails, the waveform is untouched" is a measured claim rather than an appeal to symmetry.
-- **A producer failure is a different thing**, and the interesting case is failing *after* the last
-  chunk: coverage is complete, so a plausible envelope exists to be published, and it must not be. That
-  test was added because a negative control showed the earlier one could not fail.
-- **Cancellation is a third thing**, forced with a two-gate handshake, mid-read and before the first
-  chunk. **Absence is a fourth**, and the four empty answers are asserted to differ from one another.
+- **The deletion the task asked for would have cost a guarantee.** The equivalence suites compare the
+  shared fold against an implementation with its *own* read loop and its own frame accounting. Delete
+  it and they still pass — comparing the shared path with itself. Folding against a bare accumulator is
+  no substitute: it consumes the same chunks from the same decoder, so it checks the composition and
+  never the transport. The task text conflated "retire the production read" with "delete the types";
+  it was corrected rather than carried as a false debt, and ADR-0021's decision 4 with it.
+- **Moving the oracle out of `Sources/` is architecturally blocked**: `check-boundaries.sh` rule 6
+  confines AVFoundation to `AudioInspectorMedia`, so the move needs either a broken boundary or an
+  abstraction invented to relocate a test helper.
+- **The risk that justified deleting it is answered by a gate instead**, now asserted over every
+  production target rather than only the composition root. It found a real offender on its first run.
+- **`FakeWaveformGenerating` is gone**, and that one really was dead: its only consumer was its own
+  test suite.
 
-Six negative controls, each reverted in full. **One property is not claimed as observed**: "the waveform
-stops receiving once it has failed" has no reachable input, because its only reachable failure arrives at
-`finished()`, after the last chunk. The three guards that make the accumulation path unreachable are
-asserted instead, as an alarm.
+ADR-0021 stays **Proposed** — group 7 is still open.
 
-ADR-0021 stays **Proposed** — its criteria still name group 7.
-
-**Next step:** group 6 — the deferral's own tests. 6.1 and 6.2 were already done during group 3, so the
-work is to verify that against their literal text rather than to assume it.
+**Next step:** group 7 — confirm the saving against production code, and check memory and delivery order
+while there.
 
 **Minor follow-up, not a thread:** `ImportFlowComparisonTests` has one `Task.yield()` that was never
 audited in depth; same shape as the ones above, no failure ever attributed to it.
