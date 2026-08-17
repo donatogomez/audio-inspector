@@ -104,17 +104,43 @@ order is chosen so the risky part is provable before the irreversible part happe
 
 ## 5. The properties, each with a negative control
 
-- [ ] 5.1 The waveform failing leaves the spectrogram, the signal level metrics and true peak with the
-      outcomes they would have had, and the read still finishes.
-- [ ] 5.2 Another consumer failing leaves the waveform's envelope identical to a control run.
-- [ ] 5.3 A producer failure ends all four, each with its own outcome, publishing nothing partial.
-- [ ] 5.4 Cancellation cancels the read and all four, and no partial envelope escapes.
+- [x] 5.1 The waveform failing leaves the spectrogram, the signal level metrics and true peak with the
+      outcomes they would have had, and the read still finishes. Each survivor is compared as a **whole
+      outcome** against its own accumulator fed the identical chunks against the identical stream —
+      sharing no line of the composition, which is a stronger reference than a second run of it. "The
+      read still finishes" is **observed at the port**: a delivery log counts every chunk handed over and
+      records that the decode returned normally.
+      **A "control run without the failure" over the same input does not exist**, because that input
+      always fails the waveform; the independent accumulators are what stands in for it, and the test
+      says so.
+- [x] 5.2 Another consumer failing leaves the waveform's envelope identical to a control run. **True
+      peak is the one sibling with a reachable solo failure** — its 48-tap reconstruction overflows on
+      finite-but-enormous samples of alternating sign, where a minimum and a maximum cannot. So this
+      direction is *observed*, not assumed symmetric.
+- [x] 5.3 A producer failure ends all four, each with its own outcome, publishing nothing partial. Two
+      cases, and the second was added because a negative control exposed the first as insufficient:
+      failing **partway** leaves incomplete coverage, which the accumulator would refuse to publish
+      anyway, so it does not test the composition. Failing **after the last chunk** leaves a complete,
+      publishable envelope — and that is the case where reaching for it would hand back a plausible
+      model produced by a failed read.
+- [x] 5.4 Cancellation cancels the read and all four, and no partial envelope escapes. Forced
+      deterministically with a two-gate handshake — no sleep, no polling, no `Task.yield()` — both
+      mid-read and before the first chunk. The port log confirms the read did **not** reach the end.
 - [x] 5.5 Exactly **one** sample read is opened per inspection, counted at the adapter — the successor
       to the existing two-read count test. **Counting alone proved insufficient**: reintroducing the
       legacy read left every counter happy, because a directly constructed adapter passes through no
       injected seam. A source-level assertion that `AudioInspectorApp` names no waveform-reading port
       was added beside it, and that is the one the control fails.
-- [ ] 5.6 Each negative control is reverted in full, and `git diff` shows no residue.
+- [x] 5.6 Each negative control is reverted in full, and `git diff` shows no residue. Six of them:
+      coupling the waveform's failure to the spectrogram; coupling it to signal levels and true peak;
+      stopping the read as soon as the waveform is out; publishing its partial envelope after a producer
+      failure; ignoring cancellation for it; and collapsing its absence into a failure. Each failed the
+      tests that name its property — **the fourth only after the suite was strengthened**, which is the
+      point of running them.
+      **One property has no reachable input and is not claimed as observed**: "the waveform stops
+      receiving chunks once it has failed". Its only reachable failure arrives at `finished()`, after the
+      last chunk, so there is nothing left to stop receiving. The three guards that make the
+      accumulation path unreachable are asserted instead, as an alarm that fires if any of them weakens.
 
 ## 6. The deferral's own tests
 
