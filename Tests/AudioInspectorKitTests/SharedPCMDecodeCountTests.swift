@@ -15,7 +15,16 @@ import FeatureImport
 /// compressed file at 0.47–0.53 s in Release and refused to spend it, which is what made the shared read
 /// (ADR-0020) a prerequisite for true peak rather than a nice-to-have. The number below is therefore not
 /// a performance detail — it is the architectural claim, and a test that fails the moment someone gives
-/// an analysis a decoder of its own.
+/// an analysis a read of its own.
+///
+/// **The number is now one.** The waveform was the last analysis holding a private read; ADR-0021 moved
+/// it onto the shared pass, and this suite is where that claim stops being prose. The counters below
+/// **Counting alone cannot catch every way a second read could come back**, and that is not a
+/// suspicion — it was measured. Reintroducing the legacy waveform read into the coordinator leaves the
+/// counters below completely happy, because a directly constructed adapter passes through no injected
+/// seam. The source-level assertion at the bottom of this suite is what actually failed in that
+/// control, and it is why both live here: the counters pin *how many* reads go through the seam, and the
+/// source check pins that there is no other way to open one.
 @MainActor
 @Suite("App — how many times an inspection reads the samples")
 struct SharedPCMDecodeCountTests {
@@ -23,9 +32,9 @@ struct SharedPCMDecodeCountTests {
     private final class Counts: @unchecked Sendable {
         var decodersMade = 0
         var decodeCalls = 0
-        var waveformReads = 0
-        /// Every sample read a whole inspection performs: the shared one and the waveform's own.
-        var sampleReads: Int { decodeCalls + waveformReads }
+        /// Every sample read a whole inspection performs. There is only one way to open one now — the
+        /// decoding port — which is why this is simply the decode count.
+        var sampleReads: Int { decodeCalls }
     }
 
     /// Delegates to the real decoder and counts the call. It changes nothing about the read.
@@ -43,23 +52,11 @@ struct SharedPCMDecodeCountTests {
         }
     }
 
-    private struct CountingWaveformGenerator: WaveformGenerating {
-        let wrapped: any WaveformGenerating
-        let counts: Counts
 
-        func makeWaveform(for file: AudioFileReference) async throws(WaveformError) -> WaveformEnvelope? {
-            counts.waveformReads += 1
-            return try await wrapped.makeWaveform(for: file)
-        }
-    }
-
+    /// The real coordinator, with a decoder that counts. **No waveform generator is supplied**, because
+    /// production no longer has a seam to supply one to — which is itself the property under test.
     private func coordinator(for counts: Counts) -> SourceInspectionCoordinator {
         SourceInspectionCoordinator(
-            makeWaveformGenerator: { url in
-                CountingWaveformGenerator(
-                    wrapped: AVFoundationWaveformGenerator(resolveURL: { _ in url }), counts: counts
-                )
-            },
             makeDecoder: { url in
                 counts.decodersMade += 1
                 return CountingDecoder(
@@ -79,11 +76,11 @@ struct SharedPCMDecodeCountTests {
         )
     }
 
-    /// **Two sample reads for a whole inspection**, with a real file and the real adapters: the
-    /// waveform's own, and the one that feeds the spectrogram, the signal level metrics *and* the true
-    /// peak. Not three, and not the four the pre-sharing design would have needed.
-    @Test("a whole inspection reads the samples exactly twice, with true peak included")
-    func aWholeInspectionReadsTheSamplesTwice() async throws {
+    /// **One sample read for a whole inspection**, with a real file and the real adapters: a single
+    /// pass feeding the waveform, the spectrogram, the signal level metrics *and* the true peak. Not
+    /// two, not three, and not the four the pre-sharing design would have needed.
+    @Test("a whole inspection reads the samples exactly once, with all four analyses produced")
+    func aWholeInspectionReadsTheSamplesOnce() async throws {
         try await withTemporaryDirectory { directory in
             let url = try fixture(in: directory)
             let counts = Counts()
@@ -92,8 +89,7 @@ struct SharedPCMDecodeCountTests {
 
             #expect(counts.decodersMade == 1, "an analysis was given a decoder of its own")
             #expect(counts.decodeCalls == 1, "the shared read happened more than once")
-            #expect(counts.waveformReads == 1)
-            #expect(counts.sampleReads == 2, "an inspection read the file's samples \(counts.sampleReads) times")
+            #expect(counts.sampleReads == 1, "an inspection read the file's samples \(counts.sampleReads) times")
 
             // The count only means something if all four analyses really were produced from those reads.
             guard case let .inspected(_, waveform, spectrogram, levels, truePeak) = outcome else {
@@ -107,8 +103,10 @@ struct SharedPCMDecodeCountTests {
         }
     }
 
-    /// True peak's arrival must not have moved the report, which is emitted before any sample is read
-    /// and is the reason the shared read is allowed to take as long as it takes.
+    /// The report is emitted before any sample is read, which is the reason the shared read is allowed
+    /// to take as long as it takes. **The order of the four analyses is unchanged by the cutover**: the
+    /// waveform is still announced first of them, it simply settles when the one read finishes rather
+    /// than when a read of its own did.
     @Test("the report is still delivered before either read produces anything")
     func theReportStillComesFirst() async throws {
         try await withTemporaryDirectory { directory in
@@ -137,4 +135,32 @@ struct SharedPCMDecodeCountTests {
 private final class OrderLog {
     private(set) var entries: [String] = []
     func record(_ name: String) { entries.append(name) }
+
+    /// **The door counting cannot close.** A future coordinator could construct a reader itself rather
+    /// than take one through a seam, and no spy would see it. So the composition root is asserted to
+    /// name no waveform-reading port at all: since ADR-0021 the waveform comes from the shared read, and
+    /// `AudioInspectorApp` has no business knowing that another way to read samples exists.
+    ///
+    /// The comment in `SharedPCMAnalysisGeneration` that mentions the legacy generator by name is
+    /// deliberately allowed — it explains where a default came from — so only code lines are examined.
+    @Test("the composition root names no waveform-reading port")
+    func theCompositionRootHasNoWaveformSeam() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let files = FileManager.default
+            .enumerator(at: root.appendingPathComponent("Sources/AudioInspectorApp"), includingPropertiesForKeys: nil)?
+            .compactMap { $0 as? URL }
+            .filter { $0.pathExtension == "swift" } ?? []
+        #expect(!files.isEmpty, "no sources were scanned, so this test proved nothing")
+
+        for file in files {
+            let source = try String(contentsOf: file, encoding: .utf8)
+            let offending = source.split(separator: "\n").map(String.init).filter { line in
+                let code = line.trimmingCharacters(in: .whitespaces)
+                guard !code.hasPrefix("//"), !code.hasPrefix("///") else { return false }
+                return code.contains("WaveformGenerating") || code.contains("AVFoundationWaveformGenerator")
+            }
+            #expect(offending.isEmpty, "\(file.lastPathComponent) reaches for a waveform read: \(offending)")
+        }
+    }
 }
