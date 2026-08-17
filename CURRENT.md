@@ -23,34 +23,32 @@ And the flow-state test suites synchronise on a happens-before instead of a `Tas
 guarantees nothing: their scripted actions now complete the round trip. Both are merged; the first is
 archived.
 
-**Focus: `share-waveform-pcm-read`, group 2 is done — the shared pass can now produce the waveform.**
-The waveform is the fourth consumer of `SharedPCMAnalysisGeneration`: same chunks, its own accumulator,
-its own outcome. **The legacy `WaveformGenerating` read is still alive and is still what the user sees**,
-deliberately — it is the oracle every equivalence test compares against, and retiring it is group 3's
-cut, not this one's.
+**Focus: `share-waveform-pcm-read`, group 3 is done — production reads a file's samples once.**
+The coordinator publishes the waveform the shared pass produced and no longer owns a second read: the
+generator factory, its typealias and its private helper are gone, and `AudioInspectorApp` names no
+waveform-reading port at all. The update order the surface sees is unchanged — report, waveform,
+spectrogram, signal levels, true peak.
 
-- **Equivalence is exact, for every format measured — including AAC.** The pre-implementation probe had
-  reported AAC drifting by about one ULP and the design and ADR-0021 were written expecting a tolerance
-  there. Measured against the shipped composition, at the probe's own ten-minute length and with a signal
-  the encoder cannot fold together, the worst bucket error is **zero**. The hypothesis fell; the records
-  were corrected rather than defended, and the tests assert exact equality.
-- **Position comes from `chunk.startFrame`, not from arrival order** — proven by feeding the chunks
-  backwards and getting the identical envelope.
-- **Failure and absence stay the waveform's own.** An incompletely covered read fails the waveform while
-  the other three settle exactly as accumulators fed the same chunks directly; a resolution the stream
-  cannot be mapped to is an *absence*, never a failure. Cancellation, including a deterministic
-  mid-read cancellation, cancels all four and publishes nothing partial.
-- **The buffer must be borrowed, and that is now confirmed against production code**: the fold costs
-  0.29–0.34 s through `withUnsafeBufferPointer` and 4.21–4.23 s through the array — ~13×, on all three
-  formats.
+- **What did change is when the waveform arrives.** It used to settle after its own read, before the
+  shared pass started; now it settles with its three siblings when the one read finishes. The report
+  still precedes every sample read, which is the ordering the spec protects.
+- **The saving, measured against a `main` worktree** (whole inspection, ten minutes of stereo, Release,
+  three rounds): 2.18 s → 1.64 s on FLAC and 2.42 s → 2.04 s on AAC. **WAV's ~0.04 s is inside the
+  measurement's own spread and is not claimed as a gain** — its decode was nearly free to begin with.
+- **Counting reads was not enough to protect this.** Reintroducing the legacy read left every counter
+  happy, because a directly constructed adapter passes through no injected seam. The gate that actually
+  failed is a source-level one, and both now live side by side.
+- **Two tests were removed rather than converted**, each with a note in place: cancelling the waveform
+  alone has no reachable input once there is a single read, and a test with no reachable input is green
+  for the wrong reason.
 
-Four negative controls discriminate: dropping `startFrame`, skipping a chunk, coupling the waveform's
-failure or its absence to the others, and ignoring cancellation for it.
+**The legacy `WaveformGenerating` and its adapter are deliberately still here.** Production calls
+neither; the equivalence tests use the adapter as their **oracle**, and deleting it would delete the
+evidence ADR-0021's promotion rests on. They go once group 4 is closed. ADR-0021 stays **Proposed** —
+its criteria name groups 4, 5 and 7, and none is finished.
 
-**Next step:** group 3 — retire the legacy read. Stop calling `makeWaveformGenerator` in the coordinator,
-publish the shared waveform instead, and delete `WaveformGenerating` and its adapter. The risk there is
-not the fold; it is the test surface that scripts that seam, several of which assert an arrangement
-rather than a property.
+**Next step:** group 4 — prove the equivalence as tasks 4.1–4.4 state it, including the deliberate
+behaviour change on a file that over-reads its declared length.
 
 **Minor follow-up, not a thread:** `ImportFlowComparisonTests` has one `Task.yield()` that was never
 audited in depth; same shape as the ones above, no failure ever attributed to it.
