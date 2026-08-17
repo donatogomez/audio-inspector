@@ -32,6 +32,8 @@ struct SharedPCMDecodeCountTests {
     private final class Counts: @unchecked Sendable {
         var decodersMade = 0
         var decodeCalls = 0
+        /// Whether the read had begun at the moment the report was handed over.
+        var readHadStartedWhenTheReportArrived: Bool?
         /// Every sample read a whole inspection performs. There is only one way to open one now — the
         /// decoding port — which is why this is simply the decode count.
         var sampleReads: Int { decodeCalls }
@@ -126,6 +128,35 @@ struct SharedPCMDecodeCountTests {
 
             #expect(order.entries.first == "report", "the report no longer arrives first: \(order.entries)")
             #expect(order.entries == ["report", "waveform", "spectrogram", "signalLevelMetrics", "truePeak"])
+        }
+    }
+
+    /// **The report precedes the read, not merely the other updates.**
+    ///
+    /// `audio-sample-reading` requires the report to be "reported before any sample is read", and the
+    /// ordering test above cannot see that: it compares updates with each other, so a coordinator that
+    /// held the report back until the shared pass had finished would still emit them in the same order
+    /// and still pass. A negative control proved exactly that — delaying the report broke nothing.
+    ///
+    /// This asserts the requirement itself, by asking the decoder whether it had been called yet at the
+    /// moment the report arrived.
+    @Test("the report is handed over before the decoder is even invoked")
+    func theReportPrecedesTheRead() async throws {
+        try await withTemporaryDirectory { directory in
+            let url = try fixture(in: directory)
+            let counts = Counts()
+
+            _ = await coordinator(for: counts).inspect(url) { update in
+                if case .report = update {
+                    counts.readHadStartedWhenTheReportArrived = counts.decodeCalls > 0
+                }
+            }
+
+            #expect(
+                counts.readHadStartedWhenTheReportArrived == false,
+                "the report was held back until the samples had been read"
+            )
+            #expect(counts.decodeCalls == 1, "the read did not happen at all, so this proved nothing")
         }
     }
 }
