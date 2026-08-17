@@ -29,4 +29,4 @@ disguise. Copy `0000-adr-template.md` for new ones.
 | [0018](0018-computed-technical-property-placement.md) | Where a computed technical property may live | Accepted |
 | [0019](0019-true-peak-as-a-self-describing-measurement.md) | True peak as a self-describing measurement, reported as a value not a flag | Accepted |
 | [0020](0020-independent-analyses-not-independent-decodes.md) | Independent analyses, not independent decodes (one PCM read serves several) | Accepted |
-| [0021](0021-one-pcm-read-per-inspection.md) | One PCM read per inspection — the waveform joins the shared read | Proposed (pending the reproduced saving and the property tests) |
+| [0021](0021-one-pcm-read-per-inspection.md) | One PCM read per inspection — the waveform joins the shared read | Accepted |

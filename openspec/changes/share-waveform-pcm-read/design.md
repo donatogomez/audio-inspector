@@ -145,6 +145,28 @@ the obvious way, migrating would make the pipeline roughly **2.5× slower**, not
 design rather than an optimisation. The mechanism — most likely a generic that is not specialised
 across the module boundary — is to be confirmed during implementation, not assumed.
 
+### Confirmed against production code (2026-08-17)
+
+The table above was a projection assembled from parts. Measured end to end instead — the whole
+`inspect`, against a clean `main` worktree, ten minutes of stereo carrying a different frequency per
+channel, Release, three runs after a discarded warm-up, medians:
+
+| format | before (two reads) | after (one read) | saving | of the total |
+| --- | --- | --- | --- | --- |
+| WAV | 1.2431 s | 1.1977 s | 0.0454 s | 3.7 % |
+| FLAC | 2.4651 s | 1.7880 s | 0.6771 s | 27.5 % |
+| AAC | 2.3235 s | 1.9644 s | 0.3591 s | 15.5 % |
+
+Larger than the projection for FLAC and AAC, and the reason is that the projection compared against an
+isolated decode. What is actually removed is a whole legacy *read* — decode **and** fold — while a fold
+is added back inside the shared pass. Against `legacy read − shared fold`, the arithmetic closes at
+128 % / 101 % / 97 %.
+
+**The waveform's fold is unchanged at 0.297–0.309 s**, so §8's borrowed buffer is still in force.
+
+**What §8 did not anticipate**: the waveform now becomes visible 0.8–1.3 s *later*, because it settles
+with the one read rather than after a read of its own. See ADR-0021's Promotion section.
+
 ## 9. Memory and the security scope
 
 No PCM is retained: the waveform folds each chunk and keeps two `[Float]` of `bucketCount` (2048 by

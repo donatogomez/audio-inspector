@@ -1,9 +1,9 @@
 # ADR-0021: One PCM read per inspection — the waveform joins the shared read
 
-- **Status**: **Proposed.** It stays Proposed until two things are true against production code: the
-  saving is reproduced by the real pipeline (change `share-waveform-pcm-read`, group 7), and the
-  equivalence and isolation properties are each demonstrated by a test that fails when the property is
-  broken (groups 4 and 5). Partial evidence does not promote it.
+- **Status**: **Accepted** (2026-08-17). Promoted on the two conditions this record set for itself and
+  on nothing else — the saving reproduced by the real pipeline against a `main` worktree, and each
+  equivalence and isolation property demonstrated by a test that fails when the property is broken. The
+  evidence, **including a user-visible regression it did not predict**, is in **Promotion** below.
 - **Date**: 2026-08-13
 - **Deciders**: Project maintainer
 - **Related**: **ADR-0020** (whose decision 6 this revisits — *referenced, never edited*), **ADR-0016**
@@ -174,3 +174,62 @@ Two things are worth stating plainly, because both are easy to get wrong from me
   recorded rather than left as folklore.
 - **Concurrent fan-out** stays where ADR-0020 left it: available, with a measured ceiling, reopened only
   on evidence. A fourth consumer does not by itself change that arithmetic.
+
+## Promotion — what was demonstrated, and the one thing that got worse
+
+Recorded when this moved from `Proposed` to `Accepted`, on `share-waveform-pcm-read` groups 4, 5 and 7.
+
+**The saving reproduced against production code.** The real coordinator, the real property reader, the
+real AVFoundation decoder and the real accumulators, over ten minutes of stereo at 44.1 kHz carrying a
+different frequency in each channel so no encoder can fold them together. Release, three runs after a
+discarded warm-up, formats measured one at a time, medians reported and every reading kept. "Before" is
+a clean worktree at `main`, not a simulation.
+
+| format | before (two reads) | after (one read) | saving | of the total |
+| --- | --- | --- | --- | --- |
+| WAV | 1.2431 s | 1.1977 s | 0.0454 s | 3.7 % |
+| FLAC | 2.4651 s | 1.7880 s | **0.6771 s** | **27.5 %** |
+| AAC | 2.3235 s | 1.9644 s | **0.3591 s** | **15.5 %** |
+
+**The saving reconciles, and the obvious way of checking it is wrong.** Comparing against an isolated
+decode (WAV 0.054 s, FLAC 0.661 s, AAC 0.538 s) makes AAC look like it recovered only 68 %. That
+comparison is not sound: what was removed is a whole legacy *read* — its decode **and** its fold — while
+a fold was added back inside the shared pass. Against that, the arithmetic closes: expected net saving is
+the legacy read minus the shared fold, giving **128 % (WAV), 101 % (FLAC), 97 % (AAC)** of prediction.
+The figures above and below 100 % are the run-to-run spread, not a second decode.
+
+**No hidden cost.** The waveform's fold inside the shared pass costs **0.297–0.309 s**, unchanged from
+the 0.29–0.34 s measured before the cutover, so decision 8's borrowed buffer is still in force. Restoring
+the array form during a control put it at **3.71–3.84 s**, the same ~12× it always was.
+
+**Memory does not grow with duration.** A tenfold longer file moved the peak footprint from 44.0 MB to
+44.2 MB — 0.2 MB for ten times the audio.
+
+**The report still precedes the read.** ~1.5 ms, unchanged. A negative control found that **nothing was
+testing this**: the ordering test compares updates with each other, so a coordinator holding the report
+back until the shared pass finished would still emit them in the same order and still pass. A test that
+asks the decoder whether it had been invoked yet was added, and it is what the control now fails.
+
+**What got worse, and was not predicted.** The waveform now settles when the one read finishes rather
+than after a read of its own:
+
+| format | waveform visible before | after | later by |
+| --- | --- | --- | --- |
+| WAV | 0.344 s | 1.198 s | +0.854 s |
+| FLAC | 0.968 s | 1.788 s | +0.820 s |
+| AAC | 0.686 s | 1.964 s | +1.278 s |
+
+So a ten-minute file shows its waveform roughly **0.8–1.3 s later** while the whole inspection finishes
+sooner. No specification requires the waveform before the other analyses — `audio-sample-reading` requires
+only that the report precede the read, which it does by three orders of magnitude — so this breaks no
+contract. It is nonetheless a real change in what a user sees, it was not anticipated by decision 1, and
+it is recorded here rather than left for someone to discover. **Progressive delivery inside the shared
+pass is the obvious remedy and is deliberately not designed here**: it would reopen the callback contract
+ADR-0020 decision 5 closed, and it should be justified by product judgement rather than adopted because a
+number moved.
+
+**Not claimed.** Debug was not measured — a ten-minute unoptimised run three times over two branches is
+not cheap, and the semantic conclusions do not depend on it. One machine, one OS, one SDK: the timings do
+not carry forward. And one isolation direction has **no reachable input** — "the waveform stops receiving
+chunks once it has failed", whose only reachable failure arrives after the last chunk — so it is asserted
+as an alarm on the three guards that make it unreachable, not as an observed property.
