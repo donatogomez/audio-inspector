@@ -155,6 +155,14 @@ The reading settled the fourth and reshaped the first. The decisive discovery is
     thing observed. Tech 3341 tests 7–8 are authentic programme segments: usable locally, **never
     committed**.
 
+    **These targets were made executable before any production existed**, and that ordering is part of
+    the decision rather than a scheduling accident: a target fixed after the implementation is a target
+    that was fitted to it. Measuring them established the one number that makes the cross-check worth
+    running — **FFmpeg 8.1.2 reproduces every published expectation with a worst deviation of 0.021 LU**,
+    five times inside the published tolerance — and one that bounds it: **the oracle's own
+    rate-invariance is 0.03 LU, not zero**, so no tighter agreement may be claimed against it across
+    sample rates.
+
 ## Deliberately left open
 
 - **The numeric tolerance of "the same frequency response"** at rates other than 48 kHz (decision 3).
