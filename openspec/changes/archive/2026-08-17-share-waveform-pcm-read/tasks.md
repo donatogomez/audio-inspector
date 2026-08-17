@@ -211,4 +211,9 @@ order is chosen so the risky part is provable before the irreversible part happe
       published: boundaries, `swift build -Xswiftc -warnings-as-errors`, `swift test` twice
       (**1070 tests in 111 suites**, no issues either run), `xcodebuild` Debug, `openspec validate --all
       --strict` (8/8), and `git diff --check` over both the worktree and `main...HEAD`.
-- [ ] 8.2 Update `CURRENT.md` and archive through `openspec archive` **after merge**.
+- [x] 8.2 Update `CURRENT.md` and archive through `openspec archive` **after merge**. The delta was
+      audited first: `MODIFIED` replaces a requirement wholesale, so its body and both existing scenarios
+      were checked against the canonical before archiving. Nothing is lost — the requirement text is a
+      strict superset (the carve-out for analyses consuming *whole chunks* is dropped, and "no analysis
+      shall keep a read of its own" added), both scenarios are preserved verbatim, two are added, and no
+      other capability is touched.
