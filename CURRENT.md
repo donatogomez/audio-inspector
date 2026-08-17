@@ -16,8 +16,21 @@
 >   session protocol in `CLAUDE.md`).
 
 ---
-**Focus: designing `add-loudness-measurement` — integrated loudness (LUFS-I). Methodology group closed
-against the real standards; no production code written.**
+**Focus: `add-loudness-measurement` — integrated loudness (LUFS-I). Methodology closed against the real
+standards, and the official targets are now executable. Still no production code.**
+
+**The official vectors exist and pass, before anything computes loudness.** EBU Tech 3341 §2.9 and
+Table 1 tests 1–5 plus BS.1770-5's own anchor are transcribed as data with their source attached,
+generated natively, and measured. That ordering is the point: a target fixed after the implementation is
+a target that was fitted to it. Two numbers came out of it — the oracle reproduces every published
+expectation with a **worst deviation of 0.021 LU**, and its **own rate-invariance is 0.03 LU, not zero**,
+which bounds any agreement claim across rates.
+
+The battery is split by tool dependence so CI keeps its value: transcription, discrimination and output
+parsing run everywhere; only the measurement is gated on FFmpeg. Two guards exist because the oracle
+cannot supply them — a mis-transcribed **level** would match its own wrong fixture, and a wrong
+**duration** returns −23.0 under several values — so levels are checked against their own readings and
+durations are simply stated twice. Both were confirmed by breaking them.
 
 The blocking unknown is gone. BS.1770-5 (11/2023), R 128 v5.0, Tech 3341 v4, Tech 3342 v4 and Report
 BS.2217-2 were obtained and read, and every constant now sits in the spike's **Part A** with its document,
@@ -45,12 +58,13 @@ to carry so the two never look alike on the page.
 - **Exact O(1) memory is impossible**, not merely awkward — the relative gate depends on the whole
   programme. One energy per block, ≈288 kB/hour, and the histogram shortcut is rejected.
 
-ADR-0022 stays `Proposed`: the constants half of its promotion condition is discharged, the
-implementation half is not. Nothing is implemented.
+ADR-0022 stays `Proposed`: the constants half of its promotion condition is discharged and the targets
+are fixed, but nothing implements them. Groups 1 and 5 are closed; 2–4 and 6–8 are untouched.
 
-**Next step:** task group 2 — the `LoudnessAccumulator`, starting from the pseudocode in design §6. The
-first thing that should exist is the published-target suite (5.1/5.2), so the accumulator has something
-real to fail against from its first commit.
+**Next step:** task group 2 — the `LoudnessAccumulator` in `AudioInspectorAnalysis`, straight from the
+pseudocode in design §6, with the 48 kHz coefficients used literally and the per-rate derivation left for
+4.4. Group 6 then re-points the existing vectors at production instead of at the oracle, which is a
+one-line change per test rather than new evidence.
 
 **Open on purpose, and only these two:** the numeric tolerance for "the same frequency response" away
 from 48 kHz, and the oracle comparison tolerance on real files. Both are picked from measurement once an
