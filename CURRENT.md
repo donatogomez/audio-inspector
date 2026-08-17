@@ -23,31 +23,30 @@ And the flow-state test suites synchronise on a happens-before instead of a `Tas
 guarantees nothing: their scripted actions now complete the round trip. Both are merged; the first is
 archived.
 
-**Focus: `share-waveform-pcm-read`, group 4 is done — the shared waveform is the file's own waveform.**
-The whole `WaveformEnvelope` is compared with `==` against the legacy read of the same file, and it is
-identical everywhere the contract reaches: WAV at one, two and four channels, FLAC at one and two, AIFF,
-ALAC, AAC and 32-bit float WAV; silence, an impulse, opposing polarity, a peak above full scale, files
-of 1, 2, 7 and 512 frames, and zero frames. Nine chunk sizes and five resolutions change nothing. Every
-fixture is 44 101 frames — prime — so a short final chunk is a property of every row.
+**Focus: `share-waveform-pcm-read`, group 5 is done — the waveform's isolation is observed, not assumed.**
+Every survivor is compared as a **whole outcome** against its own accumulator fed the identical chunks
+against the identical stream, which shares no line of the composition. "Not nil" and "is available"
+appear nowhere.
 
-- **A peak above full scale needed a new fixture format.** Every container already here quantises to
-  16-bit integer and clamps, so the rule could only be checked against the reduction in isolation. A
-  32-bit float WAV round-trips 2.5 as 2.4999995, and both paths report it unclamped.
-- **AAC is exact.** No tolerance was needed, confirming the correction made in group 2.
-- **The over-read case has no fixture.** Measured across all six writable containers, bounded and
-  unbounded: every one delivers exactly what it declares. So the deliberate difference is pinned at the
-  port instead, where a misbehaving decoder is expressible, and named as an exception rather than as
-  equivalence. **The policy: the declared frame count sizes the reduction and bounds the read; frames
-  delivered beyond it are a fault of the read, reported as one, never trimmed away.** The legacy loop
-  trimmed silently; that is recorded from its source, since no file can make it happen.
+- **The waveform failing is its own failure**, and the read outlives it — counted at the port, not
+  inferred from a result that looks complete.
+- **The other direction is observed too.** True peak is the one sibling with a reachable solo failure,
+  so "a sibling fails, the waveform is untouched" is a measured claim rather than an appeal to symmetry.
+- **A producer failure is a different thing**, and the interesting case is failing *after* the last
+  chunk: coverage is complete, so a plausible envelope exists to be published, and it must not be. That
+  test was added because a negative control showed the earlier one could not fail.
+- **Cancellation is a third thing**, forced with a two-gate handshake, mid-read and before the first
+  chunk. **Absence is a fourth**, and the four empty answers are asserted to differ from one another.
 
-**The legacy oracle is now a judgement call, not a blocker.** Group 4 no longer needs it to produce
-evidence, but it is what makes the equivalence tests compare against an *independent* implementation
-rather than against the shared path itself. The recommendation written into task 3.2 is to keep it and
-change the task; nothing in groups 5–8 depends on the answer. ADR-0021 stays **Proposed** — its criteria
-name groups 5 and 7 as well.
+Six negative controls, each reverted in full. **One property is not claimed as observed**: "the waveform
+stops receiving once it has failed" has no reachable input, because its only reachable failure arrives at
+`finished()`, after the last chunk. The three guards that make the accumulation path unreachable are
+asserted instead, as an alarm.
 
-**Next step:** group 5 — the five properties, each with a negative control that is reverted in full.
+ADR-0021 stays **Proposed** — its criteria still name group 7.
+
+**Next step:** group 6 — the deferral's own tests. 6.1 and 6.2 were already done during group 3, so the
+work is to verify that against their literal text rather than to assume it.
 
 **Minor follow-up, not a thread:** `ImportFlowComparisonTests` has one `Task.yield()` that was never
 audited in depth; same shape as the ones above, no failure ever attributed to it.
