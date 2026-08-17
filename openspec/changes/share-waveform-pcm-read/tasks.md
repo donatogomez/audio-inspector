@@ -12,9 +12,11 @@ order is chosen so the risky part is provable before the irreversible part happe
       its AAC tolerance did not survive measurement against production code — see 4.3.
 - [x] 1.2 Recorded explicitly that **ADR-0016 did not prohibit this migration**: it scheduled it as
       conditional and last, and the deferral being revisited is ADR-0020's.
-- [ ] 1.3 Promote ADR-0021 from `Proposed` once its own two criteria are met — the saving reproduced
+- [x] 1.3 Promote ADR-0021 from `Proposed` once its own two criteria are met — the saving reproduced
       against production code (group 7) and each property demonstrated by a test that fails when broken
-      (groups 4 and 5). Partial evidence does not promote it.
+      (groups 4 and 5). **Both are met, so it is `Accepted` (2026-08-17)**, with a Promotion section that
+      records the saving, the reconciliation, the memory figure, the one property with no reachable
+      input, and the waveform-latency regression the record did not predict.
 
 ## 2. Feed the waveform from the shared read
 
@@ -177,19 +179,31 @@ order is chosen so the risky part is provable before the irreversible part happe
 
 ## 7. Performance, confirmed against production code
 
-- [ ] 7.1 Re-measure the real pipeline before and after, ten minutes of stereo, Release, WAV/FLAC/AAC,
-      minimum of three runs. Expected from the pre-implementation probe: **0.02 s (WAV), 0.41 s (FLAC),
-      0.39 s (AAC)**. A saving materially below that means the fold is paying something the probe did
-      not — investigate before proceeding rather than accepting it.
-      **Measured during group 3**, whole `inspect` against a `main` worktree, three rounds of
-      minimum-of-three each: **1.303 s → 1.264 s (WAV), 2.177 s → 1.640 s (FLAC), 2.418 s → 2.044 s
-      (AAC)**. FLAC and AAC gain roughly the decode that was removed. **WAV's ~0.04 s is inside the
-      measurement's own spread** and should not be reported as a gain; one early reading even came out
-      slower. Left unchecked because 7.2 and 7.3 are still open and this wants the fuller treatment.
-- [ ] 7.2 Confirm memory stays a function of chunk plus accumulator state, and that the process
-      footprint during the read does not grow with duration.
-- [ ] 7.3 Confirm the report is still emitted before any sample read, and that the waveform is still
-      delivered as its own progressive update.
+- [x] 7.1 Re-measure the real pipeline before and after, ten minutes of stereo, Release, WAV/FLAC/AAC,
+      minimum of three runs. **Done properly this time**, against a clean `main` worktree rather than a
+      simulation, one format at a time, medians, every reading kept: **1.2431 → 1.1977 s (WAV),
+      2.4651 → 1.7880 s (FLAC), 2.3235 → 1.9644 s (AAC)**.
+      The task's own success rule — "the saving should be approximately the eliminated decode" — turns
+      out to be the wrong comparison, and following it would have raised a false alarm on AAC (68 %).
+      What is removed is a whole legacy *read*, decode **and** fold, while a fold is added back inside
+      the shared pass. Against `legacy read − shared fold` the arithmetic closes at **128 % / 101 % /
+      97 %**. The waveform's fold is 0.297–0.309 s, unchanged, so no slow path returned.
+      Debug was not measured: three ten-minute unoptimised runs across two branches is not cheap, and no
+      semantic conclusion depends on it.
+- [x] 7.2 Confirm memory stays a function of chunk plus accumulator state, and that the process
+      footprint during the read does not grow with duration. Measured: a tenfold longer file moved the
+      peak footprint from **44.0 MB to 44.2 MB**.
+- [x] 7.3 Confirm the report is still emitted before any sample read, and that the waveform is still
+      delivered as its own progressive update. The report arrives in ~1.5 ms, unchanged, and the waveform
+      is still its own update in the same position.
+      **A negative control found that nothing was testing the first half.** The ordering test compares
+      updates with each other, so a coordinator holding the report back until the shared pass finished
+      emitted them in the same order and passed. A test that asks the decoder whether it had been invoked
+      yet was added, and that is what the control now fails.
+      **Measured and recorded, not silently accepted**: the waveform becomes visible **0.8–1.3 s later**
+      than it used to, because it settles with the one read rather than after a read of its own. No spec
+      requires it earlier, so this breaks no contract — but it is a real change in what a user sees, and
+      it is written into ADR-0021's Promotion section rather than left to be discovered.
 
 ## 8. Gates and closure
 
