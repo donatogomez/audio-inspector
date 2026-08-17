@@ -253,6 +253,12 @@ version.
 
 ## 13. Verification targets — published, not observed
 
+**These now exist as an executable battery** (task group 5, spike Part B10): the vectors are transcribed
+as data with their authority attached, generated natively, and measured. The half that needs no tool —
+transcription guards, discrimination, output parsing — runs in CI; only the measurement is gated on
+FFmpeg. **Nothing in it touches production, because production does not exist yet**, which is the point:
+a target fixed afterwards is a target that was fitted.
+
 **Primary, from N3 Table 1** (all ±0.1 LUFS, all synthesisable from their published description with no
 protected material):
 

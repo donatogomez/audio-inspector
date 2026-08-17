@@ -5,6 +5,10 @@ The investigation is done and lives in `docs/spikes/2026-08-18-loudness-measurem
 resolve the normative constants. **It is now closed**: the standards were obtained and read, and every
 constant is sourced. Nothing below may be built on a remembered number.
 
+**Group 5 is closed too, and deliberately out of order.** The official vectors and the oracle were built
+*before* any production, so the targets could not be fitted to whatever gets written. Groups 2–4 and 6–8
+are the implementation, and none of it exists yet.
+
 ## 1. The constants, from the standard rather than from memory — **CLOSED**
 
 - [x] 1.1 Obtain the standards and record the revisions used: **ITU-R BS.1770-5 (11/2023)**,
@@ -92,57 +96,89 @@ constant is sourced. Nothing below may be built on a remembered number.
       measurement, and record it with the method. ADR-0022 leaves it open deliberately: the standard
       states none, and choosing one before the derivation exists is picking a number to be right about.
 
-## 5. Correctness against published targets, then against the oracle
+## 5. The official vectors and the oracle — **CLOSED**, and closed before any production exists
 
-- [ ] 5.1 **EBU Tech 3341 Table 1, tests 1–5**, synthesised from their published description, each to the
-      published **±0.1 LUFS**: #1 −23.0, #2 −33.0, **#3 −23.0 (relative gate)**, **#4 −23.0 (absolute
-      gate)**, #5 −23.0 (negative control — correct gating changes nothing). These are the primary
-      targets **because their expected values are published rather than observed**.
-- [ ] 5.2 The two published calibration anchors: **Tech 3341 §2.9** — stereo 1 kHz at −18 dBFS peak reads
-      **−18.0 LUFS**; and **BS.1770-5 Annex 1** — one channel at 0 dBFS, 997 Hz reads **−3.01 LKFS**.
-- [ ] 5.3 The **undefined cases**: 400 ms measures and 399 ms does not; digital silence yields no value.
-      Assert the absence, never −70.
-- [ ] 5.4 Rate-invariance across 44.1/48/88.2/96/192 kHz, and the 48 kHz round-trip: the derivation of
+Fixing the targets first is the point: a target validated after the implementation is a target that was
+fitted to it. Nothing in this group compares production against anything, because there is no production.
+
+- [x] 5.1 Transcribe **EBU Tech 3341 §2.9 and Table 1 tests 1–5** as executable vectors carrying the
+      publishers' expected readings and the publishers' **±0.1 LUFS**, each tagged with the document and
+      section it came from. Tests 6 (5.0), 7–8 (authentic programme, **never committed**) and 9–23 are
+      out of scope and recorded as such.
+- [x] 5.2 A **native, deterministic** fixture generator: `AudioFixtureSignal` gains one case for a tone
+      whose amplitude steps between regions, written as float32 through the existing `AVAudioFile`
+      writer. No Python, no FFmpeg to generate, no third-party library, no audio binary in the
+      repository, and the phase is absolute so a level change does not inject a step.
+- [x] 5.3 Transcription guards that need **no meter**, because the oracle cannot supply them: a steady
+      stereo 1 kHz vector's expected reading equals the level it is described with; the published
+      durations and levels are stated a second time; the three steady vectors' expectations are
+      collinear. A wrong level or a wrong duration is otherwise invisible to a fixture check.
+- [x] 5.4 Show each vector **discriminates something its neighbours do not** — and that tests 3 and 5
+      *bracket* the relative offset from opposite sides, since neither pins it alone. Demonstrated with a
+      deliberately simplified segment reduction that is explicitly **not** BS.1770.
+- [x] 5.5 An oracle helper over the existing `FFmpegTool`: one invocation yielding both channels, the
+      integrated value from `lavfi.r128.I` at three decimals, and the threshold parsed **section-aware**
+      so the `Loudness range:` block's −20 LU gate can never be read as the integrated one. Three
+      distinct failure modes — tool absent, tool failed, output unparseable.
+- [x] 5.6 **Qualify the oracle**: FFmpeg 8.1.2 reproduces every published expectation within the
+      published tolerance, worst deviation **0.021 LU**. Measured, not assumed.
+- [x] 5.7 **BS.1770-5's own anchor** as a separate vector — mono, **997 Hz**, 0 dBFS → −3.01 LKFS — with
+      the borrowed tolerance recorded as borrowed.
+- [x] 5.8 Derived vectors, labelled derived: the **399/400/401 ms** boundary, **digital silence**, the
+      **44.1–192 kHz** sweep, and the **mono/stereo** pair. Measured: the boundary is inclusive at 400 ms,
+      both undefined cases show the oracle's floor, the sweep drifts 0.03 LU, and the pair differs by
+      3.0100 against a predicted 3.0103.
+- [x] 5.9 **Split by tool dependence** so CI keeps the vectors' value: transcription, discrimination and
+      output parsing run everywhere; only the measurement is gated on `FFmpegTool.isAvailable`, with a
+      skip message stating that a skip is not evidence.
+- [x] 5.10 **Negative controls, each applied and reverted**: a wrong amplitude, a wrong duration, parsing
+      the LRA threshold as the integrated one, and adopting the −70 floor as a reading. Each was caught,
+      and by the test that should have caught it.
+
+## 6. Correctness of the accumulator, against the vectors already fixed
+
+- [ ] 6.1 Reproduce **Tech 3341 §2.9 and tests 1–5** within the published ±0.1 — the same vectors group 5
+      fixed, now measured against production instead of against the oracle.
+- [ ] 6.2 Reproduce **BS.1770-5's anchor** (mono, 997 Hz, 0 dBFS → −3.01 LKFS) and its attenuated form.
+- [ ] 6.3 The **undefined cases** yield no value: 400 ms measures, 399 ms does not, digital silence does
+      not. Assert the absence; never −70.
+- [ ] 6.4 Rate-invariance across 44.1/48/88.2/96/192 kHz, and the 48 kHz round-trip: the derivation of
       1.3 must reproduce the published Table 1 / Table 2 coefficients at 48 kHz.
-- [ ] 5.5 **Corroboration, ranked below 5.1–5.2**: the spike's measured K-weighting response curve
+- [ ] 6.5 **Corroboration, ranked below 6.1–6.2**: the spike's measured K-weighting response curve
       (−6.3 dB at 40 Hz … +3.4 dB at 16 kHz) and the 40 dB gating fixture reading −6.1 LUFS.
-- [ ] 5.6 Cross-check real files of each container against `ffmpeg -filter_complex ebur128`, with a
-      stated tolerance, behind the existing `FFmpegTool.isAvailable` pattern — **FFmpeg is not in CI**,
-      and the skip message must say a skip is not agreement. **Its summary is INFO-level**:
-      `-loglevel error` silently discards it. Read `I:` and the `Integrated loudness:` block's
-      `Threshold:` (the **relative gate**) — **not** the `Loudness range:` block's threshold, which is a
-      −20 LU gate and a silent 10 LU error. For more than one decimal use
-      `ebur128=metadata=1` with `lavfi.r128.I`.
-- [ ] 5.7 Negative controls, each reverted in full: weighting bypassed, gating removed, filter state
-      reset per chunk, block boundaries made per-chunk, the trailing partial block included, and the
-      relative gate applied without the absolute one.
+- [ ] 6.6 Cross-check **real files of each container** against the oracle helper built in 5.5, with a
+      tolerance stated from measurement. Remember FFmpeg's own rate-invariance is 0.03 LU, so a bound
+      tighter than that cannot be claimed against the oracle across rates.
+- [ ] 6.7 Negative controls against **production**, each reverted in full: weighting bypassed, gating
+      removed, filter state reset per chunk, block boundaries made per-chunk, the trailing partial block
+      included, and the relative gate applied without the absolute one.
 
-## 6. The fifth consumer
+## 7. The fifth consumer
 
-- [ ] 6.1 One field on `SharedPCMAnalysisOutcome`, one accumulator in the composition, one line in each
+- [ ] 7.1 One field on `SharedPCMAnalysisOutcome`, one accumulator in the composition, one line in each
       of `prepare`/`accumulate`/`failAll`/`finish` — the price true peak and the waveform each paid. No
       protocol, no generic machinery, **no second read**.
-- [ ] 6.2 Isolation, with negative controls: its failure is its own, the read outlives it, a producer
+- [ ] 7.2 Isolation, with negative controls: its failure is its own, the read outlives it, a producer
       failure ends every consumer separately, cancellation is global, absence stays distinct from
       failure.
-- [ ] 6.3 Confirm the read count is **still one**, at the gate that already asserts it.
-- [ ] 6.4 Measure the real cost as a fifth consumer. Projected from the spike: **≈0.14 s** on ten minutes
+- [ ] 7.3 Confirm the read count is **still one**, at the gate that already asserts it.
+- [ ] 7.4 Measure the real cost as a fifth consumer. Projected from the spike: **≈0.14 s** on ten minutes
       of stereo, roughly half the waveform's fold and 7–12 % of the pass it joins. Block bookkeeping and
       the two gating passes are per-block, not per-sample, and were not separately measured. A materially
       larger figure means something is being paid that the spike did not see.
 
-## 7. Surface
+## 8. Surface
 
-- [ ] 7.1 One presentation row: "Integrated loudness", one decimal — also Tech 3341 §2.8's display
+- [ ] 8.1 One presentation row: "Integrated loudness", one decimal — also Tech 3341 §2.8's display
       precision — LUFS, methodology beside it. No per-channel row. Absence uses the existing
       not-computable phrasing.
-- [ ] 7.2 **No verdict, and no target.** Not "too loud", not "streaming ready", no platform name, no
+- [ ] 8.2 **No verdict, and no target.** Not "too loud", not "streaming ready", no platform name, no
       normalisation advice, no comparison against −14 or **−23 — including R128's own −23.0 LUFS
       target**, which is a delivery requirement, not a property of a file.
-- [ ] 7.3 Accessibility: the value and its unit are announced together, as true peak's already are.
-- [ ] 7.4 Export additively under `measurements`, absent when not measured, `schemaVersion` stays **1**.
+- [ ] 8.3 Accessibility: the value and its unit are announced together, as true peak's already are.
+- [ ] 8.4 Export additively under `measurements`, absent when not measured, `schemaVersion` stays **1**.
 
-## 8. Gates and closure
+## 9. Gates and closure
 
-- [ ] 8.1 Four gates green plus the Xcode build and `git diff --check`.
-- [ ] 8.2 Update `CURRENT.md` and archive through `openspec archive` **after merge**.
+- [ ] 9.1 Four gates green plus the Xcode build and `git diff --check`.
+- [ ] 9.2 Update `CURRENT.md` and archive through `openspec archive` **after merge**.
