@@ -51,11 +51,23 @@ Two things are worth stating plainly, because both are easy to get wrong from me
    `PCMStreamDescription` already carries the frame and channel counts it needs at construction. An
    audit that finds no incapacity is a reason to leave a port alone (ADR-0020 decision 4).
 
-4. **`WaveformGenerating` and its AVFoundation adapter are retired.** Their only remaining purpose was
-   owning a read that no longer happens. A port kept alive with no caller is worse than no port: it
-   invites a second read to be reintroduced without a decision. This is the largest and riskiest part of
-   the change, because several tests script that seam and assert an *arrangement* rather than a
-   *property*.
+4. **`WaveformGenerating` and its AVFoundation adapter are retired from production, and kept as a
+   test-only oracle.** *(Second half corrected 2026-08-17, while still `Proposed`; this decision
+   originally said they were deleted.)* Their purpose as a *read* is gone — no target under `Sources/`
+   names either of them, and nothing constructs one. What they still do is give the equivalence suites
+   an implementation with its **own** read loop and its own frame accounting to compare against; delete
+   them and those suites keep passing while comparing the shared path with itself, which trades a
+   guarantee for tidiness. Relocating them to the testing-support target was evaluated and is blocked by
+   `check-boundaries.sh` rule 6, which confines AVFoundation to `AudioInspectorMedia`.
+
+   The concern this decision was written around — *a port kept alive with no caller invites a second
+   read to be reintroduced without a decision* — is real and is answered directly rather than by
+   deletion: **no production target may name a waveform-reading port**, asserted over all of `Sources/`
+   and demonstrated to fail on both a reintroduced factory and a direct construction. `FakeWaveformGenerating`
+   *was* deleted, because its only consumer was its own test suite.
+
+   The largest and riskiest part of the change remains the tests that scripted that seam and asserted an
+   *arrangement* rather than a *property*.
 
 5. **A throwing consumer does not become everyone's problem.** The waveform's accumulator is the only
    one that throws. With the two guards the composition already applies, three of its five errors are

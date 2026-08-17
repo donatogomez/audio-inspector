@@ -43,21 +43,28 @@ order is chosen so the risky part is provable before the irreversible part happe
 - [x] 3.1 Stop calling `makeWaveformGenerator` in `SourceInspectionCoordinator`, and remove the factory
       and its default. The typealias, the stored closure, the init parameter and the private
       `waveform(for:at:)` helper are gone, so the composition root has no way to open a second read.
-- [ ] 3.2 Delete `WaveformGenerating`, `AVFoundationWaveformGenerator` and `FakeWaveformGenerating`
-      once nothing calls them. **Still deferred, and the reason has changed — this is now a judgement
-      call rather than a precondition.** Production calls none of them (audited: zero references in
-      `AudioInspectorApp`, `FeatureImport`, `FeatureAnalysis`). Group 4 is closed, so they are no longer
-      needed to *produce* evidence. What they still provide is **standing regression protection**: every
-      equivalence assertion compares the shared fold against an independent implementation of the same
-      reduction, and deleting the oracle makes those tests self-referential — they would then only prove
-      the shared path agrees with itself.
-      Against that, ADR-0021 decision 4 says a port with no caller invites a second read to come back
-      without a decision. That risk is already covered from another direction: group 3 added a
-      source-level gate that fails if `AudioInspectorApp` so much as names a waveform-reading port.
-      **Recommendation: keep the oracle, and rewrite the task rather than the tests.** Nothing in groups
-      5–8 needs it, so this can be settled at closure; it should be settled deliberately, not by drift.
-      `FakeWaveformGenerating` is a separate and smaller question — only `WaveformErrorTests` still uses
-      it, and that suite can be rewritten without losing a guarantee.
+- [x] 3.2 ~~Delete `WaveformGenerating`, `AVFoundationWaveformGenerator` and `FakeWaveformGenerating`
+      once nothing calls them.~~ **The task's text conflated two different things and is corrected here
+      rather than carried as a false debt.** What it was for — *retiring the legacy read from
+      production* — happened in 3.1. What its wording asked for — deleting the types — turns out to cost
+      a guarantee, and the audit is what showed it.
+      **Decision: the port and its AVFoundation adapter are kept, as a test-only oracle.** They have no
+      production consumer in any target, and the equivalence suites compare the shared fold against them
+      — an implementation with its **own** read loop, its own frame accounting and its own AVFoundation
+      calls. Delete them and those suites still pass while comparing the shared path with itself, which
+      is not a retirement but a quiet loss of evidence. Folding against a bare
+      `WaveformEnvelopeAccumulator` is not a substitute: it consumes the same chunks from the same
+      decoder, so it can check the composition but never the transport.
+      **Moving them to `AudioInspectorTesting` was evaluated and is architecturally blocked**:
+      `check-boundaries.sh` rule 6 confines AVFoundation to `AudioInspectorMedia`, so the move would
+      either break a build-enforced boundary or need an abstraction invented purely to relocate a test
+      helper. Golden fixtures were rejected too — they would freeze one implementation's output and
+      could not tell a regression from a platform change.
+      **`FakeWaveformGenerating` is deleted**, and that one really was dead: its only consumer was its
+      own test suite. Both are gone, and no guarantee went with them.
+      ADR-0021 decision 4's concern — a port with no caller invites a second read back — is answered by
+      the gate rather than by deletion: **no production target may name a waveform-reading port**, which
+      is asserted over all of `Sources/` and fails on a reintroduced factory or a direct construction.
 - [x] 3.3 Keep `WaveformEnvelope`, `WaveformBucket`, `WaveformBucketMapping`,
       `WaveformEnvelopeAccumulator` and `WaveformError` **untouched** — verified byte-identical. The reduction's rules are what
       this change preserves; only the thing that used to own a read goes.
@@ -147,11 +154,11 @@ order is chosen so the risky part is provable before the irreversible part happe
 - [x] 6.1 Rewrite `WaveformDecodingSeamMigrationTests` rather than deleting it. It now asserts that the
       two untranslatable decoding faults are *still* untranslatable and no longer need to be, that the
       waveform's error space is unchanged, and — newly — that `PCMChunk` already carries the absolute
-      position the reduction asks for, which is the capability the deferral said was missing. It currently asserts
-      *why the migration is blocked*; it should assert *what unblocked it* — that the two untranslatable
-      decoding faults never reach the waveform because no error-space translation happens in this shape,
-      and that the waveform's error space is still exactly the ten codes it had.
-- [ ] 6.2 Re-point every test that scripts a waveform generator seam (`EndToEndFlowTests`,
+      position the reduction asks for, which is the capability the deferral said was missing.
+      **Verified against its literal text during group 6** rather than assumed from the earlier work:
+      the suite asserts what unblocked the migration, not why it was blocked, and the waveform's error
+      space is still exactly the ten codes it had.
+- [x] 6.2 Re-point every test that scripts a waveform generator seam (`EndToEndFlowTests`,
       `WaveformFlowTests`, `WaveformReportIsolationTests`, `SpectrogramFlowTests`,
       `SignalLevelMetricsFlowTests`, `SharedPCMDecodeCountTests`, `MP3WaveformEvidenceTests`,
       `AVFoundationWaveformGenerator*Tests`). This is the largest and riskiest part of the change:
@@ -163,6 +170,10 @@ order is chosen so the risky part is provable before the irreversible part happe
       signal-levels twin had no reachable input once cancellation became global, and a test with no
       reachable input is green for the wrong reason. `AVFoundationWaveformGenerator*Tests` and
       `MP3WaveformEvidenceTests` are untouched: they test the oracle, which still exists.
+      **Re-audited in group 6 against the literal list.** Every named suite is accounted for: six were
+      re-pointed onto the decoding port, and the two `AVFoundationWaveformGenerator*Tests` plus
+      `MP3WaveformEvidenceTests` legitimately still exercise the oracle — they are what keeps it a
+      trustworthy reference, and `MP3WaveformEvidenceTests` covers a format no fixture can write.
 
 ## 7. Performance, confirmed against production code
 
