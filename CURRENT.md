@@ -23,28 +23,33 @@ And the flow-state test suites synchronise on a happens-before instead of a `Tas
 guarantees nothing: their scripted actions now complete the round trip. Both are merged; the first is
 archived.
 
-**Focus: `share-waveform-pcm-read`, group 6 is done — the legacy seam is retired from production and
-kept, deliberately, as a test-only oracle.** Production reads a file's samples once; no target under
-`Sources/` names a waveform-reading port; nothing constructs one.
+**Focus: `share-waveform-pcm-read`, group 7 is done and ADR-0021 is `Accepted`.** An inspection reads a
+file's samples once, measured end to end against a clean `main` worktree — ten minutes of stereo,
+Release, three runs, medians:
 
-- **The deletion the task asked for would have cost a guarantee.** The equivalence suites compare the
-  shared fold against an implementation with its *own* read loop and its own frame accounting. Delete
-  it and they still pass — comparing the shared path with itself. Folding against a bare accumulator is
-  no substitute: it consumes the same chunks from the same decoder, so it checks the composition and
-  never the transport. The task text conflated "retire the production read" with "delete the types";
-  it was corrected rather than carried as a false debt, and ADR-0021's decision 4 with it.
-- **Moving the oracle out of `Sources/` is architecturally blocked**: `check-boundaries.sh` rule 6
-  confines AVFoundation to `AudioInspectorMedia`, so the move needs either a broken boundary or an
-  abstraction invented to relocate a test helper.
-- **The risk that justified deleting it is answered by a gate instead**, now asserted over every
-  production target rather than only the composition root. It found a real offender on its first run.
-- **`FakeWaveformGenerating` is gone**, and that one really was dead: its only consumer was its own
-  test suite.
+| format | before | after | saving |
+| --- | --- | --- | --- |
+| WAV | 1.243 s | 1.198 s | 0.045 s (3.7 %) |
+| FLAC | 2.465 s | 1.788 s | **0.677 s (27.5 %)** |
+| AAC | 2.324 s | 1.964 s | **0.359 s (15.5 %)** |
 
-ADR-0021 stays **Proposed** — group 7 is still open.
+- **The task's own success rule was the wrong comparison.** "Saving ≈ the eliminated decode" would have
+  raised a false alarm on AAC at 68 %. What is removed is a whole legacy *read* — decode and fold —
+  while a fold is added back inside the shared pass; against that the arithmetic closes at 128/101/97 %.
+- **No hidden cost**: the waveform's fold is 0.297–0.309 s, unchanged. Memory is flat — a tenfold longer
+  file moved the peak footprint by 0.2 MB.
+- **The waveform is visible 0.8–1.3 s later than it used to be**, because it settles with the one read
+  instead of after a read of its own. No spec requires it earlier and the report still precedes the read
+  by three orders of magnitude, so nothing is broken — but it is a real change in what a user sees, it
+  was not predicted, and it is written into ADR-0021's Promotion section. Progressive delivery inside the
+  shared pass is the obvious remedy and is deliberately **not** designed: it would reopen a callback
+  contract ADR-0020 closed, and that is a product decision, not a reflex.
+- **A negative control found a hole**: nothing was testing that the report precedes the *read* — only its
+  order relative to the other updates. A test that asks the decoder whether it had been invoked yet now
+  covers it.
 
-**Next step:** group 7 — confirm the saving against production code, and check memory and delivery order
-while there.
+**Next step:** group 8 — the four gates plus the Xcode build and `git diff --check`, then `CURRENT.md`
+and `openspec archive` **after merge**. The branch is still unpushed and has no PR.
 
 **Minor follow-up, not a thread:** `ImportFlowComparisonTests` has one `Task.yield()` that was never
 audited in depth; same shape as the ones above, no failure ever attributed to it.
