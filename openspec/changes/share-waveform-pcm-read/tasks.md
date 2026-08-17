@@ -207,5 +207,8 @@ order is chosen so the risky part is provable before the irreversible part happe
 
 ## 8. Gates and closure
 
-- [ ] 8.1 Four gates green plus the Xcode build and `git diff --check`.
+- [x] 8.1 Four gates green plus the Xcode build and `git diff --check`. Run on the exact head being
+      published: boundaries, `swift build -Xswiftc -warnings-as-errors`, `swift test` twice
+      (**1070 tests in 111 suites**, no issues either run), `xcodebuild` Debug, `openspec validate --all
+      --strict` (8/8), and `git diff --check` over both the worktree and `main...HEAD`.
 - [ ] 8.2 Update `CURRENT.md` and archive through `openspec archive` **after merge**.

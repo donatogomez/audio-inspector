@@ -48,8 +48,13 @@ Release, three runs, medians:
   order relative to the other updates. A test that asks the decoder whether it had been invoked yet now
   covers it.
 
-**Next step:** group 8 — the four gates plus the Xcode build and `git diff --check`, then `CURRENT.md`
-and `openspec archive` **after merge**. The branch is still unpushed and has no PR.
+**The change is ready to publish.** All six gates are green on the head being proposed, and every group
+is closed except the archive, which belongs after the merge. ADR-0021 is `Accepted`, the legacy
+generator survives only as a test oracle with a gate against its return, and the waveform's later
+arrival is recorded as a known consequence rather than smoothed over.
+
+**Next step:** review the pull request. On merge, `openspec archive share-waveform-pcm-read` and refresh
+this snapshot — nothing else is outstanding.
 
 **Minor follow-up, not a thread:** `ImportFlowComparisonTests` has one `Task.yield()` that was never
 audited in depth; same shape as the ones above, no failure ever attributed to it.
