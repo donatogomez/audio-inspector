@@ -136,31 +136,42 @@ private final class OrderLog {
     private(set) var entries: [String] = []
     func record(_ name: String) { entries.append(name) }
 
-    /// **The door counting cannot close.** A future coordinator could construct a reader itself rather
-    /// than take one through a seam, and no spy would see it. So the composition root is asserted to
-    /// name no waveform-reading port at all: since ADR-0021 the waveform comes from the shared read, and
-    /// `AudioInspectorApp` has no business knowing that another way to read samples exists.
+    /// **The door counting cannot close.** A coordinator could construct a reader itself rather than
+    /// take one through a seam, and no spy would see it — measured, not suspected: reintroducing the
+    /// legacy read left every counter above completely happy. So the source is asserted too.
     ///
-    /// The comment in `SharedPCMAnalysisGeneration` that mentions the legacy generator by name is
-    /// deliberately allowed — it explains where a default came from — so only code lines are examined.
-    @Test("the composition root names no waveform-reading port")
-    func theCompositionRootHasNoWaveformSeam() throws {
+    /// The scope is **every** production target, not just the composition root. `AVFoundationWaveformGenerator`
+    /// survives as an independent oracle for the equivalence suites, and this is what keeps that
+    /// decision honest: it may be referenced by tests and by nothing else. The moment a production file
+    /// names it, the oracle has stopped being test-only and a second read is one call away.
+    ///
+    /// Comment lines are skipped deliberately — the records that explain where a default came from, or
+    /// why the port was retired, must stay readable.
+    @Test("no production target reaches for a waveform-reading port")
+    func noProductionTargetNamesTheLegacySeam() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
         let files = FileManager.default
-            .enumerator(at: root.appendingPathComponent("Sources/AudioInspectorApp"), includingPropertiesForKeys: nil)?
+            .enumerator(at: root.appendingPathComponent("Sources"), includingPropertiesForKeys: nil)?
             .compactMap { $0 as? URL }
             .filter { $0.pathExtension == "swift" } ?? []
-        #expect(!files.isEmpty, "no sources were scanned, so this test proved nothing")
+        #expect(files.count > 20, "no sources were scanned, so this test proved nothing")
 
-        for file in files {
+        // The oracle's own declaration, and the fake that conforms to the same port, are where these
+        // names legitimately live.
+        let declarations: Set<String> = ["AVFoundationWaveformGenerator.swift", "WaveformGenerating.swift"]
+
+        var offenders: [String] = []
+        for file in files where !declarations.contains(file.lastPathComponent) {
             let source = try String(contentsOf: file, encoding: .utf8)
-            let offending = source.split(separator: "\n").map(String.init).filter { line in
+            for line in source.split(separator: "\n").map(String.init) {
                 let code = line.trimmingCharacters(in: .whitespaces)
-                guard !code.hasPrefix("//"), !code.hasPrefix("///") else { return false }
-                return code.contains("WaveformGenerating") || code.contains("AVFoundationWaveformGenerator")
+                guard !code.hasPrefix("//"), !code.hasPrefix("///") else { continue }
+                if code.contains("WaveformGenerating") || code.contains("AVFoundationWaveformGenerator") {
+                    offenders.append("\(file.lastPathComponent): \(code)")
+                }
             }
-            #expect(offending.isEmpty, "\(file.lastPathComponent) reaches for a waveform read: \(offending)")
         }
+        #expect(offenders.isEmpty, "a production file reaches for a waveform read: \(offenders)")
     }
 }

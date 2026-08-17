@@ -7,8 +7,8 @@ import AudioInspectorDomain
 ///
 /// ## Why this one is not an actor
 ///
-/// `FakeWaveformGenerating` and `FakeAudioFilePropertyReading` are actors, because their spying state
-/// is the only mutable thing they hold and nothing else constrains them. This port is different: it
+/// `FakeAudioFilePropertyReading` is an actor, because its spying state is the only mutable thing it
+/// holds and nothing else constrains it. This port is different: it
 /// hands each chunk to a **synchronous, non-escaping callback that is deliberately not `@Sendable`**,
 /// and an actor-isolated `decode` could not accept one — a caller's closure would have to cross into
 /// the actor. The fake must therefore be exactly what the real adapter is: a `Sendable` struct whose
