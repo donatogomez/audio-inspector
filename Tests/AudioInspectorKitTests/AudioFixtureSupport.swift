@@ -23,6 +23,11 @@ import Foundation
 /// pretend otherwise — see the change's task 0.6 for how that gap is closed.
 enum AudioFixtureFormat: CaseIterable {
     case wav
+    /// 32-bit **floating-point** WAV. The only writable container here that round-trips a sample beyond
+    /// full scale: every other one quantises to 16-bit integer and clamps it. It exists so the
+    /// "amplitude above 1.0 is reported, never clamped" rule can be proved through a real file rather
+    /// than only against the reduction in isolation.
+    case wavFloat
     case aiff
     case alac
     case flac
@@ -30,7 +35,7 @@ enum AudioFixtureFormat: CaseIterable {
 
     var fileExtension: String {
         switch self {
-        case .wav: "wav"
+        case .wav, .wavFloat: "wav"
         case .aiff: "aiff"
         case .alac, .aac: "m4a"
         case .flac: "flac"
@@ -47,6 +52,11 @@ enum AudioFixtureFormat: CaseIterable {
             settings[AVFormatIDKey] = kAudioFormatLinearPCM
             settings[AVLinearPCMBitDepthKey] = 16
             settings[AVLinearPCMIsFloatKey] = false
+            settings[AVLinearPCMIsBigEndianKey] = false
+        case .wavFloat:
+            settings[AVFormatIDKey] = kAudioFormatLinearPCM
+            settings[AVLinearPCMBitDepthKey] = 32
+            settings[AVLinearPCMIsFloatKey] = true
             settings[AVLinearPCMIsBigEndianKey] = false
         case .aiff:
             settings[AVFormatIDKey] = kAudioFormatLinearPCM
