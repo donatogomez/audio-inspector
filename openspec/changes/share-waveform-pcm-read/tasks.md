@@ -34,22 +34,26 @@ order is chosen so the risky part is provable before the irreversible part happe
 - [x] 2.4 Preserve the **absence/failure distinction**. A stream whose frame count cannot be mapped to
       buckets is `.unavailable`, never `.failed` — the legacy port returned `nil` there, and that means
       "the file offered nothing to size against".
-- [ ] 2.5 Add the fourth field to `SharedPCMAnalysisOutcome` and destructure it in
-      `SourceInspectionCoordinator` exactly as the other three are. **Half done, deliberately**: the
-      field exists and is computed, but the coordinator still emits the *legacy* waveform. Publishing
-      the shared one is the cut, and the cut is group 3 — keeping both is what makes the equivalence
-      tests possible at all.
+- [x] 2.5 Add the fourth field to `SharedPCMAnalysisOutcome` and destructure it in
+      `SourceInspectionCoordinator` exactly as the other three are. Completed by group 3's cut: the
+      coordinator now publishes `shared.waveform`, and the update order is unchanged.
 
 ## 3. Retire the second read
 
-- [ ] 3.1 Stop calling `makeWaveformGenerator` in `SourceInspectionCoordinator`, and remove the factory
-      and its default.
+- [x] 3.1 Stop calling `makeWaveformGenerator` in `SourceInspectionCoordinator`, and remove the factory
+      and its default. The typealias, the stored closure, the init parameter and the private
+      `waveform(for:at:)` helper are gone, so the composition root has no way to open a second read.
 - [ ] 3.2 Delete `WaveformGenerating`, `AVFoundationWaveformGenerator` and `FakeWaveformGenerating`
-      once nothing calls them. `AVFoundationAudioDecoder.defaultChunkFrames` currently derives its value
-      from `AVFoundationWaveformGenerator.defaultChunkFrames` — move the constant rather than duplicating
-      it, and keep **4 096**, so chunking is unchanged.
-- [ ] 3.3 Keep `WaveformEnvelope`, `WaveformBucket`, `WaveformBucketMapping`,
-      `WaveformEnvelopeAccumulator` and `WaveformError` **untouched**. The reduction's rules are what
+      once nothing calls them. **Deferred on its own precondition, deliberately.** Production calls none
+      of them — audited, zero references in `AudioInspectorApp`, `FeatureImport` or `FeatureAnalysis` —
+      but the tests do: `AVFoundationWaveformGenerator` is the **oracle** every equivalence assertion in
+      group 4 compares the shared envelope against, and deleting it would delete the evidence ADR-0021's
+      promotion depends on. `FakeWaveformGenerating` survives only in `WaveformErrorTests`. Both go once
+      group 4 is closed and the equivalence is recorded, not before.
+      The constant **was** moved: `AVFoundationAudioDecoder.defaultChunkFrames` no longer derives from
+      `AVFoundationWaveformGenerator.defaultChunkFrames`, and the value is still **4 096**.
+- [x] 3.3 Keep `WaveformEnvelope`, `WaveformBucket`, `WaveformBucketMapping`,
+      `WaveformEnvelopeAccumulator` and `WaveformError` **untouched** — verified byte-identical. The reduction's rules are what
       this change preserves; only the thing that used to own a read goes.
 
 ## 4. Equivalence, proved rather than asserted
@@ -77,13 +81,19 @@ order is chosen so the risky part is provable before the irreversible part happe
 - [ ] 5.2 Another consumer failing leaves the waveform's envelope identical to a control run.
 - [ ] 5.3 A producer failure ends all four, each with its own outcome, publishing nothing partial.
 - [ ] 5.4 Cancellation cancels the read and all four, and no partial envelope escapes.
-- [ ] 5.5 Exactly **one** sample read is opened per inspection, counted at the adapter — the successor
-      to the existing two-read count test.
+- [x] 5.5 Exactly **one** sample read is opened per inspection, counted at the adapter — the successor
+      to the existing two-read count test. **Counting alone proved insufficient**: reintroducing the
+      legacy read left every counter happy, because a directly constructed adapter passes through no
+      injected seam. A source-level assertion that `AudioInspectorApp` names no waveform-reading port
+      was added beside it, and that is the one the control fails.
 - [ ] 5.6 Each negative control is reverted in full, and `git diff` shows no residue.
 
 ## 6. The deferral's own tests
 
-- [ ] 6.1 Rewrite `WaveformDecodingSeamMigrationTests` rather than deleting it. It currently asserts
+- [x] 6.1 Rewrite `WaveformDecodingSeamMigrationTests` rather than deleting it. It now asserts that the
+      two untranslatable decoding faults are *still* untranslatable and no longer need to be, that the
+      waveform's error space is unchanged, and — newly — that `PCMChunk` already carries the absolute
+      position the reduction asks for, which is the capability the deferral said was missing. It currently asserts
       *why the migration is blocked*; it should assert *what unblocked it* — that the two untranslatable
       decoding faults never reach the waveform because no error-space translation happens in this shape,
       and that the waveform's error space is still exactly the ten codes it had.
@@ -93,6 +103,12 @@ order is chosen so the risky part is provable before the irreversible part happe
       `AVFoundationWaveformGenerator*Tests`). This is the largest and riskiest part of the change:
       several assert an *arrangement* rather than a *property*, and rewriting a test is how a guarantee
       quietly gets weaker. Each rewrite states which property it now pins.
+      **Done for every suite the cutover broke** (14 tests across 6 files), scripting the decoding port
+      where they used to script the waveform port. Two tests were **removed** rather than converted,
+      each with a note in place: "a cancelled waveform leaves the spectrogram's result intact" and its
+      signal-levels twin had no reachable input once cancellation became global, and a test with no
+      reachable input is green for the wrong reason. `AVFoundationWaveformGenerator*Tests` and
+      `MP3WaveformEvidenceTests` are untouched: they test the oracle, which still exists.
 
 ## 7. Performance, confirmed against production code
 
@@ -100,6 +116,11 @@ order is chosen so the risky part is provable before the irreversible part happe
       minimum of three runs. Expected from the pre-implementation probe: **0.02 s (WAV), 0.41 s (FLAC),
       0.39 s (AAC)**. A saving materially below that means the fold is paying something the probe did
       not — investigate before proceeding rather than accepting it.
+      **Measured during group 3**, whole `inspect` against a `main` worktree, three rounds of
+      minimum-of-three each: **1.303 s → 1.264 s (WAV), 2.177 s → 1.640 s (FLAC), 2.418 s → 2.044 s
+      (AAC)**. FLAC and AAC gain roughly the decode that was removed. **WAV's ~0.04 s is inside the
+      measurement's own spread** and should not be reported as a gain; one early reading even came out
+      slower. Left unchecked because 7.2 and 7.3 are still open and this wants the fuller treatment.
 - [ ] 7.2 Confirm memory stays a function of chunk plus accumulator state, and that the process
       footprint during the read does not grow with duration.
 - [ ] 7.3 Confirm the report is still emitted before any sample read, and that the waveform is still
