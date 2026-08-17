@@ -585,6 +585,79 @@ construction, and because the loudest block always exceeds a mean-derived thresh
 second emptiness guard in A6 is unreachable in practice. **It should still be written**, because its
 unreachability is an argument, not a proof carried by the code.
 
+## B10. Official executable test vectors
+
+The vectors of A9 are no longer a table in a document: they are generated and measured by the suite. The
+generator is native — `AudioFixtureSupport`'s existing float32 `AVAudioFile` writer, extended with one
+case for a tone whose amplitude steps between regions — so no Python, no FFmpeg and no third-party
+library takes part in producing a fixture, and no audio binary enters the repository.
+
+**Three kinds of row, and they are never merged:**
+
+- **normative** — the publisher supplies *both* the signal and the expected reading, and the tolerance is
+  theirs;
+- **derived** — the signal or the expectation is ours, following from the algorithm. Useful; **not**
+  compliance evidence;
+- **oracle observation** — what FFmpeg 8.1.2 actually returned, which is neither of the above.
+
+### Normative
+
+| vector | source | signal generated | expected | tol. | FFmpeg observed | Δ | property protected |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| §2.9 calibration | Tech 3341 §2.9 | stereo 1 kHz, −18.0 dBFS, 20 s | −18.0 | ±0.1 | **−18.000** | 0.000 | the conversion offset, as a third point on the line |
+| test 1 | Tech 3341 T1 #1 | stereo 1 kHz, −23.0 dBFS, 20 s | −23.0 | ±0.1 | **−23.000** | 0.000 | channel summation |
+| test 2 | Tech 3341 T1 #2 | stereo 1 kHz, −33.0 dBFS, 20 s | −33.0 | ±0.1 | **−33.000** | 0.000 | linearity of energy→LUFS |
+| test 3 | Tech 3341 T1 #3 | 10 s −36, 60 s −23, 10 s −36 | −23.0 | ±0.1 | **−23.021** | 0.021 | **the relative gate, offset not too large** |
+| test 4 | Tech 3341 T1 #4 | test 3 wrapped in 10 s −72 each end | −23.0 | ±0.1 | **−23.021** | 0.021 | **the absolute gate runs first** |
+| test 5 | Tech 3341 T1 #5 | 20 s −26, 20.1 s −20, 20 s −26 | −23.0 | ±0.1 | **−22.985** | 0.015 | **the relative offset is not too small** |
+| ITU anchor | BS.1770-5 Annex 1 | mono **997 Hz**, 0 dBFS, 20 s | −3.01 | ±0.1 † | **−3.016** | 0.006 | the −0.691 offset at its own reference frequency |
+
+† BS.1770-5 states the anchor as a consequence of the algorithm and attaches **no** tolerance. The ±0.1
+is borrowed from BS.2217-2, and the borrowing is deliberate rather than silent.
+
+**Worst deviation across every published expectation: 0.021 LU — five times inside the published
+tolerance.** That is the number that qualifies the oracle, and it is measured rather than assumed.
+
+### Derived
+
+| vector | rationale | expected | FFmpeg observed | property protected |
+| --- | --- | --- | --- | --- |
+| anchor at −23 dBFS | BS.1770-5's anchor attenuated 23 dB | −26.01 | −26.016 | attenuation maps one-for-one |
+| 399 ms | eq. (3) index set is empty below *T*<sub>g</sub> | **no value** | −70.000 (floor) | no block, so nothing to report |
+| 400 ms | index set is {0} at exactly *T*<sub>g</sub> | −20.0 | −20.0 | the edge is **inclusive** |
+| 401 ms | the partial second block is discarded | −20.0 | −20.0 | a partial block disturbs nothing |
+| silence 1 s, 10 s | eq. (6): a silent block's loudness is −∞ | **no value** | −70.000 (floor) | every block gated away is an absence |
+| rate sweep ×5 | Tech 3341 publishes at 48 kHz only | −18.0 | −18.00 / −18.00 / −18.01 / −18.02 / −18.03 | the weighting adapts to the rate |
+| mono vs stereo | Table 3's equal weights + energy summation | 3.0103 LU apart | **3.0100** | channels are summed, not averaged |
+
+### Oracle observations that are not about any single vector
+
+- **Tests 3 and 4 report the identical threshold, −34.2 LUFS.** They differ only by the −72 dBFS
+  passages, so the absolute gate removed exactly those blocks *before* the relative threshold was
+  derived. This is the only place the absolute gate is visible, because the two files' integrated
+  readings are the same to three decimals — **`I` alone does not separate them**.
+- **Tests 1 and 5 report a threshold exactly 10 LU below their reading** (−33.0), i.e. the relative gate
+  excluded nothing. Eq. (6) made visible.
+- **FFmpeg's own rate-invariance is 0.03 LU, not zero.** The sweep drifts monotonically with rate. Any
+  future claim about *our* rate-invariance is bounded below by this when it is judged against the oracle
+  rather than against the published value.
+- **−70.000 appears at full precision for both undefined cases**, with `Threshold: 0.0 LUFS` alongside —
+  the tell that no gating happened. Recorded as the oracle's floor; **never adopted as a reading**.
+
+### What the battery cannot do yet
+
+Nothing computes loudness in this product, so **no row above compares production against anything**. What
+the battery establishes is that the targets are reproducible, that the oracle passes the publishers'
+acceptance set, and that each vector catches something its neighbours do not. Fixing the targets *before*
+the accumulator exists is the point: a target validated afterwards is a target that was fitted.
+
+Two guards exist because the oracle cannot supply them. A mis-transcribed **level** is invisible to a
+fixture check — the generated signal would match its own wrong specification — so the suite asserts that
+a steady stereo 1 kHz vector's expected reading *equals* the level it is described with, which is true of
+this signal and of no other. A mis-transcribed **duration** is invisible to both: tests 3 and 5 return
+−23.0 under several wrong durations, so the published durations and levels are simply stated a second
+time. Both were confirmed by deliberately breaking them.
+
 ---
 
 # Part C — What this evidence forces
@@ -602,3 +675,7 @@ unreachability is an argument, not a proof carried by the code.
 6. **The oracle is qualified** (B2), which is what makes a cross-check meaningful — and it is absent from
    CI, which is what makes the skip message matter.
 7. **Exact O(1) is impossible; O(blocks) is cheap** (B9). The design does not need to be clever here.
+8. **The targets are fixed and executable before any production exists** (B10), which is the order that
+   makes them targets rather than a description of whatever gets written. The oracle's qualification is
+   now a measured 0.021 LU worst case rather than an assertion, and the half of the battery that needs no
+   tool runs in CI.
