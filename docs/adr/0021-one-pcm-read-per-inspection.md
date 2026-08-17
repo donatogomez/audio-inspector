@@ -69,20 +69,30 @@ Two things are worth stating plainly, because both are easy to get wrong from me
    against — and never as a failure. The legacy port expressed this by returning `nil`, and losing it
    in the move would be a silent regression.
 
-7. **Equivalence is bit-exact for lossless containers and within a tolerance for lossy ones, and that
-   asymmetry is measured rather than chosen.** Ten minutes of stereo, 2048 buckets: WAV and FLAC come
-   out **bit-identical**; AAC differs in **1778 of 2048 buckets by about one ULP**. The fold is the same
-   code in both cases, so the difference is in the decode — the legacy generator reads with
-   `read(into:)`, the shared decoder with `read(into:frameCount:)`, and the platform's lossy decoder does
-   not return identical samples for a different read granularity. A test demanding bit-exactness on AAC
-   would assert something the platform does not offer.
+7. **Equivalence is bit-exact, for lossy containers too — and this record's first answer was wrong.**
+   *(Corrected 2026-08-17, while still `Proposed`.)* A pre-implementation probe reported AAC differing in
+   1 778 of 2 048 buckets by about one ULP, and this decision was originally written to require a
+   tolerance there. Measured again through the production composition — the same file, the same decoder,
+   the same accumulator, the same bucket count, at the probe's own ten-minute length and at two shorter
+   ones, for a pure sine and for a per-channel signal the encoder cannot fold together — the worst bucket
+   error is **exactly zero** for WAV, FLAC **and AAC**. The probe's figure does not reproduce and is
+   recorded as an artefact of that throwaway harness rather than defended. What the harness did
+   differently was not established; the measurement that stands is the one taken against the code that
+   ships. The equivalence tests still compute and print the worst error, so a platform change that does
+   introduce a difference reports its magnitude instead of only failing.
 
 8. **How the run is handed over is part of this decision, not an optimisation.** Passing
    `chunk.channels[c]` — the `[Float]` itself — to `accumulate(_:ofChannel:startingAtFrame:)` costs
-   **3.79–3.81 s** for ten minutes of stereo, against **0.28–0.33 s** for an `UnsafeBufferPointer` view
-   of the same array: a **12× penalty**, constant across all three formats and therefore per-sample
-   rather than decoding-related. Written the obvious way, this migration would make the pipeline about
-   **2.5× slower** rather than faster. The pointer form is what the legacy generator already used.
+   **4.21–4.23 s** for ten minutes of stereo, against **0.29–0.34 s** for an `UnsafeBufferPointer` view
+   of the same array: a **~13× penalty**, constant across all three formats and therefore per-sample
+   rather than decoding-related. Written the obvious way, this migration would make the pipeline
+   *slower* rather than faster. The pointer form is what the legacy generator already used.
+
+   *(These are the figures measured against the shipped composition on 2026-08-17 — the shared pass with
+   the waveform folded versus the same pass with it absent. The pre-implementation probe's 3.79–3.81 s
+   versus 0.28–0.33 s said the same thing from a throwaway harness; unlike decision 7's, this finding
+   reproduced.)* The mechanism — most likely a generic that is not specialised across the module
+   boundary — remains a hypothesis, and the mitigation does not depend on it.
 
 9. **No PCM is buffered and no abstraction is introduced.** Memory stays a function of chunk plus
    accumulator state. `SharedPCMAnalysisOutcome` gains a fourth field; there is no `PCMConsumer`
@@ -129,8 +139,10 @@ Two things are worth stating plainly, because both are easy to get wrong from me
 - **A behaviour change on a malformed file.** Where the legacy loop silently trimmed frames delivered
   beyond the declared length, the shared read refuses them. Stricter on purpose, and recorded rather
   than smuggled in as equivalence.
-- **AAC equivalence is a tolerance, not an identity**, so a future reduction bug of about one ULP would
-  hide inside it on that format. Lossless formats keep the bit-exact assertion that would catch it.
+- **A measurement in this record was wrong once already** (decision 7), and the throwaway harness that
+  produced it looked reasonable at the time. The figures here are only as good as the harness that took
+  them; the ones that matter are re-taken against production code before promotion, which is exactly
+  what the Status criteria require.
 - **One OS/SDK, one machine.** The timings do not carry forward; the semantic conclusions do.
 
 ### Neutral

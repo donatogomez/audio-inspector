@@ -92,26 +92,30 @@ protocol on the grounds that four `finish()` results are unrelated types with un
 rules; the waveform is a fourth such type, and it *throws*, which makes the associated-type machinery
 larger rather than smaller. Concrete composition stays.
 
-## 7. Equivalence — measured, and it is not uniform
+## 7. Equivalence — measured, and the first measurement was wrong
 
-Ten minutes of stereo, 44.1 kHz, envelope of 2048 buckets, comparing the legacy generator's envelope
-against one folded from `PCMChunk`s of the same file:
+**Corrected on 2026-08-17.** A pre-implementation probe compared a hand-rolled fold against the legacy
+generator and reported WAV and FLAC bit-identical but **AAC differing in 1778 of 2048 buckets by about
+one ULP**, attributed to the platform's lossy decoder returning different samples for a different read
+granularity (`read(into:)` versus `read(into:frameCount:)`). This design was written expecting a
+tolerance for lossy containers.
+
+**It does not reproduce.** Measured through the production composition — the same file, the same
+decoder, the same accumulator, the same bucket count, at the probe's own ten-minute length and at two
+shorter ones, for a pure sine and for a per-channel signal the encoder cannot fold together — the worst
+bucket error is **exactly zero**.
 
 | format | result |
 | --- | --- |
-| WAV | **bit-identical**, 0 of 2048 buckets differ |
-| FLAC | **bit-identical**, 0 of 2048 buckets differ |
-| AAC | **1778 of 2048 buckets differ**, by about one ULP (e.g. −0.5088052 vs −0.50880533) |
+| WAV (mono and stereo) | **bit-identical** |
+| FLAC | **bit-identical** |
+| AAC | **bit-identical** |
 
-The fold is the same code in both cases, so the difference is in the decode: the legacy generator reads
-with `read(into:)` and the shared decoder with `read(into:frameCount:)`, and the platform's **lossy**
-decoder does not return bit-identical samples for a different read granularity. Lossless formats do.
-
-**So the equivalence criterion is derived, not chosen: bit-exact for lossless containers, and within a
-stated tolerance for lossy ones.** A test demanding bit-exactness on AAC would be asserting a property
-the platform does not offer. The tolerance must be tight enough to catch a real reduction bug — one ULP
-is far below the envelope's own drawing resolution — and it must be justified in the test rather than
-widened until it passes.
+So the criterion is **bit-exact for every format measured**, and the tolerance this design reserved is
+not needed. The earlier figure is recorded as an artefact of the throwaway harness rather than defended;
+what that harness did differently has not been established, which is itself a reason to trust the
+measurement taken against the code that will ship. The test keeps computing and printing the worst error,
+so a platform change that does introduce a difference reports its magnitude instead of only failing.
 
 ## 8. Performance — and the one result that changes the implementation
 

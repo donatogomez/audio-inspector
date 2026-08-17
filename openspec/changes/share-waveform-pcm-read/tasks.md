@@ -7,8 +7,9 @@ order is chosen so the risky part is provable before the irreversible part happe
 
 - [x] 1.1 **ADR-0021** written, revisiting **ADR-0020 decision 6** ("the waveform stays on its own read
       for now"). It is `Accepted`, so this is a decision and not an implementation detail; ADR-0020 is
-      referenced, never edited. It carries the measured saving, the equivalence result including its AAC
-      caveat, the 12× fold penalty, and why the recorded blocker was about a different shape.
+      referenced, never edited. It carries the measured saving, the equivalence result, the 12× fold
+      penalty, and why the recorded blocker was about a different shape. **Corrected on 2026-08-17**:
+      its AAC tolerance did not survive measurement against production code — see 4.3.
 - [x] 1.2 Recorded explicitly that **ADR-0016 did not prohibit this migration**: it scheduled it as
       conditional and last, and the deferral being revisited is ADR-0020's.
 - [ ] 1.3 Promote ADR-0021 from `Proposed` once its own two criteria are met — the saving reproduced
@@ -17,21 +18,27 @@ order is chosen so the risky part is provable before the irreversible part happe
 
 ## 2. Feed the waveform from the shared read
 
-- [ ] 2.1 Add `WaveformEnvelopeAccumulator` to `SharedPCMAnalysisGeneration.Consumers`: one stored
+- [x] 2.1 Add `WaveformEnvelopeAccumulator` to `SharedPCMAnalysisGeneration.Consumers`: one stored
       property, one fault, one line in `prepare`, `accumulate`, `failAll` and `finish` — the same cost
       true peak paid as the third consumer. No protocol, no generic machinery.
-- [ ] 2.2 Hand each channel's run through **`withUnsafeBufferPointer`**, not as the `[Float]` itself.
+- [x] 2.2 Hand each channel's run through **`withUnsafeBufferPointer`**, not as the `[Float]` itself.
       Measured, the array form costs **3.79–3.81 s** against **0.28–0.33 s** for ten minutes of stereo —
       a 12× penalty that would make the migration a slowdown. Confirm the mechanism while doing it
       (generic specialisation across the module boundary is the hypothesis, not the finding).
-- [ ] 2.3 Confine the accumulator's `throws` to the waveform: a throw during accumulation faults the
-      waveform alone, the read continues, and the other three settle exactly as they would have.
-- [ ] 2.4 Preserve the **absence/failure distinction**. A stream whose frame count cannot be mapped to
+      **Reproduced against production code**: the fold costs 0.29–0.34 s through the pointer and
+      4.21–4.23 s through the array — ~13×, on all three formats. The mechanism is still a hypothesis.
+- [x] 2.3 Confine the accumulator's `throws` to the waveform. A throw during accumulation is caught and
+      faults the waveform alone; the read continues. **The reachable failure turned out to be at
+      `finished()`**, not during accumulation — an incompletely covered read — and that is the input the
+      isolation test uses.
+- [x] 2.4 Preserve the **absence/failure distinction**. A stream whose frame count cannot be mapped to
       buckets is `.unavailable`, never `.failed` — the legacy port returned `nil` there, and that means
       "the file offered nothing to size against".
 - [ ] 2.5 Add the fourth field to `SharedPCMAnalysisOutcome` and destructure it in
-      `SourceInspectionCoordinator` exactly as the other three are. The order of emitted updates stays
-      as it is today unless a test says otherwise.
+      `SourceInspectionCoordinator` exactly as the other three are. **Half done, deliberately**: the
+      field exists and is computed, but the coordinator still emits the *legacy* waveform. Publishing
+      the shared one is the cut, and the cut is group 3 — keeping both is what makes the equivalence
+      tests possible at all.
 
 ## 3. Retire the second read
 
@@ -52,10 +59,14 @@ order is chosen so the risky part is provable before the irreversible part happe
       short.
 - [ ] 4.2 Prove chunk-size independence at several chunk sizes, using the guarantee
       `WaveformEnvelopeAccumulator` already documents — not a widened tolerance.
-- [ ] 4.3 For **AAC**, assert equality within a stated tolerance and justify the number in the test.
-      Measured: 1778 of 2048 buckets differ by about one ULP, because the platform's lossy decoder does
-      not return identical samples for a different read granularity. A test demanding bit-exactness here
-      would be asserting something the platform does not offer.
+- [ ] 4.3 For **AAC**, assert equality **exactly**, like the lossless containers. ~~Within a stated
+      tolerance~~ — **the hypothesis fell.** The pre-implementation probe reported 1778 of 2048 buckets
+      differing by about one ULP; measured again through the production composition, on the same file,
+      with the same decoder, accumulator and bucket count, and at the probe's own ten-minute length, the
+      worst bucket error is **exactly zero** — for a pure sine and for a per-channel signal the encoder
+      cannot fold together. The probe's finding does not reproduce and is recorded as an artefact of that
+      throwaway harness. The test still computes and prints the worst error, so a future platform change
+      reports its magnitude rather than only failing.
 - [ ] 4.4 Record the deliberate behaviour change on a file that **over-reads** its declared length: the
       legacy loop trimmed silently, the shared read refuses. Stricter on purpose.
 
