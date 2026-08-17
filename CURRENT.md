@@ -16,34 +16,45 @@
 >   session protocol in `CLAUDE.md`).
 
 ---
-**Focus: designing `add-loudness-measurement` — integrated loudness (LUFS-I), investigation done, no
-production code written.**
+**Focus: designing `add-loudness-measurement` — integrated loudness (LUFS-I). Methodology group closed
+against the real standards; no production code written.**
 
-The decisive finding is what the investigation **could not** establish: the normative constants of
-BS.1770 / R128 are not in this repo and were not read, so no coefficient, gate value or block length is
-recorded anywhere in the design. Building on remembered ones would be unverifiable. What the spike
-produced instead is an **acceptance target** measured from FFmpeg's `ebur128` — the K-weighting response
-curve, a 1 kHz calibration anchor (stereo −20 dBFS reads −20.0 LUFS, mono reads −23.0), a gating fixture,
-and rate-invariance from 44.1 to 192 kHz — plus the oracle to check against. Obtaining the constants is
-task 1, not a detail.
+The blocking unknown is gone. BS.1770-5 (11/2023), R 128 v5.0, Tech 3341 v4, Tech 3342 v4 and Report
+BS.2217-2 were obtained and read, and every constant now sits in the spike's **Part A** with its document,
+revision and section. Part B keeps the FFmpeg measurements separate; nothing is mixed.
 
-- **Mono and stereo only.** Measured: stereo reads exactly 3.01 dB above mono for the same signal, so the
-  weighting follows from the channel count. Beyond stereo the standard weights by channel *position* and
-  the pipeline has no layout — `PCMStreamDescription` carries none and the property reader deliberately
-  never infers it. So other configurations get **no value**, not a guessed one.
-- **Integrated alone.** Momentary and short-term are meter readings; putting one in a static report means
-  choosing a reduction, and that is a product decision. LRA depends on short-term.
-- **The domain stores LUFS**, unlike true peak's linear — here the normative quantity *is* the
-  logarithmic one.
-- **Affordable**: the fold measures ≈0.14 s on ten minutes of stereo, about half the waveform's, on a
-  read that already happens.
-- **Left open on purpose**: what digital silence reports. The reference returns −70.0 LUFS for both
-  silence and a 300 ms file, which are two different situations; the too-short case is *not computable*,
-  and silence needs the standard's definition of the absolute gate before it is answered.
+The finding that changed the shape of the feature is **not** a constant. **BS.1770-5 publishes filter
+coefficients for 48 kHz only** and asks other rates merely to *match that frequency response* — no
+prototype, no per-rate table, no transform, no tolerance. So the compliance claim has **two tiers**: exact
+at 48 kHz, a demonstrated equivalence everywhere else against a derivation we choose. That is weaker than
+what most tools assert, it is what the text supports, and it is now what the measurement's methodology has
+to carry so the two never look alike on the page.
 
-ADR-0022 is `Proposed`. Nothing is implemented.
+- **Mono and stereo only, and now with a proof rather than a caution.** Three channels is the
+  counterexample: L/C/R would all weigh 1.0, but the file could carry an **LFE the standard excludes
+  entirely**, and getting that wrong moves the result by more than the ±0.1 LUFS the standards tolerate.
+- **Silence is settled, and it is an absence.** A silent block's loudness is −∞, so nothing passes the
+  absolute gate and the definition divides by zero; BS.2217-2 expects "lowest resolvable value or
+  −infinity" and declines to name −70. **−70 is the gate, never a result.** Too-short is an absence for a
+  different reason — no block exists at all — and the boundary is exact: 400 ms measures, 399 ms does not.
+- **The acceptance targets are published now, not observed.** Tech 3341's tests 1–5 and its §2.9
+  calibration are pure tones with published expected values at ±0.1 LUFS; #3 and #4 are the relative- and
+  absolute-gate discriminators. The spike's own fixtures are demoted to corroboration.
+- **The oracle is qualified**: FFmpeg 8.1.2 passes those same published tests within tolerance. It is
+  still absent from CI, so its suite stays local evidence.
+- **Exact O(1) memory is impossible**, not merely awkward — the relative gate depends on the whole
+  programme. One energy per block, ≈288 kB/hour, and the histogram shortcut is rejected.
 
-**Next step:** obtain BS.1770 and R128 and complete task group 1. Everything else waits on it.
+ADR-0022 stays `Proposed`: the constants half of its promotion condition is discharged, the
+implementation half is not. Nothing is implemented.
+
+**Next step:** task group 2 — the `LoudnessAccumulator`, starting from the pseudocode in design §6. The
+first thing that should exist is the published-target suite (5.1/5.2), so the accumulator has something
+real to fail against from its first commit.
+
+**Open on purpose, and only these two:** the numeric tolerance for "the same frequency response" away
+from 48 kHz, and the oracle comparison tolerance on real files. Both are picked from measurement once an
+implementation exists; choosing either now would be picking a number to be right about.
 
 **Minor follow-up, not a thread:** `ImportFlowComparisonTests` has one `Task.yield()` that was never
 audited in depth; same shape as the ones above, no failure ever attributed to it.
@@ -54,4 +65,4 @@ audited in depth; same shape as the ones above, no failure ever attributed to it
 traversal gap shared with ADR-0015). Neither was touched this session.
 
 ---
-_Last touched: 2026-08-17. Overwrite freely; empty is fine._
+_Last touched: 2026-08-18. Overwrite freely; empty is fine._
