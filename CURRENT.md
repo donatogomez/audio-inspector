@@ -16,33 +16,34 @@
 >   session protocol in `CLAUDE.md`).
 
 ---
-**Focus:** nothing is in flight. The three properties below are integrated; the open threads are named
-at the end.
+**Focus: designing `add-loudness-measurement` — integrated loudness (LUFS-I), investigation done, no
+production code written.**
 
-**An inspection reads a file's samples once.** One shared pass decodes the file and hands the same
-chunks to the waveform, the spectrogram, the signal level metrics and the true peak, each keeping its
-own accumulation, its own failure and its own reported outcome. The report is still produced from
-metadata alone and emitted before any sample is read. The envelope is **identical** to the one the
-waveform's own read produced — exactly, for every container measured, including a lossy one — and no
-domain type, port or reduction rule changed to get there.
+The decisive finding is what the investigation **could not** establish: the normative constants of
+BS.1770 / R128 are not in this repo and were not read, so no coefficient, gate value or block length is
+recorded anywhere in the design. Building on remembered ones would be unverifiable. What the spike
+produced instead is an **acceptance target** measured from FFmpeg's `ebur128` — the K-weighting response
+curve, a 1 kHz calibration anchor (stereo −20 dBFS reads −20.0 LUFS, mono reads −23.0), a gating fixture,
+and rate-invariance from 44.1 to 192 kHz — plus the oracle to check against. Obtaining the constants is
+task 1, not a detail.
 
-A consumer's failure stays its own and the read outlives it; a producer's failure ends every unfinished
-consumer, each on its own terms; cancellation is global; an absence stays distinct from a failure; and
-nothing partial escapes. Measured on ten minutes of stereo, a compressed inspection is 15–27 % faster
-and memory does not grow with duration.
+- **Mono and stereo only.** Measured: stereo reads exactly 3.01 dB above mono for the same signal, so the
+  weighting follows from the channel count. Beyond stereo the standard weights by channel *position* and
+  the pipeline has no layout — `PCMStreamDescription` carries none and the property reader deliberately
+  never infers it. So other configurations get **no value**, not a guessed one.
+- **Integrated alone.** Momentary and short-term are meter readings; putting one in a static report means
+  choosing a reduction, and that is a product decision. LRA depends on short-term.
+- **The domain stores LUFS**, unlike true peak's linear — here the normative quantity *is* the
+  logarithmic one.
+- **Affordable**: the fold measures ≈0.14 s on ten minutes of stereo, about half the waveform's, on a
+  read that already happens.
+- **Left open on purpose**: what digital silence reports. The reference returns −70.0 LUFS for both
+  silence and a 300 ms file, which are two different situations; the too-short case is *not computable*,
+  and silence needs the standard's definition of the absolute gate before it is answered.
 
-**The known consequence:** the waveform now becomes visible **0.8–1.3 s later**, because it settles when
-the one read finishes rather than after a read of its own. The report is unaffected at ~1–2 ms, no
-specification requires the waveform before the other analyses, and progressive delivery inside the
-shared pass was deliberately not designed — it would reopen a callback contract ADR-0020 closed, and
-that is a product judgement. Recorded in ADR-0021, which is `Accepted`.
+ADR-0022 is `Proposed`. Nothing is implemented.
 
-**`AVFoundationWaveformGenerator` survives with no production consumer, on purpose**: it is the
-independent implementation the equivalence tests compare against, and a source-level gate fails if any
-production target so much as names a waveform-reading port.
-
-**Also integrated, so not threads:** `SignalLevelMetrics` cannot publish a value that is not a number,
-and the flow-state test suites synchronise on a happens-before instead of a `Task.yield()`.
+**Next step:** obtain BS.1770 and R128 and complete task group 1. Everything else waits on it.
 
 **Minor follow-up, not a thread:** `ImportFlowComparisonTests` has one `Task.yield()` that was never
 audited in depth; same shape as the ones above, no failure ever attributed to it.
