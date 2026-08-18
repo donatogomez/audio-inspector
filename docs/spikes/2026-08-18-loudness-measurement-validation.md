@@ -548,6 +548,12 @@ For comparison, measured on this machine during `share-waveform-pcm-read`: the w
 would join**, and opens no second read. Block bookkeeping and the gating passes are still unmeasured; A6
 and B9 now bound what they can cost, and it is per-block rather than per-sample.
 
+> **Superseded by the implementation.** This projection assumed `vDSP_biquad`, and the sentence above it —
+> "cost does not depend on them" — was right about the *coefficients* and wrong about the *primitive*.
+> Accelerate's biquad turned out not to be chunk-exact, so production runs a scalar recurrence instead:
+> the measured fold is **0.243 s**, and the gating pass is 0.0001 s. See ADR-0022 §14 and design §8. The
+> 0.14 s above is kept as what the spike actually measured, not as what the feature costs.
+
 ## B9. Streaming state — what A6 actually requires
 
 Derived from Part A, not measured, and stated here because it is the bridge from methodology to design.

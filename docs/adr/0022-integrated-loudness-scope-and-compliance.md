@@ -128,9 +128,13 @@ The reading settled the fourth and reshaped the first. The decisive discovery is
    exists. One type holding both would invite exactly the confusion this product exists to avoid.
 
 10. **It is a consumer of the existing shared read**, the fifth, at the price the fourth paid: one field,
-    one accumulator, one line in each composition method. **No second read**, no new abstraction. Measured
-    cost of the fold: **≈0.14 s** on ten minutes of stereo — roughly half the waveform's, and 7–12 % of the
-    pass it joins.
+    one accumulator, one line in each composition method. **No second read**, no new abstraction.
+
+    **Cost, now measured on the implementation rather than projected**: the fold is **0.243 s** over ten
+    minutes of stereo in Release, and the gating pass at the end is 0.0001 s. The spike projected 0.14 s
+    from Accelerate's biquad; the implementation is **1.7× that**, and the whole difference is the price
+    of decision 14 below. It remains under the waveform's own 0.30 s fold and comfortably affordable on a
+    read that already happens — but the earlier figure is superseded, not merely refined.
 
 11. **Per-block energies are retained; an exact O(1) implementation is not attempted, because none
     exists.** The relative gate is derived from the whole programme, so whether a block survives eq. (7)
@@ -162,6 +166,21 @@ The reading settled the fourth and reshaped the first. The decisive discovery is
     five times inside the published tolerance — and one that bounds it: **the oracle's own
     rate-invariance is 0.03 LU, not zero**, so no tighter agreement may be claimed against it across
     sample rates.
+
+14. **Chunk independence is exact, and it cost the fast primitive.** `vDSP_biquadD` was implemented first
+    and rejected on measurement: its output changed in the last two or three significant digits with the
+    chunk size it was handed, because how it groups an IIR's work depends on the length of the run. A
+    scalar transposed-direct-form-II recurrence has no such grouping. Every other analysis in this package
+    is chunk-independent *exactly*, and a loudness figure that moved with the decoder's buffer size would
+    be a reproducibility defect at any magnitude — so the slower, exact route is the one that ships, and
+    the ~0.1 s it costs is recorded rather than hidden.
+
+15. **`Double` throughout, decided by measurement and not inherited.** `Float` and `Double` filter state
+    were both implemented and compared over the published vectors: they differ by at most **1.4 × 10⁻⁵
+    LU**, both are chunk-exact, and both cost 0.469 s in the sequential form. `Float` buys nothing
+    measurable, so the wider type keeps the headroom for free. This is deliberately *not* the answer
+    `TruePeakAccumulator` reached for its own arithmetic, and the difference is that a maximum accumulates
+    no error while an IIR and an energy sum both can.
 
 ## Deliberately left open
 
