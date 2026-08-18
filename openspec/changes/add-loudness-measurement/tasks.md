@@ -5,9 +5,13 @@ The investigation is done and lives in `docs/spikes/2026-08-18-loudness-measurem
 resolve the normative constants. **It is now closed**: the standards were obtained and read, and every
 constant is sourced. Nothing below may be built on a remembered number.
 
-**Group 5 is closed too, and deliberately out of order.** The official vectors and the oracle were built
-*before* any production, so the targets could not be fitted to whatever gets written. Groups 2–4 and 6–8
-are the implementation, and none of it exists yet.
+**Group 5 was closed out of order, and deliberately.** The official vectors and the oracle were built
+*before* any production, so the targets could not be fitted to whatever got written. They were not
+touched afterwards.
+
+**Group 2 is closed at 48 kHz** and group 4's measurements with it. Every other sample rate is task 4.4
+and nothing pretends otherwise: the accumulator refuses them rather than measuring them with the wrong
+filter. Groups 3 and 6–9 remain.
 
 ## 1. The constants, from the standard rather than from memory — **CLOSED**
 
@@ -50,26 +54,37 @@ are the implementation, and none of it exists yet.
       Tests 7–8 are authentic programme segments — usable locally, **never committed**. BS.2217-2's WAVs
       were not obtained; the Report describes them.
 
-## 2. The accumulator
+## 2. The accumulator — **CLOSED at 48 kHz**; every other rate is task 4.4
 
-- [ ] 2.1 `LoudnessAccumulator` in `AudioInspectorAnalysis`, taking `PCMChunk` like its three siblings,
-      with per-channel filter state and **absolute** block boundaries carried across chunks.
-- [ ] 2.2 Filter with `vDSP_biquad` (measured at 0.117 s for two sections over two channels of ten-minute
-      stereo). Its delay state is what makes chunked streaming correct. Coefficients at 48 kHz are the
-      published Table 1 / Table 2 values; other rates come from the derivation of 1.3.
-- [ ] 2.3 Accumulate energy in **100 ms sub-blocks** and form each 400 ms block from the last four, so
+- [x] 2.1 `LoudnessAccumulator` in `AudioInspectorAnalysis`, taking `PCMChunk` like its three siblings,
+      with per-channel filter state and **absolute** block boundaries carried across chunks. It is
+      **48 kHz mono/stereo only**, and both refusals are the failable initialiser its siblings already
+      use. It is deliberately **not `public`** and returns a bare LUFS `Double?`: the shape that crosses
+      the module boundary belongs to group 3's domain type, and committing to this one first would mean
+      changing a published signature later.
+- [x] 2.2 ~~Filter with `vDSP_biquad`.~~ **Implemented and rejected on measurement**: its output changed
+      in the last two or three significant digits with the chunk size it was handed
+      (−23.385524041147569 at one frame per chunk against −23.385524041147661 whole-file), because how it
+      groups an IIR's work depends on the length of the run. Replaced by a scalar transposed-direct-form-II
+      recurrence, which has no grouping to vary and is exact. The 48 kHz coefficients are the published
+      Table 1 / Table 2 values, transcribed; other rates remain task 4.4.
+- [x] 2.3 Accumulate energy in **100 ms sub-blocks** and form each 400 ms block from the last four, so
       that **no samples are buffered**. Blocks start at frame 0; the trailing incomplete block is
       discarded; one valid block requires **T ≥ 400 ms**.
-- [ ] 2.4 Gate in two passes exactly as design §6: absolute at **−70 LKFS** on the channel-weighted block
+- [x] 2.4 Gate in two passes exactly as design §6: absolute at **−70 LKFS** on the channel-weighted block
       loudness with a **strict** inequality, then a relative threshold **10 LU** below the absolutely-
       gated loudness, with **both** conditions surviving into the final set. Means are over **energies**,
       converted afterwards — never a mean of dB values. Memory stays a function of the **block count**.
-- [ ] 2.5 `finish()` returns optional, like its siblings, so an unmeasurable file becomes an outcome
+- [x] 2.5 `finish()` returns optional, like its siblings, so an unmeasurable file becomes an outcome
       rather than a fabricated number. **Both undefined cases return no value**: an empty gated set
       (silence) and an empty block set (shorter than 400 ms).
-- [ ] 2.6 Channel weighting **G = 1.0** for mono and for both stereo channels (BS.1770-5 Table 3), from
+- [x] 2.6 Channel weighting **G = 1.0** for mono and for both stereo channels (BS.1770-5 Table 3), from
       the channel count alone. **Three or more channels report no value** — the count cannot exclude an
       LFE, which the standard removes from the measurement entirely.
+- [x] 2.7 Expose the **derived relative threshold**, because a negative control showed the reading alone
+      does not prove the absolute gate ran: with the gate removed, Tech 3341 tests 3 and 4 still produce
+      identical values, since the relative gate happens to exclude the same blocks by itself. The
+      threshold is where the difference shows, and FFmpeg reports the same quantity.
 
 ## 3. The domain type
 
@@ -85,13 +100,18 @@ are the implementation, and none of it exists yet.
 
 ## 4. Numbers, decided by measurement
 
-- [ ] 4.1 Compare `Float` against `Double` **filter state** over a ten-minute file against the published
-      targets. Do not inherit signal levels' or true peak's answer; an IIR filter accumulates error
-      differently from a sum. Record the result either way.
-- [ ] 4.2 Energy accumulation in `Double` (measured 0.028 s), for the reason signal levels needed it.
-- [ ] 4.3 **Chunk independence, exact**, at 1, 3, 127, 512, 4 096, 65 536 and whole-file. A tolerance
-      here would mean the filter state or the block boundaries are not carried correctly — treat one as
-      evidence for `Double` state, not as a reason to widen the bound.
+- [x] 4.1 Compare `Float` against `Double` **filter state** over a ten-minute file against the published
+      targets. **Measured**: both widths implemented, readings differ by at most **1.4 × 10⁻⁵ LU**, both
+      chunk-exact, and both cost **0.469 s** — the loop is bound by the recurrence's latency, not by the
+      width. `Float` buys nothing, so `Double` keeps the headroom for free. Not the answer true peak
+      reached, and the difference is that a maximum accumulates no error while an IIR does.
+- [x] 4.2 Energy accumulation in `Double`, for the reason signal levels needed it — and accumulated
+      **into the running total** in index order rather than as per-piece partial sums, which is what makes
+      the reduction itself chunk-independent.
+- [x] 4.3 **Chunk independence, exact**, at 1, 3, 127, 512, 4 096, 65 536 and whole-file. Bit-identical,
+      not within a tolerance. This is the assertion that made `vDSP_biquadD` unusable (2.2). The two
+      published gating vectors are 80 and 100 seconds long, so they are covered from 512 upwards and
+      shapes carrying the same structure cover 1 and 3.
 - [ ] 4.4 Fix the **tolerance for "the same frequency response"** at rates other than 48 kHz, from
       measurement, and record it with the method. ADR-0022 leaves it open deliberately: the standard
       states none, and choosing one before the derivation exists is picking a number to be right about.
@@ -136,6 +156,12 @@ fitted to it. Nothing in this group compares production against anything, becaus
       and by the test that should have caught it.
 
 ## 6. Correctness of the accumulator, against the vectors already fixed
+
+**Evidence already exists for most of this at 48 kHz and is deliberately not ticked**, because the group
+is written for the finished accumulator and 6.4 cannot be satisfied until the per-rate derivation lands.
+What passes today, in "Analysis — integrated loudness (48 kHz)" and the oracle suite: every published
+vector within the published ±0.1 (worst deviation **0.0213 LU**, on test 5); both BS.1770-5 anchors to
+**0.0003 LU**; agreement with FFmpeg to **0.0071 LU**; the undefined cases; and the negative controls.
 
 - [ ] 6.1 Reproduce **Tech 3341 §2.9 and tests 1–5** within the published ±0.1 — the same vectors group 5
       fixed, now measured against production instead of against the oracle.

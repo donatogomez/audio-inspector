@@ -71,11 +71,19 @@ and the measured result must be rate-invariant across 44.1/48/88.2/96/192 kHz. P
 rate-adapting implementation is achievable; it does **not** show ours will match FFmpeg's, which is why
 the sweep is a test and not an assumption.
 
-**`vDSP_biquad` is the implementation route**, measured at 0.117 s for two cascaded sections over two
-channels of ten-minute audio. It carries its own delay state, which is exactly what a chunked stream
-needs. `AVAudioUnitEQ` and `AVAudioConverter` were considered and rejected: both live in Media, both
-would drag a media framework into a DSP decision, and neither exposes coefficients we could record with
-the measurement.
+**`vDSP_biquad` was the intended route and was rejected once implemented.** It carries its own delay
+state, which is what a chunked stream needs, and the spike measured it at 0.117 s over ten minutes of
+stereo — but its output **changed with the chunk size it was handed**, in the last two or three
+significant digits (−23.385524041147569 at one frame per chunk against −23.385524041147661 whole-file),
+because how it groups an IIR's work depends on the length of the run. Every other analysis in this
+package is chunk-independent *exactly*, and a loudness figure that moved with the decoder's buffer size
+would be a reproducibility defect at any magnitude.
+
+**The route is a scalar transposed-direct-form-II recurrence**, which has no grouping to vary: each
+output depends on the two before it, in index order, whatever the caller's buffering. It costs more —
+see §8 — and it is exact. `AVAudioUnitEQ` and `AVAudioConverter` were considered and rejected before
+either: both live in Media, both would drag a media framework into a DSP decision, and neither exposes
+coefficients we could record with the measurement.
 
 ## 4. Channel layout — the hard constraint, now with a proof
 
@@ -178,11 +186,19 @@ overflow in `Float`; true peak reconstructs in `Float`. Loudness has a third sha
 where `Float` state can accumulate error over millions of samples, followed by an energy sum that has
 the same overflow exposure signal levels had.
 
-**Starting position, to be confirmed by measurement, not assumed**: filter in `Float` via `vDSP_biquad`
-(measured 0.117 s), widen to `Double` before squaring and accumulating (measured 0.028 s). Task group 4
-measures `Float` against `Double` filter state on a long file against the published targets and picks
-with numbers. If `Float` state drifts measurably, the filter moves to `Double` and the cost is
-re-measured.
+**Decided by measurement, and the answer is `Double` throughout.** Both widths were implemented over the
+published vectors and compared: the readings differ by at most **1.4 × 10⁻⁵ LU**, both are chunk-exact,
+and both cost **0.469 s** over ten minutes of stereo — the loop is bound by the recurrence's latency, not
+by the width of its arithmetic. `Float` therefore buys nothing measurable, and `Double` keeps the
+headroom, so the filter, its state and the energy sum are all `Double`. Samples arrive as `Float` and are
+widened one at a time as they enter the recurrence.
+
+**Cost, measured in Release over ten minutes of stereo**: the fold is **0.243 s** and `finish()` is
+0.0001 s. That is **1.7× the spike's 0.14 s projection**, and the difference is entirely the scalar
+recurrence bought in §3 — Accelerate's blocked biquad is faster and not chunk-exact. Two channels are
+advanced **together** rather than one after another, because they are independent dependency chains and
+interleaving them lets both be in flight: **0.243 s against 0.455 s**, with the per-channel arithmetic
+unchanged and the result bit-identical.
 
 **No clamp anywhere.** N1's loudness path contains no limit or saturation step; its only attenuation is a
 12.04 dB integer-headroom step in the *true-peak* Annex, which that text itself calls unnecessary in
