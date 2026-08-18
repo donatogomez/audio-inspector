@@ -61,6 +61,12 @@ The reading settled the fourth and reshaped the first. The decisive discovery is
    - **at every other rate** — the coefficients are **ours**, derived to satisfy a normative *property*.
      The claim is conformance of a derivation we chose, demonstrated by measurement.
 
+   **What may be said, now that the derivation exists and has been measured**: *integrated loudness per
+   ITU-R BS.1770-5 Annex 1; at 48 kHz the published coefficients; at 44.1, 88.2, 96 and 192 kHz a
+   weighting derived to reproduce that response, measured within 0.0077 dB.* **What may never be said**:
+   that BS.1770 publishes coefficients for any rate other than 48 kHz, or that a derived measurement is
+   "normative" or "certified" at that rate.
+
    **The derivation is a decision of this project, recorded here**: recover an analogue prototype from
    the published 48 kHz coefficients and re-discretise it at the target rate, rather than resampling the
    audio to 48 kHz. Resampling was rejected because it inserts a converter into the measurement path,
@@ -197,12 +203,43 @@ The reading settled the fourth and reshaped the first. The decisive discovery is
     `TruePeakAccumulator` reached for its own arithmetic, and the difference is that a maximum accumulates
     no error while an IIR and an energy sum both can.
 
+17. **The per-rate derivation is a per-stage prewarped bilinear round-trip, and the numbers behind that
+    choice are recorded.** Recover the analogue section each published one is the bilinear transform of,
+    prewarped at **that section's own natural frequency** — derived from the section, not chosen — then
+    re-discretise at the target rate. Measured against the alternatives (spike Part D): no prewarp gives
+    0.0157 dB, one shared frequency gives 0.0521 dB, and a numerical fit gives 0.00736 dB — a **4.6 %**
+    improvement bought with two magic numbers that would need re-deriving whenever anything changed. The
+    chosen construction gives **0.0077 dB** worst case with a one-line definition. Resampling to 48 kHz
+    stays rejected (decision 3), and offline tables are rejected as a second source that can drift from
+    the published one: the coefficients are built at construction, in half a microsecond.
+
+18. **48 kHz never goes through the derivation.** The round-trip reproduces the published response to
+    0.000000 dB but **not** the coefficients bit for bit — 4.4 × 10⁻¹⁶ on stage 1 — and "the published
+    numbers ran" should mean exactly that. So the published rate uses the published table literally, and
+    it is the only rate whose weighting identity is `published`.
+
+19. **The response tolerance is 0.02 dB, and it was chosen after measuring rather than before.**
+    BS.1770-5 states none. It sits five times inside the publishers' ±0.1 LUFS, under FFmpeg's own 0.03 LU
+    drift across the same rates, and leaves a factor of 2.6 over the 0.0077 dB actually produced. It is
+    deliberately **not** set at the observed error, which would test nothing but the day it was taken.
+
+20. **Derived rates carry their own weighting identity**, `itu_r_bs1770_5_48k_prototype_rediscretised_v1`.
+    It names the **method** rather than the goal, because two different constructions could both claim to
+    match a response, and changing the construction requires `v2` on the same rule the algorithm identity
+    follows. The algorithm identity is unchanged at every rate: only the filter's provenance moves.
+
+21. **The supported rates are enumerated, not open-ended.** 44.1, 48, 88.2, 96 and 192 kHz, because each
+    is a rate the derivation has been measured at. An unmeasured rate is refused rather than derived for,
+    since deriving would claim a response nobody checked — and a near miss like 48 001 Hz is refused as
+    firmly as an absurd one.
+
+22. **`Double` coefficients, for a measured reason.** Quantising them to `Float` costs 0.0146 dB of
+    response error at 192 kHz — three quarters of the whole budget, on top of the derivation's own
+    0.0077 — against 0.000025 dB at 48 kHz. All remain stable, so this is accuracy rather than safety,
+    and there is no cost to avoiding it.
+
 ## Deliberately left open
 
-- **The numeric tolerance of "the same frequency response"** at rates other than 48 kHz (decision 3).
-  The Recommendation states none, so it is ours to set, and setting it before the derivation exists would
-  be picking a number to be right about. It is fixed by the change's task group, from measurement, and
-  recorded with the method.
 - **The oracle comparison tolerance on real files.** The published compliance tolerance is ±0.1 LUFS and
   the oracle's summary prints one decimal, so a tighter bound requires its three-decimal metadata route.
   A definitive figure waits on an implementation to compare.
