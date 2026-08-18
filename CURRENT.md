@@ -16,40 +16,52 @@
 >   session protocol in `CLAUDE.md`).
 
 ---
-**Focus: `add-loudness-measurement` — integrated loudness (LUFS-I). It is now the fifth consumer of the
-one shared PCM read. Still no UI and no export.**
+**Focus: `add-loudness-measurement` — integrated loudness is now **visible and exportable**. The
+capability runs end to end; what remains is validation, the ADR, and publication.**
 
-An inspection reads the file's samples **once**, and five analyses come out of that pass: waveform,
-spectrogram, signal levels, true peak and integrated loudness. The gate that counts reads still says
-**one**, and it now checks that loudness was actually produced from it rather than merely present.
+An inspection reads the file's samples **once**, five analyses come out of that pass, and the fifth one
+now has a surface and a wire form. Nothing about the other four moved: the waveform, the spectrogram,
+the signal levels, the true peak and the report itself are byte-identical with and without it.
 
-**Loudness is the first consumer whose accumulator declines perfectly valid streams**, and that shaped
-the wiring. An unsupported sample rate or more than two channels leaves it `unavailable` — an
-**absence**, on the precedent the waveform's own already set — while the other four produce complete
-models. Nothing resamples, nothing guesses a layout, and nothing fails the shared read to avoid an
-absence.
+**On screen** it is a section of its own, between true peak and the spectrogram — a programme
+measurement whose methodology has to travel beside it, and a row had nowhere to put one. One value, one
+decimal, `LUFS`, signed, never clamped and never floored. Absence is a sentence that **names no single
+cause**, because the state does not carry one and the four causes are honestly a disjunction. **No
+standard is named on screen at all**: "BS.1770" beside a number reads as certification whatever sentence
+surrounds it, so the methodology is stated in plain words and the full identity travels on the wire.
 
-It also has **no reachable failure of its own**, audited rather than assumed: every way it ends without
-a value is an absence, and the one genuine failure path — a non-finite loudness — cannot be reached from
-`PCMChunk`'s finite `Float`s. Recorded as a limitation, as signal levels' own `nil` already is.
+**The two weighting identities read identically on screen and differ in the JSON**, and that asymmetry
+was the turn's one real design question. The derivation exists to reproduce the published response and
+the rate-invariance is demonstrated, so the provenance does not change how the number is read — while a
+caption that varied by sample rate would suggest the two numbers mean different things. It is an audit
+fact, so it lives where a consumer can act on it.
 
-**The "no second read" claim is now measured end to end.** Adding it takes the shared pass from 1.269 s
-to 1.524 s at 48 kHz over ten minutes of stereo — a delta of **0.255 s** against its own 0.236 s in
-isolation, so the increase *is* the DSP. The proportion holds at every rate, which an extra decode would
-not. Its share is 11–17 % by container against a projected 7–12 %: over at the cheap end, inside it for
-FLAC and AAC.
+**On the wire** it is `measurements.integratedLoudness`, additive, `schemaVersion` still **1**. The key
+names the **quantity, not the family** — a `loudness` object carrying one `method` would imply that
+method covered momentary, short-term and LRA, which this change deliberately does not ship. `value` is
+the unrounded LUFS `Double`, which is the *opposite* of true peak's linear rule and deliberately so.
+Absence is the key omitted, never `null`, and no cause of an absence survives to the document.
 
-`SourceInspectionOutcome.inspected` now carries **five** labelled payloads. The note that preceded it
-warned a fifth would be the uncomfortable one, and it stands — the container refactor is **recorded
-debt** and belongs to whoever adds a sixth, deliberately not done here so one change would not hide
-inside another.
+**The real path is proved at three rates.** A real file drives the real decode through the flow, the
+composition root's translation and the export, at 44.1, 48 and 96 kHz — and the exported number is the
+accumulator's own, with the weighting that actually ran rather than one inferred from a rate the mapper
+never sees. Ten negative controls (five presentation, five export) were applied and reverted.
 
-ADR-0022 stays `Proposed`. Groups 1–5 and 7 closed; group 6 keeps its cross-container oracle comparison
+**New recorded debt:** the export chain now takes a **third** positional optional. Its own note called
+that the moment to introduce a container; the container was not built here, because doing it while
+wiring a measurement would hide one change inside another — the same reasoning
+`SourceInspectionOutcome` applied to its fifth payload. It belongs to whoever adds the fourth.
+
+ADR-0022 stays `Proposed`, now recording how this is presented and what leaves on the wire. Groups 1–5,
+7 and 8 closed; **group 6 is the only implementation work left** — its cross-container oracle comparison
 and production negative controls.
 
-**Next step:** group 8 — the surface. One presentation row, "Integrated loudness", one decimal, LUFS,
-methodology beside it, no per-channel row, absence in the existing not-computable phrasing, and **no
-verdict of any kind**. Then 8.4, the additive export field with `schemaVersion` still 1.
+**Next step:** group 6, then 9.1's gates and the manual validation battery, then ADR-0022's promotion.
+Nothing is pushed and no PR exists.
+
+**Known, introduced lint warning:** `ReportJSONDTO.swift` is now 415 lines against SwiftLint's 400.
+The file was clean before; the alternatives are splitting the wire DTOs across files or cutting
+documentation, and neither was taken unilaterally. SwiftLint is not one of the four gates.
 
 **Minor follow-up, not a thread:** `ImportFlowComparisonTests` has one `Task.yield()` that was never
 audited in depth; same shape as the ones above, no failure ever attributed to it.
