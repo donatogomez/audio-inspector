@@ -179,3 +179,20 @@ public struct LoudnessMeasurement: Sendable, Equatable {
         self.method = method
     }
 }
+
+public extension LoudnessWeightingIdentifier {
+    /// Coefficients this project derived, to reproduce at another sample rate the response the published
+    /// 48 kHz section provides.
+    ///
+    /// The construction: recover the analogue section each published one is the bilinear transform of,
+    /// then re-discretise it at the target rate, prewarping each section at its own natural frequency.
+    /// **BS.1770-5 publishes none of that** — not the prototype, not the transform, not a tolerance — so
+    /// this identity names *our* method, and the name says the method rather than the goal, because two
+    /// different constructions could both claim to match a response.
+    ///
+    /// **Changing the construction requires `v2`**, on the same rule the algorithm identity follows: the
+    /// same identity must imply the same number.
+    static let derivedFrom48kHz = LoudnessWeightingIdentifier(
+        rawValue: "itu_r_bs1770_5_48k_prototype_rediscretised_v1"
+    )
+}

@@ -15,13 +15,13 @@ import AudioInspectorDomain
 /// would make the same file read differently across runs, which this project's reproducibility principle
 /// rules out (ADR-0006's pattern for engine-versioned constants).
 ///
-/// ## 48 kHz only, and mono or stereo only — by construction, not by a runtime check
+/// ## Two tiers of sample rate, and the value says which one it got
 ///
 /// BS.1770-5 publishes filter coefficients **for 48 kHz alone** and asks other rates merely to *match
-/// that frequency response*, without publishing a prototype, a per-rate table or a transform. Deriving
-/// coefficients for another rate is therefore this project's own work and its own claim, and it belongs
-/// to a later task (ADR-0022 §3). Until then this type **refuses** any other rate rather than measuring
-/// it with the wrong filter.
+/// that frequency response*, without publishing a prototype, a per-rate table or a transform. So at
+/// 48 kHz the published coefficients run literally, and at every other rate `KWeighting` derives them —
+/// a construction that is this project's own work and its own claim (ADR-0022 §3). The two are not
+/// presented as the same thing: the `weighting` identity on the measurement says which ran.
 ///
 /// Channels are refused past two for a different reason: BS.1770-5 Table 3 weights a channel by its
 /// **position**, never by its index, and Annex 3 generalises that to azimuth and elevation. One channel
@@ -34,14 +34,11 @@ import AudioInspectorDomain
 /// Both refusals are the failable initialiser, which is the convention `TruePeakAccumulator` and
 /// `SignalLevelMetricsAccumulator` already use for a stream they cannot fold.
 ///
-/// ## Not yet the domain's shape
+/// ## Internal, deliberately
 ///
-/// `finish()` returns a bare `Double?` of LUFS because `LoudnessMeasurement` does not exist yet — it is
-/// task group 3, and building it here to give this method a nicer return type would be inventing the
-/// domain model from the accumulator's convenience rather than from the domain's needs. For the same
-/// reason **nothing in this file is `public`**: the shape that crosses the module boundary is the domain
-/// type's, and committing to this one first would mean changing a published signature later. Group 3
-/// wraps the scalar; group 7 wires it.
+/// **Nothing in this file is `public`.** The shape that crosses the module boundary is
+/// `LoudnessMeasurement`'s, which `finish()` returns; publishing the accumulator as well would offer a
+/// second entry point to the same measurement with none of the model's guarantees.
 ///
 /// ## One pass, no samples retained, memory in blocks rather than in frames
 ///
@@ -61,8 +58,10 @@ struct LoudnessAccumulator {
 
     // MARK: - Published constants (ITU-R BS.1770-5, Annex 1)
 
-    /// The only rate whose coefficients the Recommendation publishes.
-    static let supportedSampleRate = 48_000.0
+    /// The rates this type measures. 48 kHz is the one the Recommendation publishes coefficients for;
+    /// the rest are served by the derivation in `KWeighting`, and are listed rather than admitted
+    /// open-endedly because each one is a rate the derivation has been measured at.
+    static let supportedSampleRates: Set<Double> = [44_100, 48_000, 88_200, 96_000, 192_000]
 
     /// Gating block duration, *T*<sub>g</sub>. BS.1770-5 Annex 1, after eq. (2): 400 ms, to the nearest
     /// sample.
@@ -85,14 +84,18 @@ struct LoudnessAccumulator {
     /// configuration this type accepts is drawn from those three.
     static let channelWeight = 1.0
 
-    /// The methodology every value this type produces was made with.
+    /// The methodology this instance's values were made with.
     ///
     /// It is stated **here**, by the implementation that actually measured, and nowhere else: a feature
     /// or an export that spelled it out again would be asserting a methodology it did not run, and the
-    /// two spellings would be free to drift. `weighting` is the published 48 kHz set because that is the
-    /// only rate this type accepts; a derivation for other rates is a later task and will carry its own
-    /// identity.
-    static let method = LoudnessMethod(algorithm: .integratedBS1770v1, weighting: .publishedAt48kHz)
+    /// two spellings would be free to drift. Nothing infers it from a sample rate downstream — the
+    /// weighting reports which coefficients it actually used, and this reads that.
+    var method: LoudnessMethod {
+        LoudnessMethod(
+            algorithm: .integratedBS1770v1,
+            weighting: weighting.isPublished ? .publishedAt48kHz : .derivedFrom48kHz
+        )
+    }
 
     // MARK: - Derived sizes
 
@@ -105,6 +108,8 @@ struct LoudnessAccumulator {
     let subBlocksPerBlock: Int
 
     private let channelCount: Int
+    /// The pre-filter this stream's rate calls for. Built once, at construction.
+    let weighting: KWeighting
 
     // MARK: - Mutable state, all confined to one operation
 
@@ -135,8 +140,9 @@ struct LoudnessAccumulator {
     /// Fails on any stream this type cannot measure honestly: a rate other than 48 kHz, a channel count
     /// outside mono/stereo, or a rate whose block does not divide into whole sub-blocks.
     init?(sampleRate: Double, channelCount: Int) {
-        guard sampleRate == Self.supportedSampleRate else { return nil }
+        guard Self.supportedSampleRates.contains(sampleRate) else { return nil }
         guard channelCount >= 1, channelCount <= 2 else { return nil }
+        guard let weighting = KWeighting(sampleRate: sampleRate) else { return nil }
 
         let blocks = Int((Self.blockDuration * sampleRate).rounded())
         let hop = Int((Self.blockDuration * (1 - Self.blockOverlap) * sampleRate).rounded())
@@ -147,6 +153,7 @@ struct LoudnessAccumulator {
         guard hop > 0, blocks == perBlock * hop else { return nil }
 
         self.channelCount = channelCount
+        self.weighting = weighting
         blockFrames = blocks
         hopFrames = hop
         subBlocksPerBlock = perBlock
@@ -224,7 +231,7 @@ struct LoudnessAccumulator {
         // surviving block has a positive energy, so the mean has one too. It would only bite if a
         // pathological input overflowed the energy sum, and then a `nil` is the honest answer.
         return LoudnessMeasurement(
-            integratedLoudness: Self.loudness(of: Self.mean(of: gated)), method: Self.method
+            integratedLoudness: Self.loudness(of: Self.mean(of: gated)), method: method
         )
     }
 
@@ -315,12 +322,16 @@ private extension LoudnessAccumulator {
                 guard let stateBase = state.baseAddress, let energyBase = energies.baseAddress else {
                     return
                 }
+                let stageOne = weighting.stage1
+                let stageTwo = weighting.stage2
                 guard channelCount == 2 else {
                     chunk.channels[0].withUnsafeBufferPointer { input in
                         guard let base = input.baseAddress else { return }
                         var energy = energyBase[0]
                         for index in 0 ..< count {
-                            let weighted = KWeighting.apply(Double(base[offset + index]), state: stateBase)
+                            let weighted = KWeighting.apply(
+                                Double(base[offset + index]), stageOne, stageTwo, state: stateBase
+                            )
                             energy += weighted * weighted
                         }
                         energyBase[0] = energy
@@ -337,10 +348,10 @@ private extension LoudnessAccumulator {
                         var secondEnergy = energyBase[1]
                         for index in 0 ..< count {
                             let one = KWeighting.apply(
-                                Double(firstBase[offset + index]), state: firstDelays
+                                Double(firstBase[offset + index]), stageOne, stageTwo, state: firstDelays
                             )
                             let two = KWeighting.apply(
-                                Double(secondBase[offset + index]), state: secondDelays
+                                Double(secondBase[offset + index]), stageOne, stageTwo, state: secondDelays
                             )
                             firstEnergy += one * one
                             secondEnergy += two * two
