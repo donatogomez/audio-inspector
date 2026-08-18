@@ -1,3 +1,4 @@
+import AVFoundation
 import CryptoKit
 import Foundation
 import Testing
@@ -134,10 +135,12 @@ struct EndToEndFlowTests {
                 exporter: JSONReportExporter(generator: fixedGenerator, now: { fixedNow }),
                 chooseDestination: { name in suggestedName = name; return destination }
             )
-            let exportModel = ReportExportModel(action: { report, metrics, peak in
-                await exportCoordinator.export(report, signalLevelMetrics: metrics, truePeak: peak)
+            let exportModel = ReportExportModel(action: { report, metrics, peak, loudness in
+                await exportCoordinator.export(
+                    report, signalLevelMetrics: metrics, truePeak: peak, loudness: loudness
+                )
             })
-            await exportModel.export(report, signalLevelMetrics: nil, truePeak: nil)
+            await exportModel.export(report, signalLevelMetrics: nil, truePeak: nil, loudness: nil)
 
             #expect(exportModel.phase == .succeeded)
             #expect(suggestedName == "fixture-inspection.json")
@@ -230,10 +233,12 @@ struct EndToEndFlowTests {
                     exporter: JSONReportExporter(generator: fixedGenerator, now: { fixedNow }),
                     chooseDestination: { _ in destination }
                 )
-                let exportModel = ReportExportModel(action: { report, metrics, peak in
-                await exportCoordinator.export(report, signalLevelMetrics: metrics, truePeak: peak)
+                let exportModel = ReportExportModel(action: { report, metrics, peak, loudness in
+                await exportCoordinator.export(
+                    report, signalLevelMetrics: metrics, truePeak: peak, loudness: loudness
+                )
             })
-                await exportModel.export(presentation.report, signalLevelMetrics: nil, truePeak: nil)
+                await exportModel.export(presentation.report, signalLevelMetrics: nil, truePeak: nil, loudness: nil)
                 #expect(exportModel.phase == .succeeded)
 
                 return (presentation, try Data(contentsOf: destination))
@@ -296,10 +301,12 @@ struct EndToEndFlowTests {
                     exporter: JSONReportExporter(generator: fixedGenerator, now: { fixedNow }),
                     chooseDestination: { _ in destination }
                 )
-                let exportModel = ReportExportModel(action: { report, metrics, peak in
-                await exportCoordinator.export(report, signalLevelMetrics: metrics, truePeak: peak)
+                let exportModel = ReportExportModel(action: { report, metrics, peak, loudness in
+                await exportCoordinator.export(
+                    report, signalLevelMetrics: metrics, truePeak: peak, loudness: loudness
+                )
             })
-                await exportModel.export(presentation.report, signalLevelMetrics: nil, truePeak: nil)
+                await exportModel.export(presentation.report, signalLevelMetrics: nil, truePeak: nil, loudness: nil)
                 #expect(exportModel.phase == .succeeded)
 
                 return (presentation, try Data(contentsOf: destination))
@@ -382,8 +389,10 @@ struct EndToEndFlowTests {
                 exporter: JSONReportExporter(generator: fixedGenerator, now: { fixedNow }),
                 chooseDestination: { _ in destination }
             )
-            let exportModel = ReportExportModel(action: { report, metrics, peak in
-                await exportCoordinator.export(report, signalLevelMetrics: metrics, truePeak: peak)
+            let exportModel = ReportExportModel(action: { report, metrics, peak, loudness in
+                await exportCoordinator.export(
+                    report, signalLevelMetrics: metrics, truePeak: peak, loudness: loudness
+                )
             })
 
             // The composition root's own translation, `RootView.signalLevelMetricsPresentation(for:)`,
@@ -392,7 +401,7 @@ struct EndToEndFlowTests {
             let toExport = exportableSignalLevelMetrics(
                 RootView.signalLevelMetricsPresentation(for: presentation.signalLevelMetrics)
             )
-            await exportModel.export(presentation.report, signalLevelMetrics: toExport, truePeak: nil)
+            await exportModel.export(presentation.report, signalLevelMetrics: toExport, truePeak: nil, loudness: nil)
             #expect(exportModel.phase == .succeeded)
 
             let json = try JSONDecoder().decode(JSONValue.self, from: Data(contentsOf: destination))
@@ -440,12 +449,14 @@ struct EndToEndFlowTests {
                 exporter: JSONReportExporter(generator: fixedGenerator, now: { fixedNow }),
                 chooseDestination: { _ in destination }
             )
-            let exportModel = ReportExportModel(action: { report, metrics, peak in
-                await exportCoordinator.export(report, signalLevelMetrics: metrics, truePeak: peak)
+            let exportModel = ReportExportModel(action: { report, metrics, peak, loudness in
+                await exportCoordinator.export(
+                    report, signalLevelMetrics: metrics, truePeak: peak, loudness: loudness
+                )
             })
 
             let toExport = exportableTruePeak(RootView.truePeakPresentation(for: presentation.truePeak))
-            await exportModel.export(presentation.report, signalLevelMetrics: nil, truePeak: toExport)
+            await exportModel.export(presentation.report, signalLevelMetrics: nil, truePeak: toExport, loudness: nil)
             #expect(exportModel.phase == .succeeded)
 
             let json = try JSONDecoder().decode(JSONValue.self, from: Data(contentsOf: destination))
@@ -457,6 +468,96 @@ struct EndToEndFlowTests {
             #expect(truePeak["method"]?["filter"]?.string == "polyphase_fir_v1")
             // Linear on the wire: the same number reads as a dBTP figure on screen and must not here.
             #expect(try #require(truePeak["overall"]?.double) > 0)
+        }
+    }
+
+    /// The same walk for **integrated loudness**, parameterised by sample rate — and it is the one
+    /// analysis whose end-to-end test has to be, because the weighting's provenance changes with the
+    /// rate while nothing else does.
+    ///
+    /// 48 kHz is where BS.1770-5's coefficients are published and transcribed; 44.1 kHz and 96 kHz use
+    /// coefficients this project derived to reproduce that response. **The document must say which one
+    /// actually ran**, and it must say it because the measurement carried it — not because the mapper
+    /// inferred it from a sample rate it never sees.
+    ///
+    /// The fixture is a full second, well past the 400 ms a gating block needs, at an amplitude that
+    /// clears the absolute gate: a shorter or quieter file would be `unavailable`, which is a correct
+    /// answer but not the one this test is about.
+    @Test(arguments: [
+        (44_100.0, LoudnessWeightingIdentifier.derivedFrom48kHz),
+        (48_000.0, LoudnessWeightingIdentifier.publishedAt48kHz),
+        (96_000.0, LoudnessWeightingIdentifier.derivedFrom48kHz),
+    ])
+    func theRealLoudnessPathReachesTheExportedDocument(
+        rate: Double, expectedWeighting: LoudnessWeightingIdentifier
+    ) async throws {
+        try await withTemporaryDirectory { directory in
+            let source = directory.appendingPathComponent("loudness-fixture.wav")
+            try writeAudioFixture(
+                AudioFixtureSpec(
+                    name: "loudness-fixture",
+                    format: .wav,
+                    signal: .sine(frequency: 997, amplitude: 0.5),
+                    sampleRate: rate,
+                    channels: 2,
+                    frames: AVAudioFrameCount(rate)
+                ),
+                to: source
+            )
+
+            let inspection = SourceInspectionCoordinator(chooseSource: { source })
+            let flow = ImportFlowModel(action: { onUpdate in await inspection.inspect(onUpdate: onUpdate) })
+            await flow.selectAndInspect()
+
+            guard case let .report(presentation) = flow.state else {
+                Issue.record("expected the flow to end in .report, got \(flow.state)"); return
+            }
+            guard case let .available(measured) = presentation.loudness else {
+                Issue.record("expected an available loudness at \(rate) Hz, got \(presentation.loudness)"); return
+            }
+            // Something real was measured, and the weighting is the one this rate calls for.
+            #expect(measured.integratedLoudness.isFinite)
+            #expect(measured.method.weighting == expectedWeighting)
+            #expect(measured.method.algorithm == .integratedBS1770v1)
+
+            /// The extraction `ReportView.exportableLoudness` performs, reproduced here because that
+            /// computed property is private to the view and SwiftUI's own button is not reachable
+            /// headlessly.
+            func exportableLoudness(_ state: LoudnessPresentation) -> LoudnessMeasurement? {
+                guard case let .measurement(measurement) = state else { return nil }
+                return measurement
+            }
+
+            let destination = directory.appendingPathComponent("out-loudness.json")
+            let exportCoordinator = ReportExportCoordinator(
+                exporter: JSONReportExporter(generator: fixedGenerator, now: { fixedNow }),
+                chooseDestination: { _ in destination }
+            )
+            let exportModel = ReportExportModel(action: { report, metrics, peak, loudness in
+                await exportCoordinator.export(
+                    report, signalLevelMetrics: metrics, truePeak: peak, loudness: loudness
+                )
+            })
+
+            let toExport = exportableLoudness(RootView.loudnessPresentation(for: presentation.loudness))
+            await exportModel.export(
+                presentation.report, signalLevelMetrics: nil, truePeak: nil, loudness: toExport
+            )
+            #expect(exportModel.phase == .succeeded)
+
+            let json = try JSONDecoder().decode(JSONValue.self, from: Data(contentsOf: destination))
+            let exported = try #require(
+                json["measurements"]?["integratedLoudness"], "the loudness never reached the export"
+            )
+            // **Exactly** the accumulator's own number — not a rounded one, and not a converted one.
+            #expect(exported["value"]?.double == measured.integratedLoudness)
+            #expect(exported["method"]?["weighting"]?.string == expectedWeighting.rawValue)
+            #expect(exported["method"]?["algorithm"]?.string == "itu_r_bs1770_5_integrated_v1")
+            // The one decimal belongs to the screen, and the two must not agree by accident.
+            #expect(
+                HumanFormat.loudnessFullScale(measured.integratedLoudness)
+                    == "\(exported["value"]!.double!.formatted(.number.precision(.fractionLength(1)).sign(strategy: .always(includingZero: false)).locale(HumanFormat.locale))) LUFS"
+            )
         }
     }
 

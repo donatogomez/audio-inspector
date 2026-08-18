@@ -26,10 +26,11 @@ struct JSONReportExporter: ReportExporting {
     func export(
         _ report: InspectionReport,
         signalLevelMetrics: SignalLevelMetrics?,
-        truePeak: TruePeakMeasurement?
+        truePeak: TruePeakMeasurement?,
+        loudness: LoudnessMeasurement?
     ) throws -> Data {
         let envelope = InspectionReportMapper.envelope(
-            for: report, signalLevelMetrics: signalLevelMetrics, truePeak: truePeak,
+            for: report, signalLevelMetrics: signalLevelMetrics, truePeak: truePeak, loudness: loudness,
             generatedAt: now(), generator: generator
         )
         return try Self.makeEncoder().encode(envelope)

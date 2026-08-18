@@ -13,14 +13,17 @@ enum InspectionReportMapper {
     /// Builds the full envelope. `generatedAt` (the export instant) and `generator` are supplied by
     /// the exporter — they belong to the envelope, not the domain report.
     ///
-    /// `signalLevelMetrics` is `nil` whenever no measurement is available to export — the caller has
-    /// already collapsed `loading`/`unavailable`/`failed`/`cancelled` to `nil` before this is reached,
-    /// so this mapper only ever sees "a real measurement exists" or "there is nothing to report" and
-    /// never has to decide what a UI-only state would mean on the wire.
+    /// Each measurement is `nil` whenever there is none available to export — the caller has already
+    /// collapsed `loading`/`unavailable`/`failed`/`cancelled` to `nil` before this is reached, so this
+    /// mapper only ever sees "a real measurement exists" or "there is nothing to report" and never has
+    /// to decide what a UI-only state would mean on the wire. That holds for loudness too, whose absence
+    /// has several causes the flow can tell apart and the wire deliberately cannot: **the document
+    /// describes measurements, never why one does not exist.**
     static func envelope(
         for report: InspectionReport,
         signalLevelMetrics: SignalLevelMetrics?,
         truePeak: TruePeakMeasurement?,
+        loudness: LoudnessMeasurement?,
         generatedAt: Date,
         generator: ReportGenerator
     ) -> ReportEnvelopeDTO {
@@ -32,7 +35,7 @@ enum InspectionReportMapper {
             technicalProperties: technicalProperties(from: report),
             warnings: report.warnings.map(warning(from:)),
             inspectionStatus: status(from: report.status),
-            measurements: measurements(from: signalLevelMetrics, truePeak: truePeak)
+            measurements: measurements(from: signalLevelMetrics, truePeak: truePeak, loudness: loudness)
         )
     }
 
@@ -132,12 +135,33 @@ enum InspectionReportMapper {
     /// that one, and neither key is ever present as `null`.
     private static func measurements(
         from metrics: SignalLevelMetrics?,
-        truePeak measurement: TruePeakMeasurement?
+        truePeak measurement: TruePeakMeasurement?,
+        loudness: LoudnessMeasurement?
     ) -> MeasurementsDTO? {
-        guard metrics != nil || measurement != nil else { return nil }
+        guard metrics != nil || measurement != nil || loudness != nil else { return nil }
         return MeasurementsDTO(
             signalLevels: metrics.map(signalLevels(from:)),
-            truePeak: measurement.map(truePeak(from:))
+            truePeak: measurement.map(truePeak(from:)),
+            integratedLoudness: loudness.map(integratedLoudness(from:))
+        )
+    }
+
+    /// **LUFS straight onto the wire, unrounded** — and deliberately not the rule `truePeak` follows.
+    /// That one exports linear amplitude because its decibel form is a presentation of it; here the
+    /// logarithmic quantity is the one the domain stores and the standard defines (ADR-0022 §5), so
+    /// there is nothing to convert. The one decimal the report shows is a display precision applied in
+    /// `FeatureAnalysis`, and it never reaches this layer.
+    ///
+    /// Both identities are read from the measurement's **own** recorded method. Nothing here branches on
+    /// a sample rate to decide which weighting to name — the mapper serialises what the measurement
+    /// carries, and a document that inferred it could describe a methodology that never ran.
+    private static func integratedLoudness(from measurement: LoudnessMeasurement) -> IntegratedLoudnessDTO {
+        IntegratedLoudnessDTO(
+            value: measurement.integratedLoudness,
+            method: LoudnessMethodDTO(
+                algorithm: measurement.method.algorithm.rawValue,
+                weighting: measurement.method.weighting.rawValue
+            )
         )
     }
 

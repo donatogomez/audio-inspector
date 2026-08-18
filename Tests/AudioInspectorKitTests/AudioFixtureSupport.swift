@@ -78,6 +78,13 @@ enum AudioFixtureFormat: CaseIterable {
 
 // MARK: - Signals
 
+/// One constant-amplitude region of a `segmentedSine`, measured in frames so a duration is exact
+/// rather than rounded twice.
+struct AudioFixtureSegment: Equatable {
+    var amplitude: Float
+    var frames: Int
+}
+
 /// The content written into a fixture: a pure function of `(channel, frame)`, so the same
 /// specification always produces the same samples.
 enum AudioFixtureSignal {
@@ -102,6 +109,14 @@ enum AudioFixtureSignal {
     /// than of a filter this package would have to implement and then trust. The total amplitude is
     /// divided between the components, so a dense comb stays inside full scale.
     case bandLimitedTones(highest: Double, spacing: Double, lowest: Double, amplitude: Float)
+    /// One sine at a fixed frequency whose **amplitude** steps at segment boundaries, identical in
+    /// every channel. Frames past the last segment are silent.
+    ///
+    /// The phase is taken from the **absolute** frame index rather than restarted per segment, so the
+    /// tone is continuous and only its envelope changes. That matters for a level-based measurement:
+    /// restarting the phase would inject a step whose broadband energy is not part of the signal the
+    /// segments describe.
+    case segmentedSine(frequency: Double, segments: [AudioFixtureSegment])
 
     /// The components of a `bandLimitedTones` signal, highest first.
     var toneFrequencies: [Double] {
@@ -113,6 +128,42 @@ enum AudioFixtureSignal {
             frequency -= spacing
         }
         return frequencies
+    }
+
+    /// `count` samples of one channel starting at `startFrame`, in one call.
+    ///
+    /// **Exactly equal to calling `sample(channel:frame:sampleRate:)` for each frame** — the arithmetic
+    /// is the same expression, and `AudioFixtureSupportTests` asserts the equality rather than trusting
+    /// this sentence. It exists only because the per-sample entry point costs about **3.8 µs** in an
+    /// unoptimised build (measured: 36.9 s for the 4 800 000 stereo frames of EBU Tech 3341 test 4),
+    /// which is enough to make the loudness suites unusable. The cost is Swift's, not the arithmetic's:
+    /// the enum's associated array is retained and released once per sample, and hoisting it out of the
+    /// loop is the whole optimisation.
+    func samples(channel: Int, from startFrame: Int, count: Int, sampleRate: Double) -> [Float] {
+        guard case let .segmentedSine(frequency, segments) = self else {
+            return (0 ..< count).map {
+                sample(channel: channel, frame: startFrame + $0, sampleRate: sampleRate)
+            }
+        }
+        var output = [Float](repeating: 0, count: count)
+        let end = startFrame + count
+        output.withUnsafeMutableBufferPointer { buffer in
+            var segmentStart = 0
+            for segment in segments {
+                let segmentEnd = segmentStart + segment.frames
+                let lower = max(startFrame, segmentStart)
+                let upper = min(end, segmentEnd)
+                if lower < upper {
+                    let amplitude = segment.amplitude
+                    for frame in lower ..< upper {
+                        buffer[frame - startFrame] = amplitude
+                            * Float(sin(2.0 * Double.pi * frequency * Double(frame) / sampleRate))
+                    }
+                }
+                segmentStart = segmentEnd
+            }
+        }
+        return output
     }
 
     func sample(channel: Int, frame: Int, sampleRate: Double) -> Float {
@@ -134,6 +185,18 @@ enum AudioFixtureSignal {
             ))
         case let .sine(frequency, amplitude):
             amplitude * Float(sin(2.0 * Double.pi * frequency * Double(frame) / sampleRate))
+        case let .segmentedSine(frequency, segments):
+            {
+                var start = 0
+                for segment in segments {
+                    if frame < start + segment.frames {
+                        return segment.amplitude
+                            * Float(sin(2.0 * Double.pi * frequency * Double(frame) / sampleRate))
+                    }
+                    start += segment.frames
+                }
+                return 0
+            }()
         case let .oppositePolarity(frequency, amplitude):
             (channel.isMultiple(of: 2) ? 1 : -1)
                 * amplitude * Float(sin(2.0 * Double.pi * frequency * Double(frame) / sampleRate))

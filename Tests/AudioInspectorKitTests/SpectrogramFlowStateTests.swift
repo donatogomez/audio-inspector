@@ -135,7 +135,7 @@ struct SpectrogramFlowStateTests {
         #expect(shown.waveform == .loading)
         #expect(shown.spectrogram == .loading)
 
-        action.finish(.inspected(action.report, waveform: .unavailable, spectrogram: .unavailable, signalLevelMetrics: .unavailable, truePeak: .unavailable))
+        action.finish(.inspected(action.report, waveform: .unavailable, spectrogram: .unavailable, signalLevelMetrics: .unavailable, truePeak: .unavailable, loudness: .unavailable))
         await running.value
     }
 
@@ -172,7 +172,7 @@ struct SpectrogramFlowStateTests {
         await action.deliver(spectrogram: outcome)
 
         let shown = try #require(presentation(of: model))
-        action.finish(.inspected(action.report, waveform: .unavailable, spectrogram: outcome, signalLevelMetrics: .unavailable, truePeak: .unavailable))
+        action.finish(.inspected(action.report, waveform: .unavailable, spectrogram: outcome, signalLevelMetrics: .unavailable, truePeak: .unavailable, loudness: .unavailable))
         await running.value
         return shown
     }
@@ -192,7 +192,7 @@ struct SpectrogramFlowStateTests {
         #expect(presentation(of: model)?.spectrogram == .loading, "cancellation was rendered as a state")
         #expect(SpectrogramState(.cancelled) == nil, "cancellation has no state to settle into")
 
-        action.finish(.inspected(action.report, waveform: .unavailable, spectrogram: .cancelled, signalLevelMetrics: .unavailable, truePeak: .unavailable))
+        action.finish(.inspected(action.report, waveform: .unavailable, spectrogram: .cancelled, signalLevelMetrics: .unavailable, truePeak: .unavailable, loudness: .unavailable))
         await running.value
     }
 
@@ -214,7 +214,7 @@ struct SpectrogramFlowStateTests {
         #expect(shown.waveform == .available(try envelope()))
         #expect(shown.spectrogram == .loading, "the spectrogram was settled by the waveform's arrival")
 
-        action.finish(.inspected(action.report, waveform: .available(try envelope()), spectrogram: .unavailable, signalLevelMetrics: .unavailable, truePeak: .unavailable))
+        action.finish(.inspected(action.report, waveform: .available(try envelope()), spectrogram: .unavailable, signalLevelMetrics: .unavailable, truePeak: .unavailable, loudness: .unavailable))
         await running.value
     }
 
@@ -232,7 +232,7 @@ struct SpectrogramFlowStateTests {
         #expect(shown.spectrogram == .available(try spectrogram()))
         #expect(shown.waveform == .loading, "the waveform was settled by the spectrogram's arrival")
 
-        action.finish(.inspected(action.report, waveform: .unavailable, spectrogram: .available(try spectrogram()), signalLevelMetrics: .unavailable, truePeak: .unavailable))
+        action.finish(.inspected(action.report, waveform: .unavailable, spectrogram: .available(try spectrogram()), signalLevelMetrics: .unavailable, truePeak: .unavailable, loudness: .unavailable))
         await running.value
     }
 
@@ -256,7 +256,7 @@ struct SpectrogramFlowStateTests {
         action.finish(.inspected(
             action.report, waveform: .available(try envelope()), spectrogram: .failed(message: "no model"),
             signalLevelMetrics: .unavailable, truePeak: .unavailable
-        ))
+        , loudness: .unavailable))
         await running.value
     }
 
@@ -273,7 +273,7 @@ struct SpectrogramFlowStateTests {
 
         // A final outcome that disagrees — as a cancelled one would — must not replace the model
         // already on screen with a fallback.
-        action.finish(.inspected(action.report, waveform: .unavailable, spectrogram: .cancelled, signalLevelMetrics: .unavailable, truePeak: .unavailable))
+        action.finish(.inspected(action.report, waveform: .unavailable, spectrogram: .cancelled, signalLevelMetrics: .unavailable, truePeak: .unavailable, loudness: .unavailable))
         await running.value
 
         #expect(presentation(of: model)?.spectrogram == .available(try spectrogram()))
@@ -304,7 +304,7 @@ struct SpectrogramFlowStateTests {
         // The first operation now finishes, late. Nothing of it may reach the second's presentation.
         await first.deliver(spectrogram: .available(try spectrogram()))
         await first.deliver(waveform: .available(try envelope()))
-        first.finish(.inspected(first.report, waveform: .available(try envelope()), spectrogram: .available(try spectrogram()), signalLevelMetrics: .unavailable, truePeak: .unavailable))
+        first.finish(.inspected(first.report, waveform: .available(try envelope()), spectrogram: .available(try spectrogram()), signalLevelMetrics: .unavailable, truePeak: .unavailable, loudness: .unavailable))
         // The stale operation is awaited to completion, so what follows is asserted against a first
         // operation that is entirely over rather than one that merely had a scheduling hop to finish in.
         await firstRun.value
@@ -314,7 +314,7 @@ struct SpectrogramFlowStateTests {
         #expect(shown.spectrogram == .loading, "a stale spectrogram landed on the current operation")
         #expect(shown.waveform == .loading, "a stale waveform landed on the current operation")
 
-        second.finish(.inspected(second.report, waveform: .unavailable, spectrogram: .unavailable, signalLevelMetrics: .unavailable, truePeak: .unavailable))
+        second.finish(.inspected(second.report, waveform: .unavailable, spectrogram: .unavailable, signalLevelMetrics: .unavailable, truePeak: .unavailable, loudness: .unavailable))
         await secondRun.value
     }
 
@@ -340,7 +340,7 @@ struct SpectrogramFlowStateTests {
         #expect(model.state == .working)
 
         await first.deliverReport()
-        first.finish(.inspected(first.report, waveform: .unavailable, spectrogram: .unavailable, signalLevelMetrics: .unavailable, truePeak: .unavailable))
+        first.finish(.inspected(first.report, waveform: .unavailable, spectrogram: .unavailable, signalLevelMetrics: .unavailable, truePeak: .unavailable, loudness: .unavailable))
         await firstRun.value
         #expect(presentation(of: model)?.report.file.displayName == "first")
     }
@@ -365,9 +365,9 @@ struct SpectrogramFlowStateTests {
         #expect(second.runCount == 1, "the second selection was refused after the report existed")
 
         await second.deliverReport()
-        second.finish(.inspected(second.report, waveform: .unavailable, spectrogram: .unavailable, signalLevelMetrics: .unavailable, truePeak: .unavailable))
+        second.finish(.inspected(second.report, waveform: .unavailable, spectrogram: .unavailable, signalLevelMetrics: .unavailable, truePeak: .unavailable, loudness: .unavailable))
         await secondRun.value
-        first.finish(.inspected(first.report, waveform: .cancelled, spectrogram: .cancelled, signalLevelMetrics: .unavailable, truePeak: .unavailable))
+        first.finish(.inspected(first.report, waveform: .cancelled, spectrogram: .cancelled, signalLevelMetrics: .unavailable, truePeak: .unavailable, loudness: .unavailable))
         await firstRun.value
 
         #expect(presentation(of: model)?.report.file.displayName == "second")

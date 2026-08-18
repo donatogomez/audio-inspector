@@ -184,6 +184,63 @@ public enum TruePeakState: Sendable, Equatable {
     }
 }
 
+/// What producing an integrated loudness actually yielded, once it is over.
+///
+/// The same four outcomes as its siblings, for the same four reasons — and one of them carries more
+/// weight here than anywhere else. **`unavailable` is the answer to two different questions**, and
+/// deliberately only one case:
+///
+/// - a **configuration this measurement cannot describe honestly**: a sample rate whose weighting has
+///   not been derived, or more than two channels, where BS.1770-5 weights by position and the pipeline
+///   has no layout;
+/// - a **file it could describe but the standard defines no value for**: shorter than one 400 ms gating
+///   block, or with no block clearing the absolute gate.
+///
+/// They stay one case because the capability's own contract makes them one: a measurement that could not
+/// be produced is reported as **not computable**, never as a floor value, a substituted number or a
+/// zero. Splitting them would put a distinction on screen that the report has no sentence for, and the
+/// causes are kept where they are actually known — in the accumulator and the composition.
+///
+/// **−70 LUFS never appears here.** It is the standard's absolute gate, not a result, and the reference
+/// implementation's −70.000 floor is a display convention this project does not copy (ADR-0022 §6).
+public enum LoudnessOutcome: Sendable, Equatable {
+    /// The programme's integrated loudness, with the methodology that produced it.
+    case available(LoudnessMeasurement)
+    /// No value: either the configuration is one this measurement does not claim, or the standard
+    /// defines no result for this file. Caused by the file or by our own declared scope, and **not** a
+    /// failure.
+    case unavailable
+    /// Producing it failed. The message is human and neutral: it names no path and no framework.
+    case failed(message: String)
+    /// The operation was cancelled — by the user picking something else, never by the file.
+    case cancelled
+}
+
+/// What the surface can say about an integrated loudness right now.
+///
+/// The extra case over `LoudnessOutcome` is `loading`; `cancelled` is deliberately **absent**, exactly
+/// as it is for the other four.
+public enum LoudnessState: Sendable, Equatable {
+    case loading
+    case available(LoudnessMeasurement)
+    case unavailable
+    case failed(message: String)
+
+    /// The state an outcome settles into.
+    ///
+    /// Returns `nil` for `cancelled`, because there is nothing to show: the operation that produced it
+    /// has been superseded, and rendering it as an absence would blame the file for the user's own
+    /// action.
+    public init?(_ outcome: LoudnessOutcome) {
+        switch outcome {
+        case let .available(measurement): self = .available(measurement)
+        case .unavailable: self = .unavailable
+        case let .failed(message): self = .failed(message: message)
+        case .cancelled: return nil
+        }
+    }
+}
+
 /// A report together with whatever is currently known about its visualisations.
 ///
 /// All four are **beside** each other, never nested: neither the waveform nor the spectrogram nor the
@@ -205,18 +262,21 @@ public struct InspectionPresentation: Sendable, Equatable {
     public var spectrogram: SpectrogramState
     public var signalLevelMetrics: SignalLevelMetricsState
     public var truePeak: TruePeakState
+    public var loudness: LoudnessState
 
     public init(
         report: InspectionReport,
         waveform: WaveformState,
         spectrogram: SpectrogramState = .loading,
         signalLevelMetrics: SignalLevelMetricsState = .loading,
-        truePeak: TruePeakState = .loading
+        truePeak: TruePeakState = .loading,
+        loudness: LoudnessState = .loading
     ) {
         self.report = report
         self.waveform = waveform
         self.spectrogram = spectrogram
         self.signalLevelMetrics = signalLevelMetrics
         self.truePeak = truePeak
+        self.loudness = loudness
     }
 }

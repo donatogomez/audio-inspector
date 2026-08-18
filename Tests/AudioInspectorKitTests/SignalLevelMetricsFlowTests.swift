@@ -127,7 +127,7 @@ struct SignalLevelMetricsFlowTests {
             let coordinator = SourceInspectionCoordinator(makeDecoder: { _ in decoder })
             let outcome = await coordinator.inspect(url, onUpdate: { box.collect($0) })
 
-            guard case let .inspected(report, waveform, spectrogram, _, _) = outcome else {
+            guard case let .inspected(report, waveform, spectrogram, _, _, _) = outcome else {
                 Issue.record("expected an inspected outcome"); return
             }
             guard case .failed = report.status else {
@@ -167,7 +167,7 @@ struct SignalLevelMetricsFlowTests {
             )
             let outcome = await coordinator.inspect(url, onUpdate: { box.collect($0) })
 
-            guard case let .inspected(report, waveform, spectrogram, _, _) = outcome else {
+            guard case let .inspected(report, waveform, spectrogram, _, _, _) = outcome else {
                 Issue.record("expected an inspected outcome"); return
             }
             if case .failed = report.status {
@@ -224,7 +224,7 @@ struct SignalLevelMetricsFlowTests {
             )
             let outcome = await coordinator.inspect(url, onUpdate: { box.collect($0) })
 
-            guard case let .inspected(_, waveform, _, _, _) = outcome else {
+            guard case let .inspected(_, waveform, _, _, _, _) = outcome else {
                 Issue.record("expected an inspected outcome"); return
             }
             guard case .failed = waveform else {
@@ -258,7 +258,7 @@ struct SignalLevelMetricsFlowTests {
             )
             let outcome = await coordinator.inspect(url, onUpdate: { box.collect($0) })
 
-            guard case let .inspected(report, waveform, spectrogram, levels, truePeak) = outcome else {
+            guard case let .inspected(report, waveform, spectrogram, levels, truePeak, _) = outcome else {
                 Issue.record("expected an inspected outcome"); return
             }
             #expect(box.first == .cancelled)
@@ -296,7 +296,7 @@ struct SignalLevelMetricsFlowTests {
             })
             let outcome = await coordinator.inspect(url, onUpdate: { box.collect($0) })
 
-            guard case let .inspected(_, _, spectrogram, signalLevels, _) = outcome else {
+            guard case let .inspected(_, _, spectrogram, signalLevels, _, _) = outcome else {
                 Issue.record("expected an inspected outcome"); return
             }
             #expect(spectrogram == .cancelled)

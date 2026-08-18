@@ -17,14 +17,18 @@ protocol ReportExporting: Sendable {
     /// collapsed any non-measurement state to `nil` before this is reached, so no lifecycle state ever
     /// reaches the wire. Throws on an encoding failure.
     ///
-    /// **Two optionals rather than a context object**, deliberately: they are independent measurements
-    /// and the signature says so. It is also the shape's comfortable limit — a third would be the moment
-    /// to introduce a container, and that is a change of its own rather than a side effect of adding a
-    /// measurement.
+    /// **Positional optionals rather than a context object**, deliberately: they are independent
+    /// measurements and the signature says so. The note that stood here called two the comfortable limit
+    /// and a third the moment to introduce a container — **and the third arrived**. It is still three
+    /// optionals, because introducing the container touches every call site of the export chain and
+    /// would have hidden that refactor inside the change that added a measurement. That is **recorded
+    /// debt**, on the reasoning `SourceInspectionOutcome` applied to its own fifth payload, and it
+    /// belongs to whoever adds the fourth — which should not simply be appended.
     func export(
         _ report: InspectionReport,
         signalLevelMetrics: SignalLevelMetrics?,
-        truePeak: TruePeakMeasurement?
+        truePeak: TruePeakMeasurement?,
+        loudness: LoudnessMeasurement?
     ) throws -> Data
 }
 

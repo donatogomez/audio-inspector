@@ -15,6 +15,7 @@ public struct ReportView: View {
     private let spectrogram: SpectrogramPresentation
     private let signalLevelMetrics: SignalLevelMetricsPresentation
     private let truePeak: TruePeakPresentation
+    private let loudness: LoudnessPresentation
     private let comparison: ComparisonPresentation
     @State private var exportModel: ReportExportModel
 
@@ -26,6 +27,7 @@ public struct ReportView: View {
         spectrogram: SpectrogramPresentation,
         signalLevelMetrics: SignalLevelMetricsPresentation,
         truePeak: TruePeakPresentation,
+        loudness: LoudnessPresentation,
         comparison: ComparisonPresentation = .none,
         export: @escaping ReportExportAction
     ) {
@@ -34,6 +36,7 @@ public struct ReportView: View {
         self.spectrogram = spectrogram
         self.signalLevelMetrics = signalLevelMetrics
         self.truePeak = truePeak
+        self.loudness = loudness
         self.comparison = comparison
         _exportModel = State(initialValue: ReportExportModel(action: export))
     }
@@ -53,6 +56,13 @@ public struct ReportView: View {
                 // them. It is a section of its own rather than a fifth row up there, because it is
                 // produced by a different method and that method has to travel with it (ADR-0019).
                 truePeakSection
+                // **Beneath the true peak, above the spectrogram.** It stays with the level sections
+                // because it is about level, and it comes last of them because it is the least
+                // sample-like: those two reduce the samples as stored or as reconstructed, this one
+                // measures the *programme* through a frequency weighting and two gates. That is also
+                // why it is a section of its own rather than a fifth signal-levels row — the method has
+                // to travel with it (ADR-0006, ADR-0022), and a row has nowhere to put one.
+                loudnessSection
                 spectrogramSection
                 propertiesSection
                 // **After this file's own facts, before its warnings.** A comparison is a statement
@@ -143,6 +153,17 @@ public struct ReportView: View {
     private var truePeakSection: some View {
         ReportSection(TruePeakCopy.title) {
             TruePeakSection(presentation: truePeak)
+        }
+    }
+
+    // MARK: - Integrated loudness — the programme's level, not the samples'
+
+    /// Present in **every** state, including when nothing was measured, so an absent or failed
+    /// measurement is a sentence rather than a gap the reader has to interpret — the same rule every
+    /// other analysis section already follows.
+    private var loudnessSection: some View {
+        ReportSection(LoudnessCopy.title) {
+            LoudnessSection(presentation: loudness)
         }
     }
 
@@ -249,7 +270,8 @@ public struct ReportView: View {
                     await exportModel.export(
                         report,
                         signalLevelMetrics: exportableSignalLevelMetrics,
-                        truePeak: exportableTruePeak
+                        truePeak: exportableTruePeak,
+                        loudness: exportableLoudness
                     )
                 }
             }
@@ -271,6 +293,15 @@ public struct ReportView: View {
     /// run rather than about the file.
     private var exportableTruePeak: TruePeakMeasurement? {
         guard case let .measurement(measurement) = truePeak else { return nil }
+        return measurement
+    }
+
+    /// And the same rule again for the integrated loudness. Its `absent` carries more causes than its
+    /// siblings' do — too short, too quiet to clear the gate, an unsupported configuration — and none of
+    /// them survives to the wire: **the JSON describes measurements, not why one does not exist**, so
+    /// every one of them collapses to the key simply not being there.
+    private var exportableLoudness: LoudnessMeasurement? {
+        guard case let .measurement(measurement) = loudness else { return nil }
         return measurement
     }
 }
@@ -436,6 +467,18 @@ private extension SignalLevelMetricsPresentation {
     }
 }
 
+private extension LoudnessPresentation {
+    /// An ordinary programme level, negative and unremarkable — deliberately not a round number and
+    /// deliberately not −23, so the canvas never shows the figure a target would be read into.
+    static var preview: LoudnessPresentation {
+        let method = LoudnessMethod(algorithm: .integratedBS1770v1, weighting: .publishedAt48kHz)
+        guard let measurement = LoudnessMeasurement(integratedLoudness: -18.437, method: method) else {
+            return .absent
+        }
+        return .measurement(measurement)
+    }
+}
+
 private extension TruePeakPresentation {
     /// A stereo file whose reconstruction crosses full scale on one channel and not the other — the
     /// case this measurement exists for, shown as the plain fact it is.
@@ -453,7 +496,7 @@ private extension TruePeakPresentation {
 #Preview {
     ReportView(
         report: .preview, waveform: .preview, spectrogram: .preview, signalLevelMetrics: .preview,
-        truePeak: .preview, export: { _, _, _ in .succeeded }
+        truePeak: .preview, loudness: .preview, export: { _, _, _, _ in .succeeded }
     )
 }
 #endif

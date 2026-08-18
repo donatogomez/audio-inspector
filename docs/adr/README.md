@@ -30,3 +30,4 @@ disguise. Copy `0000-adr-template.md` for new ones.
 | [0019](0019-true-peak-as-a-self-describing-measurement.md) | True peak as a self-describing measurement, reported as a value not a flag | Accepted |
 | [0020](0020-independent-analyses-not-independent-decodes.md) | Independent analyses, not independent decodes (one PCM read serves several) | Accepted |
 | [0021](0021-one-pcm-read-per-inspection.md) | One PCM read per inspection — the waveform joins the shared read | Accepted |
+| [0022](0022-integrated-loudness-scope-and-compliance.md) | Integrated loudness — how far compliance is claimed, and what the domain stores | Accepted |

@@ -14,17 +14,21 @@ public enum SourceInspectionOutcome: Sendable, Equatable {
     /// A file was inspected; the report carries the outcome, including a global failure. All four
     /// travel **beside** it, and whatever became of any of them never changes the report.
     ///
-    /// **Four labelled payloads is the honest shape and also the last comfortable one.** Each analysis
-    /// genuinely settles on its own, so a combined value would be a lie; but a fifth would make this
-    /// case hard to read and hard to extend safely, and the pressure is worth naming rather than
-    /// discovering later. Introducing a container is a change of its own — it would touch every call
-    /// site in the flow — and doing it while wiring a new analysis would hide one change inside another.
+    /// **The fifth payload arrived, and the warning that preceded it stands.** Each analysis genuinely
+    /// settles on its own, so a combined value would still be a lie — but this case is now at the edge
+    /// of what is comfortable to read, and a sixth should not simply be appended.
+    ///
+    /// It was added as a payload rather than triggering a container **because the previous note said
+    /// so**: introducing one is a change of its own that would touch every call site in the flow, and
+    /// doing it while wiring a new analysis would hide one change inside another. That refactor is
+    /// **recorded debt**, not an oversight, and it belongs to whoever adds the sixth.
     case inspected(
         InspectionReport,
         waveform: WaveformOutcome,
         spectrogram: SpectrogramOutcome,
         signalLevelMetrics: SignalLevelMetricsOutcome,
-        truePeak: TruePeakOutcome
+        truePeak: TruePeakOutcome,
+        loudness: LoudnessOutcome
     )
     /// The selection could not be turned into an inspectable file at all.
     case preparationFailed
@@ -47,6 +51,8 @@ public enum InspectionUpdate: Sendable {
     case signalLevelMetrics(SignalLevelMetricsOutcome)
     /// What became of the true peak measurement.
     case truePeak(TruePeakOutcome)
+    /// The integrated loudness, once the shared read has finished.
+    case loudness(LoudnessOutcome)
 }
 
 /// Receives each part of an inspection as it settles, on the main actor.

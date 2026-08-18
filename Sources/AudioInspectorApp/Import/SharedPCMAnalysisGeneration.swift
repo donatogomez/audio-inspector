@@ -15,7 +15,9 @@ import FeatureImport
 /// **A third analysis was added by adding a field**, which is the property the design claimed for this
 /// shape and is now demonstrated rather than asserted: no protocol, no generic machinery, no widening
 /// of an existing analysis. **A fourth cost the same**, and it is the one that reduces an inspection to
-/// a single read of the file.
+/// a single read of the file. **The fifth cost the same again** — and it is the first whose accumulator
+/// declines to be built for some perfectly valid streams, which the shape absorbed as an absence rather
+/// than a fault, exactly as the waveform's own already does.
 struct SharedPCMAnalysisOutcome {
     /// **Not yet what the user sees.** The waveform still has its own read in
     /// `SourceInspectionCoordinator`, and that one is what reaches the surface; this is the same
@@ -26,6 +28,7 @@ struct SharedPCMAnalysisOutcome {
     let spectrogram: SpectrogramOutcome
     let signalLevelMetrics: SignalLevelMetricsOutcome
     let truePeak: TruePeakOutcome
+    let loudness: LoudnessOutcome
 }
 
 /// Reads a file's PCM **once** and folds every chunk into several analyses, each of which keeps its own
@@ -136,7 +139,7 @@ struct SharedPCMAnalysisGeneration {
             if cancelled {
                 return SharedPCMAnalysisOutcome(
                     waveform: .cancelled, spectrogram: .cancelled,
-                    signalLevelMetrics: .cancelled, truePeak: .cancelled
+                    signalLevelMetrics: .cancelled, truePeak: .cancelled, loudness: .cancelled
                 )
             }
             guard let stream else {
@@ -146,7 +149,7 @@ struct SharedPCMAnalysisGeneration {
                 // the waveform's own port reports for this file: `makeWaveform` returns `nil`.
                 return SharedPCMAnalysisOutcome(
                     waveform: .unavailable, spectrogram: .unavailable,
-                    signalLevelMetrics: .unavailable, truePeak: .unavailable
+                    signalLevelMetrics: .unavailable, truePeak: .unavailable, loudness: .unavailable
                 )
             }
             return consumers.finish(stream: stream)
@@ -157,7 +160,7 @@ struct SharedPCMAnalysisGeneration {
             if error.code == .cancelled {
                 return SharedPCMAnalysisOutcome(
                     waveform: .cancelled, spectrogram: .cancelled,
-                    signalLevelMetrics: .cancelled, truePeak: .cancelled
+                    signalLevelMetrics: .cancelled, truePeak: .cancelled, loudness: .cancelled
                 )
             }
             // Human, neutral, and carrying no path, no framework text and no stable code — those stay
@@ -168,7 +171,8 @@ struct SharedPCMAnalysisGeneration {
                 waveform: .failed(message: "The waveform for this file could not be produced."),
                 spectrogram: .failed(message: "The spectrogram for this file could not be produced."),
                 signalLevelMetrics: .failed(message: "The signal level metrics for this file could not be produced."),
-                truePeak: .failed(message: "The true peak for this file could not be measured.")
+                truePeak: .failed(message: "The true peak for this file could not be measured."),
+                loudness: .failed(message: "The integrated loudness for this file could not be measured.")
             )
         }
     }
@@ -188,11 +192,17 @@ private extension SharedPCMAnalysisGeneration {
         private var spectrogram: SpectrogramAccumulator?
         private var signalLevelMetrics: SignalLevelMetricsAccumulator?
         private var truePeak: TruePeakAccumulator?
+        private var loudness: LoudnessAccumulator?
         private var waveform: WaveformEnvelopeAccumulator?
         private var spectrogramFault: String?
         private var signalLevelMetricsFault: String?
         private var truePeakFault: String?
         private var waveformFault: String?
+        /// Loudness's own **absence**, kept apart from a fault for the reason the waveform's is: a
+        /// stream whose sample rate has no derived weighting, or that carries more than two channels,
+        /// is one this measurement does not claim rather than one it failed at. Reporting it as a
+        /// failure would blame the file for a scope we chose (ADR-0022 §3, §4).
+        private var loudnessAbsent = false
         /// The waveform's one **absence**, kept apart from its faults on purpose: a stream this
         /// resolution cannot be mapped to buckets is a file that offered nothing to size an envelope
         /// against, which its own port reports by returning `nil`. Reporting it as a failure would
@@ -210,6 +220,7 @@ private extension SharedPCMAnalysisGeneration {
         var allFailed: Bool {
             spectrogramFault != nil && signalLevelMetricsFault != nil
                 && truePeakFault != nil && (waveformFault != nil || waveformAbsent)
+                && loudnessAbsent
         }
 
         /// Builds each accumulator once, from the one stream description the read reports.
@@ -248,6 +259,22 @@ private extension SharedPCMAnalysisGeneration {
             // a frame count the bucket mapping cannot be computed for — `channelCount` is at least one
             // by `PCMStreamDescription`'s own guarantee — and that is exactly the case the legacy port
             // answers with `nil`.
+            // Built from the same description as the others, and the **only** consumer that declines
+            // for reasons that are not a defect: BS.1770-5 publishes coefficients for 48 kHz alone and
+            // weights channels by position, so a rate whose weighting has not been derived and a stream
+            // past stereo are both outside what this measurement claims. Neither is a fault — nothing
+            // here resamples, guesses a layout, or fabricates a value, and the other four consumers do
+            // not notice.
+            //
+            // The methodology is the accumulator's own, exactly as true peak's is: which coefficients
+            // ran is recorded inside the measurement it returns, and nothing in this composition
+            // chooses, passes or repeats it.
+            loudness = LoudnessAccumulator(
+                sampleRate: stream.sampleRate, channelCount: stream.channelCount
+            )
+            if loudness == nil {
+                loudnessAbsent = true
+            }
             waveform = WaveformEnvelopeAccumulator(
                 totalFrameCount: stream.frameCount,
                 channelCount: stream.channelCount,
@@ -269,6 +296,7 @@ private extension SharedPCMAnalysisGeneration {
             if spectrogramFault == nil { spectrogram?.accumulate(chunk) }
             if signalLevelMetricsFault == nil { signalLevelMetrics?.accumulate(chunk) }
             if truePeakFault == nil { truePeak?.accumulate(chunk) }
+            if !loudnessAbsent { loudness?.accumulate(chunk) }
             if waveformFault == nil, !waveformAbsent { accumulateWaveform(chunk) }
         }
 
@@ -326,6 +354,9 @@ private extension SharedPCMAnalysisGeneration {
             if spectrogramFault == nil { spectrogramFault = message }
             if signalLevelMetricsFault == nil { signalLevelMetricsFault = message }
             if truePeakFault == nil { truePeakFault = message }
+            // Loudness has no fault of its own to set — see `finishLoudness`. A stream whose audio does
+            // not match its description leaves it absent, which is what an unmeasurable file already is.
+            loudnessAbsent = true
             // Not applied to a waveform that is **absent**: that is not a fault waiting to be
             // overwritten, and turning it into one would report a failure for a file that simply
             // offered nothing to size against.
@@ -342,7 +373,8 @@ private extension SharedPCMAnalysisGeneration {
                 waveform: finishWaveform(stream: stream),
                 spectrogram: finishSpectrogram(stream: stream),
                 signalLevelMetrics: finishSignalLevelMetrics(stream: stream),
-                truePeak: finishTruePeak(stream: stream)
+                truePeak: finishTruePeak(stream: stream),
+                loudness: finishLoudness(stream: stream)
             )
         }
 
@@ -419,6 +451,34 @@ private extension SharedPCMAnalysisGeneration {
             guard let model = accumulator.finish() else {
                 return .failed(message: "The true peak for this file could not be measured.")
             }
+            return .available(model)
+        }
+
+        /// Integrated loudness's own result — and the one consumer with **no reachable failure of its
+        /// own**, which is stated rather than left to be inferred from the absence of a fault field.
+        ///
+        /// Every way this can end without a value is an **absence**:
+        ///
+        /// - the accumulator declined to be built, because the rate has no derived weighting or the
+        ///   stream carries more than two channels;
+        /// - `finish()` returned `nil`, which the standard's own definition produces for a programme
+        ///   shorter than one 400 ms gating block and for one where no block clears the −70 LKFS
+        ///   absolute gate. That is **a complete answer from the algorithm**, not a malfunction of it.
+        ///
+        /// The one path that would be a genuine failure — an energy sum so large that the loudness came
+        /// out non-finite and the domain model refused it — **is unreachable given the inputs**:
+        /// `PCMChunk` admits only finite `Float`s, whose square is at most ~1.2 × 10⁷⁷, and a mean over
+        /// blocks cannot exceed that. `Double` overflows at ~1.8 × 10³⁰⁸. So the guard inside
+        /// `LoudnessMeasurement` is a backstop the arithmetic cannot reach from here.
+        ///
+        /// This mirrors the limitation `SignalLevelMetricsAccumulator` already documents for its own
+        /// `nil`: recorded honestly rather than met with an invented failure path.
+        private func finishLoudness(stream: PCMStreamDescription) -> LoudnessOutcome {
+            if loudnessAbsent { return .unavailable }
+            let accumulator = loudness ?? LoudnessAccumulator(
+                sampleRate: stream.sampleRate, channelCount: stream.channelCount
+            )
+            guard let model = accumulator?.finish() else { return .unavailable }
             return .available(model)
         }
     }

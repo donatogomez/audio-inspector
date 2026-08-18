@@ -115,9 +115,10 @@ measurement is byte-identical to one exported before this object existed. Its ab
 warning and never changes `inspectionStatus`; a measurement is orthogonal to whether the file's
 metadata could be read.
 
-It currently holds two **siblings** — `signalLevels` and `truePeak` — and **each is independently
-omitted** when its own measurement does not exist. All four combinations are therefore representable
-and none is faked: either alone, both, or neither (in which case `measurements` itself is absent).
+It currently holds three **siblings** — `signalLevels`, `truePeak` and `integratedLoudness` — and
+**each is independently omitted** when its own measurement does not exist. All eight combinations are
+therefore representable and none is faked: any one alone, any pair, all three, or none (in which case
+`measurements` itself is absent).
 There is deliberately **no aggregate** over them: nothing says "the measurements succeeded", because
 each answers only for itself. A new measurement adds a sibling key, which is additive and needs no
 version bump.
@@ -227,6 +228,77 @@ absent, determinism, and `schemaVersion` staying `1`) and by
 `EndToEndFlowTests.theRealTruePeakPathReachesTheExportedDocument`, which drives a real file through the
 real decode and asserts the exported number is the measured one.
 
+### `measurements.integratedLoudness`
+
+The gated, frequency-weighted loudness of the **whole programme**, in **LUFS** — the wire form of the
+domain's `LoudnessMeasurement`. Present only when a measurement was actually produced; every state that
+is not one collapses to the key being absent before export is reached.
+
+**The key names the quantity, not the family.** It is deliberately not `loudness`: that word covers four
+different measurements — integrated, momentary, short-term and loudness range — and only the first is
+shipped. Each of the others is a different quantity needing its own stated reduction (a maximum, a
+series) before it would mean anything in a static report, and each would arrive here as **its own
+sibling carrying its own `method`**. A single `loudness` object with one `method` inside it would imply
+that method covered them all — the same reason `truePeak.method` is not hoisted to `measurements` level.
+
+**The unit on the wire is LUFS, and this is deliberately the opposite of what `truePeak` does.** That
+measurement exports linear amplitude because dBTP is a *presentation* of a linear peak; here the
+logarithmic quantity **is** the normative one the standard defines and the domain stores, so converting
+it to energy would invent a unit that appears nowhere in the methodology. The value is the **unrounded**
+`Double` the accumulator produced: the report shows one decimal, and that precision is a display
+convention applied in the app's UI layer, never the datum. No unit string travels with the number — this
+contract states the unit, the document does not.
+
+| Field | Type | Null? | Notes |
+| --- | --- | --- | --- |
+| `value` | number | no | LUFS. Never `null` — an absent measurement is the whole key being omitted. Unrounded. May be negative, zero or **positive**: a programme above full scale is exported exactly as measured and is never clamped. Never a floor: **−70 is the standard's absolute gate on *blocks*, not a result**, and never appears here as a stand-in for a value that does not exist. |
+| `method.algorithm` | string | no | Stable identifier of the whole methodology — block length, hop, both gates and the conversion offset are fixed by it (`"itu_r_bs1770_5_integrated_v1"`). |
+| `method.weighting` | string | no | Stable identifier of where the K-weighting coefficients came from. `"itu_r_bs1770_5_tables_1_2_48k"` at 48 kHz, where they are published and transcribed; `"itu_r_bs1770_5_48k_prototype_rediscretised_v1"` at every other supported rate, where they were derived to reproduce that response. |
+
+There is **no `channels` array**: the channels are combined before this quantity exists, so there is no
+per-channel value to report — which is also why there is no `overall`, as there is nothing for it to be
+overall *of*. There is likewise **no `sampleRate` and no `channelCount`**: both describe the file, both
+are already in `technicalProperties`, and repeating them here would be a second description this
+document could not keep consistent with the first.
+
+**`weighting` is the one field that varies with the file**, and it is the reason the identity exists at
+all: BS.1770-5 publishes coefficients for 48 kHz only. It comes from the measurement's own record — the
+mapper never chooses it from a sample rate, which it does not see — so a document always describes the
+methodology that actually ran. The report on screen shows the two the same way, because the derivation
+exists to give the same frequency response and the measurement's rate-invariance is demonstrated; the
+distinction lives here, where it is an audit fact a consumer can act on.
+
+**Nothing here is a verdict, and nothing is a target.** No conformance, compliance, certification or
+"EBU Mode" field; no reference level, and specifically no −23, −16 or −14, including EBU R 128's own
+−23.0 LUFS — a delivery requirement someone imposes on a file is not a property the file has. The
+identifiers record *which* methodology ran, which is a fact; whether that amounts to conformance is a
+judgement, and no document is in a position to make it. Nothing about the cross-check either: the
+independent meter used to qualify the implementation is a **test-time instrument**, so no oracle name,
+observed tolerance or agreement figure appears.
+
+Example, beside its two siblings when all three are available:
+
+```json
+"measurements": {
+  "integratedLoudness": {
+    "value": -23.0139,
+    "method": {
+      "algorithm": "itu_r_bs1770_5_integrated_v1",
+      "weighting": "itu_r_bs1770_5_tables_1_2_48k"
+    }
+  }
+}
+```
+
+Pinned by `JSONReportExportLoudnessTests` (LUFS rather than linear energy, the unrounded value, the
+positive-and-unclamped case, both weighting identities, the method following the measurement rather than
+a sample rate, no compliance or target vocabulary, no oracle metadata, exact key sets, absence as an
+omitted key rather than `null`, byte-identity when absent, coexistence with both siblings, privacy,
+determinism, and `schemaVersion` staying `1`) and by
+`EndToEndFlowTests.theRealLoudnessPathReachesTheExportedDocument`, which drives a real file through the
+real decode at 44.1, 48 and 96 kHz and asserts the exported number is the measured one and the exported
+weighting is the one that actually ran.
+
 ## Stable codes
 
 `code`s (warnings) and `error.code`s (failed) are **stable, machine-processable** snake_case tokens;
@@ -326,4 +398,5 @@ Example of a **global failure**:
 This document is the canonical `schemaVersion` 1 contract. It supersedes the earlier illustrative
 draft (which used `fileIdentity`/`mediaProperties`/`analysisStatus` and a `path` field). `measurements`
 is the first DSP-era field, added additively without bumping the version, per the rule stated above;
-any future measurement (e.g. true peak) is a sibling key under `measurements`, added the same way.
+every measurement since — true peak, then integrated loudness — is a sibling key under `measurements`,
+added the same way.
