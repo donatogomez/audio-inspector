@@ -186,31 +186,58 @@ fitted to it. Nothing in this group compares production against anything, becaus
       the LRA threshold as the integrated one, and adopting the −70 floor as a reading. Each was caught,
       and by the test that should have caught it.
 
-## 6. Correctness of the accumulator, against the vectors already fixed
+## 6. Correctness of the accumulator, against the vectors already fixed — **CLOSED**
 
-**Evidence already exists for most of this at 48 kHz and is deliberately not ticked**, because the group
-is written for the finished accumulator and 6.4 cannot be satisfied until the per-rate derivation lands.
-What passes today, in "Analysis — integrated loudness (48 kHz)" and the oracle suite: every published
-vector within the published ±0.1 (worst deviation **0.0213 LU**, on test 5); both BS.1770-5 anchors to
-**0.0003 LU**; agreement with FFmpeg to **0.0071 LU**; the undefined cases; and the negative controls.
+The note that stood here said evidence existed at 48 kHz and was deliberately not ticked. It is now
+ticked, and **the subject changed**: every target below is met by the *whole path* — a real file through
+`AVFoundationAudioDecoder` and `SharedPCMAnalysisGeneration` — not by the accumulator in isolation. The
+two agree to **< 1e-9 LU**, which is asserted rather than assumed, and that is what lets the
+accumulator-level intermediates (the derived threshold, the block set, the chunk-independence matrix)
+count as evidence about the product.
 
-- [ ] 6.1 Reproduce **Tech 3341 §2.9 and tests 1–5** within the published ±0.1 — the same vectors group 5
-      fixed, now measured against production instead of against the oracle.
-- [ ] 6.2 Reproduce **BS.1770-5's anchor** (mono, 997 Hz, 0 dBFS → −3.01 LKFS) and its attenuated form.
-- [ ] 6.3 The **undefined cases** yield no value: 400 ms measures, 399 ms does not, digital silence does
-      not. Assert the absence; never −70.
+- [x] 6.1 Reproduce **Tech 3341 §2.9 and tests 1–5** within the published ±0.1 — the same vectors group 5
+      fixed, now measured against production instead of against the oracle. **Done through the production
+      path**, worst deviation **0.0213 LU** on test 5; §2.9 and tests 1–2 at 0.0067, tests 3–4 at 0.0139.
+      Tests 3 and 4 read *identically*, which a missing absolute gate would break.
+- [x] 6.2 Reproduce **BS.1770-5's anchor** (mono, 997 Hz, 0 dBFS → −3.01 LKFS) and its attenuated form.
+      **Both to 0.00028 LU** through the production path, and the two sit exactly 23 LU apart — a
+      relationship far tighter than either vector's own ±0.1.
+- [x] 6.3 The **undefined cases** yield no value: 400 ms measures, 399 ms does not, digital silence does
+      not. Assert the absence; never −70. **Done through the production path**, plus a file with no audio
+      frames, plus a sweep proving no undefined case carries a number at all — and that the four analyses
+      beside loudness still answer for themselves when it is absent.
 - [x] 6.4 Rate-invariance across 44.1/48/88.2/96/192 kHz, and the 48 kHz round-trip. **Both demonstrated**
       — the reading moves at most 0.0066 LU across the five rates (FFmpeg's own moves 0.03), and deriving
       back to 48 kHz reproduces the published response to 0.000000 dB and its coefficients to
       1e-14. Chunk independence stays **bit-exact at every rate**.
-- [ ] 6.5 **Corroboration, ranked below 6.1–6.2**: the spike's measured K-weighting response curve
-      (−6.3 dB at 40 Hz … +3.4 dB at 16 kHz) and the 40 dB gating fixture reading −6.1 LUFS.
-- [ ] 6.6 Cross-check **real files of each container** against the oracle helper built in 5.5, with a
+- [x] 6.5 **Corroboration, ranked below 6.1–6.2**: the spike's measured K-weighting response curve
+      (−6.3 dB at 40 Hz … +3.4 dB at 16 kHz) and the 40 dB gating fixture reading −6.1 LUFS. **Both
+      reproduced through the production path**, at all ten frequencies, against ±0.05 dB on the spike's
+      absolute column (half its printed digit) and ±0.1 dB on its relative column (a difference of two
+      already-rounded values carries twice the rounding). The gating fixture reads −6.0795 against −6.1.
+      Ranked below the published vectors in the suite's own header, as the spike itself ranks it.
+- [x] 6.6 Cross-check **real files of each container** against the oracle helper built in 5.5, with a
       tolerance stated from measurement. Remember FFmpeg's own rate-invariance is 0.03 LU, so a bound
-      tighter than that cannot be claimed against the oracle across rates.
-- [ ] 6.7 Negative controls against **production**, each reverted in full: weighting bypassed, gating
+      tighter than that cannot be claimed against the oracle across rates. **Done, and the rate warning
+      turned out to understate it**: at 96 and 192 kHz production and the oracle differ by 0.031 and
+      0.042 LU, and the measurement shows the movement is the *oracle's* — its reading drifts 0.030 LU
+      away from the published −23.0 as the rate rises while production's own spread is 0.0065 LU and it
+      stays within 0.0122 of the document everywhere. So no cross-rate agreement bound is claimed;
+      production is asserted against the **document** at every rate instead. Per container, on identical
+      files: every lossless container agrees to **1.4e-5 LU** (bounded at 0.001), AAC moves **6.7e-4 LU**
+      (bounded at 0.01, separated from meter error by being ~50× the lossless spread), and production
+      agrees with the oracle to **0.0060 LU** on every one of the six.
+- [x] 6.7 Negative controls against **production**, each reverted in full: weighting bypassed, gating
       removed, filter state reset per chunk, block boundaries made per-chunk, the trailing partial block
-      included, and the relative gate applied without the absolute one.
+      included, and the relative gate applied without the absolute one. **All six applied and reverted**,
+      plus four more (−70 adopted for silence, a measurement fabricated below 400 ms, the published
+      weighting claimed at every rate, the value rounded before export). **Two findings**: the trailing
+      partial block initially changed nothing, because every published vector's duration is a whole
+      number of hops at 48 kHz — a fixture with a deliberately unaligned tail now closes that; and the
+      relative gate without the absolute one is invisible in the *reading*, exactly as this change
+      already recorded, so it is caught by the threshold evidence in "Analysis — integrated loudness
+      (48 kHz)" rather than by a production assertion. `LoudnessMeasurement` was deliberately **not**
+      widened to expose the threshold for a test's convenience.
 
 ## 7. The fifth consumer — **CLOSED**
 
