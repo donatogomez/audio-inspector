@@ -240,16 +240,33 @@ vector within the published ±0.1 (worst deviation **0.0213 LU**, on test 5); bo
       result — and the one path that would be a genuine failure, a non-finite loudness, is unreachable
       from `PCMChunk`'s finite `Float`s. Recorded as a limitation, exactly as signal levels' own `nil` is.
 
-## 8. Surface
+## 8. Surface — **CLOSED**
 
-- [ ] 8.1 One presentation row: "Integrated loudness", one decimal — also Tech 3341 §2.8's display
+- [x] 8.1 One presentation row: "Integrated loudness", one decimal — also Tech 3341 §2.8's display
       precision — LUFS, methodology beside it. No per-channel row. Absence uses the existing
-      not-computable phrasing.
-- [ ] 8.2 **No verdict, and no target.** Not "too loud", not "streaming ready", no platform name, no
-      normalisation advice, no comparison against −14 or **−23 — including R128's own −23.0 LUFS
-      target**, which is a delivery requirement, not a property of a file.
-- [ ] 8.3 Accessibility: the value and its unit are announced together, as true peak's already are.
-- [ ] 8.4 Export additively under `measurements`, absent when not measured, `schemaVersion` stays **1**.
+      not-computable phrasing. **A section of its own**, between true peak and the spectrogram: it is a
+      programme measurement with a methodology that has to travel with it, and a row has nowhere to put
+      one. `LoudnessRow` has no `detail` field at all, because the channels are combined before the
+      quantity exists. `HumanFormat.loudnessFullScale` converts nothing and floors nothing — unlike its
+      two decibel siblings there is no `log10(0)` to reach an infinity through.
+- [x] 8.2 **No verdict, and no target.** Swept over every string the surface can produce, in every
+      state, by word-split rather than substring (so "loudness" is not read as "loud"). Also swept: no
+      platform, no −14/−16/−23 quoted in prose, and **no standard worn as a seal** — the methodology is
+      stated in plain words, and naming BS.1770 or R 128 on screen would read as certification. The full
+      identity travels on the wire instead. Five negative controls applied and reverted: −70 as absence,
+      "too loud" in the copy, dBFS as the unit, positives clamped, a platform target added.
+- [x] 8.3 Accessibility: the value and its unit are announced together, as true peak's already are —
+      `"Integrated loudness, -23.0 LUFS"`. The method is spoken separately, prefixed "How it was
+      measured." A positive value gets no different name, no different shape and no colour.
+- [x] 8.4 Export additively under `measurements`, absent when not measured, `schemaVersion` stays **1**.
+      **`measurements.integratedLoudness`, naming the quantity rather than the family** — a `loudness`
+      object with one `method` would imply it covered momentary, short-term and LRA too. **LUFS on the
+      wire, unrounded**, deliberately the opposite of true peak's linear rule: here the logarithmic
+      quantity is the normative one. Both identities come from the measurement's own record; the mapper
+      never infers a weighting from a sample rate it cannot see. Absence is the key omitted, never
+      `null`. Five export negative controls applied and reverted: a rounded value, linear energy, a
+      hardcoded published weighting, `"integratedLoudness": null`, and `compliant: true`.
+      `docs/json-schema-v1.md` updated.
 
 ## 9. Gates and closure
 
