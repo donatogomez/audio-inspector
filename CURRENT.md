@@ -16,51 +16,49 @@
 >   session protocol in `CLAUDE.md`).
 
 ---
-**Focus: `add-loudness-measurement` — integrated loudness is now **visible and exportable**. The
-capability runs end to end; what remains is validation, the ADR, and publication.**
+**Focus: `add-loudness-measurement` — the implementation is complete and **validated against the
+documents by the product itself**. What remains is manual validation, the ADR, and publication.**
 
-An inspection reads the file's samples **once**, five analyses come out of that pass, and the fifth one
-now has a surface and a wire form. Nothing about the other four moved: the waveform, the spectrogram,
-the signal levels, the true peak and the report itself are byte-identical with and without it.
+Group 6 is closed. The change of subject is the whole of it: the published targets were already met by
+`LoudnessAccumulator`, and they are now met by the **path** — a real file through
+`AVFoundationAudioDecoder` and `SharedPCMAnalysisGeneration`, the composition the app itself runs.
 
-**On screen** it is a section of its own, between true peak and the spectrogram — a programme
-measurement whose methodology has to travel beside it, and a row had nowhere to put one. One value, one
-decimal, `LUFS`, signed, never clamped and never floored. Absence is a sentence that **names no single
-cause**, because the state does not carry one and the four causes are honestly a disjunction. **No
-standard is named on screen at all**: "BS.1770" beside a number reads as certification whatever sentence
-surrounds it, so the methodology is stated in plain words and the full identity travels on the wire.
+**The distinction cost nothing, which is the finding.** Production and the accumulator agree to better
+than **1e-9 LU** on every published vector, so the file round-trip and the shared read are transparent —
+and that is what lets the accumulator-level intermediates (the derived threshold, the block set, the
+chunk-independence matrix) count as evidence about the product rather than about one type.
 
-**The two weighting identities read identically on screen and differ in the JSON**, and that asymmetry
-was the turn's one real design question. The derivation exists to reproduce the published response and
-the rate-invariance is demonstrated, so the provenance does not change how the number is read — while a
-caption that varied by sample rate would suggest the two numbers mean different things. It is an audit
-fact, so it lives where a consumer can act on it.
+Worst deviation from the documents, through production: **0.0213 LU** on Tech 3341 test 5, and
+**0.00028 LU** on both BS.1770-5 anchors, against a published ±0.1. Tests 3 and 4 read *identically*,
+which is what a missing absolute gate would break.
 
-**On the wire** it is `measurements.integratedLoudness`, additive, `schemaVersion` still **1**. The key
-names the **quantity, not the family** — a `loudness` object carrying one `method` would imply that
-method covered momentary, short-term and LRA, which this change deliberately does not ship. `value` is
-the unrounded LUFS `Double`, which is the *opposite* of true peak's linear rule and deliberately so.
-Absence is the key omitted, never `null`, and no cause of an absence survives to the document.
+**The rate sweep produced the one genuinely new result.** At 48 kHz production and FFmpeg agree to
+**0.0071 LU**. Above it they do not — 0.031 at 96 kHz, 0.042 at 192 — and the measurement locates the
+movement: **FFmpeg's** reading drifts 0.030 LU away from the published −23.0 as the rate rises, while
+production's own spread is **0.0065 LU** and it stays within 0.0122 of the document everywhere. That is
+ADR-0022 §3's gap appearing as a number: BS.1770-5 publishes coefficients for 48 kHz only, so above it
+two implementations run two different derivations and disagreement is not evidence against either. **No
+cross-rate agreement bound is claimed against the oracle**; production is asserted against the document
+instead.
 
-**The real path is proved at three rates.** A real file drives the real decode through the flow, the
-composition root's translation and the export, at 44.1, 48 and 96 kHz — and the exported number is the
-accumulator's own, with the weighting that actually ran rather than one inferred from a rate the mapper
-never sees. Ten negative controls (five presentation, five export) were applied and reverted.
+**Containers separate codec from meter rather than assuming it.** Five lossless containers agree to
+**1.4e-5 LU**; AAC moves **6.7e-4** — fifty times the lossless spread, which is what identifies it as
+the encoder — and production agrees with the oracle on all six to 0.0060 LU.
 
-**New recorded debt:** the export chain now takes a **third** positional optional. Its own note called
-that the moment to introduce a container; the container was not built here, because doing it while
-wiring a measurement would hide one change inside another — the same reasoning
-`SourceInspectionOutcome` applied to its fifth payload. It belongs to whoever adds the fourth.
+**Ten negative controls, all reverted, and two of them found something.** Including the trailing partial
+block changed nothing at first, because every published vector's duration is a whole number of hops at
+48 kHz; a fixture with a deliberately unaligned tail now closes that. And the relative gate without the
+absolute one is invisible in the *reading* — as this change already recorded — so it stays caught by the
+threshold evidence one layer down. `LoudnessMeasurement` was **not** widened to expose a threshold for a
+test's convenience.
 
-ADR-0022 stays `Proposed`, now recording how this is presented and what leaves on the wire. Groups 1–5,
-7 and 8 closed; **group 6 is the only implementation work left** — its cross-container oracle comparison
-and production negative controls.
+Only groups 9.1 and 9.2 remain open, and neither is implementation.
 
-**Next step:** group 6, then 9.1's gates and the manual validation battery, then ADR-0022's promotion.
-Nothing is pushed and no PR exists.
+**Next step:** the manual validation battery, then ADR-0022's promotion, then the four gates and
+publication. Nothing is pushed and no PR exists.
 
-**Known, introduced lint warning:** `ReportJSONDTO.swift` is now 415 lines against SwiftLint's 400.
-The file was clean before; the alternatives are splitting the wire DTOs across files or cutting
+**Known, introduced lint warning:** `ReportJSONDTO.swift` is 415 lines against SwiftLint's 400. The file
+was clean before the export change; the alternatives are splitting the wire DTOs across files or cutting
 documentation, and neither was taken unilaterally. SwiftLint is not one of the four gates.
 
 **Minor follow-up, not a thread:** `ImportFlowComparisonTests` has one `Task.yield()` that was never
