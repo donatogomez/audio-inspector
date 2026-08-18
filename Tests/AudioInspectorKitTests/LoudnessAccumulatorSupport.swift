@@ -16,12 +16,20 @@ enum LoudnessAccumulatorHarness {
     /// Returns the accumulator's own answer — `nil` meaning the standard defines none.
     static func measure(
         _ vector: LoudnessTestVector, chunkFrames: Int? = 4_096
-    ) throws -> Double? {
+    ) throws -> LoudnessMeasurement? {
         var accumulator = try #require(
             LoudnessAccumulator(sampleRate: vector.sampleRate, channelCount: Int(vector.channels))
         )
         try feed(vector, into: &accumulator, chunkFrames: chunkFrames)
         return accumulator.finish()
+    }
+
+    /// The LUFS value alone, for the assertions that are about the number rather than the model. The
+    /// model's own semantics are covered by "Domain — integrated loudness measurement".
+    static func measureLoudness(
+        _ vector: LoudnessTestVector, chunkFrames: Int? = 4_096
+    ) throws -> Double? {
+        try measure(vector, chunkFrames: chunkFrames)?.integratedLoudness
     }
 
     /// Feeds a vector's frames into an existing accumulator.

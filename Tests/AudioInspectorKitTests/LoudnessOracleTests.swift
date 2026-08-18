@@ -324,7 +324,7 @@ struct LoudnessOracleTests {
     )
     func accumulatorAgreesWithTheOracle(_ vector: LoudnessTestVector) async throws {
         let published = try #require(vector.expectedLUFS)
-        let produced = try LoudnessAccumulatorHarness.measure(vector)
+        let produced = try LoudnessAccumulatorHarness.measureLoudness(vector)
         let accumulator = try #require(produced, "\(vector.name) should measure")
 
         try await withTemporaryDirectory { directory in

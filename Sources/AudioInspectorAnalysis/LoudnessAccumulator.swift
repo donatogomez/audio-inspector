@@ -85,6 +85,15 @@ struct LoudnessAccumulator {
     /// configuration this type accepts is drawn from those three.
     static let channelWeight = 1.0
 
+    /// The methodology every value this type produces was made with.
+    ///
+    /// It is stated **here**, by the implementation that actually measured, and nowhere else: a feature
+    /// or an export that spelled it out again would be asserting a methodology it did not run, and the
+    /// two spellings would be free to drift. `weighting` is the published 48 kHz set because that is the
+    /// only rate this type accepts; a derivation for other rates is a later task and will carry its own
+    /// identity.
+    static let method = LoudnessMethod(algorithm: .integratedBS1770v1, weighting: .publishedAt48kHz)
+
     // MARK: - Derived sizes
 
     /// Frames in one gating block. Derived from the published duration and the rate rather than written
@@ -184,7 +193,7 @@ struct LoudnessAccumulator {
         }
     }
 
-    /// The programme's integrated loudness in LUFS, or `nil` when the standard defines none.
+    /// The programme's integrated loudness, or `nil` when the standard defines none.
     ///
     /// Three situations produce `nil`, and **none of them produces a number**: a programme shorter than
     /// one block, which forms no gating block at all; a programme every one of whose blocks falls below
@@ -196,7 +205,10 @@ struct LoudnessAccumulator {
     /// Non-`mutating`: an incomplete trailing sub-block is discarded by simply never being pushed. There
     /// is no flush, no zero-padding and no fabricated final block, which is what BS.1770-5 requires of an
     /// incomplete gating block at the end of the measurement interval.
-    func finish() -> Double? {
+    /// Builds the domain value itself, as `TruePeakAccumulator` does: the type that measured is the one
+    /// that can name the methodology, and routing that through a mapper would put a second spelling of it
+    /// somewhere the measurement could drift from.
+    func finish() -> LoudnessMeasurement? {
         guard !blockEnergies.isEmpty else { return nil }
         guard let threshold = relativeThreshold() else { return nil }
 
@@ -208,7 +220,12 @@ struct LoudnessAccumulator {
         }
         guard !gated.isEmpty else { return nil }
 
-        return Self.loudness(of: Self.mean(of: gated))
+        // The model's finiteness guard is a backstop rather than a path the arithmetic reaches: every
+        // surviving block has a positive energy, so the mean has one too. It would only bite if a
+        // pathological input overflowed the energy sum, and then a `nil` is the honest answer.
+        return LoudnessMeasurement(
+            integratedLoudness: Self.loudness(of: Self.mean(of: gated)), method: Self.method
+        )
     }
 
     /// The relative threshold Γ<sub>r</sub> this programme derives — BS.1770-5 eq. (6): the loudness of

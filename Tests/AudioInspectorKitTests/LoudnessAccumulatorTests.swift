@@ -62,6 +62,22 @@ struct LoudnessAccumulatorTests {
         #expect(accumulator.finish() == nil)
     }
 
+    // MARK: - The methodology travels with the value
+
+    /// The measurement carries the method the accumulator declares, not one assembled anywhere else. The
+    /// type that actually measured is the only one in a position to name what it ran, and a feature or an
+    /// export that spelled it out again would be asserting a methodology it did not perform.
+    @Test("the measurement carries the accumulator's own declared method")
+    func measurementCarriesTheMeasuringMethod() throws {
+        let value = try LoudnessAccumulatorHarness.measure(.table1Test1)
+        let measured = try #require(value)
+        #expect(measured.method == LoudnessAccumulator.method)
+        #expect(measured.method.algorithm == .integratedBS1770v1)
+        // The published coefficients, because 48 kHz is the only rate this type accepts. A derivation
+        // for other rates is a later task and will carry its own weighting identity.
+        #expect(measured.method.weighting == .publishedAt48kHz)
+    }
+
     // MARK: - The official targets
 
     /// EBU Tech 3341 §2.9 and Table 1 tests 1–5, each against its **published** expected reading and its
@@ -73,7 +89,7 @@ struct LoudnessAccumulatorTests {
     func reproducesPublishedTargets(_ vector: LoudnessTestVector) throws {
         let expected = try #require(vector.expectedLUFS)
         let tolerance = try #require(vector.expectedTolerance)
-        let value = try LoudnessAccumulatorHarness.measure(vector)
+        let value = try LoudnessAccumulatorHarness.measureLoudness(vector)
         let measured = try #require(value)
         #expect(
             abs(measured - expected) <= tolerance,
@@ -91,7 +107,7 @@ struct LoudnessAccumulatorTests {
     func reproducesTheITUAnchor(_ vector: LoudnessTestVector) throws {
         let expected = try #require(vector.expectedLUFS)
         let tolerance = try #require(vector.expectedTolerance)
-        let value = try LoudnessAccumulatorHarness.measure(vector)
+        let value = try LoudnessAccumulatorHarness.measureLoudness(vector)
         let measured = try #require(value)
         #expect(
             abs(measured - expected) <= tolerance,
@@ -103,8 +119,8 @@ struct LoudnessAccumulatorTests {
     @Test("stereo reads 10·log₁₀2 above the same tone in mono")
     func stereoIsThreePointZeroOneAboveMono() throws {
         let pair = LoudnessTestVector.monoAgainstStereo
-        let monoValue = try LoudnessAccumulatorHarness.measure(pair.mono)
-        let stereoValue = try LoudnessAccumulatorHarness.measure(pair.stereo)
+        let monoValue = try LoudnessAccumulatorHarness.measureLoudness(pair.mono)
+        let stereoValue = try LoudnessAccumulatorHarness.measureLoudness(pair.stereo)
         let mono = try #require(monoValue)
         let stereo = try #require(stereoValue)
         #expect(abs((stereo - mono) - LoudnessTestVector.stereoOverMonoLU) <= 0.01)
@@ -118,8 +134,8 @@ struct LoudnessAccumulatorTests {
     /// is too.
     @Test("the absolute gate makes test 4 identical to test 3, not merely close")
     func absoluteGateRemovesTheQuietPassagesEntirely() throws {
-        let threeValue = try LoudnessAccumulatorHarness.measure(.table1Test3)
-        let fourValue = try LoudnessAccumulatorHarness.measure(.table1Test4)
+        let threeValue = try LoudnessAccumulatorHarness.measureLoudness(.table1Test3)
+        let fourValue = try LoudnessAccumulatorHarness.measureLoudness(.table1Test4)
         let three = try #require(threeValue)
         let four = try #require(fourValue)
         #expect(three == four)
@@ -162,7 +178,7 @@ struct LoudnessAccumulatorTests {
         var accumulator = try #require(LoudnessAccumulator(sampleRate: 48_000, channelCount: 2))
         try LoudnessAccumulatorHarness.feed(vector, into: &accumulator, chunkFrames: 4_096)
         let threshold = try #require(accumulator.relativeThreshold())
-        let reading = try #require(accumulator.finish())
+        let reading = try #require(accumulator.finish()).integratedLoudness
         #expect(abs(threshold - (reading - LoudnessAccumulator.relativeGateOffset)) <= 0.05)
     }
 
@@ -173,10 +189,10 @@ struct LoudnessAccumulatorTests {
         let above = LoudnessAccumulatorHarness.tone(dBFS: -69.5, seconds: 2)
         let below = LoudnessAccumulatorHarness.tone(dBFS: -70.5, seconds: 2)
 
-        let aboveValue = try LoudnessAccumulatorHarness.measure(above)
+        let aboveValue = try LoudnessAccumulatorHarness.measureLoudness(above)
         let measured = try #require(aboveValue)
         #expect(abs(measured - (-69.5)) <= 0.1)
-        let belowValue = try LoudnessAccumulatorHarness.measure(below)
+        let belowValue = try LoudnessAccumulatorHarness.measureLoudness(below)
         #expect(belowValue == nil)
     }
 
@@ -209,12 +225,12 @@ struct LoudnessAccumulatorTests {
         var three = try #require(LoudnessAccumulator(sampleRate: 48_000, channelCount: 2))
         try LoudnessAccumulatorHarness.feed(.table1Test3, into: &three, chunkFrames: 4_096)
         let threeAll = three.blockEnergies.count
-        let threeGated = try #require(three.finish())
+        let threeGated = try #require(three.finish()).integratedLoudness
 
         var five = try #require(LoudnessAccumulator(sampleRate: 48_000, channelCount: 2))
         try LoudnessAccumulatorHarness.feed(.table1Test5, into: &five, chunkFrames: 4_096)
         let fiveAll = five.blockEnergies.count
-        let fiveGated = try #require(five.finish())
+        let fiveGated = try #require(five.finish()).integratedLoudness
 
         // The ungated mean of the blocks, which is what the reading would be with no relative gate.
         func ungated(_ energies: [Double]) -> Double {
@@ -234,7 +250,7 @@ struct LoudnessAccumulatorTests {
         arguments: LoudnessTestVector.blockBoundaryVectors
     )
     func blockBoundaryIsInclusiveAt400ms(_ vector: LoudnessTestVector) throws {
-        let measured = try LoudnessAccumulatorHarness.measure(vector)
+        let measured = try LoudnessAccumulatorHarness.measureLoudness(vector)
         switch vector.expectation {
         case let .measured(expected, tolerance):
             let present = try #require(measured, "\(vector.name) should measure")
@@ -250,10 +266,10 @@ struct LoudnessAccumulatorTests {
     @Test("frames past the last whole hop are discarded rather than padded")
     func trailingPartialBlockIsDiscarded() throws {
         // 450 ms is four whole 100 ms hops plus 50 ms; 400 ms is the four hops alone.
-        let tailValue = try LoudnessAccumulatorHarness.measure(
+        let tailValue = try LoudnessAccumulatorHarness.measureLoudness(
             LoudnessAccumulatorHarness.tone(dBFS: -20, seconds: 0.450)
         )
-        let truncatedValue = try LoudnessAccumulatorHarness.measure(
+        let truncatedValue = try LoudnessAccumulatorHarness.measureLoudness(
             LoudnessAccumulatorHarness.tone(dBFS: -20, seconds: 0.400)
         )
         let withTail = try #require(tailValue)
@@ -281,7 +297,7 @@ struct LoudnessAccumulatorTests {
         arguments: LoudnessTestVector.silenceVectors
     )
     func silenceIsNotComputable(_ vector: LoudnessTestVector) throws {
-        let measured = try LoudnessAccumulatorHarness.measure(vector)
+        let measured = try LoudnessAccumulatorHarness.measureLoudness(vector)
         #expect(measured == nil, "\(vector.name)")
     }
 
@@ -297,13 +313,13 @@ struct LoudnessAccumulatorTests {
     /// *true-peak* Annex, which that text itself calls unnecessary in floating point.
     @Test("samples beyond full scale are measured, not limited")
     func aboveFullScaleIsMeasuredNotClamped() throws {
-        let unityValue = try LoudnessAccumulatorHarness.measure(
+        let unityValue = try LoudnessAccumulatorHarness.measureLoudness(
             LoudnessAccumulatorHarness.tone(dBFS: 0, seconds: 2)
         )
         let unity = try #require(unityValue)
         for (amplitude, decibels) in [(1.5, 20 * log10(1.5)), (2.0, 20 * log10(2.0)), (8.0, 20 * log10(8.0))] {
             let loud = LoudnessAccumulatorHarness.tone(dBFS: 20 * log10(amplitude), seconds: 2)
-            let loudValue = try LoudnessAccumulatorHarness.measure(loud)
+            let loudValue = try LoudnessAccumulatorHarness.measureLoudness(loud)
             let measured = try #require(loudValue)
             #expect(measured.isFinite)
             #expect(
@@ -329,9 +345,9 @@ struct LoudnessAccumulatorTests {
         ]
     )
     func resultIsIdenticalAtEveryChunkSize(_ vector: LoudnessTestVector) throws {
-        let reference = try LoudnessAccumulatorHarness.measure(vector, chunkFrames: nil)
+        let reference = try LoudnessAccumulatorHarness.measureLoudness(vector, chunkFrames: nil)
         for size in [1, 3, 127, 512, 4_096, 65_536] {
-            let measured = try LoudnessAccumulatorHarness.measure(vector, chunkFrames: size)
+            let measured = try LoudnessAccumulatorHarness.measureLoudness(vector, chunkFrames: size)
             #expect(measured == reference, "\(vector.name) at \(size): \(measured ?? .nan)")
         }
     }
@@ -344,9 +360,9 @@ struct LoudnessAccumulatorTests {
         arguments: [LoudnessTestVector.table1Test3, LoudnessTestVector.table1Test4]
     )
     func publishedGatingVectorsAreChunkIndependent(_ vector: LoudnessTestVector) throws {
-        let reference = try LoudnessAccumulatorHarness.measure(vector, chunkFrames: nil)
+        let reference = try LoudnessAccumulatorHarness.measureLoudness(vector, chunkFrames: nil)
         for size in [512, 4_096, 65_536] {
-            let measured = try LoudnessAccumulatorHarness.measure(vector, chunkFrames: size)
+            let measured = try LoudnessAccumulatorHarness.measureLoudness(vector, chunkFrames: size)
             #expect(measured == reference, "\(vector.name) at \(size)")
         }
     }
