@@ -164,6 +164,32 @@ enum HumanFormat {
         return "\(formatted) dBTP"
     }
 
+    /// A programme's **integrated loudness**, in `LUFS`: `-23.04` → `-23.0 LUFS`, `0` → `0.0 LUFS`,
+    /// `2.14` → `+2.1 LUFS`.
+    ///
+    /// Three things separate it from the two formatters above, and each is deliberate:
+    ///
+    /// - **It converts nothing.** dBFS and dBTP turn a linear amplitude into decibels here; LUFS is
+    ///   already the quantity the domain stores (`LoudnessMeasurement`'s own contract, ADR-0022 §5), so
+    ///   this only renders it. There is no `log10` to reach an infinity through, which is why there is
+    ///   no floor.
+    /// - **One decimal**, not two. It is the display precision EBU Tech 3341 §2.8 states for a meter
+    ///   reading, and the accumulator's own agreement with an independent implementation is pinned at
+    ///   ±0.1 — a second decimal would assert a resolution the measurement is not qualified to.
+    /// - **Nothing is clamped, floored or substituted.** A programme genuinely above full scale reads
+    ///   positive, explicitly signed, exactly as a true peak above unity does. The standard's −70 LKFS
+    ///   absolute gate is a threshold on *blocks*, never a floor on the result, and a value that could
+    ///   not be produced never reaches this function — absence is said in words by the caller.
+    ///
+    /// The sign strategy is the one `decibelsFullScale`/`decibelsTruePeak` already use, so a positive
+    /// reading is never mistaken for a negative one and zero is not given a decorative `+`.
+    static func loudnessFullScale(_ lufs: Double) -> String {
+        let formatted = lufs.formatted(
+            .number.precision(.fractionLength(1)).sign(strategy: .always(includingZero: false)).locale(locale)
+        )
+        return "\(formatted) LUFS"
+    }
+
     /// A linear, signed value with no unit — DC offset has no good behaviour on a decibel scale, since
     /// it can be negative and sits naturally near zero. Four decimal places: `Float`'s own roughly seven
     /// significant digits give a comfortable margin at this magnitude, and four places already resolve
