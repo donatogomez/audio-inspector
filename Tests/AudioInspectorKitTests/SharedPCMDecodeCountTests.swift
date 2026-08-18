@@ -68,11 +68,17 @@ struct SharedPCMDecodeCountTests {
         )
     }
 
+    /// Half a second at 44 100 Hz, and the duration is load-bearing since loudness joined the read.
+    ///
+    /// It used to be 8 192 frames — 0.186 s — which is **shorter than one 400 ms gating block**, so
+    /// integrated loudness would correctly report no value and this gate could not tell "never received
+    /// the chunks" from "received them and the standard defines no result". 22 050 frames spans five
+    /// gating blocks, so an absence here means the wiring rather than the file.
     private func fixture(in directory: URL) throws -> URL {
         try writeAudioFixture(
             AudioFixtureSpec(
                 name: "decode-count", format: .wav, signal: .sine(frequency: 440, amplitude: 0.5),
-                channels: 2, frames: 8_192
+                channels: 2, frames: 22_050
             ),
             in: directory
         )
@@ -81,7 +87,7 @@ struct SharedPCMDecodeCountTests {
     /// **One sample read for a whole inspection**, with a real file and the real adapters: a single
     /// pass feeding the waveform, the spectrogram, the signal level metrics *and* the true peak. Not
     /// two, not three, and not the four the pre-sharing design would have needed.
-    @Test("a whole inspection reads the samples exactly once, with all four analyses produced")
+    @Test("a whole inspection reads the samples exactly once, with all five analyses produced")
     func aWholeInspectionReadsTheSamplesOnce() async throws {
         try await withTemporaryDirectory { directory in
             let url = try fixture(in: directory)
@@ -93,8 +99,11 @@ struct SharedPCMDecodeCountTests {
             #expect(counts.decodeCalls == 1, "the shared read happened more than once")
             #expect(counts.sampleReads == 1, "an inspection read the file's samples \(counts.sampleReads) times")
 
-            // The count only means something if all four analyses really were produced from those reads.
-            guard case let .inspected(_, waveform, spectrogram, levels, truePeak) = outcome else {
+            // The count only means something if all five analyses really were produced from those
+            // reads. **Loudness is the fifth**, and it joined without adding one: the number above is
+            // still one, which is the whole architectural claim.
+            guard case let .inspected(_, waveform, spectrogram, levels, truePeak, loudness) = outcome
+            else {
                 Issue.record("expected an inspected outcome, got \(outcome)"); return
             }
             guard case .available = waveform, case .available = spectrogram,
@@ -102,13 +111,19 @@ struct SharedPCMDecodeCountTests {
                 Issue.record("an analysis produced nothing: \(waveform) \(spectrogram) \(levels) \(truePeak)")
                 return
             }
+            // The fixture is 44 100 Hz stereo, a configuration loudness claims, so an absence here would
+            // mean it never received the shared chunks rather than that it declined the stream.
+            guard case .available = loudness else {
+                Issue.record("loudness produced nothing from the shared read: \(loudness)"); return
+            }
         }
     }
 
     /// The report is emitted before any sample is read, which is the reason the shared read is allowed
     /// to take as long as it takes. **The order of the four analyses is unchanged by the cutover**: the
     /// waveform is still announced first of them, it simply settles when the one read finishes rather
-    /// than when a read of its own did.
+    /// than when a read of its own did. **Loudness is announced last**, after the four that preceded it,
+    /// and the report still precedes all five.
     @Test("the report is still delivered before either read produces anything")
     func theReportStillComesFirst() async throws {
         try await withTemporaryDirectory { directory in
@@ -123,11 +138,15 @@ struct SharedPCMDecodeCountTests {
                 case .spectrogram: order.record("spectrogram")
                 case .signalLevelMetrics: order.record("signalLevelMetrics")
                 case .truePeak: order.record("truePeak")
+                case .loudness: order.record("loudness")
                 }
             }
 
             #expect(order.entries.first == "report", "the report no longer arrives first: \(order.entries)")
-            #expect(order.entries == ["report", "waveform", "spectrogram", "signalLevelMetrics", "truePeak"])
+            #expect(
+                order.entries
+                    == ["report", "waveform", "spectrogram", "signalLevelMetrics", "truePeak", "loudness"]
+            )
         }
     }
 

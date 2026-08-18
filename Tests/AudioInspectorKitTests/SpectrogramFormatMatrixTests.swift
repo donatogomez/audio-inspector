@@ -856,7 +856,7 @@ struct SpectrogramFormatIsolationTests {
             SourceInspectionCoordinator(makeDecoder: { _ in scripted })
         } ?? SourceInspectionCoordinator()
         let outcome = await coordinator.inspect(url, onUpdate: { _ in })
-        guard case let .inspected(report, _, spectrogram, _, _) = outcome else {
+        guard case let .inspected(report, _, spectrogram, _, _, _) = outcome else {
             throw InspectionDidNotComplete()
         }
         return (report, spectrogram)

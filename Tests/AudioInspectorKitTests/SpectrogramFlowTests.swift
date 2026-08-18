@@ -126,7 +126,7 @@ struct SpectrogramFlowTests {
             let coordinator = SourceInspectionCoordinator(makeDecoder: { _ in decoder })
             let outcome = await coordinator.inspect(url, onUpdate: { box.collect($0) })
 
-            guard case let .inspected(report, waveform, _, _, _) = outcome else {
+            guard case let .inspected(report, waveform, _, _, _, _) = outcome else {
                 Issue.record("expected an inspected outcome"); return
             }
             guard case .failed = report.status else {
@@ -155,7 +155,7 @@ struct SpectrogramFlowTests {
             )
             let outcome = await coordinator.inspect(url, onUpdate: { box.collect($0) })
 
-            guard case let .inspected(report, waveform, _, _, _) = outcome else {
+            guard case let .inspected(report, waveform, _, _, _, _) = outcome else {
                 Issue.record("expected an inspected outcome"); return
             }
             if case .failed = report.status {
@@ -207,7 +207,7 @@ struct SpectrogramFlowTests {
             )
             let outcome = await coordinator.inspect(url, onUpdate: { box.collect($0) })
 
-            guard case let .inspected(_, waveform, _, _, _) = outcome else {
+            guard case let .inspected(_, waveform, _, _, _, _) = outcome else {
                 Issue.record("expected an inspected outcome"); return
             }
             guard case .failed = waveform else {
@@ -241,7 +241,7 @@ struct SpectrogramFlowTests {
             )
             let outcome = await coordinator.inspect(url, onUpdate: { box.collect($0) })
 
-            guard case let .inspected(report, waveform, spectrogram, levels, truePeak) = outcome else {
+            guard case let .inspected(report, waveform, spectrogram, levels, truePeak, _) = outcome else {
                 Issue.record("expected an inspected outcome"); return
             }
             #expect(box.first == .cancelled)

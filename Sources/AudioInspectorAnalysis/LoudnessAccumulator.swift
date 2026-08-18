@@ -34,11 +34,13 @@ import AudioInspectorDomain
 /// Both refusals are the failable initialiser, which is the convention `TruePeakAccumulator` and
 /// `SignalLevelMetricsAccumulator` already use for a stream they cannot fold.
 ///
-/// ## Internal, deliberately
+/// ## Public surface, and only what the composition needs
 ///
-/// **Nothing in this file is `public`.** The shape that crosses the module boundary is
-/// `LoudnessMeasurement`'s, which `finish()` returns; publishing the accumulator as well would offer a
-/// second entry point to the same measurement with none of the model's guarantees.
+/// Three members cross the module boundary — the initialiser, `accumulate` and `finish` — which is
+/// exactly what `SharedPCMAnalysisGeneration` calls, and the same surface its three siblings expose.
+/// Everything else stays internal: the filter it built, the block energies, the derived threshold and
+/// the method it declares are for its own tests, not for a caller to reach around the measurement with.
+/// The shape that carries a result outward is `LoudnessMeasurement`'s.
 ///
 /// ## One pass, no samples retained, memory in blocks rather than in frames
 ///
@@ -54,7 +56,7 @@ import AudioInspectorDomain
 /// It owns mutable per-channel filter state with no synchronisation. Exactly like its three siblings, it
 /// is created and consumed inside one `nonisolated async` operation, never stored on a `Sendable` type,
 /// never cached, never shared.
-struct LoudnessAccumulator {
+public struct LoudnessAccumulator {
 
     // MARK: - Published constants (ITU-R BS.1770-5, Annex 1)
 
@@ -139,7 +141,7 @@ struct LoudnessAccumulator {
 
     /// Fails on any stream this type cannot measure honestly: a rate other than 48 kHz, a channel count
     /// outside mono/stereo, or a rate whose block does not divide into whole sub-blocks.
-    init?(sampleRate: Double, channelCount: Int) {
+    public init?(sampleRate: Double, channelCount: Int) {
         guard Self.supportedSampleRates.contains(sampleRate) else { return nil }
         guard channelCount >= 1, channelCount <= 2 else { return nil }
         guard let weighting = KWeighting(sampleRate: sampleRate) else { return nil }
@@ -183,7 +185,7 @@ struct LoudnessAccumulator {
     /// handed. The difference is far below any tolerance that matters, and it is still the wrong
     /// trade — this project's other analyses are chunk-independent *exactly*, and a loudness figure that
     /// changed with the decoder's buffer size would be a reproducibility defect however small.
-    mutating func accumulate(_ chunk: PCMChunk) {
+    public mutating func accumulate(_ chunk: PCMChunk) {
         guard chunk.channelCount == channelCount else { return }
         let frames = chunk.frameCount
         guard frames > 0 else { return }
@@ -215,7 +217,7 @@ struct LoudnessAccumulator {
     /// Builds the domain value itself, as `TruePeakAccumulator` does: the type that measured is the one
     /// that can name the methodology, and routing that through a mapper would put a second spelling of it
     /// somewhere the measurement could drift from.
-    func finish() -> LoudnessMeasurement? {
+    public func finish() -> LoudnessMeasurement? {
         guard !blockEnergies.isEmpty else { return nil }
         guard let threshold = relativeThreshold() else { return nil }
 

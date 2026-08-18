@@ -135,7 +135,7 @@ struct TruePeakFlowStateTests {
         action.finish(.inspected(
             action.report, waveform: .unavailable, spectrogram: .unavailable,
             signalLevelMetrics: .unavailable, truePeak: .unavailable
-        ))
+        , loudness: .unavailable))
         await running.value
     }
 
@@ -165,7 +165,7 @@ struct TruePeakFlowStateTests {
         action.finish(.inspected(
             action.report, waveform: .unavailable, spectrogram: .unavailable,
             signalLevelMetrics: .available(try metrics()), truePeak: .available(measured)
-        ))
+        , loudness: .unavailable))
         await running.value
     }
 
@@ -184,7 +184,7 @@ struct TruePeakFlowStateTests {
         action.finish(.inspected(
             action.report, waveform: .unavailable, spectrogram: .unavailable,
             signalLevelMetrics: .unavailable, truePeak: .unavailable
-        ))
+        , loudness: .unavailable))
         await running.value
     }
 
@@ -211,7 +211,7 @@ struct TruePeakFlowStateTests {
             action.report, waveform: .unavailable, spectrogram: .unavailable,
             signalLevelMetrics: .available(try metrics()),
             truePeak: .failed(message: "The true peak for this file could not be measured.")
-        ))
+        , loudness: .failed(message: "loudness")))
         await running.value
     }
 
@@ -232,7 +232,7 @@ struct TruePeakFlowStateTests {
         action.finish(.inspected(
             action.report, waveform: .unavailable, spectrogram: .unavailable,
             signalLevelMetrics: .unavailable, truePeak: .unavailable
-        ))
+        , loudness: .unavailable))
         await running.value
     }
 
@@ -264,11 +264,11 @@ struct TruePeakFlowStateTests {
         first.finish(.inspected(
             first.report, waveform: .unavailable, spectrogram: .unavailable,
             signalLevelMetrics: .unavailable, truePeak: .unavailable
-        ))
+        , loudness: .unavailable))
         second.finish(.inspected(
             second.report, waveform: .unavailable, spectrogram: .unavailable,
             signalLevelMetrics: .unavailable, truePeak: .unavailable
-        ))
+        , loudness: .unavailable))
         _ = await firstRun.value
         _ = await secondRun.value
     }

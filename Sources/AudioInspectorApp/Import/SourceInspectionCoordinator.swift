@@ -68,7 +68,7 @@ struct SourceInspectionCoordinator {
     /// The order is deliberate. The report is complete on its own and metadata is far quicker to read
     /// than samples, so holding it back until an analysis is done would delay everything that already
     /// works for the sake of something optional. `onUpdate(.report(_:))` fires the moment it exists,
-    /// and the four sample-based analyses follow.
+    /// and the five sample-based analyses follow.
     ///
     /// The scope is acquired once and released once, covering the mapper, the property reader, the use
     /// case **and the single sample read**: the `defer` below runs only after that read has finished, so
@@ -93,18 +93,20 @@ struct SourceInspectionCoordinator {
         onUpdate(.report(report))
 
         // Nothing could be read at all, so there is nothing to read samples from either. The read does
-        // not start: the report stands, and all four analyses are simply absent.
+        // not start: the report stands, and all five analyses are simply absent.
         if case .failed = report.status {
             onUpdate(.waveform(.unavailable))
             onUpdate(.spectrogram(.unavailable))
             onUpdate(.signalLevelMetrics(.unavailable))
             onUpdate(.truePeak(.unavailable))
+            onUpdate(.loudness(.unavailable))
             return .inspected(
                 report,
                 waveform: .unavailable,
                 spectrogram: .unavailable,
                 signalLevelMetrics: .unavailable,
-                truePeak: .unavailable
+                truePeak: .unavailable,
+                loudness: .unavailable
             )
         }
 
@@ -130,13 +132,15 @@ struct SourceInspectionCoordinator {
         onUpdate(.spectrogram(shared.spectrogram))
         onUpdate(.signalLevelMetrics(shared.signalLevelMetrics))
         onUpdate(.truePeak(shared.truePeak))
+        onUpdate(.loudness(shared.loudness))
 
         return .inspected(
             report,
             waveform: shared.waveform,
             spectrogram: shared.spectrogram,
             signalLevelMetrics: shared.signalLevelMetrics,
-            truePeak: shared.truePeak
+            truePeak: shared.truePeak,
+            loudness: shared.loudness
         )
     }
 
