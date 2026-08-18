@@ -339,6 +339,31 @@ struct LoudnessOracleTests {
         }
     }
 
+    /// Per rate, against the reference implementation. The bound is the published ±0.1 rather than the
+    /// 0.0426 actually observed, and deliberately: the delta **grows with the rate** because FFmpeg's own
+    /// reading drifts 0.03 LU across these rates while ours moves 0.0066, so most of what is being
+    /// measured here is the oracle moving rather than us. A bound fitted to today's oracle build would
+    /// fail on the oracle's drift and call it our regression.
+    @Test(
+        "the accumulator agrees with the oracle at every supported rate",
+        arguments: [44_100.0, 48_000.0, 88_200.0, 96_000.0, 192_000.0]
+    )
+    func accumulatorAgreesWithTheOracleAtEveryRate(_ rate: Double) async throws {
+        let vector = LoudnessAccumulatorHarness.resynthesised(
+            LoudnessTestVector.calibration, at: rate
+        )
+        let produced = try LoudnessAccumulatorHarness.measureLoudness(vector)
+        let accumulator = try #require(produced)
+
+        try await withTemporaryDirectory { directory in
+            let reading = try measure(vector, in: directory)
+            #expect(
+                abs(accumulator - reading.integrated) <= LoudnessTestVector.publishedTolerance,
+                "\(Int(rate)) Hz: accumulator \(accumulator), oracle \(reading.integrated)"
+            )
+        }
+    }
+
     // MARK: Provenance
 
     @Test("the FFmpeg build used is recorded with the evidence")

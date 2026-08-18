@@ -22,14 +22,22 @@ struct LoudnessAccumulatorTests {
         #expect(LoudnessAccumulator(sampleRate: 48_000, channelCount: 2) != nil)
     }
 
-    /// BS.1770-5 publishes coefficients for 48 kHz **only**, and asks other rates merely to match that
-    /// response without saying how. Deriving them is a later task and a weaker compliance claim, so this
-    /// version refuses rather than measuring with the wrong filter.
     @Test(
-        "every rate other than 48 kHz is refused rather than measured with the wrong filter",
-        arguments: [8_000.0, 44_100.0, 47_999.0, 48_001.0, 88_200.0, 96_000.0, 192_000.0]
+        "every rate the derivation has been measured at is accepted",
+        arguments: [44_100.0, 48_000.0, 88_200.0, 96_000.0, 192_000.0]
     )
-    func refusesOtherSampleRates(_ rate: Double) {
+    func acceptsEveryMeasuredRate(_ rate: Double) {
+        #expect(LoudnessAccumulator(sampleRate: rate, channelCount: 2) != nil)
+    }
+
+    /// The supported set is enumerated rather than open-ended: each rate in it is one the derivation has
+    /// actually been measured at, and admitting an unmeasured rate would be claiming a response nobody
+    /// checked. A near-miss is refused as firmly as an absurd one.
+    @Test(
+        "a rate the derivation has not been measured at is refused rather than guessed",
+        arguments: [8_000.0, 11_025.0, 22_050.0, 32_000.0, 47_999.0, 48_001.0, 176_400.0, 384_000.0]
+    )
+    func refusesUnmeasuredSampleRates(_ rate: Double) {
         #expect(LoudnessAccumulator(sampleRate: rate, channelCount: 2) == nil)
     }
 
@@ -69,12 +77,11 @@ struct LoudnessAccumulatorTests {
     /// export that spelled it out again would be asserting a methodology it did not perform.
     @Test("the measurement carries the accumulator's own declared method")
     func measurementCarriesTheMeasuringMethod() throws {
+        let accumulator = try #require(LoudnessAccumulator(sampleRate: 48_000, channelCount: 2))
         let value = try LoudnessAccumulatorHarness.measure(.table1Test1)
         let measured = try #require(value)
-        #expect(measured.method == LoudnessAccumulator.method)
+        #expect(measured.method == accumulator.method)
         #expect(measured.method.algorithm == .integratedBS1770v1)
-        // The published coefficients, because 48 kHz is the only rate this type accepts. A derivation
-        // for other rates is a later task and will carry its own weighting identity.
         #expect(measured.method.weighting == .publishedAt48kHz)
     }
 

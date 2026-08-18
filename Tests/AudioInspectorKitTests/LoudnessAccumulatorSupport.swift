@@ -102,6 +102,22 @@ enum LoudnessAccumulatorHarness {
         )
     }
 
+    /// The same described signal at another sample rate.
+    ///
+    /// Relabelled `derived`, because the publisher's table does not contain it: EBU Tech 3341's signals
+    /// are published synthesised at 48 kHz, and a resynthesis elsewhere is a **derived acceptance case**
+    /// rather than an official vector. The expected reading is unchanged, because the signal the
+    /// description names is the same signal.
+    static func resynthesised(_ vector: LoudnessTestVector, at rate: Double) -> LoudnessTestVector {
+        var copy = vector
+        copy.sampleRate = rate
+        copy.name = "\(vector.name)-at-\(Int(rate))"
+        copy.authority = .derived(
+            rationale: "the same described signal, resynthesised at \(Int(rate)) Hz"
+        )
+        return copy
+    }
+
     /// A multi-level tone, for a gating shape short enough to feed one frame at a time.
     static func segments(_ specs: [(dBFS: Double?, seconds: Double)]) -> LoudnessTestVector {
         LoudnessTestVector(
