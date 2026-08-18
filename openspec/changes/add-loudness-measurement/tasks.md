@@ -212,19 +212,33 @@ vector within the published ±0.1 (worst deviation **0.0213 LU**, on test 5); bo
       removed, filter state reset per chunk, block boundaries made per-chunk, the trailing partial block
       included, and the relative gate applied without the absolute one.
 
-## 7. The fifth consumer
+## 7. The fifth consumer — **CLOSED**
 
-- [ ] 7.1 One field on `SharedPCMAnalysisOutcome`, one accumulator in the composition, one line in each
+- [x] 7.1 One field on `SharedPCMAnalysisOutcome`, one accumulator in the composition, one line in each
       of `prepare`/`accumulate`/`failAll`/`finish` — the price true peak and the waveform each paid. No
-      protocol, no generic machinery, **no second read**.
-- [ ] 7.2 Isolation, with negative controls: its failure is its own, the read outlives it, a producer
-      failure ends every consumer separately, cancellation is global, absence stays distinct from
-      failure.
-- [ ] 7.3 Confirm the read count is **still one**, at the gate that already asserts it.
-- [ ] 7.4 Measure the real cost as a fifth consumer. Projected from the spike: **≈0.14 s** on ten minutes
-      of stereo, roughly half the waveform's fold and 7–12 % of the pass it joins. Block bookkeeping and
-      the two gating passes are per-block, not per-sample, and were not separately measured. A materially
-      larger figure means something is being paid that the spike did not see.
+      protocol, no generic machinery, **no second read**. The accumulator became `public` here, which is
+      the only reason it was not before.
+- [x] 7.2 Isolation, with negative controls. **Loudness is the first consumer whose accumulator declines
+      perfectly valid streams**, and the shape absorbed that as an **absence** rather than a fault, on
+      the precedent the waveform's own already set: an unsupported rate or more than two channels leaves
+      it `unavailable` and every other analysis producing a complete model. A producer failure ends all
+      five, each with its own sentence; cancellation is global; and a producer that fails *after the last
+      chunk* still publishes nothing.
+- [x] 7.3 The read count is **still one**, at the gate that already asserts it — now with loudness in the
+      list of analyses that must actually have been produced. The gate's fixture grew from 8 192 frames
+      to 22 050 for that assertion to mean anything: 0.186 s is shorter than one gating block, so
+      loudness would have reported no value for a reason that has nothing to do with the wiring.
+- [x] 7.4 Measure the real cost as a fifth consumer. **Measured 4-against-5 rather than projected**: the
+      pass goes 1.269 s → 1.524 s at 48 kHz over ten minutes of stereo, a delta of **0.255 s** against
+      loudness's own **0.236 s** in isolation — so the whole increase is its DSP and no second read is
+      hiding in it. The proportion holds across rates (44.1 → 0.230, 96 → 0.488, 192 → 0.885), which is
+      what a per-sample cost looks like. Its share of the pass is **11–17 %** depending on container
+      against the spike's projected 7–12 %: over at the cheap end (WAV, where decode is nearly free) and
+      inside it for FLAC and AAC.
+- [x] 7.5 **No reachable failure of its own**, audited rather than assumed. Every way loudness ends
+      without a value is an absence — the accumulator declining the stream, or the standard defining no
+      result — and the one path that would be a genuine failure, a non-finite loudness, is unreachable
+      from `PCMChunk`'s finite `Float`s. Recorded as a limitation, exactly as signal levels' own `nil` is.
 
 ## 8. Surface
 
