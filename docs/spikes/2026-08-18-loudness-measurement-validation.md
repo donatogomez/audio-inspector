@@ -1,19 +1,22 @@
 # Spike — loudness measurement, before designing it
 
-**Date**: 2026-08-18 (two sessions) · **Status**: complete, informing change `add-loudness-measurement` ·
+**Date**: 2026-08-18 · **Status**: complete, informing change `add-loudness-measurement` ·
 **Machine**: one Apple Silicon Mac, one SDK. Timings do not carry forward; the semantic findings do.
 
 The first session could measure a reference implementation but had not read the standards, so it
-recorded no constant as a normative fact. The second session obtained and read them. **This document is
-therefore split in two, and the split is load-bearing:**
+recorded no constant as a normative fact. Later sessions obtained and read them, and then filled the one
+gap the reading exposed. **The document is split by the authority of what it records, and the split is
+load-bearing:**
 
 - **Part A — normative facts.** Every statement carries its document, revision and section. Nothing here
   is measured, inferred or remembered.
 - **Part B — empirical oracle observations.** Everything measured from FFmpeg 8.1.2. Nothing here is
   normative, however well it agrees with Part A.
+- **Part D — this project's own construction**, for the multi-rate weighting BS.1770-5 declines to
+  specify. Measured, defensible, and **not** normative under any reading.
 
-A number that appears in both parts appears twice, once as a rule and once as a measurement. They are
-never merged.
+A number that appears in more than one part appears more than once, once as a rule and once as a
+measurement. They are never merged.
 
 ---
 
@@ -666,6 +669,155 @@ time. Both were confirmed by deliberately breaking them.
 
 ---
 
+# Part D — The multi-rate weighting derivation
+
+BS.1770-5 publishes coefficients for 48 kHz and asks every other rate for *the same frequency response*,
+publishing no prototype, no table, no transform and no tolerance (A3). This part is the evidence for the
+construction that fills that gap. **None of it is normative**: it is this project's own work, measured.
+
+## D1. What "the same response" was made to mean
+
+Compared on **absolute analogue frequency** — 40 Hz against 40 Hz — over a log sweep of 20 Hz to 20 kHz,
+which sits below Nyquist at every rate here. Comparing normalised frequencies instead would compare two
+different filters and call them equal, so it is never done.
+
+## D2. Candidates, and why four of five lost
+
+| | candidate | verdict |
+| --- | --- | --- |
+| **A** | plain bilinear round-trip, no prewarp (*K* = 2·f_s) | Works — **0.0157 dB** worst. Beaten by B |
+| **B** | inverse bilinear per stage, prewarped at that stage's own natural frequency, then forward at the target rate | **Chosen — 0.0077 dB** worst |
+| **C** | numerically fitted prewarp frequencies | **0.00736 dB** — a **4.6 %** improvement for two magic numbers. Rejected |
+| **D** | resample the audio to 48 kHz and use the published coefficients | Rejected before measurement (ADR-0022 §3): it measures a converted signal rather than the file |
+| **E** | tables generated offline | Not a different derivation — the same arithmetic, packaged as a second source that can drift from the published table. Rejected as packaging (D6) |
+
+A fourth variant was measured to show the per-stage treatment is not decoration: **prewarping both stages
+at stage 1's frequency gives 0.0521 dB**, seven times worse than B. And a common prewarp frequency chosen
+by habit degrades sharply — 1 kHz 0.018 dB, 4 kHz 0.296, 8 kHz 1.23, 16 kHz 5.75, 20 kHz 9.91. **A
+"typical" value picked without measuring would have been wrong by decibels.**
+
+The optimiser's answer also landed on the edge of its own search range, which is what a flat, ill-posed
+objective looks like — further reason not to fit.
+
+## D3. The construction, stated exactly
+
+For each published section, with *K*(f_s, f₀) = ω₀ / tan(π f₀ / f_s):
+
+1. recover the analogue section by substituting *z*⁻¹ = (*K* − *s*)/(*K* + *s*) and clearing denominators;
+2. take that section's **own** characteristic frequency f₀ = √(d₀/d₂)/2π from the recovered denominator —
+   **derived, not chosen**: stage 1 gives **1688.8019975859 Hz**, stage 2 gives **38.1355500687 Hz**;
+3. recover again with *K*(48 000, f₀), and discretise at *K*(f_s, f₀).
+
+**BS.1770-5 publishes no such prototype.** It is the analogue filter the published section is the
+bilinear transform *of* — a construction of this project, and nothing here may be called normative.
+
+## D4. The round-trip gate
+
+| | result |
+| --- | --- |
+| response, derived back to 48 kHz | **0.000000 dB** across the whole sweep |
+| coefficients, stage 1 | max abs difference **4.441 × 10⁻¹⁶** |
+| coefficients, stage 2 | max abs difference **1.110 × 10⁻¹⁶** |
+| **bit-identical?** | **No** |
+
+Exact in the response for *any* prewarp choice, because the recovery and the re-discretisation then use
+the same constant — so the tuning in D3 cannot compromise the one rate the Recommendation specifies.
+
+**And because it is not bit-identical, 48 kHz does not go through the derivation at all.** The published
+coefficients run literally, and the weighting identity says `published` rather than `derived`. "The
+published numbers ran" should mean exactly that.
+
+## D5. The matrix
+
+| rate | max response error | RMS | worst at | stage 1 pole | stage 2 pole | weighting |
+| --- | --- | --- | --- | --- | --- | --- |
+| 44 100 | **0.001518 dB** | 0.000580 | 2 689 Hz | 0.844153 | 0.994585 | derived |
+| 48 000 | **0.000000 dB** | 0.000000 | — | 0.855851 | 0.995024 | **published** |
+| 88 200 | **0.005786 dB** | 0.002225 | 2 698 Hz | 0.918774 | 0.997289 | derived |
+| 96 000 | **0.006165 dB** | 0.002372 | 2 698 Hz | 0.925120 | 0.997509 | derived |
+| 192 000 | **0.007707 dB** | 0.002969 | 2 703 Hz | 0.961832 | 0.998754 | derived |
+
+Every pole is inside the unit circle, and the worst error sits at the **shelf transition** rather than at
+the band edges — the bilinear warp costs most where the curve has slope, and least where it is flat.
+
+## D6. The tolerance, chosen after measuring
+
+The Recommendation states none, so it was not invented first and passed afterwards:
+
+- the published compliance tolerance is **±0.1 LUFS**, and a response error of *E* dB can move a reading
+  by at most *E*;
+- **FFmpeg's own reading drifts 0.03 LU** across these rates, so a bound tighter than that would claim
+  more agreement than the reference implementation has with itself;
+- the Recommendation itself notes the algorithm is **not sensitive to small variations** in these
+  coefficients and expects them to be quantised.
+
+**Chosen: 0.02 dB.** Worst observed 0.0077 → a factor of **2.6** in hand, and **5×** inside the published
+±0.1. Deliberately not set at the observed error: a tolerance fitted to today's measurement tests nothing
+but today's measurement. It has teeth — using the 48 kHz coefficients unadapted at 44.1 kHz misses it by
+more than tenfold.
+
+## D7. Loudness, which is what the response was for
+
+Spread of the same tone measured at all five rates:
+
+| tone | 40 Hz | 100 Hz | 997 Hz | 1 kHz | 4 kHz | 12 kHz |
+| --- | --- | --- | --- | --- | --- | --- |
+| spread (LU) | **0.00000** | 0.00003 | 0.00652 | **0.00655** | 0.00650 | 0.00069 |
+
+Worst **0.0066 LU** — three times inside the 0.02 the suite allows, and fifteen times inside the
+publishers' ±0.1. The published vectors resynthesised at every rate stay within their published
+expectations.
+
+## D8. Against FFmpeg, per rate
+
+| rate | ours | FFmpeg | delta |
+| --- | --- | --- | --- |
+| 44 100 | −17.9944 | −18.0000 | 0.0056 |
+| 48 000 | −17.9933 | −18.0000 | 0.0067 |
+| 88 200 | −17.9892 | −18.0100 | 0.0208 |
+| 96 000 | −17.9889 | −18.0200 | 0.0311 |
+| 192 000 | −17.9878 | −18.0300 | **0.0426** |
+
+**The delta grows with the rate because the oracle moves, not because we do.** FFmpeg's own reading of
+the same signal drifts **0.03 LU** across these rates; ours drifts **0.0066**. So our derivation is
+*more* rate-invariant than the reference implementation — which is a reason to keep the comparison bound
+at the published ±0.1 rather than tightening it onto the oracle's drift.
+
+## D9. 192 kHz, treated as its own case
+
+Not assumed easier. Measured: poles at 0.9618/0.9988 — the closest to the unit circle of any rate, and
+still inside; response error 0.0077 dB, the worst of the five; LUFS contribution 0.0066; FFmpeg delta
+0.0426. **The oracle limitation true peak has at 192 kHz is not inherited**: that one is about
+oversampling for peak reconstruction, and `ebur128` measures this rate perfectly well — confirmed by
+running it rather than by reasoning about it.
+
+## D10. Coefficient precision, and cost
+
+**`Double`, and now for a measured reason rather than a preference.** Quantising the derived coefficients
+to `Float` costs, in response error: 0.000025 dB at 48 kHz, 0.004854 at 44.1 kHz, **0.014571 at
+192 kHz** — which alone would consume three quarters of the 0.02 dB budget, on top of the derivation's
+own 0.0077. All remain stable, so this is accuracy rather than safety, and there is no cost to avoid it.
+
+Cost over ten minutes of stereo, Release:
+
+| rate | coefficient construction | fold | finish |
+| --- | --- | --- | --- |
+| 44 100 | ~0.5 µs | 0.243 s | 0.0001 s |
+| 48 000 | ~0.5 µs | ~0.27 s | 0.0001 s |
+| 96 000 | ~0.5 µs | 0.516 s | 0.0001 s |
+| 192 000 | ~0.5 µs | 1.05 s | 0.0001 s |
+
+**Building the coefficients is free** — half a microsecond, once per file, against a fold measured in
+tenths of a second. The fold scales with the sample rate because there are more samples, not because the
+derivation costs anything per sample: the recurrence is identical and only the numbers in it differ.
+
+One honest regression: 48 kHz moved from **0.243 s to ~0.27 s (+11 %)** when the coefficients stopped
+being compile-time constants and became values the filter carries. That is the price of supporting more
+than one rate at all, and special-casing 48 kHz back into constants was rejected as duplicating the
+recurrence for a tenth of a second in ten minutes.
+
+---
+
 # Part C — What this evidence forces
 
 1. **The blocking unknown is resolved.** Every constant integrated loudness needs is published, sourced
@@ -685,3 +837,8 @@ time. Both were confirmed by deliberately breaking them.
    makes them targets rather than a description of whatever gets written. The oracle's qualification is
    now a measured 0.021 LU worst case rather than an assertion, and the half of the battery that needs no
    tool runs in CI.
+9. **The gap BS.1770-5 leaves at other sample rates is fillable, and the filling is ours** (Part D). A
+   per-stage prewarped bilinear round-trip reproduces the published response to **0.0077 dB** worst case,
+   round-trips 48 kHz exactly, and leaves the reading invariant to **0.0066 LU** — better than the
+   reference implementation manages against itself. What it does not do is become normative, which is why
+   the two tiers carry different identities on the value.
