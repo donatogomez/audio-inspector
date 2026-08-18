@@ -9,10 +9,11 @@ constant is sourced. Nothing below may be built on a remembered number.
 *before* any production, so the targets could not be fitted to whatever got written. They were not
 touched afterwards.
 
-**Group 2 is closed at 48 kHz** and group 4's measurements with it. Every other sample rate is task 4.4
-and nothing pretends otherwise: the accumulator refuses them rather than measuring them with the wrong
-filter. **Group 3 is closed** and the accumulator returns the domain model. Groups 6–9 remain: the
-per-rate derivation, the shared-read wiring, the surface and the export.
+**Groups 2, 3 and 4 are closed**, now at every supported sample rate. The accumulator returns the domain
+model, and the two weighting tiers — published at 48 kHz, derived elsewhere — are distinguishable on the
+value itself. **Group 6 stays open** apart from 6.4: what remains there is the cross-container oracle
+comparison and the production negative controls. Groups 7–9 are the shared-read wiring, the surface and
+the export, none of it started.
 
 ## 1. The constants, from the standard rather than from memory — **CLOSED**
 
@@ -55,12 +56,12 @@ per-rate derivation, the shared-read wiring, the surface and the export.
       Tests 7–8 are authentic programme segments — usable locally, **never committed**. BS.2217-2's WAVs
       were not obtained; the Report describes them.
 
-## 2. The accumulator — **CLOSED at 48 kHz**; every other rate is task 4.4
+## 2. The accumulator — **CLOSED**, at every supported rate
 
 - [x] 2.1 `LoudnessAccumulator` in `AudioInspectorAnalysis`, taking `PCMChunk` like its three siblings,
-      with per-channel filter state and **absolute** block boundaries carried across chunks. It is
-      **48 kHz mono/stereo only**, and both refusals are the failable initialiser its siblings already
-      use. It is deliberately **not `public`**; it returned a bare LUFS `Double?` until group 3 existed,
+      with per-channel filter state and **absolute** block boundaries carried across chunks. **Mono and
+      stereo only**, at the rates task 2.8 lists, and every refusal is the failable initialiser its
+      siblings already use. It is deliberately **not `public`**; it returned a bare LUFS `Double?` until group 3 existed,
       so that the shape crossing the module boundary would be the domain type's rather than the
       accumulator's convenience. It now returns `LoudnessMeasurement?` (task 3.5).
 - [x] 2.2 ~~Filter with `vDSP_biquad`.~~ **Implemented and rejected on measurement**: its output changed
@@ -68,7 +69,7 @@ per-rate derivation, the shared-read wiring, the surface and the export.
       (−23.385524041147569 at one frame per chunk against −23.385524041147661 whole-file), because how it
       groups an IIR's work depends on the length of the run. Replaced by a scalar transposed-direct-form-II
       recurrence, which has no grouping to vary and is exact. The 48 kHz coefficients are the published
-      Table 1 / Table 2 values, transcribed; other rates remain task 4.4.
+      Table 1 / Table 2 values, transcribed; other rates are derived per task 2.8.
 - [x] 2.3 Accumulate energy in **100 ms sub-blocks** and form each 400 ms block from the last four, so
       that **no samples are buffered**. Blocks start at frame 0; the trailing incomplete block is
       discarded; one valid block requires **T ≥ 400 ms**.
@@ -86,6 +87,12 @@ per-rate derivation, the shared-read wiring, the surface and the export.
       does not prove the absolute gate ran: with the gate removed, Tech 3341 tests 3 and 4 still produce
       identical values, since the relative gate happens to exclude the same blocks by itself. The
       threshold is where the difference shows, and FFmpeg reports the same quantity.
+- [x] 2.8 **Multi-rate weighting.** 44.1 / 48 / 88.2 / 96 / 192 kHz. At 48 kHz the published
+      coefficients run **literally** — not through the derivation, whose round-trip is exact in the
+      response (0.000000 dB) but not bit-identical in the coefficients (4.4 × 10⁻¹⁶). Every other rate is
+      derived by a per-stage prewarped bilinear round-trip, worst response error **0.0077 dB**, all poles
+      inside the unit circle, reading invariant to **0.0066 LU**. The supported set is **enumerated**:
+      an unmeasured rate is refused rather than derived for. Evidence in spike Part D.
 
 ## 3. The domain type — **CLOSED**
 
@@ -132,9 +139,13 @@ per-rate derivation, the shared-read wiring, the surface and the export.
       not within a tolerance. This is the assertion that made `vDSP_biquadD` unusable (2.2). The two
       published gating vectors are 80 and 100 seconds long, so they are covered from 512 upwards and
       shapes carrying the same structure cover 1 and 3.
-- [ ] 4.4 Fix the **tolerance for "the same frequency response"** at rates other than 48 kHz, from
-      measurement, and record it with the method. ADR-0022 leaves it open deliberately: the standard
-      states none, and choosing one before the derivation exists is picking a number to be right about.
+- [x] 4.4 Fix the **tolerance for "the same frequency response"** at rates other than 48 kHz, from
+      measurement. **0.02 dB**, chosen after measuring rather than before: five times inside the
+      publishers' ±0.1 LUFS, under FFmpeg's own 0.03 LU drift across the same rates, and a factor of 2.6
+      over the 0.0077 dB the derivation actually produces. Deliberately not set at the observed error.
+- [x] 4.5 Decide the **coefficient precision**. `Double`, measured: quantising to `Float` costs 0.0146 dB
+      of response error at 192 kHz — three quarters of the whole budget — against 0.000025 dB at 48 kHz.
+      All remain stable, so this is accuracy rather than safety, and avoiding it costs nothing.
 
 ## 5. The official vectors and the oracle — **CLOSED**, and closed before any production exists
 
@@ -188,8 +199,10 @@ vector within the published ±0.1 (worst deviation **0.0213 LU**, on test 5); bo
 - [ ] 6.2 Reproduce **BS.1770-5's anchor** (mono, 997 Hz, 0 dBFS → −3.01 LKFS) and its attenuated form.
 - [ ] 6.3 The **undefined cases** yield no value: 400 ms measures, 399 ms does not, digital silence does
       not. Assert the absence; never −70.
-- [ ] 6.4 Rate-invariance across 44.1/48/88.2/96/192 kHz, and the 48 kHz round-trip: the derivation of
-      1.3 must reproduce the published Table 1 / Table 2 coefficients at 48 kHz.
+- [x] 6.4 Rate-invariance across 44.1/48/88.2/96/192 kHz, and the 48 kHz round-trip. **Both demonstrated**
+      — the reading moves at most 0.0066 LU across the five rates (FFmpeg's own moves 0.03), and deriving
+      back to 48 kHz reproduces the published response to 0.000000 dB and its coefficients to
+      1e-14. Chunk independence stays **bit-exact at every rate**.
 - [ ] 6.5 **Corroboration, ranked below 6.1–6.2**: the spike's measured K-weighting response curve
       (−6.3 dB at 40 Hz … +3.4 dB at 16 kHz) and the 40 dB gating fixture reading −6.1 LUFS.
 - [ ] 6.6 Cross-check **real files of each container** against the oracle helper built in 5.5, with a

@@ -64,12 +64,23 @@ So the three levels stay separate, and ADR-0022 decision 3 carries them:
 | --- | --- |
 | **Normatively fixed** | the 48 kHz coefficients above; the requirement that other rates match that response |
 | **Implementation-equivalent** | any derivation that demonstrably meets it |
-| **Our decision, recorded** | recover an analogue prototype from the 48 kHz coefficients and re-discretise per rate — **not** resample the audio to 48 kHz; and the tolerance at which "same response" is judged |
+| **Our decision, recorded** | the construction below, and the 0.02 dB at which "same response" is judged |
 
-**Acceptance property, mandatory**: at 48 kHz the derivation must reproduce the published coefficients,
-and the measured result must be rate-invariant across 44.1/48/88.2/96/192 kHz. Part B §5 shows a
-rate-adapting implementation is achievable; it does **not** show ours will match FFmpeg's, which is why
-the sweep is a test and not an assumption.
+**The construction, measured in Part D.** Recover the analogue section each published one is the bilinear
+transform of, prewarped at **that section's own natural frequency** — taken from the recovered
+denominator, so nothing here is a tuned constant — then re-discretise at the target rate. Worst response
+error **0.0077 dB** across 44.1–192 kHz, every pole inside the unit circle, and the reading invariant to
+**0.0066 LU**. Alternatives measured and rejected: no prewarp (0.0157 dB), one shared prewarp frequency
+(0.0521 dB), a numerical fit (0.00736 dB — 4.6 % better, for two magic numbers), resampling to 48 kHz
+(measures a converted signal), and offline tables (a second source that can drift from the published
+one).
+
+**48 kHz does not go through it.** The round-trip is exact in the response — 0.000000 dB — but not
+bit-identical in the coefficients (4.4 × 10⁻¹⁶), so the published rate uses the published table literally
+and is the only one whose weighting identity reads `published`.
+
+**The supported rates are enumerated**, because each is one the derivation was measured at; an unmeasured
+rate is refused rather than derived for.
 
 **`vDSP_biquad` was the intended route and was rejected once implemented.** It carries its own delay
 state, which is what a chunked stream needs, and the spike measured it at 0.117 s over ten minutes of
