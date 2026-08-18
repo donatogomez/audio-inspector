@@ -1,13 +1,14 @@
 # ADR-0022: Integrated loudness — how far compliance is claimed, and what the domain stores
 
-- **Status**: **Proposed.** The blocking condition of the first draft — that the normative constants had
-  not been read — **is discharged**: BS.1770-5, R 128 v5.0, Tech 3341 v4, Tech 3342 v4 and Report
-  BS.2217-2 were obtained and read, and every constant is now sourced in
-  `docs/spikes/2026-08-18-loudness-measurement-validation.md` Part A. It stays **Proposed** until the
-  implementation reproduces the **published** acceptance targets — EBU Tech 3341 tests 1–5 and its §2.9
-  calibration signal, within the published ±0.1 LUFS — plus rate-invariance and chunk-independence, each
-  by a test that fails when the property is broken, and until the manual validation battery has run.
-  Partial evidence does not promote it.
+- **Status**: **Accepted** (2026-08-18). Promoted on the conditions this record set for itself and on
+  nothing else: the **published** acceptance targets — EBU Tech 3341 tests 1–5 and its §2.9 calibration
+  signal — reproduced within the published ±0.1 LUFS, plus rate-invariance and chunk-independence, each
+  by a test that fails when the property is broken, and the manual validation battery run. The first
+  draft's own blocking condition — that the normative constants had not been read — was discharged
+  before any of them: BS.1770-5, R 128 v5.0, Tech 3341 v4, Tech 3342 v4 and Report BS.2217-2 were
+  obtained and read, and every constant is sourced in
+  `docs/spikes/2026-08-18-loudness-measurement-validation.md` Part A. The evidence, the three classes it
+  is kept in, and what it does **not** cover are in **Promotion** below.
 - **Date**: 2026-08-18
 - **Deciders**: Project maintainer
 - **Related**: **ADR-0006** (which chose the standard and the oracle and left the constants to this
@@ -395,3 +396,129 @@ The reading settled the fourth and reshaped the first. The decisive discovery is
   done here, on the reasoning `SourceInspectionOutcome` applied to its fifth payload.
 - The oracle remains absent from CI, so its suite stays local evidence behind the existing
   `FFmpegTool.isAvailable` pattern, with a skip message that says a skip is not agreement.
+
+## Promotion — what was demonstrated, in which class, and what it does not cover
+
+Recorded when this moved from `Proposed` to `Accepted`, on `add-loudness-measurement`'s groups 6 and 9.
+
+**The three classes of evidence are kept apart on purpose**, because collapsing them is exactly how a
+measurement acquires an authority nobody granted it:
+
+- **normative** — what EBU Tech 3341 and ITU-R BS.1770-5 say a compliant meter reports, with the
+  publishers' own ±0.1 LUFS. These are the acceptance targets, and they are the only ones;
+- **automated** — what this project's own suites assert, on every run, without a person present;
+- **manual** — what a person observed once, in the running app. It is not repeatable by CI and is not
+  written back as a test pretending otherwise.
+
+FFmpeg belongs to none of the three as an authority. It is a **corroborating oracle** (ADR-0003), and
+agreement with it is never recorded here as compliance.
+
+### Normative — the published targets, met by the production path
+
+Not by `LoudnessAccumulator` in isolation: by a real file through `AVFoundationAudioDecoder` and
+`SharedPCMAnalysisGeneration`, which is the composition the app runs. The two agree to better than
+**1e-9 LU**, asserted rather than assumed, which is what lets the accumulator-level intermediates
+describe the path a user actually takes.
+
+| target | published | production | delta |
+| --- | --- | --- | --- |
+| Tech 3341 §2.9 calibration | −18.0 | −17.993298 | +0.0067 |
+| Tech 3341 Table 1 test 1 | −23.0 | −22.993298 | +0.0067 |
+| Tech 3341 Table 1 test 2 | −33.0 | −32.993297 | +0.0067 |
+| Tech 3341 Table 1 test 3 | −23.0 | −23.013869 | −0.0139 |
+| Tech 3341 Table 1 test 4 | −23.0 | −23.013869 | −0.0139 |
+| Tech 3341 Table 1 test 5 | −23.0 | −22.978658 | **+0.0213** |
+| BS.1770-5 anchor, 997 Hz 0 dBFS | −3.01 | −3.010283 | −0.00028 |
+| BS.1770-5 anchor, attenuated | −26.01 | −26.010283 | −0.00028 |
+
+**The published ±0.1 was not widened**; the worst deviation meets it with a factor of 4.7. Tests 3 and 4
+read *identically*, and the two anchors sit exactly 23 LU apart — relationships far tighter than either
+vector's own tolerance, and ones no offset error satisfies by accident.
+
+### Automated — the properties, each with a test that fails when it is broken
+
+- **Rate-invariance**, through the whole path: 0.0065 LU across 44.1/48/88.2/96/192 kHz.
+- **Chunk-independence**, **bit-exact** rather than within a tolerance, at every chunk size and every
+  rate.
+- **The undefined cases are absences**: 399 ms, digital silence and a file with no frames yield no
+  value, and a sweep asserts none of them carries a number. **−70 is the gate, never a result.**
+- **Corroboration**, ranked below the published targets: the spike's K-weighting curve reproduced at all
+  ten frequencies, and its 40 dB gating fixture reading −6.0795 against −6.1.
+- **Ten negative controls**, each applied to production and reverted in full: weighting bypassed, gating
+  removed, filter state reset per chunk, block boundaries made per-chunk, the trailing partial block
+  included, the relative gate applied without the absolute one, −70 adopted for silence, a measurement
+  fabricated below 400 ms, the published weighting claimed at every rate, and the value rounded before
+  export.
+
+Two of those controls found something rather than confirming something, and both are recorded because a
+control that only ever passes has taught nothing:
+
+- **the trailing partial block initially changed nothing**, because every published vector's duration is
+  a whole number of 100 ms hops at 48 kHz. A fixture with a deliberately unaligned tail closes it;
+- **the relative gate without the absolute one is invisible in the reading**, as decision 24's own note
+  predicted. It is caught by the derived threshold one layer down, and `LoudnessMeasurement` was **not**
+  widened to expose a threshold for a test's convenience.
+
+### Corroborating — the oracle, and where it stops being useful
+
+At 48 kHz, where both implementations run the same published coefficients, production and FFmpeg 8.1.2
+agree to **0.0071 LU** across every vector, every container and a moving-level programme no published
+vector covers.
+
+Above 48 kHz they do not, and the measurement located the movement rather than absorbing it into a wider
+bound: FFmpeg's reading drifts **0.030 LU** away from the published −23.0 as the rate rises, while
+production's own spread is **0.0065 LU** and it stays within 0.0122 of the document everywhere. That is
+decision 3's gap as a number — BS.1770-5 publishes coefficients for 48 kHz alone, so above it the two
+run **different derivations** and their disagreement is evidence against neither. **No cross-rate
+agreement bound is claimed against the oracle**; production is asserted against the document instead.
+
+Per container, on identical files: five lossless containers agree to **1.4 × 10⁻⁵ LU**, AAC moves
+**6.7 × 10⁻⁴** — about fifty times the lossless spread, which is what identifies it as the encoder
+rather than the meter — and production agrees with the oracle on all six to **0.0060 LU**.
+
+### Manual — the battery, run by the maintainer
+
+The fixtures and their expected values were prepared programmatically **before** the app was opened, so
+nothing below could be rationalised after the fact. The observation itself is the maintainer's, in a
+confirmed-fresh instance: a clean rebuild launched by executable path rather than `open`, because this
+project has been caught by a stale process before.
+
+| case | file | production | on screen | weighting on the wire |
+| --- | --- | --- | --- | --- |
+| A | 48 kHz, Tech 3341 test 1 | `-22.993297609572508` | `-23.0 LUFS` | `itu_r_bs1770_5_tables_1_2_48k` |
+| B | 96 kHz, same signal | `-22.98892057051201` | `-23.0 LUFS` | `itu_r_bs1770_5_48k_prototype_rediscretised_v1` |
+| C | 399 ms | no measurement | `Not computable for this file.` | key absent |
+| D | 10 s digital silence | no measurement | `Not computable for this file.` | key absent |
+
+Confirmed on screen: the section renders in its place in the hierarchy with its methodology beside the
+value; **no target, verdict, platform, normalisation advice, compliance or certification claim, and no
+standard worn as a seal**; light and dark appearance; window resizing without truncation or clipping;
+the value and its unit announced together; and A → B → C with no stale value, method or state carried
+between files.
+
+**The published/derived distinction behaved as decision 25 intended**: B is visually indistinguishable
+from A in everything that should be, and the difference appears only on the wire.
+
+Confirmed in the four documents exported from the running app: `schemaVersion` **1**; the displayed
+value is the rounded form of the exported one, and the exported one is the measurement's own, unrounded;
+the method identities above; `measurements.integratedLoudness` **absent** — never `null` — for C and D,
+with `signalLevels` and `truePeak` still present beside it; no local path disclosed; and a repeated
+export reproducing the same block.
+
+### What this promotion does not cover, and is not claimed to
+
+- **No conformance, compliance or certification is claimed**, and decisions 1 and 12 still govern. What
+  is recorded is which methodology ran; whether that amounts to conformance is a judgement, and no
+  measurement is in a position to make it.
+- **Only 48 kHz runs published coefficients.** Every other supported rate runs a derivation this project
+  performed, named as such in `method.weighting`, and it must never be presented as BS.1770-5's own.
+- **Mono and stereo only.** Beyond two channels the standard weights by position and the pipeline has no
+  layout, so there is no measurement at all — an absence, not a degraded reading.
+- **Only the supported rates**: 44.1, 48, 88.2, 96 and 192 kHz. An unmeasured rate is refused rather
+  than guessed.
+- **Momentary, short-term and loudness range are absent**, and their absence is decision 11 rather than
+  an unfinished suite.
+- **FFmpeg is corroboration, never authority.** Its suite is absent from CI, and a skipped run is not
+  agreement.
+- **The manual battery was run once, by one person, on four fixtures.** It is not a regression test and
+  nothing here should be read as one.
