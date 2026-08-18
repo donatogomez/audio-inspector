@@ -301,4 +301,7 @@ count as evidence about the product.
       documentary state**, with `swift test` run twice to catch a flake and none appearing: 1 252 tests in
       126 suites, boundaries respected, a zero-warnings build, the Xcode Debug app target built, OpenSpec
       strict at 8/8, and a clean `git diff --check`.
-- [ ] 9.2 Update `CURRENT.md` and archive through `openspec archive` **after merge**.
+- [x] 9.2 Update `CURRENT.md` and archive through `openspec archive` **after merge**. **Merged** as PR
+      #46 — a true two-parent merge commit (`4dcb85e`), whose second parent is the branch head
+      `2dc2e76`, with CI green on `main`. `CURRENT.md` refreshed and the change archived through the CLI
+      rather than by moving folders.
