@@ -287,11 +287,44 @@ The reading settled the fourth and reshaped the first. The decisive discovery is
     sample rate the measurement does not carry. **Absence is the key omitted, never `null`**, and no
     cause of it survives to the document: the wire describes measurements, not why one does not exist.
 
+26. **The published targets are met by the product, not only by the accumulator** — and the distinction
+    turned out to cost nothing, which is itself the finding. Every vector measured through a real file,
+    `AVFoundationAudioDecoder` and `SharedPCMAnalysisGeneration` agrees with the same vector fed straight
+    into the accumulator to **better than 1e-9 LU**. The file round-trip and the shared read are
+    transparent, so the accumulator-level intermediates — the derived threshold, the block set, the
+    chunk-independence matrix — describe the path a user actually takes.
+
+    Worst deviations from the documents, through production: **0.0213 LU** (Tech 3341 test 5), and
+    **0.00028 LU** on both BS.1770-5 anchors, against a published ±0.1.
+
+27. **Agreement with the oracle is a single-rate claim, and the rate sweep says why.** At 48 kHz the two
+    implementations run the same published coefficients and agree to **0.0071 LU** across every vector,
+    every container and a moving-level programme. Away from it they do not, and the measurement locates
+    the movement: FFmpeg's reading drifts **0.030 LU** away from the published −23.0 as the rate rises
+    (0.010 at 88.2 kHz, 0.020 at 96, 0.030 at 192), while production's own spread over the same five
+    files is **0.0065 LU** and it stays within 0.0122 of the document everywhere.
+
+    This is §3's gap showing up as a number rather than as a caveat: BS.1770-5 publishes coefficients for
+    48 kHz alone, so at any other rate two implementations run **two different derivations** and a
+    disagreement between them is not evidence that either is wrong. **No cross-rate agreement bound is
+    therefore claimed against the oracle.** What is asserted per rate is production against the
+    *document*, which it meets.
+
+28. **Container variance is the codec's, and it is separated from the meter's rather than assumed to be.**
+    On identical files, every lossless container — WAV, float WAV, AIFF, ALAC, FLAC — agrees to
+    **1.4 × 10⁻⁵ LU**, which is 16-bit quantisation and nothing else. AAC moves **6.7 × 10⁻⁴ LU** from the
+    float reference: about fifty times the whole lossless spread, which is what identifies it as the
+    encoder rather than the measurement, and still more than a hundred times inside the published ±0.1.
+    Production agrees with the oracle on all six to **0.0060 LU**, including the lossy one, where the two
+    are not even decoding the same samples.
+
 ## Deliberately left open
 
 - **The oracle comparison tolerance on real files.** The published compliance tolerance is ±0.1 LUFS and
   the oracle's summary prints one decimal, so a tighter bound requires its three-decimal metadata route.
-  A definitive figure waits on an implementation to compare.
+  A definitive figure waits on an implementation to compare. **Partly discharged**: at 48 kHz the
+  measured agreement is 0.0071 LU and the bound asserted is 0.01. Across rates it stays open by decision
+  rather than for want of data — see decision 27, which declines to claim such a bound at all.
 
 ## Alternatives considered
 
@@ -347,6 +380,13 @@ The reading settled the fourth and reshaped the first. The decisive discovery is
   wearing a measurement's clothes.
 - The correctness burden is high and front-loaded — though materially lower than when this record was
   first drafted, because the targets are now published rather than observed.
+- **The absolute gate is not observable from outside the accumulator.** A negative control confirmed it
+  again at the production level: applying the relative gate without the absolute one leaves every
+  published reading unchanged, because the relative gate happens to exclude the same blocks by itself.
+  Only the derived threshold separates them, and `LoudnessMeasurement` carries no threshold — deliberately,
+  since widening it so a test could read one would put a DSP intermediate in a domain value. That evidence
+  therefore lives one layer down, in the accumulator's own suite and in the oracle's threshold comparison,
+  and group 6 cites it rather than duplicating it.
 
 ### Neutral
 - No port changes, no domain type changes beyond the new one, no export version change, no new
