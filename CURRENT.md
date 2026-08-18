@@ -16,59 +16,42 @@
 >   session protocol in `CLAUDE.md`).
 
 ---
-**Focus: `add-loudness-measurement` — integrated loudness (LUFS-I). Methodology closed against the real
-standards, and the official targets are now executable. Still no production code.**
+**Focus: `add-loudness-measurement` — integrated loudness (LUFS-I). The 48 kHz accumulator exists and
+reproduces every official target. No wiring, no domain type, no other sample rate.**
 
-**The official vectors exist and pass, before anything computes loudness.** EBU Tech 3341 §2.9 and
-Table 1 tests 1–5 plus BS.1770-5's own anchor are transcribed as data with their source attached,
-generated natively, and measured. That ordering is the point: a target fixed after the implementation is
-a target that was fitted to it. Two numbers came out of it — the oracle reproduces every published
-expectation with a **worst deviation of 0.021 LU**, and its **own rate-invariance is 0.03 LU, not zero**,
-which bounds any agreement claim across rates.
+`LoudnessAccumulator` lives in `AudioInspectorAnalysis` and measures **48 kHz mono/stereo only**. Every
+published expectation is reproduced within the published ±0.1 — worst deviation **0.0213 LU** on Tech 3341
+test 5, and BS.1770-5's own 997 Hz anchor lands **0.0003 LU** out, which is the sharpest confirmation
+available because 997 Hz is exactly where the −0.691 offset cancels the K-weighting gain. It agrees with
+FFmpeg to **0.0071 LU**. None of those targets moved to meet it: they were fixed two commits earlier.
 
-The battery is split by tool dependence so CI keeps its value: transcription, discrimination and output
-parsing run everywhere; only the measurement is gated on FFmpeg. Two guards exist because the oracle
-cannot supply them — a mis-transcribed **level** would match its own wrong fixture, and a wrong
-**duration** returns −23.0 under several values — so levels are checked against their own readings and
-durations are simply stated twice. Both were confirmed by breaking them.
+Three things were decided by measurement rather than inherited, and two of them contradict what the
+design assumed:
 
-The blocking unknown is gone. BS.1770-5 (11/2023), R 128 v5.0, Tech 3341 v4, Tech 3342 v4 and Report
-BS.2217-2 were obtained and read, and every constant now sits in the spike's **Part A** with its document,
-revision and section. Part B keeps the FFmpeg measurements separate; nothing is mixed.
+- **`vDSP_biquadD` was implemented and rejected.** Its output changed in the last two or three digits with
+  the chunk size it was handed, because how it groups an IIR's work depends on the run length. A scalar
+  transposed-direct-form-II recurrence has no grouping to vary, and chunk independence is now **bit-exact**
+  at 1, 3, 127, 512, 4 096, 65 536 and whole-file.
+- **That cost the fast primitive**: the fold is **0.243 s** over ten minutes of stereo in Release against
+  the spike's 0.14 s projection. Half of the gap was recovered by advancing the two channels *together* —
+  independent dependency chains, 0.243 s against 0.455 s, arithmetic per channel untouched.
+- **`Float` filter state buys nothing.** Both widths were implemented: 1.4 × 10⁻⁵ LU apart, both
+  chunk-exact, both 0.469 s. `Double` keeps the headroom for free.
 
-The finding that changed the shape of the feature is **not** a constant. **BS.1770-5 publishes filter
-coefficients for 48 kHz only** and asks other rates merely to *match that frequency response* — no
-prototype, no per-rate table, no transform, no tolerance. So the compliance claim has **two tiers**: exact
-at 48 kHz, a demonstrated equivalence everywhere else against a derivation we choose. That is weaker than
-what most tools assert, it is what the text supports, and it is now what the measurement's methodology has
-to carry so the two never look alike on the page.
+A negative control found a real gap and closed it: with the absolute gate removed entirely, tests 3 and 4
+still read identically, because the relative gate happens to exclude the same blocks by itself. The gate
+is only observable in the **derived threshold**, so the accumulator now exposes it — and FFmpeg reports
+the same quantity, so the two can be compared at an intermediate rather than only at the answer.
 
-- **Mono and stereo only, and now with a proof rather than a caution.** Three channels is the
-  counterexample: L/C/R would all weigh 1.0, but the file could carry an **LFE the standard excludes
-  entirely**, and getting that wrong moves the result by more than the ±0.1 LUFS the standards tolerate.
-- **Silence is settled, and it is an absence.** A silent block's loudness is −∞, so nothing passes the
-  absolute gate and the definition divides by zero; BS.2217-2 expects "lowest resolvable value or
-  −infinity" and declines to name −70. **−70 is the gate, never a result.** Too-short is an absence for a
-  different reason — no block exists at all — and the boundary is exact: 400 ms measures, 399 ms does not.
-- **The acceptance targets are published now, not observed.** Tech 3341's tests 1–5 and its §2.9
-  calibration are pure tones with published expected values at ±0.1 LUFS; #3 and #4 are the relative- and
-  absolute-gate discriminators. The spike's own fixtures are demoted to corroboration.
-- **The oracle is qualified**: FFmpeg 8.1.2 passes those same published tests within tolerance. It is
-  still absent from CI, so its suite stays local evidence.
-- **Exact O(1) memory is impossible**, not merely awkward — the relative gate depends on the whole
-  programme. One energy per block, ≈288 kB/hour, and the histogram shortcut is rejected.
+`finish()` returns a bare LUFS `Double?` and the type is **not `public`**: the shape that crosses the
+module boundary belongs to group 3's `LoudnessMeasurement`, and committing to this one first would mean
+changing a published signature later.
 
-ADR-0022 stays `Proposed`: the constants half of its promotion condition is discharged and the targets
-are fixed, but nothing implements them. Groups 1 and 5 are closed; 2–4 and 6–8 are untouched.
+ADR-0022 stays `Proposed`. Groups 1, 2, 4 and 5 are closed; 3 and 6–9 remain.
 
-**Next step:** task group 2 — the `LoudnessAccumulator` in `AudioInspectorAnalysis`, straight from the
-pseudocode in design §6, with the 48 kHz coefficients used literally and the per-rate derivation left for
-4.4. Group 6 then re-points the existing vectors at production instead of at the oracle, which is a
-one-line change per test rather than new evidence.
-
-**Open on purpose, and only these two:** the numeric tolerance for "the same frequency response" away
-from 48 kHz, and the oracle comparison tolerance on real files. Both are picked from measurement once an
-implementation exists; choosing either now would be picking a number to be right about.
+**Next step:** task group 3 — `LoudnessMeasurement` in the domain, carrying the methodology including
+**which compliance tier produced it**, then group 7's wiring. The per-rate derivation (4.4) is a separate
+thread and the accumulator refuses those rates until it lands.
 
 **Minor follow-up, not a thread:** `ImportFlowComparisonTests` has one `Task.yield()` that was never
 audited in depth; same shape as the ones above, no failure ever attributed to it.
