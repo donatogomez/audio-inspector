@@ -16,42 +16,39 @@
 >   session protocol in `CLAUDE.md`).
 
 ---
-**Focus: `add-loudness-measurement` — integrated loudness (LUFS-I). The 48 kHz accumulator exists and
-reproduces every official target. No wiring, no domain type, no other sample rate.**
+**Focus: `add-loudness-measurement` — integrated loudness (LUFS-I). Methodology, official targets, the
+48 kHz accumulator and now the domain model are all closed. No wiring, no other sample rate.**
 
-`LoudnessAccumulator` lives in `AudioInspectorAnalysis` and measures **48 kHz mono/stereo only**. Every
-published expectation is reproduced within the published ±0.1 — worst deviation **0.0213 LU** on Tech 3341
-test 5, and BS.1770-5's own 997 Hz anchor lands **0.0003 LU** out, which is the sharpest confirmation
-available because 997 Hz is exactly where the −0.691 offset cancels the K-weighting gain. It agrees with
-FFmpeg to **0.0071 LU**. None of those targets moved to meet it: they were fixed two commits earlier.
+`LoudnessMeasurement` holds one `Double` of LUFS and its `LoudnessMethod`, and `LoudnessAccumulator.finish()`
+returns it — the type that measured is the only one that can name what it ran, and nothing in App or
+Feature spells the identity. No value moved and no tolerance changed; only the return type did.
 
-Three things were decided by measurement rather than inherited, and two of them contradict what the
-design assumed:
+**The method is two identities and no constants**, which is not the shape the ADR predicted before the
+type existed. An `algorithm` identity with the revision embedded (`itu_r_bs1770_5_integrated_v1`) and a
+`weighting` identity naming where the coefficients came from (`itu_r_bs1770_5_tables_1_2_48k`). The block
+length, the hop and both gate values are *not* fields: they are fixed by the algorithm identity, and
+fields would only add states that contradict it and that the type cannot police. The second identity
+exists so that the published 48 kHz set and a later derivation are distinguishable on the value itself
+rather than inferred from a sample rate the model deliberately does not carry.
 
-- **`vDSP_biquadD` was implemented and rejected.** Its output changed in the last two or three digits with
-  the chunk size it was handed, because how it groups an IIR's work depends on the run length. A scalar
-  transposed-direct-form-II recurrence has no grouping to vary, and chunk independence is now **bit-exact**
-  at 1, 3, 127, 512, 4 096, 65 536 and whole-file.
-- **That cost the fast primitive**: the fold is **0.243 s** over ten minutes of stereo in Release against
-  the spike's 0.14 s projection. Half of the gap was recovered by advancing the two channels *together* —
-  independent dependency chains, 0.243 s against 0.455 s, arithmetic per channel untouched.
-- **`Float` filter state buys nothing.** Both widths were implemented: 1.4 × 10⁻⁵ LU apart, both
-  chunk-exact, both 0.469 s. `Double` keeps the headroom for free.
+**Nothing records conformance, and that is a decision rather than an omission.** A measurement cannot
+certify itself: conformance is a claim about a process, and agreement with FFmpeg is test-time evidence
+about an implementation, not a property of a file. Mono/stereo is a supported scope, not a grade; 48 kHz
+is where the coefficients are published, not a tier. A test asserts the identifiers carry none of that
+vocabulary, so a field added later for convenience fails rather than slips through.
 
-A negative control found a real gap and closed it: with the absolute gate removed entirely, tests 3 and 4
-still read identically, because the relative gate happens to exclude the same blocks by itself. The gate
-is only observable in the **derived threshold**, so the accumulator now exposes it — and FFmpeg reports
-the same quantity, so the two can be compared at an intermediate rather than only at the answer.
+Also settled by argument rather than convenience: **no channel count and no sample rate on the model** —
+both describe the file, are already reported by the technical properties, and would be a second
+description this type could not keep consistent with the first. **No range on the value** either: only
+`isFinite`. −70 is a threshold on blocks, not a floor on the result, and a programme above full scale
+legitimately reads positive.
 
-`finish()` returns a bare LUFS `Double?` and the type is **not `public`**: the shape that crosses the
-module boundary belongs to group 3's `LoudnessMeasurement`, and committing to this one first would mean
-changing a published signature later.
+ADR-0022 stays `Proposed`. Groups 1–5 are closed; 6–9 remain.
 
-ADR-0022 stays `Proposed`. Groups 1, 2, 4 and 5 are closed; 3 and 6–9 remain.
-
-**Next step:** task group 3 — `LoudnessMeasurement` in the domain, carrying the methodology including
-**which compliance tier produced it**, then group 7's wiring. The per-rate derivation (4.4) is a separate
-thread and the accumulator refuses those rates until it lands.
+**Next step:** the per-rate derivation is task 4.4 and stays a separate thread — the accumulator refuses
+those rates until it lands. The nearer work is group 7: one field on `SharedPCMAnalysisOutcome`, one
+accumulator in the composition, one line in each of prepare/accumulate/failAll/finish, and no second
+read. Group 6's evidence largely exists already at 48 kHz and is deliberately unticked.
 
 **Minor follow-up, not a thread:** `ImportFlowComparisonTests` has one `Task.yield()` that was never
 audited in depth; same shape as the ones above, no failure ever attributed to it.
