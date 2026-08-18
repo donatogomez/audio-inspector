@@ -399,13 +399,18 @@ struct FileComparisonProhibitionTests {
         Set(Mirror(reflecting: comparison).children.compactMap(\.label))
     }
 
-    /// The eight compared fields, the two reports, and **nothing else**.
-    @Test("it stores exactly the two reports and the eight comparisons")
+    /// One compared field per technical property, the two reports, and **nothing else**.
+    ///
+    /// The list is spelled out rather than counted so that adding a field is a deliberate edit here. It
+    /// previously named eight, which stopped being every property when `averageFileBitrate` arrived —
+    /// `ComparisonPropertyCoverageTests` is what now ties the count to `TechnicalProperties` instead of
+    /// to a number written by hand.
+    @Test("it stores exactly the two reports and one comparison per technical property")
     func itStoresExactlyWhatItShould() {
         #expect(storedProperties == [
             "first", "second",
             "container", "duration", "sampleRate", "channelCount",
-            "bitDepth", "codec", "declaredBitrate", "estimatedBitrate",
+            "bitDepth", "codec", "declaredBitrate", "estimatedBitrate", "averageFileBitrate",
         ])
     }
 

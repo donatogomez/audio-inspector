@@ -48,16 +48,16 @@ struct ComparisonPresentationTests {
         return try #require(rows.first { $0.name == name }, "no row named \(name)")
     }
 
-    // MARK: The eight rows, in order
+    // MARK: The rows, in order
 
     /// The order is the one coupling in the formatter — the outcomes are listed by hand beside two
     /// arrays built elsewhere — so it is pinned rather than trusted.
-    @Test("the eight properties appear once each, in the report's own order")
-    func theEightRowsAreCorrect() {
+    @Test("every property appears once each, in the report's own order")
+    func theRowsAreCorrect() {
         let names = ComparisonFormatter.rows(for: comparison(base)).map(\.name)
         #expect(names == [
             "Container", "Duration", "Sample rate", "Channel count",
-            "Bit depth", "Codec", "Declared bitrate", "Estimated bitrate",
+            "Bit depth", "Codec", "Declared bitrate", "Estimated bitrate", "Average file bitrate",
         ])
     }
 
@@ -322,11 +322,12 @@ struct ComparisonPresentationTests {
         second.channelCount = .available(1)
         let rows = ComparisonFormatter.rows(for: comparison(second))
 
-        // Eight rows, and no ninth summarising them.
-        #expect(rows.count == 8)
+        // One row per property, and no extra row summarising them.
+        #expect(rows.count == ReportPropertyFormatter.displays(for: base).count)
         // The copy says what the section is and is not; it never counts.
         #expect(!ComparisonCopy.subtitle.contains("differences"))
         #expect(!ComparisonCopy.subtitle.contains("of 8"))
+        #expect(!ComparisonCopy.subtitle.contains("of 9"))
     }
 
     /// The subtitle states the two things a comparison table most invites a reader to assume.
