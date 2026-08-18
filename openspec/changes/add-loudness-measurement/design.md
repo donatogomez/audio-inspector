@@ -223,10 +223,21 @@ Extending `SignalLevelMetrics` was rejected: it holds direct sample-domain facts
 weighting and no time structure. Loudness is frequency-weighted, gated, time-blocked and **whole-file**;
 there is no per-channel loudness to report, because the channels are summed before the number exists.
 
-It carries its **method**, and §3 makes that heavier than for true peak: enough to reproduce the value
-**and to tell the two compliance tiers apart** — the standard revision, the weighting's identity,
-**whether the coefficients were the published 48 kHz set or derived for the file's rate**, the block
-length and overlap, and both gate values, tied to the analysis engine version.
+It carries its **method** as **two identities and no constants**: an `algorithm` identifier with the
+standard's revision embedded in it, and a `weighting` identifier naming where the coefficients came
+from. The second exists because of §3 — the published 48 kHz set and a later derivation are different
+provenances for the same algorithm, and that difference must travel with the value rather than be
+inferred from a sample rate this type does not carry.
+
+Block length, hop and both gate values are **not** fields. They are fixed by the algorithm identifier,
+and carrying them would make contradictory states representable — a block length disagreeing with the
+identifier that names it — which the type could not police, because it cannot see the evidence the
+constants came from. `TruePeakMethod` makes the same trade for the same reason.
+
+**No conformance or compliance field.** A measurement cannot certify itself: conformance is a claim
+about a process, asserted by whoever holds the evidence, and agreement with an independent meter is
+test-time evidence about an implementation rather than a property of a file. Recording it would also be
+the one thing this project's reports never do — turn a measurement into a verdict (§12).
 
 ## 11. Unit, silence, and the too-short file
 

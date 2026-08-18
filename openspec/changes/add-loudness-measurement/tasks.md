@@ -11,7 +11,8 @@ touched afterwards.
 
 **Group 2 is closed at 48 kHz** and group 4's measurements with it. Every other sample rate is task 4.4
 and nothing pretends otherwise: the accumulator refuses them rather than measuring them with the wrong
-filter. Groups 3 and 6–9 remain.
+filter. **Group 3 is closed** and the accumulator returns the domain model. Groups 6–9 remain: the
+per-rate derivation, the shared-read wiring, the surface and the export.
 
 ## 1. The constants, from the standard rather than from memory — **CLOSED**
 
@@ -59,9 +60,9 @@ filter. Groups 3 and 6–9 remain.
 - [x] 2.1 `LoudnessAccumulator` in `AudioInspectorAnalysis`, taking `PCMChunk` like its three siblings,
       with per-channel filter state and **absolute** block boundaries carried across chunks. It is
       **48 kHz mono/stereo only**, and both refusals are the failable initialiser its siblings already
-      use. It is deliberately **not `public`** and returns a bare LUFS `Double?`: the shape that crosses
-      the module boundary belongs to group 3's domain type, and committing to this one first would mean
-      changing a published signature later.
+      use. It is deliberately **not `public`**; it returned a bare LUFS `Double?` until group 3 existed,
+      so that the shape crossing the module boundary would be the domain type's rather than the
+      accumulator's convenience. It now returns `LoudnessMeasurement?` (task 3.5).
 - [x] 2.2 ~~Filter with `vDSP_biquad`.~~ **Implemented and rejected on measurement**: its output changed
       in the last two or three significant digits with the chunk size it was handed
       (−23.385524041147569 at one frame per chunk against −23.385524041147661 whole-file), because how it
@@ -86,17 +87,36 @@ filter. Groups 3 and 6–9 remain.
       identical values, since the relative gate happens to exclude the same blocks by itself. The
       threshold is where the difference shows, and FFmpeg reports the same quantity.
 
-## 3. The domain type
+## 3. The domain type — **CLOSED**
 
-- [ ] 3.1 `LoudnessMeasurement` — `Sendable`, `Equatable`, failable, **not** `Codable`. Stores **LUFS**,
-      not linear energy: the normative quantity is the logarithmic one.
-- [ ] 3.2 It carries its methodology, as `TruePeakMeasurement` does, and enough of it to tell the two
-      compliance tiers apart: the **standard revision**, the weighting's identity, **whether the
-      coefficients were the published 48 kHz set or derived for the file's rate**, block length and
-      overlap, and both gate values — tied to the analysis engine version.
-- [ ] 3.3 It refuses what cannot describe a measurement — non-finite values above all, the mistake
-      `SignalLevelMetrics` had to be repaired for. **−∞ is not storable**, which is why the undefined
-      cases are an absence rather than a value.
+- [x] 3.1 `LoudnessMeasurement` — `Sendable`, `Equatable`, failable, **not** `Codable`, and not
+      `Hashable` or `Comparable` either: there is no order over two measurements with their own methods,
+      and nothing keys a dictionary by one. Stores **LUFS**, not linear energy. It carries **no channel
+      count and no sample rate**: both describe the file, are already reported by the technical
+      properties, and would be a second description this type could not keep consistent with the first.
+- [x] 3.2 It carries its methodology as `TruePeakMeasurement` does — but as **two identities and no
+      constants**, which is not the shape this task predicted. `LoudnessMethod` holds an `algorithm`
+      identifier (`itu_r_bs1770_5_integrated_v1`, the revision embedded rather than beside it) and a
+      `weighting` identifier naming where the coefficients came from
+      (`itu_r_bs1770_5_tables_1_2_48k`). Block length, hop and both gate values are **not** fields: they
+      are fixed by the algorithm identifier, and carrying them would put contradictory states within
+      reach that the type could not police — the same reason `TruePeakMethod` carries an identity rather
+      than its filter's design.
+- [x] 3.3 It refuses what cannot describe a measurement: `isFinite` rejects `NaN`, signalling `NaN` and
+      both infinities in one guard — the check `SignalLevelMetrics` had to be repaired to include, here
+      from the start. **−∞ is a silent block's own loudness and is not storable**, which is why the
+      undefined cases are an absence rather than a value. **No range is imposed**: the standard states
+      none, a programme above full scale legitimately reads positive, and −70 is a threshold on blocks
+      rather than a floor on the result.
+- [x] 3.4 **No conformance, compliance or certification field, and no target level.** A measurement
+      cannot certify itself; agreement with an independent meter is test-time evidence about an
+      implementation, not a property of a file. The identities record *what ran*; whether that amounts to
+      conformance is a judgement no value type is in a position to make. Asserted by a test over the
+      identifiers' own vocabulary, not left to review.
+- [x] 3.5 `LoudnessAccumulator.finish()` now returns `LoudnessMeasurement?`, and the accumulator declares
+      the method itself — the type that measured is the only one that can name what it ran. Confirmed:
+      nothing in App or Feature spells the identifiers. No value changed and no tolerance moved; only
+      the return type did.
 
 ## 4. Numbers, decided by measurement
 
