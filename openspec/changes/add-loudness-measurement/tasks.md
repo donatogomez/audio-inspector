@@ -297,5 +297,8 @@ count as evidence about the product.
 
 ## 9. Gates and closure
 
-- [ ] 9.1 Four gates green plus the Xcode build and `git diff --check`.
+- [x] 9.1 Four gates green plus the Xcode build and `git diff --check`. **All seven green from the final
+      documentary state**, with `swift test` run twice to catch a flake and none appearing: 1 252 tests in
+      126 suites, boundaries respected, a zero-warnings build, the Xcode Debug app target built, OpenSpec
+      strict at 8/8, and a clean `git diff --check`.
 - [ ] 9.2 Update `CURRENT.md` and archive through `openspec archive` **after merge**.
