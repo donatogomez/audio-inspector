@@ -2,6 +2,8 @@ import AVFoundation
 import Foundation
 import Testing
 
+@testable import AudioInspectorAnalysis
+
 // The official loudness vectors, measured by an independent implementation.
 //
 // **What this suite establishes, and what it does not.** Nothing in this product computes loudness yet,
@@ -298,6 +300,41 @@ struct LoudnessOracleTests {
             #expect(
                 abs(difference - LoudnessTestVector.stereoOverMonoLU) <= 0.05,
                 "difference \(difference), expected \(LoudnessTestVector.stereoOverMonoLU)"
+            )
+        }
+    }
+
+    // MARK: The production accumulator against the same files
+
+    /// Three-way: the published target, the oracle, and what `LoudnessAccumulator` makes of the very
+    /// same file the oracle was handed.
+    ///
+    /// The accumulator is judged against the **published** value at the **published** tolerance — that
+    /// comparison is the contract and it lives in "Analysis — integrated loudness (48 kHz)", which needs
+    /// no tool. What this adds is agreement with a second implementation, which is a different claim and
+    /// a weaker one: two implementations can share a misreading of the same document.
+    ///
+    /// The bound used here is the published ±0.1 rather than something tighter. A tighter one would be
+    /// fitted to today's measurement, and ADR-0022 leaves the oracle tolerance open until there is a
+    /// reason to close it.
+    @Test(
+        "the accumulator agrees with the oracle on every published vector",
+        arguments: LoudnessTestVector.normativeVectors
+            + [LoudnessTestVector.bs1770Anchor, LoudnessTestVector.bs1770AnchorAttenuated]
+    )
+    func accumulatorAgreesWithTheOracle(_ vector: LoudnessTestVector) async throws {
+        let published = try #require(vector.expectedLUFS)
+        let produced = try LoudnessAccumulatorHarness.measure(vector)
+        let accumulator = try #require(produced, "\(vector.name) should measure")
+
+        try await withTemporaryDirectory { directory in
+            let reading = try measure(vector, in: directory)
+            #expect(
+                abs(accumulator - reading.integrated) <= LoudnessTestVector.publishedTolerance,
+                """
+                \(vector.name): accumulator \(accumulator), oracle \(reading.integrated), \
+                published \(published)
+                """
             )
         }
     }
