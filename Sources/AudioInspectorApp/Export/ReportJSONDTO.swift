@@ -332,21 +332,71 @@ struct TruePeakDTO: Encodable {
     }
 }
 
+/// How an integrated loudness was produced: which algorithm, and where the K-weighting filter's
+/// coefficients came from (ADR-0006's "the constants are recorded with the result", ADR-0022 §3).
+///
+/// **Two identities, and neither is a conformance level.** They record *which* methodology ran, which
+/// is a fact; whether that amounts to conformance is a judgement no document is in a position to make.
+/// There is deliberately no `compliant`, `conformant`, `certified` or "EBU Mode" field, and no target
+/// level: a target is a delivery requirement someone imposes on a file, never a property the file has.
+///
+/// `weighting` is the one field that varies per file while everything else stays fixed — the published
+/// tables are defined at 48 kHz alone, and every other rate uses coefficients derived to reproduce that
+/// response. Both fields are always present; a measurement that exists was produced by some method, and
+/// both are read from the measurement's own record rather than inferred from a sample rate.
+struct LoudnessMethodDTO: Encodable {
+    let algorithm: String
+    let weighting: String
+
+    enum CodingKeys: String, CodingKey {
+        case algorithm, weighting
+    }
+}
+
+/// `measurements.integratedLoudness`: the programme's gated loudness and the method that produced it.
+///
+/// **The key names the quantity, not the family.** It is not `loudness`, because integrated loudness is
+/// one of four quantities that word covers — momentary, short-term and loudness range are different
+/// measurements, each needing its own stated reduction before it would mean anything in a static
+/// report. Each would arrive as its own sibling here, carrying its own `method`, exactly as this one
+/// does. A `loudness` object holding a single `method` would imply that method covered them all — the
+/// same reason `truePeak.method` is not hoisted to `measurements` level.
+///
+/// **`value` is LUFS, and this is deliberately not the rule true peak follows.** That measurement
+/// exports linear amplitude because dBTP is a *presentation* of a linear peak; here the logarithmic
+/// quantity **is** the normative one (ADR-0022 §5), so exporting energy would invent a unit the standard
+/// does not use. It is the unrounded `Double` the accumulator produced: the screen's one decimal is a
+/// display precision, never the datum. There is no unit string — this contract states the unit, the
+/// document does not.
+///
+/// It is a **number, never `null`**: absence is the whole key being omitted. There is no per-channel
+/// array, because the channels are combined before this quantity exists.
+struct IntegratedLoudnessDTO: Encodable {
+    let value: Double
+    let method: LoudnessMethodDTO
+
+    enum CodingKeys: String, CodingKey {
+        case value, method
+    }
+}
+
 /// The `measurements` object itself. A struct rather than `SignalLevelsDTO` directly at the top level,
 /// so a further measurement adds a sibling key rather than replacing this one or forcing a new
-/// top-level field — which is exactly what `truePeak` did.
+/// top-level field — which is exactly what `truePeak`, and then `integratedLoudness`, did.
 ///
-/// **Both keys are optional and each is omitted when its measurement does not exist**, so the four
-/// combinations are all representable and none is faked: signal levels alone (byte-identical to before
-/// true peak existed), true peak alone, both, or — when neither exists — no `measurements` object at
-/// all. There is deliberately **no aggregate**: nothing here says "the measurements succeeded", because
-/// nothing downstream should be able to ask a question about them together.
+/// **Every key is optional and each is omitted when its measurement does not exist**, so all eight
+/// combinations are representable and none is faked: any one alone (signal levels alone stays
+/// byte-identical to before true peak existed), any pair, all three, or — when none exists — no
+/// `measurements` object at all. There is deliberately **no aggregate**: nothing here says "the
+/// measurements succeeded", because nothing downstream should be able to ask a question about them
+/// together.
 struct MeasurementsDTO: Encodable {
     let signalLevels: SignalLevelsDTO?
     let truePeak: TruePeakDTO?
+    let integratedLoudness: IntegratedLoudnessDTO?
 
     enum CodingKeys: String, CodingKey {
-        case signalLevels, truePeak
+        case signalLevels, truePeak, integratedLoudness
     }
 }
 

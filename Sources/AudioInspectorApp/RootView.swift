@@ -129,6 +129,22 @@ public struct RootView: View {
         }
     }
 
+    /// Translates the flow's integrated loudness state into the report surface's own, in the shape the
+    /// four analyses before it already established.
+    ///
+    /// Total by construction, with no default case — every state the flow can hold has exactly one
+    /// presentation, and none is invented. `unavailable` becomes `absent` exactly as its siblings' does,
+    /// and the several causes behind it stay where they are known: this mapping adds no reason the flow
+    /// did not carry.
+    nonisolated static func loudnessPresentation(for state: LoudnessState) -> LoudnessPresentation {
+        switch state {
+        case .loading: .loading
+        case let .available(measurement): .measurement(measurement)
+        case .unavailable: .absent
+        case let .failed(message): .failed(message: message)
+        }
+    }
+
     /// The inspected report plus the way back to picking another file. `ReportView` is used exactly as
     /// group 5 shipped it — the export action is passed straight through, unchanged.
     /// The comparison's own controls, beside the existing way to pick another file.
@@ -178,6 +194,7 @@ public struct RootView: View {
                 spectrogram: Self.spectrogramPresentation(for: presentation.spectrogram),
                 signalLevelMetrics: Self.signalLevelMetricsPresentation(for: presentation.signalLevelMetrics),
                 truePeak: Self.truePeakPresentation(for: presentation.truePeak),
+                loudness: Self.loudnessPresentation(for: presentation.loudness),
                 comparison: Self.comparisonPresentation(for: flow.comparison),
                 export: export
             )

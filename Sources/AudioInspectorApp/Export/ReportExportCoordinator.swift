@@ -26,7 +26,8 @@ struct ReportExportCoordinator {
     func export(
         _ report: InspectionReport,
         signalLevelMetrics: SignalLevelMetrics?,
-        truePeak: TruePeakMeasurement?
+        truePeak: TruePeakMeasurement?,
+        loudness: LoudnessMeasurement?
     ) async -> ExportOutcome {
         let suggestedName = SuggestedExportName.forReport(report)
 
@@ -37,7 +38,9 @@ struct ReportExportCoordinator {
 
         let data: Data
         do {
-            data = try exporter.export(report, signalLevelMetrics: signalLevelMetrics, truePeak: truePeak)
+            data = try exporter.export(
+                report, signalLevelMetrics: signalLevelMetrics, truePeak: truePeak, loudness: loudness
+            )
         } catch {
             return .encodingFailed // encoding failure is distinct from a write failure
         }
