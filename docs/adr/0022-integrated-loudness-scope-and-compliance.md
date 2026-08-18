@@ -114,43 +114,58 @@ The reading settled the fourth and reshaped the first. The decisive discovery is
    which the text itself calls unnecessary in floating point. The project's existing no-clamp expectation
    is not merely compatible with the methodology — it is what the methodology says.
 
-8. **The measurement carries its methodology**, as `TruePeakMeasurement` does (ADR-0019) — and decision 3
-   makes this heavier than it was. What travels with the value must be enough to reproduce it and to tell
-   the two compliance tiers apart: **the standard revision (BS.1770-5), the weighting's identity, whether
-   the coefficients were the published 48 kHz set or derived for the file's rate, the block length and
-   overlap, and both gate values**, tied to the analysis engine version. A figure whose tier is not
-   visible would let an exact claim and a derived one look identical on the page, which is the one thing
-   decision 3 exists to prevent.
+8. **The measurement carries its methodology**, as `TruePeakMeasurement` does (ADR-0019) — as **two
+   identities and no constants**. `LoudnessMethod` holds an **algorithm identity**, with the standard's
+   revision embedded in it rather than beside it, and a **weighting identity** naming where the
+   coefficients came from. The second exists because of decision 3: the published 48 kHz set and a later
+   derivation are different provenances for the same algorithm, and a figure whose provenance was not
+   visible would let an exact claim and a derived one look identical on the page.
 
-9. **It is a sibling type, not an extension of `SignalLevelMetrics`.** Those are direct sample-domain
+   **The block length, the hop and both gate values are deliberately not fields.** They are fixed by the
+   algorithm identity, and carrying them would make contradictory states representable — a block length
+   disagreeing with the identifier naming it — which the type could not police, because it cannot see the
+   evidence the constants came from. This supersedes what this record predicted before the type existed.
+
+   **The same identity implies the same number.** Changing any rule the algorithm identity names requires
+   a new version of it, and changing how the coefficients are obtained requires a new weighting identity.
+
+9. **The result records what ran, and never that it conformed.** There is no compliance, conformance,
+   certification, "EBU Mode" or target-level field, and none may be added. A measurement cannot certify
+   itself: conformance is a claim about a process, asserted by whoever holds the evidence, and agreement
+   with an independent meter is *test-time evidence about an implementation* rather than a property of a
+   file. Mono/stereo is a supported scope, not a certification; 48 kHz is where the coefficients are
+   published, not a grade. Recording a verdict here would also be the one thing decision 13 forbids
+   everywhere else in the report.
+
+10. **It is a sibling type, not an extension of `SignalLevelMetrics`.** Those are direct sample-domain
    facts, per channel, unweighted and untimed. Loudness is frequency-weighted, gated, time-blocked and
    whole-file — there is no per-channel loudness, because the channels are combined before the quantity
    exists. One type holding both would invite exactly the confusion this product exists to avoid.
 
-10. **It is a consumer of the existing shared read**, the fifth, at the price the fourth paid: one field,
+11. **It is a consumer of the existing shared read**, the fifth, at the price the fourth paid: one field,
     one accumulator, one line in each composition method. **No second read**, no new abstraction.
 
     **Cost, now measured on the implementation rather than projected**: the fold is **0.243 s** over ten
     minutes of stereo in Release, and the gating pass at the end is 0.0001 s. The spike projected 0.14 s
     from Accelerate's biquad; the implementation is **1.7× that**, and the whole difference is the price
-    of decision 14 below. It remains under the waveform's own 0.30 s fold and comfortably affordable on a
+    of decision 15 below. It remains under the waveform's own 0.30 s fold and comfortably affordable on a
     read that already happens — but the earlier figure is superseded, not merely refined.
 
-11. **Per-block energies are retained; an exact O(1) implementation is not attempted, because none
+12. **Per-block energies are retained; an exact O(1) implementation is not attempted, because none
     exists.** The relative gate is derived from the whole programme, so whether a block survives eq. (7)
     cannot be decided when that block is produced. Memory is therefore **one energy per block** — 10
     blocks per second, ≈288 kB per hour as `Double` — which keeps the standing rule that memory is a
     function of the block count and never of the sample count. A histogram was rejected: it trades an
     exactness the standards budget at ±0.1 LUFS for memory the measurement does not need.
 
-12. **No verdict, ever.** The report states the measurement. Not "too loud", not "too quiet", not "ready"
+13. **No verdict, ever.** The report states the measurement. Not "too loud", not "too quiet", not "ready"
     for any platform, no platform target named, no normalisation advice, no comparison against −14 or
     **−23 — including the −23.0 LUFS target that EBU R 128 itself recommends**, which this project reads
     as a broadcast delivery requirement and not as a property of a file. Loudness is the metric most
     likely to invite a judgement, which is why the prohibition is written into the record rather than
     left to taste. Loudness *findings* are a different capability and are out of scope.
 
-13. **The acceptance targets are the published ones.** EBU Tech 3341 Table 1 tests **1–5** are pure tones
+14. **The acceptance targets are the published ones.** EBU Tech 3341 Table 1 tests **1–5** are pure tones
     fully specified by level and duration, synthesisable from their description with no protected
     material, and carry **published** expected values at **±0.1 LUFS** — tests 3 and 4 being the relative-
     and absolute-gate discriminators respectively. Its §2.9 calibration signal and BS.1770-5's own anchor
@@ -167,7 +182,7 @@ The reading settled the fourth and reshaped the first. The decisive discovery is
     rate-invariance is 0.03 LU, not zero**, so no tighter agreement may be claimed against it across
     sample rates.
 
-14. **Chunk independence is exact, and it cost the fast primitive.** `vDSP_biquadD` was implemented first
+15. **Chunk independence is exact, and it cost the fast primitive.** `vDSP_biquadD` was implemented first
     and rejected on measurement: its output changed in the last two or three significant digits with the
     chunk size it was handed, because how it groups an IIR's work depends on the length of the run. A
     scalar transposed-direct-form-II recurrence has no such grouping. Every other analysis in this package
@@ -175,7 +190,7 @@ The reading settled the fourth and reshaped the first. The decisive discovery is
     be a reproducibility defect at any magnitude — so the slower, exact route is the one that ships, and
     the ~0.1 s it costs is recorded rather than hidden.
 
-15. **`Double` throughout, decided by measurement and not inherited.** `Float` and `Double` filter state
+16. **`Double` throughout, decided by measurement and not inherited.** `Float` and `Double` filter state
     were both implemented and compared over the published vectors: they differ by at most **1.4 × 10⁻⁵
     LU**, both are chunk-exact, and both cost 0.469 s in the sequential form. `Float` buys nothing
     measurable, so the wider type keeps the headroom for free. This is deliberately *not* the answer
@@ -202,13 +217,24 @@ The reading settled the fourth and reshaped the first. The decisive discovery is
 - **Claim plain "BS.1770 compliance" at all rates.** Simpler to say and what most tools say. Rejected: the
   Recommendation does not publish what would make it true, and this product's claim is that it does not
   overstate.
-- **Extend `SignalLevelMetrics` with a loudness field.** Fewer types. Rejected — see decision 9.
+- **Extend `SignalLevelMetrics` with a loudness field.** Fewer types. Rejected — see decision 10.
 - **Store linear energy and convert in the view**, as true peak does. Rejected — see decision 5.
 - **Assume channel order (0 = L, 1 = R, …) for surround.** It would let us publish a number for any file.
   Rejected: it is a guess wearing a measurement's clothes, and the LFE case in decision 4 shows the guess
   is wrong in a way that exceeds the standard's own tolerance.
-- **A histogram of block loudnesses**, as fast reference implementations use. Rejected — see decision 11.
+- **A histogram of block loudnesses**, as fast reference implementations use. Rejected — see decision 12.
 - **Report −70.0 LUFS for silence**, as the reference implementation does. Rejected — see decision 6.
+- **Store a compliance or conformance level on the result** — "BS.1770-5 compliant", "EBU Mode", a tier.
+  It would make the two-tier claim of decision 3 legible at a glance. Rejected — see decision 9: a value
+  type is not in a position to certify the process that produced it, and the weighting identity already
+  records the fact the tier is derived *from*.
+- **Carry the block length, hop and gate values as fields on the method**, as this record originally
+  predicted. Rejected — see decision 8: they are fixed by the algorithm identity, so fields would only
+  add states that contradict it and that the type could not police.
+- **Store the sample rate or channel count on the measurement.** Rejected: both describe the file, are
+  already reported by the technical properties, and would be a second description this type could not
+  keep consistent with the first. The rate's only methodological consequence is which coefficients ran,
+  and the weighting identity says that directly.
 - **Shell out to FFmpeg for the shipped value.** Accurate and free. Rejected by ADR-0006 and unchanged;
   it remains the oracle — and it is now a *qualified* one, having passed Tech 3341 tests 1–5 and the §2.9
   calibration within the published tolerance.
