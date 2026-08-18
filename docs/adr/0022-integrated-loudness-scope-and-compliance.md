@@ -259,6 +259,34 @@ The reading settled the fourth and reshaped the first. The decisive discovery is
     The shape already had the precedent — the waveform's own `unavailable` — and this is the second use
     of it, which is what makes it a pattern rather than a special case.
 
+25. **How it is presented, and what leaves on the wire.** Recorded here because both decisions are
+    consequences of §12's refusal to turn a measurement into a verdict, and both are hard to reverse once
+    a document is published.
+
+    **On screen** it is a section of its own between true peak and the spectrogram — a programme
+    measurement whose methodology has to travel with it, and a row has nowhere to put one. One value, one
+    decimal (Tech 3341 §2.8's own display precision, and the resolution the ±0.1 agreement supports),
+    `LUFS`, explicitly signed, never clamped and never floored. Absence is said in words, and the
+    sentence **names no single cause**: the state does not carry one, and the four causes §6 identifies
+    are honestly a disjunction. **No standard is named on screen at all** — the methodology is stated in
+    plain words, because "BS.1770" beside a number reads as certification whatever the surrounding
+    sentence says.
+
+    **The two weighting identities read identically on screen and differ on the wire.** The derivation
+    exists to reproduce the published response and rate-invariance is demonstrated, so the provenance
+    does not change how a reader interprets the number — while a caption that varied by sample rate would
+    suggest the two numbers mean different things. It is an audit fact, and it belongs where a consumer
+    can act on it.
+
+    **On the wire** it is `measurements.integratedLoudness`, additive under `schemaVersion` **1**, with
+    `value` and `method{algorithm, weighting}`. The key names the **quantity, not the family**: a
+    `loudness` object carrying one `method` would imply that method covered momentary, short-term and
+    LRA, which §11 deliberately does not ship. `value` is the unrounded `Double` in LUFS — the opposite
+    of ADR-0019's linear rule for true peak, for the reason §5 gives, and the difference is again the
+    point. Both identities come from the measurement's own record; nothing infers a weighting from a
+    sample rate the measurement does not carry. **Absence is the key omitted, never `null`**, and no
+    cause of it survives to the document: the wire describes measurements, not why one does not exist.
+
 ## Deliberately left open
 
 - **The oracle comparison tolerance on real files.** The published compliance tolerance is ±0.1 LUFS and
@@ -322,6 +350,8 @@ The reading settled the fourth and reshaped the first. The decisive discovery is
 
 ### Neutral
 - No port changes, no domain type changes beyond the new one, no export version change, no new
-  dependency, and no second read.
+  dependency, and no second read. The export chain now takes a **third** positional optional, which its
+  own note called the moment to introduce a container; that refactor is **recorded debt** rather than
+  done here, on the reasoning `SourceInspectionOutcome` applied to its fifth payload.
 - The oracle remains absent from CI, so its suite stays local evidence behind the existing
   `FFmpegTool.isAvailable` pattern, with a skip message that says a skip is not agreement.
