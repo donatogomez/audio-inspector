@@ -157,6 +157,13 @@ The reading settled the fourth and reshaped the first. The decisive discovery is
     of decision 15 below. It remains under the waveform's own 0.30 s fold and comfortably affordable on a
     read that already happens — but the earlier figure is superseded, not merely refined.
 
+    **And the claim of "no second read" is now measured end to end.** Wiring it as the fifth consumer
+    takes the shared pass from **1.269 s to 1.524 s** at 48 kHz over ten minutes of stereo — a delta of
+    **0.255 s** against loudness's own 0.236 s in isolation. The increase *is* its DSP; nothing else
+    appeared. The proportion holds at every rate, which is what a per-sample cost looks like and what an
+    extra decode would not. Its share of the pass is **11–17 %** by container against the projected
+    7–12 %: over at the cheap end, where decode is nearly free, and inside it for FLAC and AAC.
+
 12. **Per-block energies are retained; an exact O(1) implementation is not attempted, because none
     exists.** The relative gate is derived from the whole programme, so whether a block survives eq. (7)
     cannot be decided when that block is produced. Memory is therefore **one energy per block** — 10
@@ -237,6 +244,20 @@ The reading settled the fourth and reshaped the first. The decisive discovery is
     response error at 192 kHz — three quarters of the whole budget, on top of the derivation's own
     0.0077 — against 0.000025 dB at 48 kHz. All remain stable, so this is accuracy rather than safety,
     and there is no cost to avoiding it.
+
+23. **Loudness is the first consumer of the shared read with no reachable failure of its own**, and the
+    composition says so rather than inventing one. Every way it ends without a value is an absence: the
+    accumulator declining a stream whose rate has no derived weighting or that carries more than two
+    channels, or the standard defining no result for the file. The one path that would be a genuine
+    failure — a loudness that came out non-finite — cannot be reached from `PCMChunk`'s finite `Float`s,
+    whose squares are bounded ~10²³¹ below `Double`'s ceiling. That is recorded as a limitation, on the
+    precedent `SignalLevelMetricsAccumulator` set for its own `nil`, rather than met with a fabricated
+    error path.
+
+24. **An unsupported configuration is loudness's absence and nobody else's.** It does not fail the shared
+    read, does not touch the other four, and does not resample or guess a layout to avoid the absence.
+    The shape already had the precedent — the waveform's own `unavailable` — and this is the second use
+    of it, which is what makes it a pattern rather than a special case.
 
 ## Deliberately left open
 
