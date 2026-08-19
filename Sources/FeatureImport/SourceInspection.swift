@@ -47,19 +47,26 @@ public struct InspectionAnalyses: Sendable, Equatable {
     public var truePeak: TruePeakOutcome
     /// What became of the integrated loudness.
     public var loudness: LoudnessOutcome
+    /// What became of the programme bandwidth.
+    ///
+    /// **No default.** A container exists so a signature stops growing, not so a field can be
+    /// forgotten: omitting this is a compile error, which is the strongest form of "the tests fail".
+    public var significantBandwidth: SignificantBandwidthOutcome
 
     public init(
         waveform: WaveformOutcome,
         spectrogram: SpectrogramOutcome,
         signalLevelMetrics: SignalLevelMetricsOutcome,
         truePeak: TruePeakOutcome,
-        loudness: LoudnessOutcome
+        loudness: LoudnessOutcome,
+        significantBandwidth: SignificantBandwidthOutcome
     ) {
         self.waveform = waveform
         self.spectrogram = spectrogram
         self.signalLevelMetrics = signalLevelMetrics
         self.truePeak = truePeak
         self.loudness = loudness
+        self.significantBandwidth = significantBandwidth
     }
 }
 
@@ -82,6 +89,8 @@ public enum InspectionUpdate: Sendable {
     case truePeak(TruePeakOutcome)
     /// The integrated loudness, once the shared read has finished.
     case loudness(LoudnessOutcome)
+    /// The programme bandwidth, once the shared read has finished.
+    case significantBandwidth(SignificantBandwidthOutcome)
 }
 
 /// Receives each part of an inspection as it settles, on the main actor.

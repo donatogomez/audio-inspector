@@ -258,6 +258,11 @@ public final class ImportFlowModel {
             guard let settled = TruePeakState(outcome) else { return }
             presentation.truePeak = settled
             state = .report(presentation)
+        case let .significantBandwidth(outcome):
+            guard case var .report(presentation) = state else { return }
+            guard let settled = SignificantBandwidthState(outcome) else { return }
+            presentation.significantBandwidth = settled
+            state = .report(presentation)
         case let .loudness(outcome):
             guard case var .report(presentation) = state else { return }
             guard let settled = LoudnessState(outcome) else { return }
@@ -282,7 +287,8 @@ public final class ImportFlowModel {
                 spectrogram: SpectrogramState(analyses.spectrogram) ?? .unavailable,
                 signalLevelMetrics: SignalLevelMetricsState(analyses.signalLevelMetrics) ?? .unavailable,
                 truePeak: TruePeakState(analyses.truePeak) ?? .unavailable,
-                loudness: LoudnessState(analyses.loudness) ?? .unavailable
+                loudness: LoudnessState(analyses.loudness) ?? .unavailable,
+                significantBandwidth: SignificantBandwidthState(analyses.significantBandwidth) ?? .unavailable
             )
             // A settled visualisation already shown must not be walked back to a fallback.
             if case let .report(current) = state, current.report == report {
@@ -293,7 +299,9 @@ public final class ImportFlowModel {
                     signalLevelMetrics: current.signalLevelMetrics == .loading
                         ? presentation.signalLevelMetrics : current.signalLevelMetrics,
                     truePeak: current.truePeak == .loading ? presentation.truePeak : current.truePeak,
-                    loudness: current.loudness == .loading ? presentation.loudness : current.loudness
+                    loudness: current.loudness == .loading ? presentation.loudness : current.loudness,
+                    significantBandwidth: current.significantBandwidth == .loading
+                        ? presentation.significantBandwidth : current.significantBandwidth
                 ))
             } else {
                 state = .report(presentation)

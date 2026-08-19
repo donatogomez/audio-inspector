@@ -34,6 +34,8 @@ public struct SignificantBandwidthAccumulator {
     static let significanceRatio = Float(0.003_162_277_66) // 10^(-50/20)
     /// A window contributes only if within this of the **file's** peak.
     static let budgetRatio = Float(0.001) // 10^(-60/20)
+    /// The same budget in decibels, for arithmetic that must not underflow.
+    static let budgetDecibels = -60.0
     /// Reported when significant in at least this fraction of eligible windows, counted as the k-th
     /// largest with k = ceil(fraction × N).
     static let persistenceFraction = 0.10
@@ -185,7 +187,10 @@ public struct SignificantBandwidthAccumulator {
         // The budget's boundary, resolved to whole strata. The stratum the boundary falls inside is
         // **included**: a window sitting exactly on the budget is eligible under the exact rule, and
         // excluding its stratum would drop it.
-        let thresholdDecibels = 20 * log10(Double(filePeak) * Double(Self.budgetRatio))
+        // **Subtracted in decibels, never multiplied first.** `filePeak * budgetRatio` underflows to
+        // zero for a peak near the bottom of `Float`, and `log10(0)` is −infinity, which traps on the
+        // conversion below. A very quiet file is not an error, and the arithmetic must not make it one.
+        let thresholdDecibels = Self.decibels(filePeak) + Self.budgetDecibels
         let firstIncluded = Int(floor(thresholdDecibels / Self.bucketDecibels))
         let lowestRepresentable = topBucket - Self.bucketCount + 1
         let lowerBound = max(firstIncluded, lowestRepresentable)
@@ -219,6 +224,19 @@ public struct SignificantBandwidthAccumulator {
             readings.append(found)
         }
         return SignificantBandwidth(channels: readings, method: method)
+    }
+
+    /// A window peak in decibels, kept finite.
+    ///
+    /// Two ways this can leave the real line, and neither is an error the file committed. A peak near
+    /// the bottom of `Float` would underflow if the budget were applied by multiplication, so the
+    /// budget is subtracted in decibels instead. And a signal extreme enough to overflow a magnitude to
+    /// infinity — which `PCMChunk`'s finiteness rule permits, since it bounds samples and not their
+    /// transform — would otherwise trap on the conversion to a stratum index. Both are clamped to the
+    /// widest finite value rather than dropped: a window that carries energy is an observation.
+    static func decibels(_ magnitude: Float) -> Double {
+        guard magnitude.isFinite else { return 20 * log10(Double(Float.greatestFiniteMagnitude)) }
+        return 20 * log10(Double(magnitude))
     }
 
     private func slot(for bucket: Int) -> Int {
@@ -277,7 +295,7 @@ private extension SignificantBandwidthAccumulator {
         for value in magnitudes where value > peak { peak = value }
         guard peak > 0 else { return }
         if peak > filePeak { filePeak = peak }
-        let bucket = Int(floor(20 * log10(Double(peak)) / Self.bucketDecibels))
+        let bucket = Int(floor(Self.decibels(peak) / Self.bucketDecibels))
 
         // A window more than 60 dB below the running peak can never become eligible, because the final
         // peak is at least the running one. Dropping it is exact, not an approximation.

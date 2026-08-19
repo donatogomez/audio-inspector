@@ -100,12 +100,15 @@ struct SourceInspectionCoordinator {
             onUpdate(.signalLevelMetrics(.unavailable))
             onUpdate(.truePeak(.unavailable))
             onUpdate(.loudness(.unavailable))
-            return .inspected(
-                report, analyses: InspectionAnalyses(waveform: .unavailable,
+            onUpdate(.significantBandwidth(.unavailable))
+            return .inspected(report, analyses: InspectionAnalyses(
+                waveform: .unavailable,
                 spectrogram: .unavailable,
                 signalLevelMetrics: .unavailable,
                 truePeak: .unavailable,
-                loudness: .unavailable))
+                loudness: .unavailable,
+                significantBandwidth: .unavailable
+            ))
         }
 
         // **One read, every analysis.** The waveform, the spectrogram, the signal level metrics and the
@@ -131,13 +134,18 @@ struct SourceInspectionCoordinator {
         onUpdate(.signalLevelMetrics(shared.signalLevelMetrics))
         onUpdate(.truePeak(shared.truePeak))
         onUpdate(.loudness(shared.loudness))
+        // Last, because it is the newest: the five before it keep the order they always had, which a
+        // test pins rather than trusts.
+        onUpdate(.significantBandwidth(shared.significantBandwidth))
 
-        return .inspected(
-            report, analyses: InspectionAnalyses(waveform: shared.waveform,
+        return .inspected(report, analyses: InspectionAnalyses(
+            waveform: shared.waveform,
             spectrogram: shared.spectrogram,
             signalLevelMetrics: shared.signalLevelMetrics,
             truePeak: shared.truePeak,
-            loudness: shared.loudness))
+            loudness: shared.loudness,
+            significantBandwidth: shared.significantBandwidth
+        ))
     }
 
     /// Produces every sample-based analysis from **one** read, inside the window the caller already

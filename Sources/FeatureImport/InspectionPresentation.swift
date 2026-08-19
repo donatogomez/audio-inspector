@@ -216,6 +216,45 @@ public enum LoudnessOutcome: Sendable, Equatable {
     case cancelled
 }
 
+/// What became of the programme bandwidth — the highest frequency carrying persistent, prominent
+/// energy, measured within 60 dB of the file's own programme peak.
+///
+/// Shaped exactly like `LoudnessOutcome`, and for the same reason: its accumulator declines to be
+/// built for a stream it does not claim, which is an absence rather than a failure.
+public enum SignificantBandwidthOutcome: Sendable, Equatable {
+    /// The measurement, with the methodology that produced it.
+    case available(SignificantBandwidth)
+    /// No value: the configuration is one this measurement does not claim, or the file carried no
+    /// window the method could use. Caused by the file or by our own declared scope, **not** a failure.
+    case unavailable
+    /// Producing it failed. The message is human and neutral: it names no path and no framework.
+    case failed(message: String)
+    /// The operation was cancelled — by the user picking something else, never by the file.
+    case cancelled
+}
+
+/// What the surface can say about a programme bandwidth right now.
+///
+/// It exists so the flow can **carry** the measurement to the surface that will one day render it.
+/// Nothing renders it yet, and this change deliberately adds no view: a value that reached the model
+/// and stopped there would be a wiring bug nobody could see.
+public enum SignificantBandwidthState: Sendable, Equatable {
+    case loading
+    case available(SignificantBandwidth)
+    case unavailable
+    case failed(message: String)
+
+    /// The state an outcome settles into; `nil` for `cancelled`, exactly as its five siblings.
+    public init?(_ outcome: SignificantBandwidthOutcome) {
+        switch outcome {
+        case let .available(model): self = .available(model)
+        case .unavailable: self = .unavailable
+        case let .failed(message): self = .failed(message: message)
+        case .cancelled: return nil
+        }
+    }
+}
+
 /// What the surface can say about an integrated loudness right now.
 ///
 /// The extra case over `LoudnessOutcome` is `loading`; `cancelled` is deliberately **absent**, exactly
@@ -263,6 +302,8 @@ public struct InspectionPresentation: Sendable, Equatable {
     public var signalLevelMetrics: SignalLevelMetricsState
     public var truePeak: TruePeakState
     public var loudness: LoudnessState
+    /// Carried, not yet shown: no view reads this, and the flow tests assert it arrives.
+    public var significantBandwidth: SignificantBandwidthState
 
     public init(
         report: InspectionReport,
@@ -270,7 +311,8 @@ public struct InspectionPresentation: Sendable, Equatable {
         spectrogram: SpectrogramState = .loading,
         signalLevelMetrics: SignalLevelMetricsState = .loading,
         truePeak: TruePeakState = .loading,
-        loudness: LoudnessState = .loading
+        loudness: LoudnessState = .loading,
+        significantBandwidth: SignificantBandwidthState = .loading
     ) {
         self.report = report
         self.waveform = waveform
@@ -278,5 +320,6 @@ public struct InspectionPresentation: Sendable, Equatable {
         self.signalLevelMetrics = signalLevelMetrics
         self.truePeak = truePeak
         self.loudness = loudness
+        self.significantBandwidth = significantBandwidth
     }
 }
