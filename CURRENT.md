@@ -16,43 +16,58 @@
 >   session protocol in `CLAUDE.md`).
 
 ---
-**Open thread: `add-significant-bandwidth-measurement`.** Group 1 is complete. No production code exists
-for this change yet, and group 2 comes before it.
+**Open thread: `add-significant-bandwidth-measurement`.** Groups 1 and 2 are complete. There is still no
+production code for this change; group 3 is the accumulator and it is now authorised.
 
-**GO.** The blocking question was never a measurement, and it stopped pretending to be one. A window
-holding only a noise floor is indistinguishable, from inside itself, from one holding only quiet music —
-three independent routes converged on that — so the rule that separates them is a **declaration**, and it
-was made: **programme bandwidth, within 60 dB of programme peak**. The budget is load-bearing on exactly
-one case, a broadband floor alone in a file, and its cost is written into the record rather than left to
-be discovered: content more than 60 dB below a file's loudest moment is not measured, and a noise floor
-further down does not count as content. Those are two halves of one rule; no setting keeps one and drops
-the other. The name carries the budget so the figure cannot be read as a claim about everything in the
-file.
+**Group 2 asked one question: does the fact survive the transport?** It does. The method left in-memory
+arrays and went onto real files through the production decoder — five sample rates, five lossless
+containers, AAC, MP3 and rewrap, seven chunk sizes from one frame to the whole file, and every file
+edge. Lossless containers and chunk sizes agree on the **identical bin**, asserted exactly rather than
+within a tolerance, because the measurement is a pure function of the samples and a tolerance there
+would hide a decoder difference instead of revealing one.
 
-**A correction came with it, and it simplifies the method.** The absence rules — first a −120 dBFS floor,
-then a file-level energy test — were both artefacts of the first harness clamping magnitudes at 1e-12,
-which turned a silent window into a −240 dB window *with a reference*. Unclamped, a window of zeros has
-magnitude exactly zero and is ineligible by itself; digital silence reads absent even with every other
-rule switched off. So there is no absolute rule of any kind, and one methodological requirement instead:
-**the accumulator must not clamp its magnitudes.**
+**The resolution contract came out of measurement, not out of a choice.** Across four known edges and
+five rates the error is always positive — one-sided upward, as the Hann derivation said — and worst-case
+4.55 resolutions against the analytic reach of 4.72. So the assertion is `0 ≤ error ≤ 5 × resolution`,
+and the raw hertz are explicitly *not* comparable across rates: each rate quantises the edge onto its own
+bin grid, and 12 kHz reads +1.00 resolutions at 48 kHz and +4.55 at 44.1 kHz for that reason alone.
 
-The full rule set then ran as one thing for the first time and passed twelve of twelve pre-registered
-constraints. Four constants and one declaration: per-window spectral peak as reference, −50 dB
-prominence, ≥10 % persistence, ~42.67 ms time-locked window with 75 % overlap and a periodic Hann, and
-the 60 dB budget.
+**Lossy came out better than expected.** A 64 kbps MP3 reads its own low-pass — 16 790 Hz where the
+source reads 20 075 — and a 320 kbps one keeps the source's edge; AAC moves four bins. Codec artefacts
+above the low-pass stayed under the threshold, so nothing had to be widened to accommodate a codec, and
+every bitrate survives a rewrap to PCM with the identical bin. That last row is evidence about spectral
+extent and nothing else: it says two files measure the same, never where either came from.
 
-**Next step: group 2, fixtures and the oracle** — and it is a change of kind, not of degree. Everything
-measured so far is synthetic and in memory. Group 2 is where this meets real files, the rate matrix,
-container and codec equivalence, and FFmpeg as a corroborating oracle only. The accumulator (group 3)
-comes after it, on the change's own ordering.
+**FFmpeg is settled, and by measurement.** Its `aspectralstats` `rolloff` under-reads a 16 kHz limit as
+15.2 kHz, and adding a dominant 100 Hz tone drags it to 12.5 kHz while the extent does not move. It
+tracks spectral balance, not extent. There is no external oracle for this quantity, and now that is a
+measured statement rather than an assumed one.
 
-ADR-0023 stays `Proposed`. Its first promotion condition is now met; the other two are the impulse
-control passing against production code and human validation of the surface, and neither can be met
-before the accumulator exists.
+**Two things group 2 hands forward.** An impulse alone in digital silence reads as broadband — not a
+persistence failure but eligibility interacting with it, since removing empty windows raises the share
+of the few that remain, and a programme has to occupy about a quarter of the file before an isolated
+click stops setting the answer. It is pinned by a test. And bounded memory (task 3.3) is harder than it
+reads: the budget compares each window against the file's peak, which is not known until the end, so a
+plain per-bin counter cannot decide eligibility as it goes. Counters stratified by window peak into dB
+buckets are one shape that stays bounded.
+
+Three self-inflicted faults are written into the spike rather than quietly fixed, because each would
+pass unnoticed: a hard amplitude step in a fixture is broadband and measured as Nyquist; a comb of 32
+components at 0.05 clips and measures its own clipping; and a fast path must associate its arithmetic
+exactly as the slow path writes it, because the support tests compare them bit for bit.
+
+**Next step: group 3, the accumulator** — `SignificantBandwidthAccumulator` in `AudioInspectorAnalysis`,
+taking `PCMChunk` like its five siblings, with chunk independence demonstrated by a test that fails when
+it is broken, bounded memory per 3.3, and the mono/stereo decision (3.4) that group 2 deliberately left
+open by measuring each channel separately.
+
+ADR-0023 stays `Proposed`. Its first promotion condition is met; the other two — the impulse control
+against production code, and human validation of the surface — cannot be met before the accumulator
+exists.
 
 **Older threads, neither advanced here**: `add-static-spectrogram-visualization` (manual validation
 battery deferred by product decision); `add-two-file-technical-comparison` (one accessibility criterion
-open, blocked on the VoiceOver traversal gap shared with ADR-0015). The loudness debt recorded four
+open, blocked on the VoiceOver traversal gap shared with ADR-0015). The loudness debt recorded five
 snapshots ago is unchanged and still not a thread: the export chain's third positional optional,
 `ReportJSONDTO.swift` at 415 lines against SwiftLint's 400, the absolute gate not being observable from
 outside `LoudnessAccumulator`, and the unaudited `Task.yield()` in `ImportFlowComparisonTests`.
