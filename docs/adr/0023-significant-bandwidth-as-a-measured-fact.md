@@ -58,14 +58,26 @@ spike measured whether that works. It does not, and the measurements decided thi
    of eligible windows**. This does not promote the record — see the status above, whose other two
    conditions are untouched.
 
-5. **Threshold and persistence are not sufficient, and the two rules that complete them are named.**
+5. **Threshold and persistence are not sufficient, and what completes them is still open.**
    Measured: *no* relative reference at *any* threshold and *any* persistence reports absence for digital
-   silence, because on silence every bin and every relative reference sit at the same numerical floor. A
-   **window-eligibility gate** — a window whose own spectral peak is more than 60 dB below the file's
-   global spectral peak contributes to neither the count nor the denominator — is gain-invariant by
-   construction and is inert on every fixture except one that is partly digital silence. An **absolute
-   silence floor** at −120 dBFS on the global spectral peak is not gain-invariant and is not meant to be:
-   it detects the absence of audio rather than measuring bandwidth. Gain invariance was measured to hold
+   silence, because on silence every bin and every relative reference sit at the same numerical floor.
+   Two rules were proposed and then tested to destruction:
+
+   - **Absence is a numeric condition, not a level.** A file that carries **no energy at all** has no
+     bandwidth. An earlier −120 dBFS floor is rejected: it discards about 60 dB of range in which the
+     measurement demonstrably still works, while digital silence is separable from a signal 180 dB down
+     by total energy being exactly zero. No chosen dB value is needed and none should be invented.
+   - **The window-eligibility gate is a dynamic-range budget, and −60 dB is not enough.** Excluding a
+     window whose own peak is more than 60 dB below the file's global peak does stop silent windows from
+     qualifying — and it also erases a real quiet passage 70 dB below the loudest moment, band and all.
+     The two failure tables are exact mirror images, because to this rule "a noise floor 70 dB down" and
+     "real music 70 dB down" are the same measurement. **No single value separates them.** Whatever
+     replaces it will still be a budget, and the record must state it as one rather than leave it
+     implicit.
+
+   This is why the accumulator is not authorised yet: the unresolved rule decides *which windows are
+   looked at*, and sits upstream of the threshold and the persistence criterion, both of which survived
+   direct attempts to refute them. Gain invariance was measured to hold
    over an 80 dB range above that floor.
 
 6. **This is not a filter-knee detector, and the record says so before a surface can imply it.** On a
@@ -74,15 +86,40 @@ spike measured whether that works. It does not, and the measurements decided thi
    edge below Nyquist at all and the reported value is the top of the band.
 
 7. **The value carries the resolution it was measured at**, and no surface may print more precision than
-   that supports. A bin is 21.5 Hz wide at 44.1 kHz and 93.8 Hz at 192 kHz, and a Hann window spreads a
-   tone beyond one bin: the overshoot above a known hard cut-off measures **≈ 4 bins, one-sided upward**,
-   consistently at four different bin widths. `21.73 kHz` would be a fabricated digit.
+   that supports. `21.73 kHz` would be a fabricated digit.
 
-8. **Absence is an absence.** No audio, shorter than one window, or nothing meeting the criterion yields
+   The uncertainty is now **derived rather than observed**. A Hann window's transform is
+   `|W(d)| = |sin(πd)| / (π|d||d²−1|)` — verified against the true DTFT to 0.000 dB — whose skirt falls
+   as `1/d³`. A relative threshold `T` therefore stays above the skirt out to
+   **`d(T) ≈ (1 / (π·10^(T/20)))^(1/3)` bins**, which is **4.72 bins at −50 dB**. That, and not the bin
+   width, not the main lobe, and not bin quantisation, is what the observed overshoot was: it is the only
+   one of the four that moves with the threshold, and the measurement moves with it exactly.
+
+   Consequences the record fixes:
+
+   - **The reported frequency is an upper bound on where content ends**, overstating it by one bin when
+     the edge falls on a bin and by up to `d(T)` bins when it does not — one-sided, upward, and dependent
+     on the content's sub-bin position, which is unknowable from the result.
+   - **An interval contract was derived and then falsified** and must not be reintroduced: tones one bin
+     apart and in phase overshoot by 8.5 bins, past any bound `d(T)` supports. The domain carries a
+     frequency and a resolution, not a lower and an upper bound.
+   - **Display granularity must be coarser than the bias, not merely coarser than the bin.** At a
+     42.67 ms window the bias is 23–111 Hz, so a tenth of a kHz is the finest defensible step.
+
+8. **The analysis window is fixed in time, not in samples.** Measured: under a 2048-point window at every
+   rate, ten short bursts totalling 5 % of a file read 12.65 % of windows at 44.1 kHz and 6.73 % at
+   192 kHz — the same temporal evidence classified significant at one rate and insignificant at another.
+   Time-locked, the same content reads 11.6–11.8 % at all five rates. The window is therefore **≈ 42.67
+   ms**, realised as the nearest length `vDSP_DFT_zrop` accepts (`f · 2^m`, f ∈ {1,3,5,15} — so 1920 at
+   44.1 kHz and 3840 at 88.2 kHz, within 2.0 %, rather than the 8.8 % error powers of two would force),
+   with **75 % overlap**. `fftSize` and `hop` are part of the method's identity, because the persistence
+   criterion is defined on windows.
+
+9. **Absence is an absence.** No audio, shorter than one window, or nothing meeting the criterion yields
    no value. Zero is not a result and **Nyquist is not a result** — the same rule that made −70 LUFS a
-   gate rather than a reading (ADR-0022 §6).
+   gate rather than a reading (ADR-0022 §6). "No audio" is the numeric condition of §5, not a level.
 
-9. **The shared STFT stage is deferred and named.** `SpectrogramAccumulator` already computes 1025 bins
+10. **The shared STFT stage is deferred and named.** `SpectrogramAccumulator` already computes 1025 bins
    per hop and throws the resolution away; sharing that stage would make this nearly free. It is the
    right end state and the wrong first step — it would land a refactor inside a feature and design for
    one consumer while guessing at the second. It waits for `average spectrum` to give it a second.
@@ -113,6 +150,15 @@ spike measured whether that works. It does not, and the measurements decided thi
   gate, and at rates other than 48 kHz to this project's own derivation of the weighting.
 - **Reporting Nyquist when nothing is found.** Rejected as the floor mistake this project has already
   made once and refused: it turns "not measurable" into a number.
+- **Reporting a lower and an upper bound instead of a frequency.** Derived, and then falsified by
+  measurement: coherent content one bin apart overshoots by 8.5 bins, outside any bound the window's own
+  leakage supports. A bound a legal signal violates is not a bound.
+- **Reporting the bin's upper edge rather than its centre.** Rejected: it adds half a bin of
+  overstatement to a figure that already overstates, and buys nothing.
+- **An absolute silence floor in dBFS.** Rejected in favour of a numeric energy test: any chosen level
+  discards real content that the method still measures correctly, and none is needed.
+- **A window fixed in samples.** Rejected on measurement: it makes the persistence criterion
+  rate-dependent, classifying identical temporal evidence differently at 44.1 and 192 kHz.
 - **Shipping an upsampling indicator with it.** Rejected: one indicator is not an evidence engine, and
   the methodology requires several independent ones with alternative explanations.
 
