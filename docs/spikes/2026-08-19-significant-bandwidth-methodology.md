@@ -352,7 +352,304 @@ content stops crossing the threshold, which for gently filtered material is not 
 | measured overshoot | **≈ 4 bins**, one-sided upward | §7 — 3.7–4.35 bins at four different bin widths |
 | analysis window | FFT 4096 / hop 1024 at 48 kHz | §7 — the persistence constant is not portable across window lengths |
 
-## 12. What group 1 still requires
+## 12. Part B — resolution, the analysis window, and four refutation attempts
+
+Part A settled four parameters. Part B derives the uncertainty analytically instead of empirically,
+decides the analysis window, and then tries to **break** each parameter on fixtures that did not choose
+it. Two of the four did not survive.
+
+### 12.1 The Hann window, derived and then verified
+
+A Hann window is a rectangular window minus two half-amplitude copies shifted by one bin, so its
+transform is a weighted sum of three Dirichlet kernels. Because `sin(π(d ± 1)) = −sin(πd)`, the three
+collapse into one expression:
+
+> **|W(d)| / W(0) = |sin(πd)| / (π · |d| · |d² − 1|)**, with `d` in bins.
+
+Checked against the true sampled DTFT of the window at N = 2048: **agreement to 0.000 dB at every point
+tested**, from d = 0 to d = 10.5. Every figure below is measured from the window in the run, not quoted:
+
+| quantity | measured | canonical |
+| --- | --- | --- |
+| coherent gain | 0.5000 | 0.5 |
+| equivalent noise bandwidth | 1.5000 bins | 1.5 |
+| first zero | 2.0000 bins → main lobe **4 bins** null-to-null | 2 |
+| −3 dB bandwidth | 1.438 bins | 1.44 |
+| scalloping loss at d = 0.5 | **−1.424 dB** | 1.42 |
+| first sidelobe | **−31.47 dB** at d = 2.362 | −31.5 |
+| asymptotic roll-off | **−18.6 dB/octave** | −18 |
+
+(the canonical column is Harris 1978, *On the Use of Windows for Harmonic Analysis with the DFT*,
+Proc. IEEE 66(1), table 1; it is there to confirm the harness, not to supply the numbers.)
+
+Accelerate's own window was checked too: `vDSP_HANN_DENORM` **is** the periodic
+`0.5(1 − cos(2πn/N))`, and `vDSP_HANN_NORM` is that scaled by `2/Σw`. Neither is the symmetric
+`/(N−1)` variant.
+
+### 12.2 What actually explains the ≈4-bin overshoot — and it is none of the obvious three
+
+Four different quantities were being called "resolution". They are not the same thing:
+
+| | quantity | value at 48 kHz / 2048 | depends on the threshold? |
+| --- | --- | --- | --- |
+| **A** | nominal FFT resolution `rate / fftSize` | 23.4 Hz | no |
+| **B** | Hann main-lobe width | 4 bins = 94 Hz | no |
+| **C** | bin quantisation of the reported index | ±0.5 bin = ±12 Hz | no |
+| **D** | **threshold cutting the leakage skirt** | **4.72 bins = 111 Hz** | **yes** |
+
+Only **D** behaves like the observation. Far from the main lobe the envelope goes as `1/(πd³)`, so
+solving `|W(d)| = 10^(T/20)` gives a closed form:
+
+> **d(T) ≈ ( 1 / (π · 10^(T/20)) )^(1/3) bins**
+
+| threshold | −40 | −45 | **−50** | −55 | −60 | −70 | −80 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| d(T), bins | 3.27 | 3.93 | **4.72** | 5.69 | 6.88 | 10.06 | 14.73 |
+
+The measured overshoot follows it exactly, and depends **only on where the content edge sits inside a
+bin** — not on the rate and not on the FFT size:
+
+| sub-bin offset of the edge | 0.00 | 0.25 | 0.50 | 0.75 |
+| --- | --- | --- | --- | --- |
+| overshoot, bins | **1.00** | 3.75 | **4.50** | 4.25 |
+
+identical at 44.1 / 48 / 88.2 / 96 / 192 kHz and at FFT 2048 / 4096 / 8192. An edge exactly on a bin
+leaks into ±1 bin and no further, because the sampled Hann transform is then exactly `{¼, ½, ¼}`; an
+edge between bins leaks out to d(T). **So the uncertainty is one-sided, upward, and content-dependent.**
+
+### 12.3 The interval contract, derived and then falsified
+
+The natural contract was: `trueEdge ∈ [(b − d(T))·Δf, (b + 0.5)·Δf]`. It held on 105 of 105 isolated and
+sparse cases — and then failed. Tones spaced **one bin apart and in phase** put the reading **8.50 bins**
+above the true edge, because the skirts of many partials add in amplitude:
+
+| content | worst overshoot |
+| --- | --- |
+| isolated tone / sparse comb (42.7 bins apart) | 4.50 bins — inside d(T) |
+| comb 4 bins apart | 4.50 bins |
+| comb 2 bins apart, in phase | 5.50 bins — **outside** |
+| comb 1 bin apart, in phase | **8.50 bins — outside** |
+| band-limited noise, random phases (the realistic dense case) | 2.76–3.50 bins |
+| white noise through a real FIR brick wall | 2.33–4.33 bins |
+
+**The interval contract (option C) is rejected on this evidence.** A derived bound that a legal signal
+violates is not a bound. Coherent dense content is contrived, but it is a signal, and the contract
+claimed to hold for all of them.
+
+### 12.4 The reporting contract — frequency and resolution, with the bias stated
+
+| contract | verdict |
+| --- | --- |
+| **A — bin centre + the resolution it was measured at** | **chosen.** The number is exactly what was measured; the resolution says how finely it is quantised. It claims nothing about the content's cut-off, which §8 already established it must not. |
+| B — bin upper edge | rejected: adds half a bin of overstatement to a number that already overstates, and buys nothing. |
+| C — lower/upper bound | rejected: the bound is falsifiable and was falsified (§12.3). |
+| D — band index plus a mapping | rejected: moves DSP into the surface, which ADR-0016 already refused for the spectrogram. |
+
+The bias is not hidden by choosing A; it is **stated**: the reported frequency is an upper bound on the
+edge of the content, overstating it by one bin when the edge falls on a bin and by up to d(T) bins when
+it does not. In Hz that is `bins / windowDuration`, so it is one number per window length and — once the
+window is time-locked — the same at every sample rate:
+
+| window | bin width @48 kHz | bias, 1 … d(T) | worst observed | honest display step |
+| --- | --- | --- | --- | --- |
+| 21.33 ms | 46.9 Hz | 47 … 221 Hz | 398 Hz | 0.5 kHz |
+| **42.67 ms** | **23.4 Hz** | **23 … 111 Hz** | 199 Hz | 0.1–0.5 kHz |
+| 85.33 ms | 11.7 Hz | 12 … 55 Hz | 100 Hz | 0.1 kHz |
+
+### 12.5 The analysis window — time-locked, on evidence
+
+**vDSP accepts far more than powers of two.** Probed, not assumed: `f · 2^m` for f in {1, 3, 5, 15} is
+available through `vDSP_DFT_zrop`, giving 1920, 3840, 7680 and so on alongside the usual sizes. That is
+what makes a time-locked window possible at 44.1 and 88.2 kHz without a large duration error.
+
+| rate | sample-locked 2048 | time-locked ≈42.67 ms | time-locked, powers of two only |
+| --- | --- | --- | --- |
+| 44.1 kHz | 46.44 ms | **1920 → 43.54 ms (+2.0 %)** | 2048 → 46.44 ms (+8.8 %) |
+| 48 kHz | 42.67 ms | 2048 → 42.67 ms (0 %) | 2048 (0 %) |
+| 88.2 kHz | **23.22 ms (−45.6 %)** | **3840 → 43.54 ms (+2.0 %)** | 4096 → 46.44 ms (+8.8 %) |
+| 96 kHz | **21.33 ms (−50 %)** | 4096 → 42.67 ms (0 %) | 4096 (0 %) |
+| 192 kHz | **10.67 ms (−75 %)** | 8192 → 42.67 ms (0 %) | 8192 (0 %) |
+
+**A single contiguous event does not discriminate the two families.** The shortest event still classified
+significant, found by bisection on a 5 s file, is 500.0–502.6 ms sample-locked and 500.9–502.6 ms
+time-locked — a spread of 0.5 % and 0.3 %. When the event is much longer than the window, the window
+does not matter.
+
+**Fragmented content discriminates them decisively.** Ten short bursts totalling a stated fraction of the
+file, measured window presence:
+
+| content | 44.1 k | 48 k | 88.2 k | 96 k | 192 k | same verdict? |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1 % duty, sample-locked | 8.67 % | 7.53 % | 4.66 % | 4.18 % | **2.72 %** | 3.2× spread |
+| 1 % duty, **time-locked** | 7.89 % | 7.53 % | 7.68 % | 7.53 % | 7.74 % | yes |
+| **5 % duty, sample-locked** | **12.65 %** | **11.61 %** | **8.74 %** | **8.24 %** | **6.73 %** | **NO — significant at 44.1 and 48 kHz, not significant above** |
+| 5 % duty, **time-locked** | 11.84 % | 11.61 % | 11.62 % | 11.61 % | 11.61 % | yes |
+| 10 % duty, sample-locked | 17.80 % | 16.56 % | 13.75 % | 13.17 % | 11.65 % | yes, but 1.5× margin spread |
+| 10 % duty, **time-locked** | 17.11 % | 16.56 % | 16.89 % | 16.77 % | 16.56 % | yes |
+
+The 5 % row is the answer to the question the turn was set: **the same temporal evidence receives a
+different classification at different sample rates under a sample-locked window, and the same
+classification under a time-locked one.** Time-locked, on evidence.
+
+### 12.6 What "≥ 10 % of windows" means in time
+
+`windowPresence ≈ (totalEventTime + n · α · windowDuration) / fileDuration`, with `n` the number of
+separate fragments and α between 0.5 and 1 depending on how far above threshold the event sits.
+
+- **one contiguous event**: the criterion is "present for ≥ 10 % of the file", accurate to one window
+  length — measured critical duration 502 ms against a nominal 500 ms on a 5 s file.
+- **n fragments**: each fragment costs about one extra window length. Ten bursts totalling 1 % of a 5 s
+  file measure 7.5 %, not 1 %.
+
+So "10 % of the time" and "10 % of windows" are different quantities, and the difference is the window
+duration times the number of fragments. This is a property of the definition and is stated, not fixed.
+
+### 12.7 Hop
+
+| overlap | hop @48 kHz | windows / 5 s | critical duration | a transient marks | STFT cost |
+| --- | --- | --- | --- | --- | --- |
+| 25 % | 42.67 ms | 117 | **480.8 ms** | 1 window (0.85 %) | 0.7 ms |
+| 50 % | 21.33 ms | 233 | 502.6 ms | 1 window (0.43 %) | 1.3 ms |
+| **75 %** | **10.67 ms** | 465 | **502.6 ms** | 1 window (**0.22 %**) | 3.0 ms |
+| 87.5 % | 5.33 ms | 930 | 502.6 ms | 1 window (0.11 %) | 4.6 ms |
+
+Two things worth correcting from part A. A short transient marks **one** window, not `fftSize / hop` of
+them — the Hann taper attenuates a transient sitting near a window's edge below the threshold. And
+because the transient's window *count* stays at one while the window total grows, **more overlap makes a
+transient less significant, not more**. 25 % overlap disagrees with the rest on the critical duration;
+50, 75 and 87.5 % agree. **75 % chosen**: it agrees with the consensus, rejects transients better than
+50 %, and costs a third of what 87.5 % costs.
+
+**Adversarial alignment** — the same signal shifted by 0, ¼, ½ and ¾ of a hop, time-locked, all five
+rates: a 520 ms event reads 10.31–10.54 % and is classified significant in **20 of 20** cases; a 10 ms
+burst reads 0.00–0.44 % and is classified insignificant in **20 of 20**. Alignment is not a risk.
+
+### 12.8 Refutation 1 — the −50 dB threshold survives
+
+Nine fixtures that had no part in choosing it, swept −45 / −47.5 / −50 / −52.5 / −55:
+
+| fixture | reading at −50 dB | comment |
+| --- | --- | --- |
+| tilted spectrum −6 dB/oct to 20 kHz | 20 016 | kept |
+| **tilted spectrum −12 dB/oct to 20 kHz** | **9 000** | the −50 dB crossing of the tilt: 500 · 2^(50/12) = 9 000 Hz **exactly** |
+| bass dominant +30 dB + band −30 dB | 16 031 | §12.11 |
+| narrow band, one tone at 19.5 kHz | 19 523 | a single tone is enough |
+| wide band 16.5–23.5 kHz | 23 531 | kept |
+| two regions, 0–8 kHz and 18–20 kHz | 20 016 | a spectral gap does not break it |
+| gentle roll-off, knee 8 kHz, 24 dB/oct | 23 531 | no edge below Nyquist |
+| pink-ish noise −3 dB/oct | 23 930 | full band, correctly |
+| body + band + one isolated full-scale click | 20 016 | the click does not become the reference |
+
+No fixture where −50 dB is worse than its neighbours. The −12 dB/oct row is the most instructive: the
+reading tracks `500 · 2^(|T|/12)` across the whole sweep (6 492 / 7 500 / 9 000 / 10 500 / 12 000 Hz),
+which is the threshold's definition working exactly, and a sharp reminder that **on a tilted spectrum the
+reported frequency is the −50 dB point of the tilt, not the top of the content.**
+
+### 12.9 Refutation 2 — the −60 dB eligibility gate does **not** survive
+
+The gate was introduced in part A to stop digitally silent windows from qualifying. It turns out to be
+doing two jobs at once, and they pull in opposite directions.
+
+**Job A — reject a passage that is only noise floor.** Loud passage over 40 % of the file, then white
+noise at the stated level and nothing else. A correct reading is ~16 000; 24 000 means the noise won:
+
+| noise floor | gate −40 | −50 | **−60** | −70 | −80 | −90 | −100 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| −60 dBFS | 16 102 | 16 102 | **16 102** | 24 000 | 24 000 | 24 000 | 24 000 |
+| −80 dBFS | 16 102 | 16 102 | **16 102** | 16 102 | 16 102 | 24 000 | 24 000 |
+| −100 dBFS | 16 102 | 16 102 | **16 102** | 16 102 | 16 102 | 16 102 | 16 102 |
+
+**Job B — keep a real quiet passage.** The same structure, but the second passage is real music with a
+real 19–20 kHz band 30 dB under its own body. A correct reading is ~20 000:
+
+| quiet passage | gate −40 | −50 | **−60** | −70 | −80 | −90 | −100 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| −50 dB | 16 102 | 20 016 | **20 016** | 20 016 | 20 016 | 20 016 | 20 016 |
+| −70 dB | 16 102 | 16 102 | **16 102** | 20 016 | 20 016 | 20 016 | 20 016 |
+| −90 dB | 16 102 | 16 102 | **16 102** | 16 102 | 16 102 | 20 016 | 20 016 |
+
+**The two tables are exact mirror images.** They have to be: "a noise floor 70 dB down" and "real music
+70 dB down" are the same measurement to a gate that only knows how far below the file's peak a window
+sits. No value separates them.
+
+So, against the criterion set for this turn — *does −60 dB make musically real sections disappear?* —
+the answer is **yes, at 70 dB below the file's peak and below**. The gate is therefore **rejected as
+specified**. What it actually is, and what any replacement will also be, is a **dynamic-range budget**:
+*content in passages more than G dB below the file's loudest moment is not measured.* That is a
+defensible thing to state and a wrong thing to leave implicit at G = 60.
+
+### 12.10 Refutation 3 — the −120 dBFS floor is arbitrary, and a numeric condition is better
+
+| the same real signal at | global peak | with the −120 floor | with no floor |
+| --- | --- | --- | --- |
+| −0 dB | −40 dBFS | 20 016 | 20 016 |
+| −80 dB | −120 dBFS | 20 016 | 20 016 |
+| **−100 dB** | **−140 dBFS** | **absent** | **20 016** |
+| −140 dB | −180 dBFS | absent | 20 016 |
+| −180 dB | −220 dBFS | absent | 24 000 (the harness's own 1e-12 magnitude clamp, not the signal) |
+
+The floor **discards about 60 dB of range in which the measurement still works**. And it is not needed
+for what it was introduced for: digital silence has total energy of **exactly 0.0**, while a real signal
+180 dB down has energy 1.5 × 10⁻¹⁵ — the two are separated by a numeric condition with **no chosen dB
+value at all**.
+
+> **Absence when the file carries no energy**, not when it falls below a picked level.
+
+One thing a relative gate cannot do, confirmed: for an all-silent file every window peak equals the
+global peak, so their *ratio* is 0 dB and no relative rule excludes them. The absence test has to be
+absolute — but it can be numeric rather than acoustic.
+
+### 12.11 The bass-dominance boundary is exactly the definition
+
+A real 19–20 kHz band L dB below the body, with a 100 Hz tone D dB above the body. Prediction: the band
+is kept while `|L| + D ≤ 50 dB`.
+
+| band level | LF +0 | +10 | +20 | +30 | +40 |
+| --- | --- | --- | --- | --- | --- |
+| −40 dB | 20 016 | 19 500 (boundary) | 16 031 | 16 031 | 16 008 |
+| −45 dB | 20 016 | 16 055 | 16 031 | 16 031 | 16 008 |
+| −50 dB | 19 500 (boundary) | 16 055 | 16 031 | 16 031 | 16 008 |
+| −55 dB | 16 102 | 16 055 | 16 031 | 16 031 | 16 008 |
+
+The boundary falls on `|L| + D = 50` in every cell. **R7 is not a defect and not a surprise**: a
+peak-relative threshold measures *prominence*, not presence, and 50 dB of prominence is what was chosen.
+The finding to carry forward is the wording, not a fix — the quantity is "content within 50 dB of the
+loudest thing happening at the same moment", and calling that "the highest frequency present" would be
+false.
+
+### 12.12 Roll-off, confirmed window-independent
+
+The reading is `knee · 2^(|T| / slope)`, and it does **not** move with the analysis window — measured at
+both 2048/512 and 4096/1024, agreeing to within one 500 Hz fixture step:
+
+| knee | slope | predicted | 2048/512 | 4096/1024 |
+| --- | --- | --- | --- | --- |
+| 8 kHz | 6 / 12 / 24 dB/oct | > Nyquist | 23 555 / 23 531 / 23 531 | 23 531 / 23 520 / 23 508 |
+| 8 kHz | 48 | 16 469 | 16 008 | 15 996 |
+| 8 kHz | 96 | 11 478 | 11 016 | 11 004 |
+| 8 kHz | 480 | 8 599 | 8 508 | 8 508 |
+| 16 kHz | 6 … 48 | > Nyquist | 23 531 – 23 578 | 23 520 – 23 543 |
+| 16 kHz | 96 | 22 957 | 22 500 | 22 500 |
+| 16 kHz | 480 | 17 198 | 17 016 | 17 004 |
+
+**Significant maximum frequency ≠ cut-off frequency**, quantitatively: at 48 kHz with a 16 kHz knee,
+anything gentler than about 85 dB/octave has no edge below Nyquist at all.
+
+### 12.13 Where part B leaves the five parameters
+
+| parameter | status after part B |
+| --- | --- |
+| reference: per-window spectral peak | unchanged, and re-validated at the new window |
+| threshold −50 dB | **survives** refutation on nine new fixtures (§12.8) |
+| persistence ≥ 10 % of eligible windows | **survives**, and is now portable across rates *provided* the window is time-locked (§12.5) |
+| eligibility gate −60 dB | **rejected as specified** (§12.9). It is a dynamic-range budget, not a silence test, and 60 dB is too little |
+| absolute floor −120 dBFS | **replaced** by "the file carries no energy" (§12.10) |
+| analysis window | **decided**: time-locked ≈ 42.67 ms, nearest vDSP-supported length per rate, hop = fftSize/4 |
+
+All eight of part A's pre-registered constraints were re-checked at the new window (2048/512 at 48 kHz)
+and all eight still pass.
+
+## 13. What group 1 still requires
 
 - **1.5 the resolution claim** — the ≈ 4-bin overshoot is measured (§7); still to decide is whether the
   reported value is a bin centre, a bin edge or a range, paired with the analytic Hann main-lobe figure
@@ -364,3 +661,29 @@ content stops crossing the threshold, which for gently filtered material is not 
 
 ADR-0023 stays **Proposed**. Two of its three promotion conditions — an impulse control passing against
 *production* code, and human validation of the surface — are untouched by this session.
+
+## 14. Stopping rule — **NO-GO for the accumulator**
+
+Nine conditions were set for authorising group 2. Seven are met:
+
+1. Hann explained analytically — **met** (§12.1, verified to 0.000 dB against the DTFT).
+2. A defensible uncertainty — **met** (§12.2–12.4), including the falsification of the contract that
+   looked derivable.
+3. Window and hop defensible — **met** (§12.5, §12.7).
+4. Persistence portable across rates — **met, conditionally**: it is portable *because* the window is
+   time-locked, and demonstrably is not otherwise (§12.5).
+5. −50 dB survived refutation — **met** (§12.8).
+8. R7 understood and documented — **met** (§12.11).
+9. Roll-off understood as expected behaviour — **met** (§12.12).
+
+Two are not:
+
+6. **The −60 dB eligibility gate did not survive** (§12.9). It erases real content in passages more than
+   60 dB below the file's peak, and no single value can separate a quiet passage from a noise floor at
+   the same level, because to this rule they are the same measurement.
+7. **The −120 dBFS floor was replaced** by a numeric absence condition (§12.10). That is an improvement,
+   but it is a change to the method, not a confirmation of it.
+
+Item 6 is structural, so the accumulator is not authorised. It is not a defect in the threshold or the
+persistence criterion — both survived — but in the rule that decides *which windows are looked at*, and
+that rule sits upstream of everything else.
