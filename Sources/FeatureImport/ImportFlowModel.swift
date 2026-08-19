@@ -158,7 +158,7 @@ public final class ImportFlowModel {
         restoringOnCancellation previous: ComparisonState
     ) {
         switch outcome {
-        case let .inspected(report, _, _, _, _, _):
+        case let .inspected(report, _):
             // Normally already set from the update; this is the backstop for a caller that reported
             // nothing, so a comparison cannot stay stuck on `loading`. Every sample-based analysis is
             // discarded here as deliberately as it is above: a comparison compares reports.
@@ -269,7 +269,7 @@ public final class ImportFlowModel {
     /// Settles the state once an operation has finished. Only ever called for the current operation.
     private func apply(_ outcome: SourceInspectionOutcome, restoringOnCancellation previous: State) {
         switch outcome {
-        case let .inspected(report, waveform, spectrogram, signalLevelMetrics, truePeak, loudness):
+        case let .inspected(report, analyses):
             // None of the three withholds or replaces the report, whatever became of it.
             //
             // The progressive handler has normally settled all three already; this is the backstop for a
@@ -278,11 +278,11 @@ public final class ImportFlowModel {
             // claim that the file offered nothing.
             let presentation = InspectionPresentation(
                 report: report,
-                waveform: WaveformState(waveform) ?? .unavailable,
-                spectrogram: SpectrogramState(spectrogram) ?? .unavailable,
-                signalLevelMetrics: SignalLevelMetricsState(signalLevelMetrics) ?? .unavailable,
-                truePeak: TruePeakState(truePeak) ?? .unavailable,
-                loudness: LoudnessState(loudness) ?? .unavailable
+                waveform: WaveformState(analyses.waveform) ?? .unavailable,
+                spectrogram: SpectrogramState(analyses.spectrogram) ?? .unavailable,
+                signalLevelMetrics: SignalLevelMetricsState(analyses.signalLevelMetrics) ?? .unavailable,
+                truePeak: TruePeakState(analyses.truePeak) ?? .unavailable,
+                loudness: LoudnessState(analyses.loudness) ?? .unavailable
             )
             // A settled visualisation already shown must not be walked back to a fallback.
             if case let .report(current) = state, current.report == report {

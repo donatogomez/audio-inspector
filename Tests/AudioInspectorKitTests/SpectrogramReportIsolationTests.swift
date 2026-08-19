@@ -47,10 +47,10 @@ struct SpectrogramReportIsolationTests {
     ) async throws -> (report: InspectionReport, spectrogram: SpectrogramOutcome) {
         let coordinator = SourceInspectionCoordinator(makeDecoder: { _ in decoder })
         let outcome = await coordinator.inspect(url, onUpdate: { _ in })
-        guard case let .inspected(report, _, spectrogram, _, _, _) = outcome else {
+        guard case let .inspected(report, analyses) = outcome else {
             throw InspectionDidNotComplete()
         }
-        return (report, spectrogram)
+        return (report, analyses.spectrogram)
     }
 
     private func fixture(in directory: URL) throws -> URL {

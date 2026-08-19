@@ -101,13 +101,11 @@ struct SourceInspectionCoordinator {
             onUpdate(.truePeak(.unavailable))
             onUpdate(.loudness(.unavailable))
             return .inspected(
-                report,
-                waveform: .unavailable,
+                report, analyses: InspectionAnalyses(waveform: .unavailable,
                 spectrogram: .unavailable,
                 signalLevelMetrics: .unavailable,
                 truePeak: .unavailable,
-                loudness: .unavailable
-            )
+                loudness: .unavailable))
         }
 
         // **One read, every analysis.** The waveform, the spectrogram, the signal level metrics and the
@@ -135,13 +133,11 @@ struct SourceInspectionCoordinator {
         onUpdate(.loudness(shared.loudness))
 
         return .inspected(
-            report,
-            waveform: shared.waveform,
+            report, analyses: InspectionAnalyses(waveform: shared.waveform,
             spectrogram: shared.spectrogram,
             signalLevelMetrics: shared.signalLevelMetrics,
             truePeak: shared.truePeak,
-            loudness: shared.loudness
-        )
+            loudness: shared.loudness))
     }
 
     /// Produces every sample-based analysis from **one** read, inside the window the caller already

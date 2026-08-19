@@ -67,7 +67,7 @@ struct ImportFlowModelTests {
 
     @Test func inspectedOutcomeBecomesTheReportStateAndRunsTheActionOnce() async {
         let report = makeReport(named: "clip.wav")
-        let action = ScriptedAction(.inspected(report, waveform: .unavailable, spectrogram: .unavailable, signalLevelMetrics: .unavailable, truePeak: .unavailable, loudness: .unavailable))
+        let action = ScriptedAction(.inspected(report, analyses: InspectionAnalyses(waveform: .unavailable, spectrogram: .unavailable, signalLevelMetrics: .unavailable, truePeak: .unavailable, loudness: .unavailable)))
         let model = ImportFlowModel(action: action.run)
 
         await model.selectAndInspect()
@@ -88,7 +88,7 @@ struct ImportFlowModelTests {
 
     @Test func cancellingAfterAReportKeepsThePreviousReport() async {
         let first = makeReport(named: "first.wav")
-        let sequence = SequenceAction([.inspected(first, waveform: .unavailable, spectrogram: .unavailable, signalLevelMetrics: .unavailable, truePeak: .unavailable, loudness: .unavailable), .cancelled])
+        let sequence = SequenceAction([.inspected(first, analyses: InspectionAnalyses(waveform: .unavailable, spectrogram: .unavailable, signalLevelMetrics: .unavailable, truePeak: .unavailable, loudness: .unavailable)), .cancelled])
         let model = ImportFlowModel(action: sequence.run)
 
         await model.selectAndInspect()
@@ -124,7 +124,7 @@ struct ImportFlowModelTests {
             warnings: [],
             status: .failed(error)
         )
-        let model = ImportFlowModel(action: ScriptedAction(.inspected(failedReport, waveform: .unavailable, spectrogram: .unavailable, signalLevelMetrics: .unavailable, truePeak: .unavailable, loudness: .unavailable)).run)
+        let model = ImportFlowModel(action: ScriptedAction(.inspected(failedReport, analyses: InspectionAnalyses(waveform: .unavailable, spectrogram: .unavailable, signalLevelMetrics: .unavailable, truePeak: .unavailable, loudness: .unavailable))).run)
 
         await model.selectAndInspect()
 
@@ -147,7 +147,7 @@ struct ImportFlowModelTests {
         await model.selectAndInspect() // ignored while working
         #expect(action.callCount == 1)
 
-        action.finish(.inspected(report, waveform: .unavailable, spectrogram: .unavailable, signalLevelMetrics: .unavailable, truePeak: .unavailable, loudness: .unavailable))
+        action.finish(.inspected(report, analyses: InspectionAnalyses(waveform: .unavailable, spectrogram: .unavailable, signalLevelMetrics: .unavailable, truePeak: .unavailable, loudness: .unavailable)))
         await first.value
         #expect(model.state == .report(InspectionPresentation(report: report, waveform: .unavailable, spectrogram: .unavailable, signalLevelMetrics: .unavailable, truePeak: .unavailable, loudness: .unavailable)))
     }
@@ -157,7 +157,7 @@ struct ImportFlowModelTests {
     @Test func aSecondSelectionReplacesThePreviousReport() async {
         let first = makeReport(named: "first.wav")
         let second = makeReport(named: "second.wav")
-        let model = ImportFlowModel(action: SequenceAction([.inspected(first, waveform: .unavailable, spectrogram: .unavailable, signalLevelMetrics: .unavailable, truePeak: .unavailable, loudness: .unavailable), .inspected(second, waveform: .unavailable, spectrogram: .unavailable, signalLevelMetrics: .unavailable, truePeak: .unavailable, loudness: .unavailable)]).run)
+        let model = ImportFlowModel(action: SequenceAction([.inspected(first, analyses: InspectionAnalyses(waveform: .unavailable, spectrogram: .unavailable, signalLevelMetrics: .unavailable, truePeak: .unavailable, loudness: .unavailable)), .inspected(second, analyses: InspectionAnalyses(waveform: .unavailable, spectrogram: .unavailable, signalLevelMetrics: .unavailable, truePeak: .unavailable, loudness: .unavailable))]).run)
 
         await model.selectAndInspect()
         #expect(model.state == .report(InspectionPresentation(report: first, waveform: .unavailable, spectrogram: .unavailable, signalLevelMetrics: .unavailable, truePeak: .unavailable, loudness: .unavailable)))
@@ -168,7 +168,7 @@ struct ImportFlowModelTests {
 
     @Test func selectingAgainAfterAPreparationFailureCanSucceed() async {
         let report = makeReport(named: "clip.wav")
-        let model = ImportFlowModel(action: SequenceAction([.preparationFailed, .inspected(report, waveform: .unavailable, spectrogram: .unavailable, signalLevelMetrics: .unavailable, truePeak: .unavailable, loudness: .unavailable)]).run)
+        let model = ImportFlowModel(action: SequenceAction([.preparationFailed, .inspected(report, analyses: InspectionAnalyses(waveform: .unavailable, spectrogram: .unavailable, signalLevelMetrics: .unavailable, truePeak: .unavailable, loudness: .unavailable))]).run)
 
         await model.selectAndInspect()
         #expect(model.state == .failed(message: "That file could not be opened for inspection."))

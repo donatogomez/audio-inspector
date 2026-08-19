@@ -11,27 +11,56 @@ import AudioInspectorDomain
 public enum SourceInspectionOutcome: Sendable, Equatable {
     /// The user dismissed the picker — **not** an error.
     case cancelled
-    /// A file was inspected; the report carries the outcome, including a global failure. All four
-    /// travel **beside** it, and whatever became of any of them never changes the report.
+    /// A file was inspected; the report carries the outcome, including a global failure. The analyses
+    /// travel **beside** it in one value, and whatever became of any of them never changes the report.
     ///
-    /// **The fifth payload arrived, and the warning that preceded it stands.** Each analysis genuinely
-    /// settles on its own, so a combined value would still be a lie — but this case is now at the edge
-    /// of what is comfortable to read, and a sixth should not simply be appended.
-    ///
-    /// It was added as a payload rather than triggering a container **because the previous note said
-    /// so**: introducing one is a change of its own that would touch every call site in the flow, and
-    /// doing it while wiring a new analysis would hide one change inside another. That refactor is
-    /// **recorded debt**, not an oversight, and it belongs to whoever adds the sixth.
-    case inspected(
-        InspectionReport,
+    /// **The container arrived with the sixth analysis, as the previous note said it must.** Five
+    /// labelled payloads were at the edge of what is comfortable to read, and appending a sixth would
+    /// have made the signature the thing a reader has to parse before the meaning. `InspectionAnalyses`
+    /// groups them without inventing architecture: the report stays outside it because it has a
+    /// different lifecycle — it exists before any sample is read — and `InspectionPresentation` stays
+    /// separate because it models *states* that change as results arrive, not final values.
+    case inspected(InspectionReport, analyses: InspectionAnalyses)
+    /// The selection could not be turned into an inspectable file at all.
+    case preparationFailed
+}
+
+/// Everything an inspection derived **from the file's samples**, gathered so that adding one more does
+/// not lengthen a signature.
+///
+/// Only sample-derived results belong here. `InspectionReport` does not: it is read from the file's
+/// metadata, it exists before the first chunk, and folding it in would suggest it waits for the audio.
+/// Presentation state does not either: `InspectionPresentation` holds `…State` values that move from
+/// `.loading` as results arrive, where these are the settled outcomes.
+///
+/// Each analysis still settles **on its own** — that was the reason five separate payloads were
+/// defensible for as long as they were, and grouping them changes nothing about it. A failure in one is
+/// still a failure in one.
+public struct InspectionAnalyses: Sendable, Equatable {
+    /// What became of the amplitude envelope.
+    public var waveform: WaveformOutcome
+    /// What became of the spectral model.
+    public var spectrogram: SpectrogramOutcome
+    /// What became of the signal level metrics.
+    public var signalLevelMetrics: SignalLevelMetricsOutcome
+    /// What became of the true peak measurement.
+    public var truePeak: TruePeakOutcome
+    /// What became of the integrated loudness.
+    public var loudness: LoudnessOutcome
+
+    public init(
         waveform: WaveformOutcome,
         spectrogram: SpectrogramOutcome,
         signalLevelMetrics: SignalLevelMetricsOutcome,
         truePeak: TruePeakOutcome,
         loudness: LoudnessOutcome
-    )
-    /// The selection could not be turned into an inspectable file at all.
-    case preparationFailed
+    ) {
+        self.waveform = waveform
+        self.spectrogram = spectrogram
+        self.signalLevelMetrics = signalLevelMetrics
+        self.truePeak = truePeak
+        self.loudness = loudness
+    }
 }
 
 /// One thing an inspection has finished, delivered the moment it is known.

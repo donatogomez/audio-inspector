@@ -133,9 +133,9 @@ struct TruePeakFlowStateTests {
         #expect(shown.truePeak == .loading, "the report was withheld or the state fabricated")
 
         action.finish(.inspected(
-            action.report, waveform: .unavailable, spectrogram: .unavailable,
+            action.report, analyses: InspectionAnalyses(waveform: .unavailable, spectrogram: .unavailable,
             signalLevelMetrics: .unavailable, truePeak: .unavailable
-        , loudness: .unavailable))
+        , loudness: .unavailable)))
         await running.value
     }
 
@@ -163,9 +163,9 @@ struct TruePeakFlowStateTests {
         #expect(shown.spectrogram == .loading)
 
         action.finish(.inspected(
-            action.report, waveform: .unavailable, spectrogram: .unavailable,
+            action.report, analyses: InspectionAnalyses(waveform: .unavailable, spectrogram: .unavailable,
             signalLevelMetrics: .available(try metrics()), truePeak: .available(measured)
-        , loudness: .unavailable))
+        , loudness: .unavailable)))
         await running.value
     }
 
@@ -182,9 +182,9 @@ struct TruePeakFlowStateTests {
         #expect(try #require(presentation(of: model)).truePeak == .unavailable)
 
         action.finish(.inspected(
-            action.report, waveform: .unavailable, spectrogram: .unavailable,
+            action.report, analyses: InspectionAnalyses(waveform: .unavailable, spectrogram: .unavailable,
             signalLevelMetrics: .unavailable, truePeak: .unavailable
-        , loudness: .unavailable))
+        , loudness: .unavailable)))
         await running.value
     }
 
@@ -208,10 +208,10 @@ struct TruePeakFlowStateTests {
         #expect(shown.signalLevelMetrics == .available(try metrics()))
 
         action.finish(.inspected(
-            action.report, waveform: .unavailable, spectrogram: .unavailable,
+            action.report, analyses: InspectionAnalyses(waveform: .unavailable, spectrogram: .unavailable,
             signalLevelMetrics: .available(try metrics()),
             truePeak: .failed(message: "The true peak for this file could not be measured.")
-        , loudness: .failed(message: "loudness")))
+        , loudness: .failed(message: "loudness"))))
         await running.value
     }
 
@@ -230,9 +230,9 @@ struct TruePeakFlowStateTests {
         #expect(try #require(presentation(of: model)).truePeak == .loading, "a cancellation was shown as a state")
 
         action.finish(.inspected(
-            action.report, waveform: .unavailable, spectrogram: .unavailable,
+            action.report, analyses: InspectionAnalyses(waveform: .unavailable, spectrogram: .unavailable,
             signalLevelMetrics: .unavailable, truePeak: .unavailable
-        , loudness: .unavailable))
+        , loudness: .unavailable)))
         await running.value
     }
 
@@ -262,13 +262,13 @@ struct TruePeakFlowStateTests {
         #expect(shown.truePeak == .loading, "a stale true peak landed on the current file")
 
         first.finish(.inspected(
-            first.report, waveform: .unavailable, spectrogram: .unavailable,
+            first.report, analyses: InspectionAnalyses(waveform: .unavailable, spectrogram: .unavailable,
             signalLevelMetrics: .unavailable, truePeak: .unavailable
-        , loudness: .unavailable))
+        , loudness: .unavailable)))
         second.finish(.inspected(
-            second.report, waveform: .unavailable, spectrogram: .unavailable,
+            second.report, analyses: InspectionAnalyses(waveform: .unavailable, spectrogram: .unavailable,
             signalLevelMetrics: .unavailable, truePeak: .unavailable
-        , loudness: .unavailable))
+        , loudness: .unavailable)))
         _ = await firstRun.value
         _ = await secondRun.value
     }

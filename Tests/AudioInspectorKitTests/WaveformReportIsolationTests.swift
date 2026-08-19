@@ -46,10 +46,10 @@ struct WaveformReportIsolationTests {
             SourceInspectionCoordinator(makeDecoder: { _ in scripted })
         } ?? SourceInspectionCoordinator()
         let outcome = await coordinator.inspect(url, onUpdate: { _ in })
-        guard case let .inspected(report, waveform, _, _, _, _) = outcome else {
+        guard case let .inspected(report, analyses) = outcome else {
             throw InspectionDidNotComplete()
         }
-        return (report, waveform)
+        return (report, analyses.waveform)
     }
 
     private struct InspectionDidNotComplete: Error {}

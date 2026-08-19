@@ -102,19 +102,19 @@ struct SharedPCMDecodeCountTests {
             // The count only means something if all five analyses really were produced from those
             // reads. **Loudness is the fifth**, and it joined without adding one: the number above is
             // still one, which is the whole architectural claim.
-            guard case let .inspected(_, waveform, spectrogram, levels, truePeak, loudness) = outcome
+            guard case let .inspected(_, analyses) = outcome
             else {
                 Issue.record("expected an inspected outcome, got \(outcome)"); return
             }
-            guard case .available = waveform, case .available = spectrogram,
-                  case .available = levels, case .available = truePeak else {
-                Issue.record("an analysis produced nothing: \(waveform) \(spectrogram) \(levels) \(truePeak)")
+            guard case .available = analyses.waveform, case .available = analyses.spectrogram,
+                  case .available = analyses.signalLevelMetrics, case .available = analyses.truePeak else {
+                Issue.record("an analysis produced nothing: \(analyses.waveform) \(analyses.spectrogram) \(analyses.signalLevelMetrics) \(analyses.truePeak)")
                 return
             }
             // The fixture is 44 100 Hz stereo, a configuration loudness claims, so an absence here would
             // mean it never received the shared chunks rather than that it declined the stream.
-            guard case .available = loudness else {
-                Issue.record("loudness produced nothing from the shared read: \(loudness)"); return
+            guard case .available = analyses.loudness else {
+                Issue.record("analyses.loudness produced nothing from the shared read: \(analyses.loudness)"); return
             }
         }
     }

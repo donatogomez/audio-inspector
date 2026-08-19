@@ -77,11 +77,11 @@ struct ExportComparisonIsolationTests {
             let secondAction = ImportFlowComparisonTests.ControllableAction(delivering: [.report(second)])
             let comparing = Task { await flow.compare(using: secondAction.run) }
             await secondAction.waitUntilStarted()
-            secondAction.finish(.inspected(second, waveform: .unavailable, spectrogram: .unavailable, signalLevelMetrics: .unavailable, truePeak: .unavailable, loudness: .unavailable))
+            secondAction.finish(.inspected(second, analyses: InspectionAnalyses(waveform: .unavailable, spectrogram: .unavailable, signalLevelMetrics: .unavailable, truePeak: .unavailable, loudness: .unavailable)))
             await comparing.value
         }
 
-        action.finish(.inspected(primary, waveform: .unavailable, spectrogram: .unavailable, signalLevelMetrics: .unavailable, truePeak: .unavailable, loudness: .unavailable))
+        action.finish(.inspected(primary, analyses: InspectionAnalyses(waveform: .unavailable, spectrogram: .unavailable, signalLevelMetrics: .unavailable, truePeak: .unavailable, loudness: .unavailable)))
         await running.value
 
         guard case let .report(presentation) = flow.state else { return nil }
@@ -222,12 +222,12 @@ struct ExportComparisonIsolationTests {
         let secondAction = ImportFlowComparisonTests.ControllableAction(delivering: [.report(second)])
         let comparing = Task { await flow.compare(using: secondAction.run) }
         await secondAction.waitUntilStarted()
-        secondAction.finish(.inspected(second, waveform: .unavailable, spectrogram: .unavailable, signalLevelMetrics: .unavailable, truePeak: .unavailable, loudness: .unavailable))
+        secondAction.finish(.inspected(second, analyses: InspectionAnalyses(waveform: .unavailable, spectrogram: .unavailable, signalLevelMetrics: .unavailable, truePeak: .unavailable, loudness: .unavailable)))
         await comparing.value
 
         flow.dismissComparison()
 
-        action.finish(.inspected(primary, waveform: .unavailable, spectrogram: .unavailable, signalLevelMetrics: .unavailable, truePeak: .unavailable, loudness: .unavailable))
+        action.finish(.inspected(primary, analyses: InspectionAnalyses(waveform: .unavailable, spectrogram: .unavailable, signalLevelMetrics: .unavailable, truePeak: .unavailable, loudness: .unavailable)))
         await running.value
 
         guard case let .report(presentation) = flow.state else {
