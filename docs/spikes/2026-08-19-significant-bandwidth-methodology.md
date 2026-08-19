@@ -920,6 +920,141 @@ carries the budget in the name, so it stays true if the budget is ever changed, 
 the significance that "significant bandwidth" would. *Persistent spectral extent* was the accurate
 alternative but is silent about the budget, which is the one thing a reader must not have to guess.
 
+## 13d. Group 2 — the fact meets real files
+
+Group 1 measured arrays in memory. Group 2 asks whether the *fact* survives being written to a
+container, encoded, decoded by the production decoder and handed over in chunks. The subject is
+`ProgrammeBandwidthReference` in `Tests/`, which implements the decided method; **no production
+accumulator exists and nothing here asserts against one.**
+
+### 13d.1 Fixture vocabulary — two primitives, not a second system
+
+`AudioFixtureSignal` already expressed hard spectral edges through `bandLimitedTones`. Two cases were
+added, and only two, because a programme *and* a second band at a different level cannot be written
+without them:
+
+- `sum([AudioFixtureSignal])` — signals added sample by sample, nothing normalised, so each part's
+  level stays what its own case says.
+- `enveloped(signal, segments:rampFrames:)` — any signal under a piecewise envelope.
+
+Plus two factories over those: `tones(perComponentAmplitude:)`, because `bandLimitedTones` divides its
+amplitude between components and a per-bin measurement needs the per-bin figure; and `slopedTones`,
+which is a `sum` of sines and therefore needed no case of its own.
+
+**The ramp is not decoration, and finding that out cost a wrong conclusion.** A hard amplitude step is a
+broadband event: with a hard gate, a file of silence plus one impulse plus a 25 %-long programme read
+Nyquist, and the cause was the *envelope's own step*, not the impulse. With a raised-cosine ramp the
+same fixture reads 16 383 Hz. An artefact that loud will pass unnoticed in any suite where the eligible
+window count is small.
+
+Two other self-inflicted faults are recorded so the next reader does not repeat them: a comb of 32
+components at `perComponentAmplitude` 0.05 reaches a peak of 1.6 and **clips** in the writer, and
+clipping is broadband — the first budget fixture measured its own clipping. And the fast path added to
+`samples(_:)` must associate its arithmetic exactly as `sample(_:)` writes it, because
+`AudioFixtureSupportTests` asserts the two entry points agree bit for bit.
+
+### 13d.2 The resolution contract, measured rather than chosen
+
+Four known edges × five sample rates, error expressed in multiples of the analysis resolution:
+
+| | 8 kHz | 12 kHz | 16 kHz | 20 kHz |
+| --- | --- | --- | --- | --- |
+| 44.1 kHz | +3.70 | +4.55 | +4.40 | +3.25 |
+| 48 kHz | +3.67 | **+1.00** | +4.33 | +3.67 |
+| 88.2 kHz | +3.70 | +4.55 | +4.40 | +4.25 |
+| 96 kHz | +3.67 | **+1.00** | +4.33 | +3.67 |
+| 192 kHz | +3.67 | **+1.00** | +4.33 | +3.67 |
+
+Every error is **positive** — one-sided upward, as §12.2 derived — and the worst is **+4.55**, inside
+the analytic reach `d(−50 dB) = 4.72`. The `+1.00` cells are 12 kHz landing exactly on a bin at
+48/96/192 kHz, where Hann leakage is identically zero beyond ±1 bin.
+
+So the permanent contract is `0 ≤ error ≤ 5 × resolution`, and **the raw hertz are not comparable across
+rates**: 12 kHz reads 12 023 Hz at 48 kHz and 12 105 Hz at 44.1 kHz, because each rate quantises the
+edge onto its own grid. Expressed in resolutions the five rates agree to within one.
+
+### 13d.3 Containers, chunks and edges
+
+| question | result |
+| --- | --- |
+| WAV / float WAV / AIFF / ALAC / FLAC | **identical bin**, asserted exactly rather than within a tolerance |
+| chunk sizes 1, 3, 127, 512, 4096, 65536, whole file | **identical reading**, no tolerance |
+| a prime frame count (short final chunk at every size) | identical at two chunk sizes |
+| digital silence | absent |
+| a valid file holding no audio | absent |
+| 1, 1 000, 2 047 frames (under one window) | absent |
+| exactly 2 048 frames | one window, and a value |
+| two channels carrying different tones | measured separately; **no channel semantics asserted** (task 3.4) |
+
+### 13d.4 A limitation the transport exposed
+
+**An impulse alone in digital silence reads as broadband**, and that is not a bug in the persistence
+criterion — it is the eligibility rule interacting with it. Removing windows that carry no energy
+raises the share of those that remain, so a click that occupies 4 windows out of 4 eligible ones is
+present 100 % of the time. Measured, against a programme occupying a growing share of the file:
+
+| programme share | 0 % | 2 % | 5 % | 10 % | 25 % | 50 % | 100 % |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| reading | 24 000 | 24 000 | 24 000 | 24 000 | 16 383 | 16 102 | 16 102 |
+
+A programme must occupy roughly a quarter of the file before an isolated impulse stops setting the
+answer. With any real programme the impulse control passes — an impulse inside a 16 kHz programme reads
+16 102 Hz — and ADR-0023 §2's argument is unaffected, but the degenerate case is now pinned by a test
+rather than waiting to be discovered.
+
+### 13d.5 Lossy transport does not destroy the fact
+
+Source with components to 20 kHz, 44.1 kHz mono:
+
+| file | reading |
+| --- | --- |
+| float WAV source | 20 075 Hz |
+| AAC 128 kbps (macOS encoder) | 20 167 Hz — four bins up, artefacts below the threshold |
+| MP3 64 kbps | **16 790 Hz** — the codec's own low-pass, measured from samples |
+| MP3 128 kbps | 20 167 Hz |
+| MP3 320 kbps | 20 075 Hz — the source's own edge |
+| every one of the three, rewrapped to PCM | **the identical bin** |
+
+Classification for phase 9: **A, robust.** Artefacts above a codec's low-pass stayed below the −50 dB
+threshold and never pushed a reading to Nyquist, so neither the threshold nor the persistence fraction
+had to be widened to accommodate a codec. The rewrap row is evidence about **spectral extent only**: it
+says the two files measure the same, and nothing about where either came from.
+
+### 13d.6 There is no external oracle, and now that is measured
+
+FFmpeg's `aspectralstats` has a `rolloff`, and it is **not** this quantity — it is the energy percentile
+ADR-0023 already rejected as an alternative:
+
+| signal | true extent | ffmpeg rolloff |
+| --- | --- | --- |
+| 1 kHz sine | 1 kHz | 1 008 Hz |
+| noise low-passed at 16 kHz | 16 kHz | 15 234–15 422 Hz (**under**-reads the limit) |
+| the same noise plus a dominant 100 Hz tone | still 16 kHz | **12 492–13 360 Hz** |
+
+Adding a bass tone moved it by two kilohertz while the extent did not change at all. It tracks spectral
+**balance**, not spectral **extent**. FFmpeg therefore stays what it already was in this repository: a
+producer of fixtures no macOS encoder can make, never a source of a fact.
+
+### 13d.7 Cost, and what it says about group 3
+
+Reference harness, Debug, stereo:
+
+| | 48 kHz | 192 kHz |
+| --- | --- | --- |
+| decode + measure | 6.1 s per audio-minute | 24.7 s per audio-minute |
+| extrapolated, 10-minute file | ~61 s | ~247 s |
+| retained by **this harness**, 10-minute file | ~14 MB | ~55 MB |
+
+The permanent suites use 1–2 second fixtures and run in about nine seconds all together; a ten-minute
+benchmark cannot live in the suite and belongs to group 5.
+
+The retained figure is this harness's, not a bound on the accumulator's. It keeps one window peak and
+one bit per bin per window because the **budget** needs the file's spectral peak, which is not known
+until the end. A bounded accumulator does not have to: per-bin counters **stratified by the window's own
+peak level**, quantised into fixed dB buckets, are `bins × buckets` counters regardless of duration, and
+the budget is applied at the end by summing the buckets at or above `filePeak − 60 dB`. That is a group 3
+design note, recorded here because group 2 is where the constraint became visible.
+
 ## 14. Stopping rule — **GO for the accumulator**
 
 Nine conditions were set for authorising group 2. Seven are met:
