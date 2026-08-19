@@ -347,17 +347,95 @@ Release in one session.
 
 ## 6. Correctness against the fixtures
 
-- [ ] 6.1 A known edge is reported within the stated resolution, at every supported rate.
-- [ ] 6.2 **The impulse control**: a file silent but for one click reports no wider a band than silence
+**Done, against production.** The subject of every task below is the path a user's file actually
+takes — a written file, the real `AVFoundationAudioDecoder`, the shared read, and the
+`SignificantBandwidthOutcome` the composition publishes. Group 2's suites measure the same fixtures
+with `ProgrammeBandwidthReference`, and group 3's feed the accumulator chunks directly; neither is
+production, and nothing here constructs a `SignificantBandwidth` by hand. No expected value is taken
+from a previous run, and every tolerance is stated in **resolutions** rather than hertz, so it means
+the same thing at all five rates.
+
+- [x] 6.1 A known edge is reported within the stated resolution, at every supported rate.
+      **Done.** Four edges — 8, 12, 16 and 20 kHz — at 44.1, 48, 88.2, 96 and 192 kHz: twenty cases,
+      each within the 5 resolutions the Hann skirt explains at −50 dB. **The one-sidedness is asserted
+      across the whole matrix in one place**, because a per-case bound of `>= −1 resolution` would let a
+      systematic downward bias hide inside it: no reading falls below its edge at any rate.
+- [x] 6.2 **The impulse control**: a file silent but for one click reports no wider a band than silence
       does. This is the property the whole design exists for.
-- [ ] 6.3 A quiet-but-persistent band is reported; a loud-but-isolated one is not.
-- [ ] 6.4 Rate invariance: the same described signal agrees within resolution across the five rates.
-- [ ] 6.5 Undefined cases yield absences: no audio, shorter than one window, silence.
-- [ ] 6.6 A lossy encoder's band limit survives being rewrapped as WAV, on
+      **Done — and this task's own prediction was false, so it is corrected here rather than worked
+      around.** A file silent but for one click does **not** report what silence reports. Measured
+      through production it reads above 20 kHz, exactly as `ProgrammeBandwidthEvidenceTests` and
+      ADR-0023's declared limitation already said it would. The eligibility rule is why: a window with
+      no energy is filed nowhere, so the only eligible windows are the four the click touches, and the
+      click is present in all four. It is not a transient *within* a programme — it **is** the
+      programme, and a click is broadband. Silence and silence-plus-a-click are therefore kept as two
+      tests, because they are two answers by two mechanisms and one predicate over both would hide that
+      only one of them is an absence.
+
+      **The property the design exists for is the other one, and it holds.** An isolated full-scale
+      click inside a 16 kHz programme leaves the published reading **identical** — equality, not a
+      tolerance, because a control that let the reading drift would pass while the transient was moving
+      it. The turnover is asserted on both sides: `ceil(0.10 × 278) = 28` windows are needed, and
+      measured it takes **eight** impulses rather than the seven four-windows-each would predict. The
+      extra one is the Hann taper — the outermost of the four windows carries the click near an edge
+      where the coefficient is near zero, so it never clears significance and an impulse is worth about
+      three and a half windows. Clustering the clicks changes nothing, because the criterion counts
+      windows and not spacing.
+- [x] 6.3 A quiet-but-persistent band is reported; a loud-but-isolated one is not.
+      **Done, on all three layers, through production.** **Persistence**: a band present 5 % of the file
+      leaves the reading at the programme's own edge, and 10, 25 and 100 % are reported. **Budget**: a
+      passage 50 and 60 dB below the programme takes part and one 70 dB below does not — the three
+      anchors the specification uses, which confirms the conservative 0.25 dB stratification does not
+      disturb them. **Prominence**: a high band 40 and 50 dB below its window's peak is reported, 60 and
+      70 dB below is not. A band sitting exactly on the −50 dB threshold is reported but **not to its
+      full extent**, because its topmost components are the ones closest to the threshold; that partial
+      reading is asserted as what it is rather than rounded to either neighbour.
+- [x] 6.4 Rate invariance: the same described signal agrees within resolution across the five rates.
+      **Done.** The overshoot on a 16 kHz edge varies by no more than one resolution across the five
+      rates. **The method identity is pinned per rate as well**, which is what makes "time-locked"
+      testable rather than asserted: 1920 frames at 44.1 kHz, 2048 at 48, 3840 at 88.2, 4096 at 96 and
+      8192 at 192 — the non-powers of two being what hold the window within 2 % of the 42.67 ms target.
+      A sample-locked implementation reports 2048 everywhere and fails this.
+- [x] 6.5 Undefined cases yield absences: no audio, shorter than one window, silence.
+      **Done.** Zero frames, one frame, 1 000 and 2 047 all publish `.unavailable`, as does five seconds
+      of digital silence — an absence caused by the file, never a floor, a zero or a substituted
+      Nyquist. **Exactly one window measures**, and a partial tail after it changes nothing: asserted as
+      equality between the two files, so a tail that leaked in would have to move the reading to pass.
+- [x] 6.6 A lossy encoder's band limit survives being rewrapped as WAV, on
       `MP3SpectrogramEvidenceTests`' own precedent — reported as a frequency, with no codec named.
-- [ ] 6.7 Negative controls against production, each applied and reverted: persistence disabled;
+      **Done.** Through production, all three bitrates publish the **identical** measurement before and
+      after a rewrap to PCM: the same samples, and the measurement is a pure function of them. A 64 kbps
+      MP3 publishes its own low-pass, clearly below the source and clearly not a Nyquist artefact; at
+      320 kbps it keeps the source's edge, so the measurement is not simply reporting "lossy". AAC is
+      encoded by macOS and is CI coverage; **the MP3 rows are local evidence only** — FFmpeg is not on
+      CI, and a skipped run is not coverage. Nothing reads a header or names a codec: the assertions are
+      only that two files measure the same, or that one measures lower than another.
+- [x] 6.7 Negative controls against production, each applied and reverted: persistence disabled;
       threshold made absolute; the reduction changed to a maximum over time; resolution reported finer
       than a bin; Nyquist substituted for an absence.
+      **Done — nine controls, eight of which bite, and the ninth diagnosed rather than repeated.**
+      Persistence disabled fails the impulse control itself, which is the one that matters: the isolated
+      click then does produce a bandwidth. A maximum over time is the same mutation and the same
+      failure. The threshold made absolute fails 35 assertions across prominence, persistence, channels
+      and AAC; tightening it to −30 dB fails 15. A resolution finer than a bin fails 81. Nyquist
+      substituted for an absence fails every undefined case. A sample-locked window fails the rate
+      matrix and the identity. Channels mixed before the transform fails opposite polarity and both
+      per-channel tests. Accepting the partial final window **traps**, which is the correct failure for
+      a bounds violation.
+
+      **The ninth is a documented redundancy, not a gap.** Removing the budget's check at the end alone
+      changes nothing, because the budget is enforced **twice** — the ring's capacity is 60 dB of strata
+      by construction, so a window below the budget was already dropped before the check could see it.
+      Removing the check *and* enlarging the ring admits the −70 dB passage and fails exactly the budget
+      test. This was recorded when the accumulator was built and is confirmed here at the production
+      level.
+
+      **One end-to-end case is not reachable, and is recorded rather than faked.** The denormal
+      amplitudes the underflow arithmetic needs do not survive the write-and-decode round trip. That is
+      evidenced rather than claimed: the signal level metrics from the same shared read report a peak of
+      **zero**, so the file the decoder hands over is silence and the absence is the correct answer to
+      it. The evidence for that arithmetic stays at the PCM level, where it can be exercised. The
+      overflow extreme **is** reachable through a real file and publishes a finite in-range answer.
 
 ## 7. Presentation
 
