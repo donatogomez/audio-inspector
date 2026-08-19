@@ -1,10 +1,11 @@
 # ADR-0023: Significant bandwidth as a measured fact, independent of the spectrogram
 
-- **Status**: **Proposed.** It stays Proposed until three things are true: the threshold and persistence
-  criterion are decided **from measurement on graded fixtures** rather than from the sharp-edged ones
-  the motivating spike used; the impulse control passes against production code, so an isolated
-  transient provably does not widen the reported band; and the surface has been validated by a person
-  looking at it. Partial evidence does not promote it.
+- **Status**: **Proposed.** Of its three promotion conditions the first is now **met** — the threshold,
+  the persistence criterion, the analysis window, the reporting contract and the eligibility rule are
+  all decided from measurement on graded fixtures, and the full rule set passes twelve of twelve
+  pre-registered constraints in a single validation. Two remain: the impulse control must pass against
+  **production** code, so an isolated transient provably does not widen the reported band, and the
+  surface must be validated by a person looking at it. Partial evidence does not promote it.
 - **Date**: 2026-08-18
 - **Deciders**: Project maintainer
 - **Related**: **ADR-0016** (the STFT spectrogram this deliberately does *not* build on), ADR-0020 and
@@ -58,52 +59,40 @@ spike measured whether that works. It does not, and the measurements decided thi
    of eligible windows**. This does not promote the record — see the status above, whose other two
    conditions are untouched.
 
-5. **Threshold and persistence are not sufficient, and what completes them is still open.**
-   Measured: *no* relative reference at *any* threshold and *any* persistence reports absence for digital
-   silence, because on silence every bin and every relative reference sit at the same numerical floor.
-   Two rules were proposed and then tested to destruction:
+5. **The measurement declares what it is looking at, and the declaration is part of it.**
+   Measured: a window containing only a noise floor is indistinguishable, *from inside itself*, from one
+   containing only quiet music. Spectral flatness cannot tell them apart — tape hiss and musical "air"
+   at the same per-bin level both measure 0.564, to three decimals — and neither can reading the result
+   at several persistence levels. The difference exists only in comparison with the rest of the file,
+   and every such comparison is a **dynamic-range budget**.
 
-   - **Absence is a numeric condition, not a level.** A file that carries **no energy at all** has no
-     bandwidth. An earlier −120 dBFS floor is rejected: it discards about 60 dB of range in which the
-     measurement demonstrably still works, while digital silence is separable from a signal 180 dB down
-     by total energy being exactly zero. No chosen dB value is needed and none should be invented.
-   - **The window-eligibility gate is a dynamic-range budget, and −60 dB is not enough.** Excluding a
-     window whose own peak is more than 60 dB below the file's global peak does stop silent windows from
-     qualifying — and it also erases a real quiet passage 70 dB below the loudest moment, band and all.
-     The two failure tables are exact mirror images, because to this rule "a noise floor 70 dB down" and
-     "real music 70 dB down" are the same measurement. **No single value separates them.** Whatever
-     replaces it will still be a budget, and the record must state it as one rather than leave it
-     implicit.
+   So the budget is declared rather than discovered: **a window contributes only if it sits within
+   60 dB of the file's loudest spectral moment.** Its cost is one sentence, and both halves of it are
+   the same rule:
 
-   The gateless alternative — *every window carrying energy participates, and nothing else is a rule* —
-   was then tested on its own terms. It is numerically exact: `FFT(zeros)` is identically zero, so
-   "carries energy" needs no epsilon, and the reading is unchanged from 0 to −240 dBFS with no floor at
-   all. It reads seven of eight collector files correctly, including an analog transfer that plays
-   continuously, and including a **band-limited** noise floor, which is the case the feature exists for.
-   It fails on one: a **broadband** noise floor alone in more than 10 % of a file sets the answer **at
-   any level, down to 200 dB below the programme**, because a window containing only a floor is its own
-   reference.
+   > Content in passages more than 60 dB below a file's loudest spectral moment is not measured, and a
+   > noise floor further down than that does not count as content.
 
-   Spectral flatness cannot rescue it — a tape hiss and a cymbal measured 0.564 flatness each, to three
-   decimals, at the same per-bin level — and neither can reading the measurement at several persistence
-   levels. A window that contains only a noise floor is indistinguishable *from inside itself* from one
-   that contains only quiet music; the difference exists solely in comparison with the rest of the file,
-   and every such comparison is a dynamic-range budget.
+   Sixty decibels covers the macro-dynamics of the material this product is pointed at, with margin,
+   and excludes every noise floor measured. It is not a physical boundary and is not presented as one —
+   which is why **the metric is named `programme bandwidth`, stated in full as "programme bandwidth,
+   within 60 dB of programme peak"**. The name carries the budget so that the figure cannot be read as
+   a claim about everything in the file, and so that it stays true if the budget is ever revised.
 
-   This is why the accumulator is not authorised yet: the unresolved rule decides *which windows are
-   looked at*, and sits upstream of the threshold and the persistence criterion, both of which survived
-   direct attempts to refute them. What remains is **not a measurement but a declaration** — how far
-   below a file's programme this product claims to still be looking — and it must travel with the
-   number rather than hide inside it. Until it is declared, the name is unsafe too: "significant"
-   cannot describe a figure a −200 dBFS floor can set. Gain invariance was measured to hold
-   over an 80 dB range above that floor.
+6. **Absence needs no rule at all, and the earlier ones were artefacts.** A window of zeros transforms
+   to magnitude exactly zero, so a window that carries no energy is ineligible on its own and a file of
+   silence yields absence with nothing added. The −120 dBFS floor is deleted; so is the file-level
+   energy test that briefly replaced it. Both existed only because the spike's first harness floored
+   magnitudes at 1e-12, which turned a silent window into a −240 dB window *with a reference*.
+   **A production accumulator must therefore not clamp its magnitudes** — that is a methodological
+   requirement, not an implementation detail.
 
-6. **This is not a filter-knee detector, and the record says so before a surface can imply it.** On a
+7. **This is not a filter-knee detector, and the record says so before a surface can imply it.** On a
    graded roll-off the measurement reports where content stops crossing the threshold, which is not the
    filter's corner. At 48 kHz with a 16 kHz knee, a roll-off gentler than roughly 85 dB per octave has no
    edge below Nyquist at all and the reported value is the top of the band.
 
-7. **The value carries the resolution it was measured at**, and no surface may print more precision than
+8. **The value carries the resolution it was measured at**, and no surface may print more precision than
    that supports. `21.73 kHz` would be a fabricated digit.
 
    The uncertainty is now **derived rather than observed**. A Hann window's transform is
@@ -124,7 +113,7 @@ spike measured whether that works. It does not, and the measurements decided thi
    - **Display granularity must be coarser than the bias, not merely coarser than the bin.** At a
      42.67 ms window the bias is 23–111 Hz, so a tenth of a kHz is the finest defensible step.
 
-8. **The analysis window is fixed in time, not in samples.** Measured: under a 2048-point window at every
+9. **The analysis window is fixed in time, not in samples.** Measured: under a 2048-point window at every
    rate, ten short bursts totalling 5 % of a file read 12.65 % of windows at 44.1 kHz and 6.73 % at
    192 kHz — the same temporal evidence classified significant at one rate and insignificant at another.
    Time-locked, the same content reads 11.6–11.8 % at all five rates. The window is therefore **≈ 42.67
@@ -133,11 +122,11 @@ spike measured whether that works. It does not, and the measurements decided thi
    with **75 % overlap**. `fftSize` and `hop` are part of the method's identity, because the persistence
    criterion is defined on windows.
 
-9. **Absence is an absence.** No audio, shorter than one window, or nothing meeting the criterion yields
+10. **Absence is an absence.** No audio, shorter than one window, or nothing meeting the criterion yields
    no value. Zero is not a result and **Nyquist is not a result** — the same rule that made −70 LUFS a
    gate rather than a reading (ADR-0022 §6). "No audio" is the numeric condition of §5, not a level.
 
-10. **The shared STFT stage is deferred and named.** `SpectrogramAccumulator` already computes 1025 bins
+11. **The shared STFT stage is deferred and named.** `SpectrogramAccumulator` already computes 1025 bins
    per hop and throws the resolution away; sharing that stage would make this nearly free. It is the
    right end state and the wrong first step — it would land a refactor inside a feature and design for
    one consumer while guessing at the second. It waits for `average spectrum` to give it a second.
