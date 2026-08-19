@@ -130,11 +130,29 @@ spike measured whether that works. It does not, and the measurements decided thi
     be widened to accommodate a codec. **None of this licenses the inference the change forbids**: that
     two files measure the same extent says nothing about where either came from.
 
-11. **Absence is an absence.** No audio, shorter than one window, or nothing meeting the criterion yields
+11. **Channels are measured apart, and the budget is not.** A downmix that sums channels cancels
+    opposite-polarity content to a flat line, and a measurement of *where energy stops* must not be able
+    to lose energy the file carries — so each channel is measured on its own and `overall` is the
+    highest of those readings, a **summary of facts** rather than a claim about "the programme".
+    `SignalLevelMetrics` and `TruePeakMeasurement` set that precedent; `LoudnessAccumulator` combines
+    only because BS.1770 defines programme loudness that way, and nothing defines this. Channels are
+    **indices, never labels**. The programme **budget** stays global, because the programme is the file:
+    a channel 70 dB under the rest is below it and reports no value.
+
+12. **The bounded structure costs one declared tolerance, and it rounds towards measuring more.** The
+    budget compares each window against the file's peak, which is unknown until the last chunk, so
+    per-bin counters are **stratified by the window's own peak** in 0.25 dB strata — constant in
+    duration, 7.57 MB for stereo at 192 kHz whatever the file's length, where one bit per bin per window
+    would be 499 MB for three hours. The stratum straddling `filePeak − 60 dB` cannot be split: it is
+    resolved **inclusively**, because a passage at exactly −60.0 dB is eligible under the exact rule and
+    excluding its stratum drops it. So the budget is *60 dB, resolved to whole 0.25 dB strata, admitting
+    at most 0.25 dB below it* — stated, not hidden, and in the harmless direction.
+
+13. **Absence is an absence.** No audio, shorter than one window, or nothing meeting the criterion yields
    no value. Zero is not a result and **Nyquist is not a result** — the same rule that made −70 LUFS a
    gate rather than a reading (ADR-0022 §6). "No audio" is the numeric condition of §5, not a level.
 
-12. **The shared STFT stage is deferred and named.** `SpectrogramAccumulator` already computes 1025 bins
+14. **The shared STFT stage is deferred and named.** `SpectrogramAccumulator` already computes 1025 bins
    per hop and throws the resolution away; sharing that stage would make this nearly free. It is the
    right end state and the wrong first step — it would land a refactor inside a feature and design for
    one consumer while guessing at the second. It waits for `average spectrum` to give it a second.
