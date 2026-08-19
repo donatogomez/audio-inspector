@@ -10,14 +10,15 @@ loudest bin in the same analysis window**, the persistence criterion is **>= 10 
 the analysis window is **time-locked at ~42.67 ms with 75 % overlap**, and the reported value is a **bin
 centre plus its resolution**, never an interval.
 
-**Groups 1 and 2 are complete and the accumulator is authorised.** Two rounds of deliberate refutation
-left the threshold, the persistence criterion, the analysis window and the reporting contract standing,
-and turned the eligibility rule from an undeclared constant into a declared one: **programme bandwidth,
-within 60 dB of programme peak**. Group 2 then took the method off in-memory arrays and onto real files:
-five sample rates, five lossless containers, AAC, MP3 and rewrap, seven chunk sizes and every file edge.
-Twenty-nine tests, including five negative controls that break one constant each. ADR-0023 stays
-`Proposed`: its remaining two promotion conditions are the impulse control against **production** code
-and human validation of the surface, and neither can be met before the accumulator exists.
+**Groups 1, 2 and 3 are complete, and the domain model came with 3.** The methodology was decided by
+measurement and survived two rounds of refutation; group 2 took it onto real files; group 3 turned it
+into `SignificantBandwidthAccumulator`, which reproduces every one of group 2's targets **without a
+single expected value changed or a tolerance widened**. Bounded memory is constant in duration —
+7.57 MB stereo at 192 kHz for a file of any length — and channels are measured apart because a downmix
+would cancel opposite-polarity content. Group 4 was brought forward only as far as `finish()` required.
+Nothing is wired: no shared PCM consumer, no UI, no export, no comparison. ADR-0023 stays `Proposed`;
+its remaining promotion conditions are the impulse control against production code, which group 6 owns,
+and human validation of a surface that does not exist yet.
 
 ## 1. Methodology — decide it before writing an accumulator
 
@@ -166,33 +167,67 @@ nothing here asserts against one**. Spike §13d.
 
 ## 3. The accumulator
 
-- [ ] 3.1 `SignificantBandwidthAccumulator` in `AudioInspectorAnalysis`, taking `PCMChunk` like its five
+**Group 3 passes.** `SignificantBandwidthAccumulator` in `AudioInspectorAnalysis`, reproducing group 2's
+targets without a single expected value being changed or a tolerance widened. Spike §13e.
+
+- [x] 3.1 `SignificantBandwidthAccumulator` in `AudioInspectorAnalysis`, taking `PCMChunk` like its five
       siblings, with its own STFT at full bin resolution.
-- [ ] 3.2 **Chunk independence**, demonstrated by a test that fails when it is broken, at the same chunk
+      **Done.** `init?(sampleRate:channelCount:)` → `mutating accumulate(_:)` → `finish() -> SignificantBandwidth?`,
+      the shape its five siblings use. Time-locked window derived per rate, periodic Hann built in place,
+      75 % overlap, `vDSP.DiscreteFourierTransform` on `SpectrogramAccumulator`'s own precedent, DC and
+      Nyquist unpacked into their own bins, and **no clamp anywhere in the path**.
+- [x] 3.2 **Chunk independence**, demonstrated by a test that fails when it is broken, at the same chunk
       sizes loudness uses.
-- [ ] 3.3 Bounded memory: per-bin persistence counters, never a retained spectrogram.
-      Harder than it looks, and group 2 found why: the **budget** compares each window against the
-      file's spectral peak, which is not known until the end, so a plain per-bin counter cannot decide
-      eligibility as it goes. One bounded shape that works: per-bin counters **stratified by the
-      window's own peak**, quantised into fixed dB buckets, summed at the end over the buckets at or
-      above `filePeak − 60 dB`. That is `bins × buckets` counters regardless of duration. Spike §13d.7.
-- [ ] 3.4 Decide mono/stereo handling — per channel, or combined — and state why. Whatever is chosen
+      **Exact equality** — not a tolerance — at 1, 3, 127, 512, 4 096, 65 536 and whole-file chunks, over
+      48 and 192 kHz, on a hard edge, a weak persistent band, a file sitting on the budget boundary and
+      silence. The test that fails when it is broken is verified: resetting the overlap state on every
+      chunk breaks it (spike §13e.5).
+- [x] 3.3 Bounded memory: per-bin persistence counters, never a retained spectrogram.
+      **Done, and the alternatives were costed rather than assumed.** One bit per bin per window is exact
+      but 499 MB for three hours at 192 kHz, and is a retained spectrogram whatever its resolution.
+      Counters stratified by the window's own peak in **0.25 dB** strata are **constant in duration**:
+      measured 1.78 / 1.89 / 3.78 / **7.57 MB** stereo at 44.1 / 48 / 96 / 192 kHz, for a file of any
+      length. The declared tolerance the structure costs is written down: the stratum straddling
+      `filePeak − 60 dB` cannot be split, and is resolved **inclusively**, because a fixture at exactly
+      −60.0 dB proved the exclusive reading loses a passage the exact rule keeps. Spike §13e.1, §13e.2.
+- [x] 3.4 Decide mono/stereo handling — per channel, or combined — and state why. Whatever is chosen
       must not assert a channel layout the pipeline does not read.
-      Group 2 deliberately left this open: the reference measures each channel separately and its tests
-      assert per channel, so nothing there presumes an answer.
+      **Per channel, with `overall` the highest of those readings.** Decided by the `oppositePolarity`
+      fixture: any downmix that sums channels cancels it to a flat line, and a measurement of *where
+      energy stops* must not be able to lose energy the file carries. Precedent chosen semantically —
+      `SignalLevelMetrics` and `TruePeakMeasurement` are per channel plus overall; `LoudnessAccumulator`
+      combines only because BS.1770 defines programme loudness that way, and nothing defines this.
+      Channels are **indices, never labels**: four channels are four readings and no layout is named.
+      The **budget stays global**, because the programme is the file: a channel 70 dB under the rest
+      reports `nil`. Spike §13e.3.
 
 ## 4. The domain model
 
-- [ ] 4.1 `SignificantBandwidth` — `Sendable`, `Equatable`, failable, **not** `Codable`, carrying the
+**Brought forward deliberately, and only as far as group 3 required.** `finish()` has to return
+something, and inventing a provisional DTO that would later die is worse than building the value type
+the change already specified. 4.1–4.4 are done; nothing about export, presentation or comparison is.
+
+- [x] 4.1 `SignificantBandwidth` — `Sendable`, `Equatable`, failable, **not** `Codable`, carrying the
       frequency, the resolution it was measured at, and its method identity.
-- [ ] 4.2 The method carries **identities, not editable configuration**, on `LoudnessMethod`'s own
+      **Done**, with a per-channel `Channel` carrying frequency and resolution, `channels: [Channel?]`,
+      `overall`, and `SignificantBandwidthMethod`.
+- [x] 4.2 The method carries **identities, not editable configuration**, on `LoudnessMethod`'s own
       precedent: the same identifier must imply the same number.
-- [ ] 4.3 **No verdict field of any kind**: no `isBandLimited`, no `suspectedUpsample`, no confidence,
+      **Done**: `programme-bandwidth-60db-v1`, carrying window frames, hop and rate — the parameters
+      without which the identifier would not imply one number, because the persistence criterion is
+      defined on windows.
+- [x] 4.3 **No verdict field of any kind**: no `isBandLimited`, no `suspectedUpsample`, no confidence,
       no comparison against the declared rate.
-- [ ] 4.4 Absence is an optional the producer returns, never a floor. Nyquist is not a result.
+      **Done**, and the type's documentation states what it is not: not a cut-off, not a claim about the
+      whole file, not evidence of provenance.
+- [x] 4.4 Absence is an optional the producer returns, never a floor. Nyquist is not a result.
       **And nor is zero, but the measurement can produce it**: a constant signal is DC, so DC is
       legitimately its highest qualifying bin and the reading is 0 Hz. Decide what the model does with
       that. Spike §13b.2.
+      **Decided: report it.** Neither end is used as a floor or a sentinel — absence is `nil` throughout —
+      so a *measured* 0 Hz or Nyquist is a reading and not a stand-in for "nothing found". Suppressing
+      either would be inventing the verdict 4.3 forbids. The type says so, and a surface must not render
+      them as absence.
 
 ## 5. The sixth consumer
 
