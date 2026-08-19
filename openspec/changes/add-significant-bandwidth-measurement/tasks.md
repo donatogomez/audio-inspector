@@ -231,15 +231,36 @@ the change already specified. 4.1–4.4 are done; nothing about export, presenta
 
 ## 5. The sixth consumer
 
-- [ ] 5.1 One field on `SharedPCMAnalysisOutcome`, one accumulator in the composition. **The read count
+**Partly done. 5.1 and 5.3 are demonstrated; 5.2 and 5.4 are not, and are not marked.**
+
+- [x] 5.1 One field on `SharedPCMAnalysisOutcome`, one accumulator in the composition. **The read count
       stays one**, at the gate that already asserts it.
+      **Done.** The accumulator is built in `prepare(for:)` from the same `PCMStreamDescription` as its
+      five siblings, fed in `accumulate(_:)`, ended in `failAll`, and finished in `finish(stream:)` —
+      no protocol, no generic machinery, no second decoder. It follows **loudness's** shape rather than
+      the others': its `init?` declines a stream it does not claim, which is an absence and not a fault,
+      so it has an `absent` flag and no fault of its own. `SharedPCMDecodeCountTests` now asserts the
+      read count with programme bandwidth **`.available`** rather than merely present, and pins the
+      update order with the sixth last and the five before it unchanged.
 - [ ] 5.2 Isolation: its failure or absence changes nothing about the other five, with negative controls.
-- [ ] 5.3 **The container refactor is due.** `SourceInspectionOutcome.inspected` already carries five
+      **Not demonstrated.** The composition's existing shape makes each consumer's outcome independent,
+      and the producer-failure, cancellation and no-stream paths all carry a sixth value — but no test
+      yet drives those paths *for this consumer*, and none of the negative controls this task asks for
+      has been written. Until they exist this stays open.
+- [x] 5.3 **The container refactor is due.** `SourceInspectionOutcome.inspected` already carries five
       labelled payloads and its own note says a sixth "should not simply be appended". Decide here
       whether this change introduces the container or records why it does not — do not append silently.
+      **Done, and done first.** `InspectionAnalyses` groups only what an inspection derives from the
+      file's samples; the report stays outside it because it exists before the first chunk, and
+      `InspectionPresentation` stays separate because it models states that move from `.loading` rather
+      than settled outcomes. The migration was landed as its own commit and is **observably neutral**:
+      the same 1309 tests in 140 suites passed before and after, with the sixth analysis added only
+      afterwards. The new field carries **no default**, so omitting it is a compile error.
 - [ ] 5.4 Measure the real cost 5-against-6, as group 7 of `add-loudness-measurement` did. Baseline for
       reference: the five-consumer pass takes 1.02 s for 60 s of stereo at 48 kHz and 3.54 s at 192 kHz
       in Debug.
+      **Not measured.** The accumulator's isolated cost is known (0.07/0.07/0.14/0.28 s per audio-minute
+      at 44.1/48/96/192 kHz in Release), but the 5→6 delta through the shared pass has not been run.
 
 ## 6. Correctness against the fixtures
 
