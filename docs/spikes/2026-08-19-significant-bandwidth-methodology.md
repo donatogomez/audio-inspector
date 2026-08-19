@@ -828,7 +828,99 @@ is only honest once the budget is part of it. Candidates, none adopted, no API e
 - *programme bandwidth (within N dB of programme peak)* — carries the budget in the name, which is the
   only version that stays true under option B.
 
-## 14. Stopping rule — **NO-GO for the accumulator**
+## 13c. Part D — the decision, and a simplification that came with it
+
+The budget is a product declaration, and it was made: **60 dB**. The metric is named **programme
+bandwidth**. What follows is the validation of the whole rule set as one thing — every earlier run
+exercised one rule at a time — and a correction to part C that the validation produced.
+
+### 13c.1 The correction: there are two rules, not three, and one of them needs no constant
+
+Part C proposed a file-level numeric test ("absence when the file carries no energy") alongside the
+per-window eligibility test. Switching the two independently shows the file-level test is **redundant**:
+
+| file | wanted | both rules | budget only | numeric only | neither |
+| --- | --- | --- | --- | --- | --- |
+| digital silence | absent | absent | **absent** | absent | **absent** |
+| 60 % body + 40 % digital silence | 16 000 | 16 102 | 16 102 | 16 102 | **16 102** |
+| 40 % broadband noise-floor tail | 16 000 | 16 102 | 16 102 | 24 000 | 24 000 |
+| real music 70 dB down in the second half | (the cost) | 16 102 | 16 102 | 20 016 | 20 016 |
+
+Row 1 is absent in **every** column, including the one with no rules at all. A window of zeros
+transforms to magnitude exactly zero, which is `-infinity` in dB, so the per-window eligibility test
+already excludes it and absence falls out with nothing added.
+
+**The P8 failure that started all of this was caused by a magnitude clamp**, not by the method. Part A's
+harness floored magnitudes at 1e-12, which turned a silent window into −240 dB and therefore into a
+window with a reference. Remove the clamp and silence solves itself. That makes the clamp a
+**methodological requirement rather than an implementation detail**: a production accumulator must not
+floor its magnitudes, or it reintroduces the failure.
+
+Rows 3 and 4 show what the budget is actually for, and it is one thing only: the broadband
+noise-floor-alone case. Row 2 needs no budget either.
+
+So the final rule set is:
+
+1. **Eligibility — no constant.** A window is an observation if it carries energy. This handles digital
+   silence, partial silence and absence, all of it, automatically.
+2. **Budget — one declared constant, 60 dB.** A window must sit within 60 dB of the file's spectral peak
+   to contribute. This handles the broadband noise floor, and nothing else needs it.
+3. **Significance — −50 dB** relative to that window's own peak.
+4. **Persistence — ≥ 10 %** of eligible windows.
+
+### 13c.2 The whole method, validated once, with every rule active
+
+48 kHz, FFT 2048 / hop 512 (42.67 ms, 75 % overlap), periodic Hann, no magnitude clamp:
+
+| | constraint | reading |
+| --- | --- | --- |
+| PASS | P1 gain invariance (0 / −20 / −40 dB) | 20 016 / 20 016 / 20 016 |
+| PASS | P2 a click does not reach Nyquist | 16 102 |
+| PASS | P3a loud but rare band (−20 dB, 1 %) | 16 102 |
+| PASS | P3b full-band bursts totalling 1 % | 16 102 |
+| PASS | P4 persistent −30 dB band is kept | 20 016 |
+| PASS | P5 continuous −80 dB noise ignored | 16 102 |
+| PASS | P6a / P6b hard cut-offs at 16 and 20 kHz | 16 102 / 20 086 |
+| PASS | P7 a loud LF event keeps the band | 20 016 |
+| PASS | P8 digital silence reports absence | absent |
+| PASS | X1 partial digital silence | 16 102 |
+| PASS | X2 partial silence keeps a real band | 20 086 |
+
+**Twelve of twelve, with the full rule set active for the first time.**
+
+### 13c.3 The declared cost, as a table the record owns
+
+Loud first half; second half X dB lower, carrying a real 19–20 kHz band:
+
+| quiet passage | −30 | −40 | −50 | **−60** | **−70** | −80 | −90 dB |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| reading | 20 016 | 20 016 | 20 016 | **20 016** | **16 102** | 16 102 | 16 102 |
+| measured? | yes | yes | yes | **yes** | **no** | no | no |
+
+> **Content in passages more than 60 dB below a file's loudest spectral moment is not measured, and a
+> noise floor further down than that does not count as content.** The two halves of that sentence are
+> the same rule; there is no setting that keeps one and drops the other.
+
+And what the budget buys, on the case that motivated it — 40 % of the file a broadband floor and nothing
+else:
+
+| noise floor | −40 | −60 | −70 | −90 | −120 | −200 dBFS |
+| --- | --- | --- | --- | --- | --- | --- |
+| with the budget | 24 000 | **16 102** | 16 102 | 16 102 | 16 102 | **16 102** |
+| without | 24 000 | 24 000 | 24 000 | 24 000 | 24 000 | 24 000 |
+
+The −40 dBFS row still reads 24 000, and correctly: a floor that loud is within the budget and within
+the prominence threshold, so it *is* programme. A band-limited floor alone still reads its own limit
+(16 102), which is the case the feature exists for.
+
+### 13c.4 The name
+
+**Programme bandwidth**, stated in full as *"programme bandwidth, within 60 dB of programme peak"*. It
+carries the budget in the name, so it stays true if the budget is ever changed, and it does not claim
+the significance that "significant bandwidth" would. *Persistent spectral extent* was the accurate
+alternative but is silent about the budget, which is the one thing a reader must not have to guess.
+
+## 14. Stopping rule — **GO for the accumulator**
 
 Nine conditions were set for authorising group 2. Seven are met:
 
@@ -842,13 +934,14 @@ Nine conditions were set for authorising group 2. Seven are met:
 8. R7 understood and documented — **met** (§12.11).
 9. Roll-off understood as expected behaviour — **met** (§12.12).
 
-Two are not:
+Two were not, and both are now resolved by part D:
 
-6. **The −60 dB eligibility gate did not survive** (§12.9). It erases real content in passages more than
-   60 dB below the file's peak, and no single value can separate a quiet passage from a noise floor at
-   the same level, because to this rule they are the same measurement.
-7. **The −120 dBFS floor was replaced** by a numeric absence condition (§12.10). That is an improvement,
-   but it is a change to the method, not a confirmation of it.
+6. **The −60 dB eligibility rule is a declaration, not a discovery** (§12.9, §13c). It erases real
+   content in passages more than 60 dB below the file's peak, and no value can separate a quiet passage
+   from a noise floor at the same level. It is therefore stated as a budget, with its cost tabulated
+   (§13c.3), and carried in the metric's own name.
+7. **The −120 dBFS floor is deleted, not replaced** (§12.10, §13c.1). An unclamped transform makes a
+   silent window ineligible by itself, so no absolute rule of any kind is required.
 
 Item 6 is structural, so the accumulator is not authorised. It is not a defect in the threshold or the
 persistence criterion — both survived — but in the rule that decides *which windows are looked at*, and
@@ -858,6 +951,16 @@ that rule sits upstream of everything else.
 numerically clean, needs no invented constant, and gets seven of the collector's eight files right. It
 fails on one: a broadband noise floor alone in more than 10 % of a file sets the answer, **at any level,
 down to 200 dB below the programme**. Nothing inside a window can tell that floor from quiet music, and
-every rule that can is a dynamic-range budget. So the remaining decision is not a measurement — it is
-**what the product declares it is looking at**, and the answer must travel with the number rather than
-hide inside it.
+every rule that can is a dynamic-range budget. So the remaining decision was not a measurement — it was
+**what the product declares it is looking at**.
+
+**Part D closed it.** The declaration was made — 60 dB, with the cost written down in §13c.3 rather than
+discovered later — and the rule that carries it turned out to be the only constant the method needs
+beyond the three already settled. Item 6 is decided rather than refuted, and item 7 dissolved: the
+absolute floor is not replaced by a numeric condition, it is **not needed at all**, because an unclamped
+transform makes a silent window ineligible on its own.
+
+All nine conditions are now met, and the full rule set passes twelve of twelve constraints in a single
+validation. **The accumulator is authorised**, subject to the change's own ordering: group 2's fixtures
+and oracle come before group 3's accumulator, and nothing here has touched a real file, a container, a
+codec, or the production decode path.
