@@ -16,61 +16,55 @@
 >   session protocol in `CLAUDE.md`).
 
 ---
-**Open thread: `add-significant-bandwidth-measurement`.** Groups 1 and 2 are complete. There is still no
-production code for this change; group 3 is the accumulator and it is now authorised.
+**Open thread: `add-significant-bandwidth-measurement`.** Groups 1, 2 and 3 are complete, and the domain
+model came with 3. Nothing is wired: no shared PCM consumer, no UI, no export, no comparison.
 
-**Group 2 asked one question: does the fact survive the transport?** It does. The method left in-memory
-arrays and went onto real files through the production decoder — five sample rates, five lossless
-containers, AAC, MP3 and rewrap, seven chunk sizes from one frame to the whole file, and every file
-edge. Lossless containers and chunk sizes agree on the **identical bin**, asserted exactly rather than
-within a tolerance, because the measurement is a pure function of the samples and a tolerance there
-would hide a decoder difference instead of revealing one.
+**The accumulator exists and it reproduces group 2's targets exactly** — no expected value changed, no
+tolerance widened. That was the point of settling them first, and it paid: the one place the production
+type disagreed with the reference was real, and it was the stratification, not the method.
 
-**The resolution contract came out of measurement, not out of a choice.** Across four known edges and
-five rates the error is always positive — one-sided upward, as the Hann derivation said — and worst-case
-4.55 resolutions against the analytic reach of 4.72. So the assertion is `0 ≤ error ≤ 5 × resolution`,
-and the raw hertz are explicitly *not* comparable across rates: each rate quantises the edge onto its own
-bin grid, and 12 kHz reads +1.00 resolutions at 48 kHz and +4.55 at 44.1 kHz for that reason alone.
+**Two questions had to be answered before the type had a shape, and both were decided by arithmetic
+rather than taste.** Bounded memory first: the budget compares each window against the *file's* peak,
+which is unknown until the last chunk, so something must be carried. One bit per bin per window is exact
+and was seriously considered — the rule is not to trade exactness for O(1) when a compact O(duration)
+form costs a few MB — but it is 499 MB for three hours at 192 kHz, and task 3.3 forbids retaining a
+spectrogram at any resolution, which one bit per bin still is. Counters stratified by the window's own
+peak are **constant in duration**: 7.57 MB for stereo at 192 kHz whether the file is a minute or three
+hours, against 879 MB of PCM for ten minutes of the same audio.
 
-**Lossy came out better than expected.** A 64 kbps MP3 reads its own low-pass — 16 790 Hz where the
-source reads 20 075 — and a 320 kbps one keeps the source's edge; AAC moves four bins. Codec artefacts
-above the low-pass stayed under the threshold, so nothing had to be widened to accommodate a codec, and
-every bitrate survives a rewrap to PCM with the identical bin. That last row is evidence about spectral
-extent and nothing else: it says two files measure the same, never where either came from.
+**That structure costs exactly one tolerance, and a fixture found which way it must round.** The budget's
+boundary always falls *inside* a stratum whose members straddle it, and whose exact peaks are gone.
+Resolving that stratum exclusively read 16 102 Hz for a passage sitting at exactly −60.0 dB where the
+exact rule reads 20 016 — a window *on* the budget is eligible, and dropping its stratum drops it. So it
+is resolved inclusively, and the declared budget became "60 dB, resolved to whole 0.25 dB strata,
+admitting at most 0.25 dB below it". Both sides are pinned by tests. A side effect worth remembering:
+the budget is enforced **twice**, by the ring's capacity as well as by the check at the end, which is
+why removing the check alone changes nothing.
 
-**FFmpeg is settled, and by measurement.** Its `aspectralstats` `rolloff` under-reads a 16 kHz limit as
-15.2 kHz, and adding a dominant 100 Hz tone drags it to 12.5 kHz while the extent does not move. It
-tracks spectral balance, not extent. There is no external oracle for this quantity, and now that is a
-measured statement rather than an assumed one.
+**Channels are measured apart, and the fixture that decided it cannot be argued with.**
+`oppositePolarity` — identical content with the sign flipped on odd channels — cancels to a flat line
+under any downmix that sums, and a measurement of where energy stops must not be able to lose energy the
+file carries. So each channel is measured on its own, `overall` is the highest of those readings, and
+channels are indices with no layout named. The budget stays global, because the programme is the file: a
+channel 70 dB under the rest reports nothing, which is a fact about the file's dynamics.
 
-**Two things group 2 hands forward.** An impulse alone in digital silence reads as broadband — not a
-persistence failure but eligibility interacting with it, since removing empty windows raises the share
-of the few that remain, and a programme has to occupy about a quarter of the file before an isolated
-click stops setting the answer. It is pinned by a test. And bounded memory (task 3.3) is harder than it
-reads: the budget compares each window against the file's peak, which is not known until the end, so a
-plain per-bin counter cannot decide eligibility as it goes. Counters stratified by window peak into dB
-buckets are one shape that stays bounded.
+Nine negative controls, applied and reverted one at a time, all break a test — two of them by trapping
+rather than by an assertion, which is the right failure for a bounds violation. One methodological
+sentence is now load-bearing in code: **there is no clamp anywhere in the transform path**, and the
+silence test is what stands between the method and an epsilon.
 
-Three self-inflicted faults are written into the spike rather than quietly fixed, because each would
-pass unnoticed: a hard amplitude step in a fixture is broadband and measured as Nyquist; a comb of 32
-components at 0.05 clips and measures its own clipping; and a fast path must associate its arithmetic
-exactly as the slow path writes it, because the support tests compare them bit for bit.
+**Next step: group 5, the sixth consumer** — wiring the accumulator into the one shared PCM read, on
+ADR-0021's terms, and the cost that ADR-0023 already names as this change's main negative consequence.
+Group 6's correctness battery and group 7's presentation follow it. The accumulator's own cost is
+measured and small: 0.28 s per audio-minute at 192 kHz in Release, `finish()` in milliseconds.
 
-**Next step: group 3, the accumulator** — `SignificantBandwidthAccumulator` in `AudioInspectorAnalysis`,
-taking `PCMChunk` like its five siblings, with chunk independence demonstrated by a test that fails when
-it is broken, bounded memory per 3.3, and the mono/stereo decision (3.4) that group 2 deliberately left
-open by measuring each channel separately.
-
-ADR-0023 stays `Proposed`. Its first promotion condition is met; the other two — the impulse control
-against production code, and human validation of the surface — cannot be met before the accumulator
-exists.
+ADR-0023 stays `Proposed`. Its remaining promotion conditions are the impulse control against production
+code, which group 6 owns, and human validation of a surface that does not exist yet.
 
 **Older threads, neither advanced here**: `add-static-spectrogram-visualization` (manual validation
 battery deferred by product decision); `add-two-file-technical-comparison` (one accessibility criterion
-open, blocked on the VoiceOver traversal gap shared with ADR-0015). The loudness debt recorded five
-snapshots ago is unchanged and still not a thread: the export chain's third positional optional,
-`ReportJSONDTO.swift` at 415 lines against SwiftLint's 400, the absolute gate not being observable from
-outside `LoudnessAccumulator`, and the unaudited `Task.yield()` in `ImportFlowComparisonTests`.
+open, blocked on the VoiceOver traversal gap shared with ADR-0015). The loudness debt recorded six
+snapshots ago is unchanged and still not a thread.
 
 ---
 _Last touched: 2026-08-19. Overwrite freely; empty is fine._
