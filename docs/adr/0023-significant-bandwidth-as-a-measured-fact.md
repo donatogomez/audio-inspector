@@ -212,10 +212,11 @@ spike measured whether that works. It does not, and the measurements decided thi
 
 ### Negative / costs
 - **A sixth FFT.** Until the shared stage exists this computes a transform the spectrogram has already
-  computed and discarded. Measured baseline for the five-consumer pass: 1.02 s per 60 s of stereo at
-  48 kHz, 3.54 s at 192 kHz, in Debug.
-- **`SourceInspectionOutcome` reaches six payloads**, and its own note says a sixth "should not simply
-  be appended". The change must decide the container or record why not.
+  computed and discarded. **Now measured rather than feared** — see *What the integration cost* below:
+  the sixth consumer costs what it costs alone, 0.05–0.20 s per audio-minute in Release, and adds no
+  overhead beyond itself.
+- **`SourceInspectionOutcome` reached six payloads**, and its own note said a sixth "should not simply
+  be appended". **Decided and landed first, as `InspectionAnalyses`** — see below.
 - **No published reference exists** for this quantity, and that is now measured rather than assumed.
   FFmpeg's `aspectralstats` has a `rolloff`, and it is the energy percentile this record already
   rejects: it under-reads a 16 kHz limit as 15.2–15.4 kHz, and adding a dominant 100 Hz tone moves it to
@@ -229,6 +230,72 @@ spike measured whether that works. It does not, and the measurements decided thi
   before an isolated impulse stops setting the answer. Inside any real programme the impulse control
   passes, and §2's argument is unaffected — but the degenerate case is a property of the method, pinned
   by a test rather than left to be discovered.
+
+### What the integration cost, and what it proved
+
+Recorded here because it is evidence, not narrative. None of it promotes this record: the two remaining
+promotion conditions are untouched.
+
+**One read, and the container that made a sixth payload readable.** `InspectionAnalyses` groups only what
+an inspection derives from the file's samples. The report stays outside it — it exists before the first
+chunk — and `InspectionPresentation` stays separate because it models states that move from `.loading`
+rather than settled outcomes. The new field carries **no default**, and the six outcome types are all
+distinct, so omitting a field is *missing argument for parameter* and swapping two is *cannot convert
+value of type*. There is no positional debt left to write a test against. The read count is still one
+decoder, one decode call, one sample read, with programme bandwidth `.available` rather than merely
+present; giving it a read of its own takes that to two, which the gate reports.
+
+**The bundle is one operation's, whole.** A late result from a superseded inspection is dropped as a
+unit, and this is asserted with six deliberately distinguishable analyses per operation rather than
+inferred from fields that stayed `.loading`. The case that matters is a late bundle whose report *equals*
+the one on screen — the same file inspected twice — where the merge fills every field still loading and
+keeps every field settled: without the operation guard, A's analyses land on exactly the fields B had not
+reached, leaving B's waveform beside A's loudness. Routing either the new field or an existing sibling
+around that guard fails the same test.
+
+**Isolation is bilateral**, and neither direction is an assumption: its absence leaves the other five
+identical to a control run and does not shorten the read, and a sibling's real failure leaves its own
+reading exactly what the accumulator produces from the same chunks. A producer failure partway — and,
+the case that matters, *after the final chunk*, when a complete answer already exists — leaves all six
+failed with nothing partial.
+
+**Absence by configuration is unreachable, and that is a property rather than a gap.** Over every rate
+from 10⁻³⁰⁰ to `greatestFiniteMagnitude` and channel counts from 1 to 1 024, 126 of 126 valid
+`PCMStreamDescription`s were accepted and none declined: the domain type already guarantees a finite
+positive rate and at least one channel, and no supported window length is one `vDSP` refuses. The real
+absences come from the audio not matching its description, or from a file carrying no usable window.
+
+**The numeric extremes are three cases, not two, and each has its own protection.** The magnitudes are
+computed by two routes — the interior bins squared, DC and Nyquist taken linearly — and that asymmetry
+decides which extreme an input can reach. A quiet *sine* collapses to no positive peak and returns
+before the budget is computed; a quiet *Nyquist alternation* carries a denormal all the way through, and
+`x · 0.001` underflows to exactly zero at and below 6.99 × 10⁻⁴³, which is why the budget is subtracted
+in decibels. Samples at `greatestFiniteMagnitude` make the magnitudes `NaN`, which the eligibility rule
+turns into an absence. Amplitudes above about 3 × 10¹⁶ keep the components finite while their squares
+overflow, so the magnitude is `+∞`, which *is* greater than zero, passes eligibility, and reaches the
+stratum conversion — that is what the finiteness clamp exists for, and nothing else exercises it.
+
+**What it cost.** Release, ten minutes of stereo, one machine and one session, the minimum of three
+repetitions per cell:
+
+| rate | shared 5 | shared 6 | delta | accumulator alone | delta / alone |
+| --- | --- | --- | --- | --- | --- |
+| 44.1 kHz | 5.271 s | 5.788 s | 0.517 s | 0.512 s | 1.01 |
+| 48 kHz | 5.702 s | 6.373 s | 0.671 s | 0.491 s | 1.37 |
+| 96 kHz | 11.671 s | 12.586 s | 0.915 s | 0.956 s | 0.96 |
+| 192 kHz | 23.156 s | 24.956 s | 1.800 s | 1.968 s | 0.91 |
+
+Three of four ratios are at or below 1.01; the 48 kHz outlier is noise, and at 192 kHz — most expensive
+and best resolved — the delta is 9 % *below* the isolated cost. There is no overhead beyond the work
+itself, so nothing was optimised. These measure the consumers; decode is identical on both sides, and
+the read-count gate is what proves it did not change.
+
+**Memory, measured at the allocator rather than at RSS**, which could not resolve it. The sixth consumer
+adds 2.4 MB at 48 kHz and 8.7 MB at 192 kHz — the stratified counters plus a bounded overlap tail and
+preallocated scratch — and is **constant in duration**: quadrupling the audio moves it by half a
+percent. It is therefore neither a copy of the PCM nor a retained spectrogram, both of which would be
+about 184 MB for the same material. Retaining every window's magnitudes takes it to 233 MB at four
+audio-minutes and makes it scale with duration, which is how the measurement was shown to discriminate.
 
 ### Neutral
 - No port changes, no export version change, no new dependency, and no second read.
