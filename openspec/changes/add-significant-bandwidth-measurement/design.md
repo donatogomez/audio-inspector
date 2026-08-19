@@ -64,14 +64,21 @@ not this document's expectation of it.
   spectral peak (gain-invariant, and inert except on near-silent windows) and an absolute silence floor
   at −120 dBFS are both required.
 
-**Still open, and now better characterised:**
+**Also settled, by the continuation of group 1:**
 
-- **The resolution claim (§5).** The overshoot above a known hard cut-off measures ≈ 4 bins, one-sided
-  upward. Bin centre / edge / range is undecided.
-- **The analysis window is a parameter, not an implementation detail.** The same signal reads 16 043 Hz
-  at FFT 4096 and 24 000 Hz at FFT 8192, because a longer window smears a burst over a larger fraction of
-  fewer windows. §5's choice of 2048 points is therefore reopened, and whether the window should be fixed
-  in *time* rather than in samples is a group 3 question.
+- **The resolution claim (§5).** Derived, not observed: the Hann skirt reaches `d(T) = (1/(π·10^(T/20)))^(1/3)`
+  bins, 4.72 at −50 dB. The contract is **bin centre plus resolution**; an interval contract was derived
+  and then falsified.
+- **The analysis window is time-locked at ≈ 42.67 ms**, hop = fftSize/4, realised through the
+  non-power-of-two lengths `vDSP_DFT_zrop` accepts. §5's 2048 points is right at 48 kHz and wrong
+  everywhere else.
+
+**Still open, and one of them blocking:**
+
+- **The window-eligibility rule (task 1.7) — blocking.** The −60 dB gate erases a real quiet passage
+  70 dB below the file's peak, and no value separates that from a noise floor at the same level. It is a
+  dynamic-range budget and must be stated as one. It decides which windows are looked at, so nothing
+  downstream can be built on it as it stands.
 - **Nothing was measured on real music**, on any codec, or through the production decode path. All of
   group 1's material is synthetic and in memory.
 
@@ -94,12 +101,21 @@ The FFT was to be 2048 points, so a bin is `sampleRate / 2048` wide: **21.5 Hz a
 192 kHz**. A Hann window spreads a pure tone across neighbouring bins, so the true edge is known no more
 precisely than a bin, and in practice a little less.
 
-**Measured, and worse than that.** Against known hard cut-offs at four bin widths, across 48 and
-192 kHz and FFT 2048/4096/8192, the reported edge sits **3.7 to 4.35 bins above the true one** — the
-Hann skirt reaching the −50 dB threshold. The uncertainty is therefore about **four bins, one-sided
-upward**, not half of one. Group 1 also found that the size itself is not free: the persistence
-criterion is defined on windows, so `fftSize` and `hop` are part of the method identity and the choice
-of 2048 is reopened (§3).
+**Derived, and worse than that.** The Hann transform is `|W(d)| = |sin(πd)|/(π|d||d²−1|)`, verified
+against the true DTFT to 0.000 dB, and its skirt falls as `1/d³`. A relative threshold `T` therefore
+stays above it out to **`d(T) = (1/(π·10^(T/20)))^(1/3)` bins — 4.72 at −50 dB**. That is the
+uncertainty: not the bin width, not the 4-bin main lobe, not bin quantisation. It is one-sided upward
+and depends on where the content's edge falls inside a bin, from **1 bin** (edge on a bin) to `d(T)`.
+
+The reported value is therefore a **bin centre plus the resolution it was measured at**. A lower/upper
+bound contract was derived and then falsified — coherent tones one bin apart overshoot by 8.5 bins — and
+must not be reintroduced. **Display granularity must be coarser than the bias**, which is 23–111 Hz at a
+42.67 ms window: a tenth of a kHz is the finest defensible step.
+
+The window is **time-locked at ≈ 42.67 ms** with 75 % overlap, because the persistence criterion is
+defined on windows and a sample-locked one makes it rate-dependent: ten bursts totalling 5 % of a file
+read 12.65 % of windows at 44.1 kHz and 6.73 % at 192 kHz. `fftSize` and `hop` are part of the method
+identity.
 
 **The measurement therefore reports a frequency together with the resolution it was measured at**, and
 the surface must not print more precision than that supports. `21.73 kHz` is a lie at 192 kHz;

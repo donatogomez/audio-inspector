@@ -4,12 +4,17 @@
 methodology is measured. This is the order `add-loudness-measurement` used — constants settled and
 sourced before an accumulator existed — and the reason its numbers survived review.
 
-**Group 1 status.** 1.1–1.4 are settled from measurement in
-`docs/spikes/2026-08-19-significant-bandwidth-methodology.md`: the threshold is **−50 dB relative to the
-loudest bin in the same analysis window**, the persistence criterion is **≥ 10 % of eligible windows**,
-and the two are **not sufficient on their own** — a window-eligibility gate at −60 dB below the file's
-global spectral peak and an absolute silence floor at −120 dBFS are both required, and both are measured
-rather than assumed. 1.5 and 1.6 remain open. ADR-0023 stays `Proposed`.
+**Group 1 status.** 1.1-1.5 are settled from measurement in
+`docs/spikes/2026-08-19-significant-bandwidth-methodology.md`: the threshold is **-50 dB relative to the
+loudest bin in the same analysis window**, the persistence criterion is **>= 10 % of eligible windows**,
+the analysis window is **time-locked at ~42.67 ms with 75 % overlap**, and the reported value is a **bin
+centre plus its resolution**, never an interval.
+
+**The accumulator is NOT authorised.** Deliberate attempts to refute the parameters left the threshold
+and the persistence criterion standing, and broke the **window-eligibility gate** (new task 1.7). It
+decides which windows are looked at, so it blocks groups 2-5. The -120 dBFS floor was replaced by a
+numeric condition — an improvement, but a change to the method rather than a confirmation of it.
+ADR-0023 stays `Proposed`.
 
 ## 1. Methodology — decide it before writing an accumulator
 
@@ -49,22 +54,49 @@ rather than assumed. 1.5 and 1.6 remain open. ADR-0023 stays `Proposed`.
       them. Two consequences are recorded rather than tuned away: continuous noise above the cut-off at
       −40/−50 dB *is* reported, and a file with a full-scale low end throughout under-reports a real high
       band 59.5 dB below its window peak. Spike §4, §10.
-- [ ] 1.5 Fix the **resolution claim**: bin width per rate, and how a Hann window's spread widens the
+- [x] 1.5 Fix the **resolution claim**: bin width per rate, and how a Hann window's spread widens the
       real uncertainty beyond one bin. Decide whether the reported value is a bin centre, a bin edge, or
       a range.
-      **Measured, not yet decided.** The overshoot above a known hard cut-off is **≈ 4 bins, one-sided
-      upward** — 3.7 to 4.35 bins at four different bin widths, across 48 and 192 kHz and FFT
-      2048/4096/8192. So the honest uncertainty is about four bins, not half of one. Still to settle: bin
-      centre / edge / range, paired with the analytic Hann main-lobe figure rather than this empirical one
-      alone. Also open, and found here: the persistence constant is **tied to the analysis window** — the
-      same signal reads 16 043 Hz at FFT 4096 and 24 000 Hz at FFT 8192 — so the method identity must
-      carry `fftSize` and `hop`, and whether the window should be fixed in *time* rather than in samples
-      is a group 3 question. Spike §7.
+      **Decided.** The Hann transform is `|W(d)| = |sin(pi d)|/(pi |d| |d^2-1|)`, verified against the
+      true DTFT to 0.000 dB, and its skirt falls as `1/d^3`. A relative threshold T therefore reaches
+      `d(T) = (1/(pi*10^(T/20)))^(1/3)` bins — **4.72 bins at -50 dB**. That is what the earlier "~4
+      bins" was: not the bin width, not the 4-bin main lobe, not bin quantisation, but the threshold
+      cutting the leakage skirt, and it is the only one of the four that moves with the threshold.
+      **Contract: bin centre plus the resolution it was measured at.** An interval contract was derived
+      and then **falsified** — coherent tones one bin apart overshoot by 8.5 bins — so lower/upper bounds
+      are rejected rather than deferred. The reported value is an upper bound on where content ends,
+      overstating by 1 bin (edge on a bin) to d(T) bins (edge between bins), one-sided upward; display
+      granularity must be coarser than that bias, which is 23-111 Hz at a 42.67 ms window. Spike
+      §12.1-12.4.
+
 - [ ] 1.6 Record every constant with its source in a spike document, as
       `docs/spikes/2026-08-18-loudness-measurement-validation.md` Part A does.
-      **Table written** at `docs/spikes/2026-08-19-significant-bandwidth-methodology.md` §11, with the
-      source of each of the seven constants settled so far. It cannot be called complete while 1.5's
-      constant does not exist.
+      **Table written** at `docs/spikes/2026-08-19-significant-bandwidth-methodology.md` §11 and §12.13.
+      It cannot close while two of the constants it records are not settled: the eligibility gate was
+      **rejected** at -60 dB (see 1.7) and the -120 dBFS floor was **replaced** by a numeric condition.
+
+- [ ] 1.7 **Decide the window-eligibility rule.** Opened by refutation, not by design: the -60 dB gate
+      erases a real quiet passage 70 dB below the file's peak, band and all, and the two failure tables —
+      "reject a noise-floor-only passage" and "keep a real quiet passage" — are exact mirror images,
+      because to a rule that only knows how far below the file's peak a window sits they are the same
+      measurement. **No single value separates them.** Any replacement is a stated **dynamic-range
+      budget**, not a silence test. Absence itself is already solved and needs no level: a file that
+      carries no energy at all has no bandwidth. Spike §12.9, §12.10. **This blocks the accumulator**,
+      because it decides which windows are looked at and sits upstream of everything in groups 3-5.
+
+## 1b. The analysis window — settled here, listed separately because it was not a numbered task
+
+- [x] 1b.1 **Time-locked, not sample-locked**, on measurement: under a fixed 2048-point window, ten
+      bursts totalling 5 % of a file read 12.65 % of windows at 44.1 kHz and 6.73 % at 192 kHz — the same
+      temporal evidence classified significant at one rate and not at another. Time-locked it reads
+      11.6-11.8 % at all five rates. Spike §12.5.
+- [x] 1b.2 **Window ~42.67 ms, hop = fftSize/4 (75 % overlap).** `vDSP_DFT_zrop` accepts `f * 2^m` for
+      f in {1,3,5,15}, so 1920 at 44.1 kHz and 3840 at 88.2 kHz hold the duration to within 2.0 %, where
+      powers of two alone would force 8.8 %. 25 % overlap disagrees with the rest on the critical event
+      duration; 50, 75 and 87.5 % agree, and more overlap rejects transients better. Spike §12.5, §12.7.
+- [x] 1b.3 **`fftSize` and `hop` are part of the method identity**, because the persistence criterion is
+      defined on windows. A transient marks **one** window, not `fftSize/hop` of them — the Hann taper
+      attenuates it near a window's edge — which corrects part A. Spike §12.7.
 
 ## 2. Fixtures and the oracle
 
