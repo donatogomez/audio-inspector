@@ -89,7 +89,7 @@ struct ComparisonFlowPresentationTests {
     }
 
     /// The second report turns the surface into a full comparison with its eight rows.
-    @Test("the second report presents a comparison of eight rows")
+    @Test("the second report presents a comparison of every property")
     func theSecondReportPresentsAComparison() async {
         let primary = report("a.wav", sampleRate: 44_100)
         let (flow, primaryAction, running) = await flowShowingAReport(primary)
@@ -104,7 +104,7 @@ struct ComparisonFlowPresentationTests {
             return
         }
         let rows = ComparisonFormatter.rows(for: comparison)
-        #expect(rows.count == 8)
+        #expect(rows.count == ReportPropertyFormatter.displays(for: other.properties).count)
         #expect(rows.first { $0.name == "Sample rate" }?.outcome.text == "Different")
 
         second.finish(.inspected(other, waveform: .unavailable, spectrogram: .unavailable, signalLevelMetrics: .unavailable, truePeak: .unavailable, loudness: .unavailable))

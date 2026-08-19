@@ -22,14 +22,21 @@
 /// it is also where `ComparisonGap`'s missing detail lives: the gap says a side was `unsupported`, and
 /// the reason it was is on the property inside the report.
 ///
-/// ## Eight fields, named explicitly
+/// ## One field per technical property, named explicitly
 ///
-/// Exactly the fields `TechnicalProperties` holds. **There is no `format` property** — `container` and
-/// `codec` are separate technical facts, and the project treats that distinction as load-bearing.
+/// Exactly the fields `TechnicalProperties` holds — **all of them**, which the spec requires in as many
+/// words: *"For every technical property both reports carry … the set SHALL be exhaustive, so no
+/// property is left without an outcome."* **There is no `format` property** — `container` and `codec`
+/// are separate technical facts, and the project treats that distinction as load-bearing.
 ///
-/// They are eight stored comparisons rather than a dictionary keyed by some property identifier,
+/// They are stored comparisons rather than a dictionary keyed by some property identifier,
 /// deliberately: the contract is visible in the type, each carries its own `Value`, and nothing needs
 /// type erasure or `Any` to hold them together.
+///
+/// **The count is not the contract; the coverage is.** This type was born with eight fields and went a
+/// release without the ninth, because nothing tied it to `TechnicalProperties`. `ComparisonPropertyCoverageTests`
+/// now asserts the correspondence over `Mirror`, so a tenth property fails on the day it is added
+/// rather than quietly losing its row.
 ///
 /// ## What it cannot express
 ///
@@ -66,6 +73,13 @@ public struct FileComparison: Sendable, Equatable {
     /// `incomparable`: the reader marks an estimate `uncertain` by construction, and an unreliable
     /// reading is not a comparable fact however closely it matches another (ADR-0017).
     public let estimatedBitrate: PropertyComparison<Int>
+    /// The whole file's average rate, compared only against the other file's own average.
+    ///
+    /// Like `estimatedBitrate` it is almost always `incomparable` in practice, and for the same reason:
+    /// `AVFoundationAudioFilePropertyReader` has no path that returns it as anything but `uncertain`
+    /// (ADR-0018). That is not a special case here — it is the generic rule applied to a property whose
+    /// state happens to be constant, and no exception is made to let an estimate compare.
+    public let averageFileBitrate: PropertyComparison<Int>
 
     /// Compares two reports. Pure, total and deterministic: no port, no I/O, no `URL`, no framework,
     /// nothing to await and nothing that can fail.
@@ -78,8 +92,9 @@ public struct FileComparison: Sendable, Equatable {
     /// is no per-field logic for a special case to hide in, and no field-specific tolerance to add.
     /// Duration is a `Double` compared by that same rule, so its equality is exact.
     ///
-    /// **A declared rate is never compared against an estimated one.** Each pairing below reads the
-    /// same field from both sides; there is no expression that crosses them.
+    /// **No two rates of different kinds are ever compared.** Declared, estimated and whole-file average
+    /// are three different things; each pairing below reads the **same** field from both sides, and there
+    /// is no expression that crosses them.
     public init(first: InspectionReport, second: InspectionReport) {
         self.first = first
         self.second = second
@@ -95,5 +110,6 @@ public struct FileComparison: Sendable, Equatable {
         codec = PropertyComparison(first: a.codec, second: b.codec)
         declaredBitrate = PropertyComparison(first: a.declaredBitrate, second: b.declaredBitrate)
         estimatedBitrate = PropertyComparison(first: a.estimatedBitrate, second: b.estimatedBitrate)
+        averageFileBitrate = PropertyComparison(first: a.averageFileBitrate, second: b.averageFileBitrate)
     }
 }
