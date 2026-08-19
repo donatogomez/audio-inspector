@@ -122,11 +122,19 @@ spike measured whether that works. It does not, and the measurements decided thi
    with **75 % overlap**. `fftSize` and `hop` are part of the method's identity, because the persistence
    criterion is defined on windows.
 
-10. **Absence is an absence.** No audio, shorter than one window, or nothing meeting the criterion yields
+10. **A lossy transport moves the reading without destroying the fact, and that is measured.** A
+    64 kbps MP3 reads its own low-pass at 16 790 Hz where its source reads 20 075 Hz; a 320 kbps MP3
+    keeps the source's edge; AAC at 128 kbps moves it four bins. Every one of them survives a rewrap to
+    PCM with the **identical bin**, because the band limit travels with the samples and not with the
+    container. Codec artefacts above the low-pass stayed below the threshold, so neither constant had to
+    be widened to accommodate a codec. **None of this licenses the inference the change forbids**: that
+    two files measure the same extent says nothing about where either came from.
+
+11. **Absence is an absence.** No audio, shorter than one window, or nothing meeting the criterion yields
    no value. Zero is not a result and **Nyquist is not a result** — the same rule that made −70 LUFS a
    gate rather than a reading (ADR-0022 §6). "No audio" is the numeric condition of §5, not a level.
 
-11. **The shared STFT stage is deferred and named.** `SpectrogramAccumulator` already computes 1025 bins
+12. **The shared STFT stage is deferred and named.** `SpectrogramAccumulator` already computes 1025 bins
    per hop and throws the resolution away; sharing that stage would make this nearly free. It is the
    right end state and the wrong first step — it would land a refactor inside a feature and design for
    one consumer while guessing at the second. It waits for `average spectrum` to give it a second.
@@ -190,10 +198,19 @@ spike measured whether that works. It does not, and the measurements decided thi
   48 kHz, 3.54 s at 192 kHz, in Debug.
 - **`SourceInspectionOutcome` reaches six payloads**, and its own note says a sixth "should not simply
   be appended". The change must decide the container or record why not.
-- **No published reference exists** for this quantity. Unlike loudness there is no Tech 3341 to be
-  measured against, so the primary evidence is analytic fixtures and FFmpeg is corroboration at best.
+- **No published reference exists** for this quantity, and that is now measured rather than assumed.
+  FFmpeg's `aspectralstats` has a `rolloff`, and it is the energy percentile this record already
+  rejects: it under-reads a 16 kHz limit as 15.2–15.4 kHz, and adding a dominant 100 Hz tone moves it to
+  12.5–13.4 kHz while the extent does not change at all. It tracks spectral **balance**, not **extent**.
+  FFmpeg stays a producer of fixtures no macOS encoder can make, never a source of a fact.
 - **The most useful reading is the one hardest to defend.** A 96 kHz file limited near 22 kHz is
   precisely what a user wants explained, and precisely what this must not explain yet.
+- **An impulse alone in digital silence reads as broadband**, because eligibility removes the windows
+  carrying no energy and so raises the share of the few that remain: a click occupying four of four
+  eligible windows is present all the time. Measured, a programme must occupy about a quarter of a file
+  before an isolated impulse stops setting the answer. Inside any real programme the impulse control
+  passes, and §2's argument is unaffected — but the degenerate case is a property of the method, pinned
+  by a test rather than left to be discovered.
 
 ### Neutral
 - No port changes, no export version change, no new dependency, and no second read.
