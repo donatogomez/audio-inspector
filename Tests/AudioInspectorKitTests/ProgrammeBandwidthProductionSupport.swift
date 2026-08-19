@@ -78,6 +78,21 @@ func productionReading(
     }
 }
 
+/// The whole model a production outcome carries, for the suites that assert on the method identity or
+/// on the per-channel readings rather than only on `overall`.
+func productionModel(
+    _ outcome: SignificantBandwidthOutcome, _ comment: Comment,
+    sourceLocation: SourceLocation = #_sourceLocation
+) throws -> SignificantBandwidth {
+    guard case let .available(model) = outcome else {
+        Issue.record("\(comment): expected a measurement, got \(outcome)", sourceLocation: sourceLocation)
+        throw ProductionMeasurementMissing()
+    }
+    return model
+}
+
+struct ProductionMeasurementMissing: Error {}
+
 /// A production reading must sit at or above a known edge, and within the leakage reach of it.
 func expectProductionEdge(
     _ outcome: SignificantBandwidthOutcome, at edge: Double,
