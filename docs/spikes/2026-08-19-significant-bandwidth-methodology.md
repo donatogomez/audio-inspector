@@ -1055,6 +1055,111 @@ peak level**, quantised into fixed dB buckets, are `bins × buckets` counters re
 the budget is applied at the end by summing the buckets at or above `filePeak − 60 dB`. That is a group 3
 design note, recorded here because group 2 is where the constraint became visible.
 
+## 13e. Group 3 — the two questions that had to be answered before the accumulator had a shape
+
+### 13e.1 Bounded memory (task 3.3), decided by arithmetic
+
+The budget compares each window against the **file's** spectral peak, which is not known until the last
+chunk. So eligibility cannot be decided as the analysis goes, and something has to be carried. What?
+
+| alternative | 1 min | 10 min | 1 h | 3 h | exact? |
+| --- | --- | --- | --- | --- | --- |
+| D · retain PCM (192 kHz stereo) | 88 MB | 879 MB | 5.3 GB | 15.8 GB | yes |
+| retain full spectra | 88 MB | 879 MB | 5.3 GB | 15.8 GB | yes |
+| G · one bit per bin per window + peak (192 kHz) | 2.8 MB | 27.7 MB | 166 MB | **499 MB** | yes |
+| **F · counters stratified by window peak (192 kHz, 0.25 dB)** | **3.8 MB** | **3.8 MB** | **3.8 MB** | **3.8 MB** | to one stratum |
+
+G is exact and was seriously considered — the rule says not to trade methodological exactness for O(1)
+when a compact O(duration) form costs a few MB. It does not: 499 MB for three hours at 192 kHz, and task
+3.3 forbids retaining a spectrogram at *any* resolution, which one bit per bin still is.
+
+F is **constant in duration**. Measured in Release, stereo: 1.78 MB at 44.1 kHz, 1.89 at 48, 3.78 at 96,
+**7.57 MB at 192 kHz**, for a file of any length — against 879 MB of PCM for ten minutes of the same
+192 kHz stereo. The state is 0.86 % of one ten-minute file's samples, and does not grow.
+
+### 13e.2 The stratum quantum (phase 4), and the direction it must round
+
+An exact *and* bounded structure does not exist here, and the reason is short: the eligibility boundary
+is `filePeak − 60 dB`, `filePeak` is arbitrary relative to any fixed grid, so the boundary always falls
+*inside* a stratum whose members straddle it and whose exact peaks are gone. The choice is which way to
+resolve that stratum, and it was made by measurement rather than by taste:
+
+| quantum | strata | 48 kHz | 192 kHz |
+| --- | --- | --- | --- |
+| 1.00 dB | 61 | 0.24 MB | 0.95 MB |
+| 0.50 dB | 121 | 0.47 MB | 1.89 MB |
+| **0.25 dB** | **242** | **0.94 MB** | **3.77 MB** |
+| 0.10 dB | 601 | 2.35 MB | 9.39 MB |
+
+**Resolving the stratum exclusively is wrong, and a fixture caught it.** A passage sitting at exactly
+−60.0 dB read **16 102 Hz** where the exact rule reads 20 016 Hz: a window *on* the budget is eligible,
+and dropping its stratum drops it. Resolving inclusively matches the exact rule at the boundary, and
+errs by admitting content up to one stratum *below* the budget — which is the harmless direction, since
+the budget exists to exclude noise floors far below the programme.
+
+So the declared tolerance is: **60 dB, resolved to whole 0.25 dB strata, admitting at most 0.25 dB
+below it.** Both sides are pinned by `SignificantBandwidthBudgetBoundaryTests` at −59.5, −60.0, −60.5,
+−61 and −65 dB.
+
+**The budget turns out to be enforced twice.** The ring holds 60.5 dB of strata and drops anything
+below, so a window under the budget is never even stored — measured: removing the threshold check at
+`finish()` alone changes nothing, and only enlarging the ring to 200 dB *as well* makes the equivalence
+tests fail. Redundancy by construction, recorded because it makes one negative control read as a pass.
+
+### 13e.3 Channels (task 3.4), decided by a fixture that cannot be argued with
+
+**Measured per channel; `overall` is the highest of those readings.**
+
+The fixture that settles it is `oppositePolarity`: identical content with the sign flipped on odd
+channels. Any downmix that sums the channels cancels it to a flat line, and a measurement whose subject
+is *where energy stops* would then report an absence for a file that is plainly not silent. Measured, the
+per-channel design reads 15 023 Hz on both channels and 15 023 Hz overall.
+
+The rest of the matrix: mono; identical stereo; left to 16 kHz and right to 20 kHz (16 102 / 20 016,
+overall 20 016); a weak band in one channel only (kept in that channel and in overall); four channels
+with four extents, reported by **index with no layout named**, because the pipeline reads channel counts
+and never labels.
+
+Precedent, chosen semantically rather than for symmetry: `SignalLevelMetrics` and `TruePeakMeasurement`
+are per channel plus an overall; `LoudnessAccumulator` combines **only** because BS.1770 defines
+programme loudness that way, and there is no such definition here. So `overall` is a **summary of the
+per-channel facts**, never a claim about "the programme".
+
+**One thing is deliberately global: the budget.** The programme is the file, so a channel sitting 70 dB
+under the rest is below the programme rather than a programme of its own — measured, it reports `nil`,
+which is a fact about the file's dynamics. Measuring each channel against its own peak instead would
+make a channel of pure dither report its own noise floor's bandwidth.
+
+### 13e.4 What the accumulator cost
+
+Release, accumulator alone, ten minutes of stereo fed as chunks:
+
+| rate | window | bins | state | accumulate | finish | per audio-minute |
+| --- | --- | --- | --- | --- | --- | --- |
+| 44.1 kHz | 1920 | 961 | 1.78 MB | 0.66 s | 0.002 s | 0.07 s |
+| 48 kHz | 2048 | 1025 | 1.89 MB | 0.70 s | 0.001 s | 0.07 s |
+| 96 kHz | 4096 | 2049 | 3.78 MB | 1.36 s | 0.002 s | 0.14 s |
+| 192 kHz | 8192 | 4097 | 7.57 MB | 2.81 s | 0.010 s | 0.28 s |
+
+`finish()` is milliseconds because the sweep is over strata and bins, not over the file.
+
+### 13e.5 Negative controls
+
+Nine, each breaking exactly one thing, applied and reverted one at a time. **All nine break a test**, two
+of them by trapping rather than by an assertion — which is the correct failure for a bounds violation:
+
+| control | how it fails |
+| --- | --- |
+| a magnitude clamp at 1e-12 | silence stops being an absence |
+| the budget's threshold removed | traps; and with the ring enlarged too, the equivalence tests fail |
+| threshold −50 → −30 dB | a real band 40 dB down disappears |
+| persistence 10 % → 1 % | a band present a twentieth of the time is admitted |
+| a sample-locked 2048 window at every rate | the rate matrix diverges |
+| overlap state reset on every chunk | chunk independence fails |
+| the partial final window accepted | **traps** on an out-of-bounds window |
+| the boundary stratum resolved exclusively | the −60.0 dB fixture is lost |
+| every channel measured from channel 0 | the per-channel matrix fails |
+
 ## 14. Stopping rule — **GO for the accumulator**
 
 Nine conditions were set for authorising group 2. Seven are met:
