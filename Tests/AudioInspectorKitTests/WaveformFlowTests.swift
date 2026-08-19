@@ -92,7 +92,7 @@ private final class SuspendedAction {
         cancellationContinuation?.resume()
         cancellationContinuation = nil
         if finishesOnCancellation {
-            finish(.inspected(report, analyses: InspectionAnalyses(waveform: .cancelled, spectrogram: .unavailable, signalLevelMetrics: .unavailable, truePeak: .unavailable, loudness: .unavailable)))
+            finish(.inspected(report, analyses: InspectionAnalyses(waveform: .cancelled, spectrogram: .unavailable, signalLevelMetrics: .unavailable, truePeak: .unavailable, loudness: .unavailable, significantBandwidth: .unavailable)))
         }
     }
 
@@ -351,13 +351,13 @@ struct WaveformFlowStateTests {
 
         #expect(model.state == .report(InspectionPresentation(report: action.report, waveform: .loading)))
 
-        action.finish(.inspected(action.report, analyses: InspectionAnalyses(waveform: .available(envelope()), spectrogram: .unavailable, signalLevelMetrics: .unavailable, truePeak: .unavailable, loudness: .unavailable)))
+        action.finish(.inspected(action.report, analyses: InspectionAnalyses(waveform: .available(envelope()), spectrogram: .unavailable, signalLevelMetrics: .unavailable, truePeak: .unavailable, loudness: .unavailable, significantBandwidth: .unavailable)))
         await running.value
 
         #expect(model.state == .report(InspectionPresentation(
             report: action.report, waveform: .available(envelope()), spectrogram: .unavailable,
             signalLevelMetrics: .unavailable, truePeak: .unavailable, loudness: .unavailable
-        )))
+        , significantBandwidth: .unavailable)))
     }
 
     @Test("an unavailable waveform replaces loading without touching the report")
@@ -368,13 +368,13 @@ struct WaveformFlowStateTests {
         let running = Task { await model.selectAndInspect() }
         await action.waitUntilStarted()
         await action.deliverReport()
-        action.finish(.inspected(action.report, analyses: InspectionAnalyses(waveform: .unavailable, spectrogram: .unavailable, signalLevelMetrics: .unavailable, truePeak: .unavailable, loudness: .unavailable)))
+        action.finish(.inspected(action.report, analyses: InspectionAnalyses(waveform: .unavailable, spectrogram: .unavailable, signalLevelMetrics: .unavailable, truePeak: .unavailable, loudness: .unavailable, significantBandwidth: .unavailable)))
         await running.value
 
         #expect(model.state == .report(InspectionPresentation(
             report: action.report, waveform: .unavailable, spectrogram: .unavailable,
             signalLevelMetrics: .unavailable, truePeak: .unavailable, loudness: .unavailable
-        )))
+        , significantBandwidth: .unavailable)))
     }
 
     @Test("a failed waveform never becomes a failed flow")
@@ -385,7 +385,7 @@ struct WaveformFlowStateTests {
         let running = Task { await model.selectAndInspect() }
         await action.waitUntilStarted()
         await action.deliverReport()
-        action.finish(.inspected(action.report, analyses: InspectionAnalyses(waveform: .failed(message: "The waveform could not be produced."), spectrogram: .unavailable, signalLevelMetrics: .unavailable, truePeak: .unavailable, loudness: .unavailable)))
+        action.finish(.inspected(action.report, analyses: InspectionAnalyses(waveform: .failed(message: "The waveform could not be produced."), spectrogram: .unavailable, signalLevelMetrics: .unavailable, truePeak: .unavailable, loudness: .unavailable, significantBandwidth: .unavailable)))
         await running.value
 
         guard case let .report(presentation) = model.state else {
@@ -414,7 +414,7 @@ struct WaveformFlowStateTests {
 
         // Let the first one complete so the test can end; the assertions above already hold.
         await first.deliverReport()
-        first.finish(.inspected(first.report, analyses: InspectionAnalyses(waveform: .unavailable, spectrogram: .unavailable, signalLevelMetrics: .unavailable, truePeak: .unavailable, loudness: .unavailable)))
+        first.finish(.inspected(first.report, analyses: InspectionAnalyses(waveform: .unavailable, spectrogram: .unavailable, signalLevelMetrics: .unavailable, truePeak: .unavailable, loudness: .unavailable, significantBandwidth: .unavailable)))
         await running.value
         #expect(first.callCount == 1)
     }
@@ -440,7 +440,7 @@ struct WaveformFlowStateTests {
         #expect(first.cancellationsObserved == 1, "the pending generation was cancelled")
 
         await second.deliverReport()
-        second.finish(.inspected(second.report, analyses: InspectionAnalyses(waveform: .available(envelope()), spectrogram: .unavailable, signalLevelMetrics: .unavailable, truePeak: .unavailable, loudness: .unavailable)))
+        second.finish(.inspected(second.report, analyses: InspectionAnalyses(waveform: .available(envelope()), spectrogram: .unavailable, signalLevelMetrics: .unavailable, truePeak: .unavailable, loudness: .unavailable, significantBandwidth: .unavailable)))
         await secondRun.value
         _ = await firstRun.value
 
@@ -464,11 +464,11 @@ struct WaveformFlowStateTests {
         let secondRun = Task { await model.inspectDroppedSource(using: second.run) }
         await second.waitUntilStarted()
         await second.deliverReport()
-        second.finish(.inspected(second.report, analyses: InspectionAnalyses(waveform: .unavailable, spectrogram: .unavailable, signalLevelMetrics: .unavailable, truePeak: .unavailable, loudness: .unavailable)))
+        second.finish(.inspected(second.report, analyses: InspectionAnalyses(waveform: .unavailable, spectrogram: .unavailable, signalLevelMetrics: .unavailable, truePeak: .unavailable, loudness: .unavailable, significantBandwidth: .unavailable)))
         await secondRun.value
 
         // The superseded operation now tries to report a completely different result. It must not land.
-        first.finish(.inspected(first.report, analyses: InspectionAnalyses(waveform: .available(envelope()), spectrogram: .unavailable, signalLevelMetrics: .unavailable, truePeak: .unavailable, loudness: .unavailable)))
+        first.finish(.inspected(first.report, analyses: InspectionAnalyses(waveform: .available(envelope()), spectrogram: .unavailable, signalLevelMetrics: .unavailable, truePeak: .unavailable, loudness: .unavailable, significantBandwidth: .unavailable)))
         _ = await firstRun.value
 
         guard case let .report(presentation) = model.state else {
@@ -486,7 +486,7 @@ struct WaveformFlowStateTests {
         let firstRun = Task { await model.selectAndInspect() }
         await first.waitUntilStarted()
         await first.deliverReport()
-        first.finish(.inspected(first.report, analyses: InspectionAnalyses(waveform: .unavailable, spectrogram: .unavailable, signalLevelMetrics: .unavailable, truePeak: .unavailable, loudness: .unavailable)))
+        first.finish(.inspected(first.report, analyses: InspectionAnalyses(waveform: .unavailable, spectrogram: .unavailable, signalLevelMetrics: .unavailable, truePeak: .unavailable, loudness: .unavailable, significantBandwidth: .unavailable)))
         await firstRun.value
 
         let settled = model.state

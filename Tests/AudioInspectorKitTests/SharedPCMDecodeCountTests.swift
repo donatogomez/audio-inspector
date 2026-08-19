@@ -116,6 +116,15 @@ struct SharedPCMDecodeCountTests {
             guard case .available = analyses.loudness else {
                 Issue.record("analyses.loudness produced nothing from the shared read: \(analyses.loudness)"); return
             }
+            // **`.available`, not merely "not failed".** A sixth consumer that never received a chunk
+            // would report `.unavailable`, and a test that accepted that would pass while proving
+            // nothing about the one read it exists to protect.
+            guard case let .available(bandwidth) = analyses.significantBandwidth else {
+                Issue.record("programme bandwidth produced nothing from the shared read: \(analyses.significantBandwidth)")
+                return
+            }
+            #expect(bandwidth.overall != nil, "the fixture is long enough to produce a reading")
+            #expect(bandwidth.method.sampleRate == 44_100)
         }
     }
 
@@ -139,13 +148,16 @@ struct SharedPCMDecodeCountTests {
                 case .signalLevelMetrics: order.record("signalLevelMetrics")
                 case .truePeak: order.record("truePeak")
                 case .loudness: order.record("loudness")
+                case .significantBandwidth: order.record("significantBandwidth")
                 }
             }
 
             #expect(order.entries.first == "report", "the report no longer arrives first: \(order.entries)")
+            // The five that were here keep the order they always had; the sixth arrives last.
             #expect(
                 order.entries
-                    == ["report", "waveform", "spectrogram", "signalLevelMetrics", "truePeak", "loudness"]
+                    == ["report", "waveform", "spectrogram", "signalLevelMetrics", "truePeak",
+                        "loudness", "significantBandwidth"]
             )
         }
     }
