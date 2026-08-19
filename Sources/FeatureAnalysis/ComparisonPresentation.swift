@@ -103,11 +103,23 @@ enum ComparisonFormatter {
             outcome(comparison.codec),
             outcome(comparison.declaredBitrate),
             outcome(comparison.estimatedBitrate),
+            outcome(comparison.averageFileBitrate),
         ]
 
-        guard first.count >= outcomes.count, second.count >= outcomes.count else { return [] }
+        // **Exactly equal, never "at least".** This guard used to read `>=`, paired with a `prefix` that
+        // trimmed the displays to fit — so when `TechnicalProperties` gained a ninth property and this
+        // list did not, the extra row was silently dropped and every test still passed. An unequal count
+        // is now a visible, empty table rather than a quiet omission, and
+        // `ComparisonPropertyCoverageTests` asserts the row names against the report's own so a reorder
+        // fails by name rather than by count.
+        //
+        // Pairing by name instead of by position was considered and rejected: the names would have to be
+        // written down a second time here, trading one drift for another, and the coupling this file
+        // actually needs — that the two lists describe the same properties in the same order — is what
+        // the coverage suite already pins.
+        guard first.count == outcomes.count, second.count == outcomes.count else { return [] }
 
-        return zip(zip(first.prefix(outcomes.count), second.prefix(outcomes.count)), outcomes).map { sides, outcome in
+        return zip(zip(first, second), outcomes).map { sides, outcome in
             ComparisonRowDisplay(
                 name: sides.0.name,
                 first: sides.0,
