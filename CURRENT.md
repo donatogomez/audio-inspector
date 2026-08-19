@@ -16,37 +16,46 @@
 >   session protocol in `CLAUDE.md`).
 
 ---
-**No loudness thread is open.** `add-loudness-measurement` is merged, archived, and its capability is
-canonical. Two older threads remain, neither touched by it.
+**Open thread: `add-significant-bandwidth-measurement`, group 1.** Methodology only — there is no
+production code for this change and none is wanted yet.
 
-Integrated loudness (LUFS-I) shipped end to end and closed the chain it set out to close: **the
-normative documents → the DSP → the multi-rate weighting → the one shared PCM read → the report surface
-→ the JSON contract → automated and manual validation.** ADR-0022 is `Accepted`, and
-`openspec/specs/audio-loudness-measurement` now carries three requirements and twelve scenarios,
-promoted from the change's own delta without touching any other capability.
+Group 1 asked whether a threshold plus a persistence fraction can define "significant bandwidth". The
+measured answer is **no, not on their own**, and that is the useful result of the session rather than a
+setback. Threshold and persistence are settled (−50 dB relative to the loudest bin in the same analysis
+window; presence in ≥ 10 % of eligible windows), but no relative reference at any setting can report
+*absence* for digital silence — on silence the signal and the reference sit on the same numerical floor.
+Two small rules complete it and both were measured rather than assumed: a gain-invariant window-
+eligibility gate, and an absolute silence floor that is deliberately **not** gain-invariant because it
+detects the absence of audio rather than measuring anything.
 
-What the product measures is one quantity, and the record is precise about how far that claim goes: the
-48 kHz coefficients are BS.1770-5's own, every other supported rate runs a derivation **this project**
-performed and names as such on the wire, and no conformance, certification or platform target is
-asserted anywhere. FFmpeg was, and remains, a corroborating oracle rather than a source of authority.
+The intent behind the constants matters more than the constants. **The threshold is a sensitivity, not a
+discriminator** — a weak real band and a low noise floor at the same relative level are indistinguishable,
+so choosing −50 dB is choosing how deep to look, not choosing what is real. Two consequences are recorded
+in the ADR rather than tuned away: a bass-dominated file under-reports, and a gentle roll-off reports the
+top of the band rather than the filter's knee. This is emphatically **not** a filter-knee detector, and
+the record says so before any surface can imply otherwise.
 
-**Real debt that outlived the change**, none of it a thread:
+**Next step: task 1.5**, the resolution claim. The empirical half is done — the reported edge sits ≈ 4
+bins above a known cut-off, one-sided upward, at four different bin widths — but the decision it feeds
+(bin centre, bin edge, or range) needs the analytic Hann main-lobe figure beside the measurement, not
+instead of it. 1.6 closes with it.
 
-- **The export chain takes a third positional optional.** Its own note called that the moment to
-  introduce a container; doing it inside a feature change would have hidden a refactor. It belongs to
-  whoever adds the fourth measurement, and `SourceInspectionOutcome`'s fifth payload carries the sibling
-  version of the same debt.
-- **`ReportJSONDTO.swift` is 415 lines against SwiftLint's 400.** SwiftLint is not one of the four gates,
-  and the alternatives were splitting the wire DTOs or cutting documentation.
-- **The absolute gate is not observable from outside `LoudnessAccumulator`.** Deliberate: the domain
-  value was not widened to expose a DSP intermediate. The evidence lives one layer down.
-- **`ImportFlowComparisonTests` has one `Task.yield()`** never audited in depth; no failure has ever been
-  attributed to it.
+**The open question that outgrew group 1**: the persistence fraction is defined on *windows*, so it is
+not portable across window lengths — the same signal reads 16 043 Hz at FFT 4096 and 24 000 Hz at FFT
+8192. `fftSize` and `hop` are therefore part of the method identity, design.md's choice of 2048 points is
+reopened, and whether the window should be fixed in **time** rather than in samples belongs to group 3
+before an accumulator is written.
 
-**Open threads** (see `openspec list` for their real counts, not restated here):
-`add-static-spectrogram-visualization` — manual validation battery deferred by product decision;
-`add-two-file-technical-comparison` — one accessibility criterion open, blocked on a known VoiceOver
-traversal gap shared with ADR-0015.
+Everything measured so far is synthetic and in memory. Nothing has touched a real file, a container, a
+codec, or the production decode path. ADR-0023 stays `Proposed`: two of its three promotion conditions —
+an impulse control passing against production code, and human validation of the surface — are untouched.
+
+**Older threads, neither advanced here**: `add-static-spectrogram-visualization` (manual validation
+battery deferred by product decision); `add-two-file-technical-comparison` (one accessibility criterion
+open, blocked on the VoiceOver traversal gap shared with ADR-0015). The loudness debt recorded in the
+previous snapshot is unchanged and still not a thread: the export chain's third positional optional,
+`ReportJSONDTO.swift` at 415 lines against SwiftLint's 400, the absolute gate not being observable from
+outside `LoudnessAccumulator`, and the unaudited `Task.yield()` in `ImportFlowComparisonTests`.
 
 ---
-_Last touched: 2026-08-18. Overwrite freely; empty is fine._
+_Last touched: 2026-08-19. Overwrite freely; empty is fine._
