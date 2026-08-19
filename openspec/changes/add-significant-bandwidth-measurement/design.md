@@ -64,7 +64,7 @@ not this document's expectation of it.
   spectral peak (gain-invariant, and inert except on near-silent windows) and an absolute silence floor
   at −120 dBFS are both required.
 
-**Also settled, by the continuation of group 1:**
+**Settled by the continuation of group 1:**
 
 - **The resolution claim (§5).** Derived, not observed: the Hann skirt reaches `d(T) = (1/(π·10^(T/20)))^(1/3)`
   bins, 4.72 at −50 dB. The contract is **bin centre plus resolution**; an interval contract was derived
@@ -75,19 +75,22 @@ not this document's expectation of it.
 
 **Still open, and one of them blocking:**
 
-- **The window-eligibility rule (task 1.7) — blocking, after two attempts.** A −60 dB gate erases a real
-  quiet passage 70 dB below the file's peak. Removing the gate entirely is numerically exact and gets
-  seven of eight collector files right — including a continuously-playing analog transfer, and including
-  a *band-limited* noise floor, which is the case this feature exists for — but lets a *broadband* floor
-  alone in more than 10 % of a file set the answer at any level, down to 200 dB below the programme.
-  Neither spectral flatness (0.564 for both tape hiss and musical "air") nor a persistence curve
-  separates them, because a window holding only a floor is indistinguishable from inside itself from one
-  holding only quiet music. What is left is a **declaration** — how far below a file's programme this
-  product claims to be looking — which must travel with the number. The metric's **name** is blocked on
-  the same decision.
-- **Absence is settled and needs no level.** `FFT(zeros)` is identically zero, so "the window carries
-  energy" is decidable with no epsilon, and the reading is unchanged from 0 to −240 dBFS with no floor at
-  all. A constant signal is DC and legitimately reads 0 Hz, which task 4.4 must handle.
+- **The window-eligibility rule (task 1.7) — decided.** A level gate presented as a discovery was
+  rejected: its two failure tables are exact mirror images. No gate at all is numerically exact and right
+  on seven of eight collector files, but lets a *broadband* floor alone in more than 10 % of a file set
+  the answer at any level. Neither spectral flatness (0.564 for both tape hiss and musical "air") nor a
+  persistence curve separates them. So the rule is **declared**: a window contributes if it carries
+  energy *and* sits within **60 dB** of the file's loudest spectral moment. The cost is stated rather
+  than discovered — content more than 60 dB down is not measured, and a floor further down does not count
+  as content — and the metric is named **programme bandwidth, within 60 dB of programme peak** so that
+  the budget travels with the figure.
+- **Absence needs no rule.** A window of zeros transforms to magnitude exactly zero, so it is ineligible
+  on its own; the −120 dBFS floor and the file-level energy test that briefly replaced it were both
+  artefacts of a magnitude clamp. **The transform must not clamp its magnitudes.** A constant signal is
+  DC and legitimately reads 0 Hz, which task 4.4 must handle.
+
+**Still open:**
+
 - **Nothing was measured on real music**, on any codec, or through the production decode path. All of
   group 1's material is synthetic and in memory.
 
