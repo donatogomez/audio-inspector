@@ -16,50 +16,47 @@
 >   session protocol in `CLAUDE.md`).
 
 ---
-**Open thread: `add-significant-bandwidth-measurement`.** Groups 1-5 are complete. The DSP is built and
-it is **wired**: programme bandwidth is the sixth consumer of the one shared PCM read. Nothing is
-visible yet — no UI, no export, no comparison, no findings — and that is deliberate.
+**Open thread: `add-significant-bandwidth-measurement`.** Groups 1-6 are complete. The DSP is built, it
+is **wired** as the sixth consumer of the one shared PCM read, and it is now **validated against
+production** — a written file, the real decoder, the shared pass, and the outcome the composition
+publishes. Still nothing visible: no UI, no export, no comparison, no findings.
 
-**The accumulator reproduces group 2's targets exactly**, with no expected value changed and no
-tolerance widened, and its shape was decided by arithmetic rather than taste: counters stratified by
-each window's own peak, constant in duration at 7.57 MB for stereo at 192 kHz, because the budget
-compares against a file peak that is unknown until the last chunk. Channels are measured apart, because
-a downmix that sums can cancel opposite-polarity content and a measurement of where energy stops must
-not be able to lose energy the file carries.
+**The core is unchanged and was not touched by this validation.** Counters stratified by each window's
+own peak, constant in duration; channels measured apart because a summing downmix can cancel
+opposite-polarity content; the budget global because the programme is the file. Group 6 found nothing
+that contradicted the methodology, which is the outcome that makes the measurement worth trusting.
 
-**The container came before the sixth payload, not after it.** `InspectionAnalyses` groups only what an
-inspection derives from the samples; the report stays outside because it exists before the first chunk.
-The compiler now carries what a test would otherwise have had to: the new field has no default, and the
-six outcome types are all distinct, so a forgotten field and a swapped pair are both compile errors.
+**The impulse control is satisfied, and the interesting part is what it is not.** An isolated
+full-scale click inside a programme leaves the published reading identical — equality, not a tolerance
+— and the turnover is pinned on both sides at eight impulses, where four-windows-each would predict
+seven; the extra one is the Hann taper. What is *not* true, and what task 6.2 wrongly predicted, is that
+a file of silence plus one click reads like silence. It reads broadband, because eligibility discards
+silent windows and the click is then the whole programme. That was already measured and already
+declared in ADR-0023; the task text was corrected rather than the method.
 
-**The evidence group 5 needed is the evidence it has.** One read — one decoder, one decode call, one
-sample read, with programme bandwidth `.available` rather than merely present. Isolation in both
-directions, failure and cancellation without partial answers, shared equal to direct at four rates,
-chunk independence through the composition. The bundle is atomic: a superseded operation's analyses are
-dropped as a unit, asserted with six distinguishable values per operation rather than inferred from
-fields that stayed `.loading`.
+**Everything else came through the same real path**: four edges at five rates within the leakage the
+window explains and never below the edge; the method identity per rate, which is what makes the
+time-locked window testable; persistence, budget and prominence with both sides on real files;
+undefined cases as absences and never a substituted Nyquist; every lossless container identical; a lossy
+band limit surviving a rewrap identically, with no codec named. Nine negative controls, eight biting,
+the ninth a documented redundancy — the budget is enforced twice, so removing its final check alone
+changes nothing.
 
-**Three things were believed and turned out to be wrong, and correcting them is most of what group 5
-actually cost.** The numeric-extreme suite did not pin its own fix, because a quiet sine collapses
-before the arithmetic it was meant to protect — only the linear DC and Nyquist bins carry a denormal
-that far. What had been treated as one overflow is two, with two different protections. And the absence
-that tasks predicted from a declining initialiser does not exist: no valid stream is ever declined, so
-that is a property to state, not a branch to test.
+**One limitation is recorded rather than papered over.** The denormal amplitudes the underflow
+arithmetic needs do not survive the write-and-decode round trip, evidenced by the zero peak the same
+shared read reports. That evidence stays at PCM level. The overflow extreme does come through a real
+file and answers finitely.
 
-**Cost and memory are measured, not assumed**: the sixth consumer costs what it costs alone, and adds no
-overhead beyond itself; its footprint is 2.4 MB at 48 kHz and 8.7 MB at 192 kHz and does not grow with
-duration. The numbers and the method are in ADR-0023 and in the change's 5.4.
-
-**Next step: group 6, correctness against the fixtures.** It owns the property this whole design exists
-for — the impulse control against **production** code, so a file silent but for one click reports no
-wider a band than silence does. That is also the first of ADR-0023's two outstanding promotion
-conditions; the second is human validation of a surface that does not exist yet, which group 7 builds.
-ADR-0023 stays `Proposed`.
+**Next step: group 7, the presentation** — one row stating what was measured and at what resolution, no
+verdict, no comparison against the declared sample rate, absence in the existing not-computable
+phrasing, and the structural half of accessibility. That surface is also what the **last** outstanding
+promotion condition needs: ADR-0023 now records two of three met, with manual surface validation
+pending and no surface yet to validate. Group 8's export follows it.
 
 **Older threads, neither advanced here**: `add-static-spectrogram-visualization` (manual validation
 battery deferred by product decision); `add-two-file-technical-comparison` (one accessibility criterion
-open, blocked on the VoiceOver traversal gap shared with ADR-0015). The loudness debt recorded seven
+open, blocked on the VoiceOver traversal gap shared with ADR-0015). The loudness debt recorded eight
 snapshots ago is unchanged and still not a thread.
 
 ---
-_Last touched: 2026-08-19. Overwrite freely; empty is fine._
+_Last touched: 2026-08-20. Overwrite freely; empty is fine._
