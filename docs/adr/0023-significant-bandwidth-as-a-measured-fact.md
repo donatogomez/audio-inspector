@@ -75,9 +75,27 @@ spike measured whether that works. It does not, and the measurements decided thi
      replaces it will still be a budget, and the record must state it as one rather than leave it
      implicit.
 
+   The gateless alternative — *every window carrying energy participates, and nothing else is a rule* —
+   was then tested on its own terms. It is numerically exact: `FFT(zeros)` is identically zero, so
+   "carries energy" needs no epsilon, and the reading is unchanged from 0 to −240 dBFS with no floor at
+   all. It reads seven of eight collector files correctly, including an analog transfer that plays
+   continuously, and including a **band-limited** noise floor, which is the case the feature exists for.
+   It fails on one: a **broadband** noise floor alone in more than 10 % of a file sets the answer **at
+   any level, down to 200 dB below the programme**, because a window containing only a floor is its own
+   reference.
+
+   Spectral flatness cannot rescue it — a tape hiss and a cymbal measured 0.564 flatness each, to three
+   decimals, at the same per-bin level — and neither can reading the measurement at several persistence
+   levels. A window that contains only a noise floor is indistinguishable *from inside itself* from one
+   that contains only quiet music; the difference exists solely in comparison with the rest of the file,
+   and every such comparison is a dynamic-range budget.
+
    This is why the accumulator is not authorised yet: the unresolved rule decides *which windows are
    looked at*, and sits upstream of the threshold and the persistence criterion, both of which survived
-   direct attempts to refute them. Gain invariance was measured to hold
+   direct attempts to refute them. What remains is **not a measurement but a declaration** — how far
+   below a file's programme this product claims to still be looking — and it must travel with the
+   number rather than hide inside it. Until it is declared, the name is unsafe too: "significant"
+   cannot describe a figure a −200 dBFS floor can set. Gain invariance was measured to hold
    over an 80 dB range above that floor.
 
 6. **This is not a filter-knee detector, and the record says so before a surface can imply it.** On a
@@ -159,6 +177,12 @@ spike measured whether that works. It does not, and the measurements decided thi
   discards real content that the method still measures correctly, and none is needed.
 - **A window fixed in samples.** Rejected on measurement: it makes the persistence criterion
   rate-dependent, classifying identical temporal evidence differently at 44.1 and 192 kHz.
+- **Spectral flatness as a way to tell a noise floor from content.** Rejected on measurement: broadband
+  hiss and band-limited "air" at the same per-bin level both measure 0.564. It separates *tonal*
+  artefacts from noise, which is a different question, possibly worth its own indicator later.
+- **A dynamic-range budget derived from the file itself** (its own dynamic range, or its loudness
+  range). Rejected on principle: identical content in two files would be measured against two different
+  budgets, breaking the rule that one method identity implies one number (§4.2 of the change's tasks).
 - **Shipping an upsampling indicator with it.** Rejected: one indicator is not an evidence engine, and
   the methodology requires several independent ones with alternative explanations.
 
