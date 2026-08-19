@@ -20,8 +20,11 @@ Nine things this is *not*, each rejected for its own reason:
 
 **Chosen definition.** The highest frequency at which the signal carries energy **above a stated
 threshold, relative to the file's own spectrum, in at least a stated fraction of analysis windows**.
-Three parameters, all of which travel with the result: threshold, persistence fraction, and the
-resolution the answer is quantised to.
+
+Group 1 measured how many parameters that actually takes, and it is more than three (§3): threshold,
+persistence fraction, a **window-eligibility gate**, an **absolute silence floor**, and the analysis
+window itself — the persistence fraction is not portable across window lengths. All of them travel with
+the result, because the same identifier must imply the same number.
 
 ## 2. Why persistence is not optional
 
@@ -37,20 +40,40 @@ Measured, on 5 s stereo at 48 kHz, threshold −60 dB relative to each window's 
 A maximum over time answers *23 977 Hz* for a file containing one click. A percentile answers *0*. The
 persistence criterion is the whole difference between a measurement and an artefact detector.
 
-## 3. What the spike did **not** settle
+## 3. What group 1 settled, and what it did not
 
-Honesty about the gap, because it determines the first task group:
+The motivating spike settled nothing beyond "the threshold must be relative". Group 1's measurement
+campaign is `docs/spikes/2026-08-19-significant-bandwidth-methodology.md`; what follows is its result,
+not this document's expectation of it.
 
-- **The threshold is undetermined.** Sweeping −20 → −100 dB moved the answer only 328 Hz, but the
-  fixture has an *infinitely sharp* edge — no content above 20 kHz at all — so it cannot discriminate
-  between thresholds. **Graded fixtures** (a roll-off, not a cliff) are required before any value is
-  fixed.
-- **The persistence fraction is undetermined.** p50 and p95 agreed on every fixture tried, because each
-  was stationary. Non-stationary programme material is needed to separate them.
-- **Nothing was measured on real music**, only on synthetic signals.
+**Settled by measurement, on graded fixtures:**
 
-None of these may be chosen by intuition. Group 1 settles them by measurement, before an accumulator
-exists — the order `add-loudness-measurement` used, and the reason its constants survived review.
+- **Threshold: −50 dB relative to the loudest bin in the same analysis window.** The admissible region
+  is [−65, −45], bracketed by fixtures; −50 is its midpoint. The rejected references were measured, not
+  argued — the file's overall peak loses a real band to a 2 % transient; global RMS and a robust p95 are
+  bin-population statistics that drift 6.0 dB and 41.8 dB across FFT sizes; gated loudness is not
+  commensurable with a per-bin magnitude, its offset spreading 32.6 dB across fixtures.
+- **Persistence: presence in ≥ 10 % of eligible windows**, restated exactly as the k-th largest of the
+  bin's per-window levels with `k = ceil(0.10 · N)` — a nearest-rank-from-the-top p90, not an
+  interpolated p90 and not p95.
+- **The threshold is a sensitivity, not a discriminator.** A weak band and a low noise floor at the same
+  relative level are the same thing spectrally. A persistent band is reported in full at −45 dB, at the
+  transition at −50 dB, and not at all at −55 dB.
+- **Those two parameters are not sufficient.** No relative reference at any threshold and any persistence
+  reports absence for digital silence. A window-eligibility gate at −60 dB below the file's global
+  spectral peak (gain-invariant, and inert except on near-silent windows) and an absolute silence floor
+  at −120 dBFS are both required.
+
+**Still open, and now better characterised:**
+
+- **The resolution claim (§5).** The overshoot above a known hard cut-off measures ≈ 4 bins, one-sided
+  upward. Bin centre / edge / range is undecided.
+- **The analysis window is a parameter, not an implementation detail.** The same signal reads 16 043 Hz
+  at FFT 4096 and 24 000 Hz at FFT 8192, because a longer window smears a burst over a larger fraction of
+  fewer windows. §5's choice of 2048 points is therefore reopened, and whether the window should be fixed
+  in *time* rather than in samples is a group 3 question.
+- **Nothing was measured on real music**, on any codec, or through the production decode path. All of
+  group 1's material is synthetic and in memory.
 
 ## 4. Architecture
 
@@ -67,9 +90,16 @@ The dependency rule is unaffected: the accumulator lives in `AudioInspectorAnaly
 
 ## 5. Resolution and uncertainty
 
-The FFT is 2048 points, so a bin is `sampleRate / 2048` wide: **21.5 Hz at 44.1 kHz, 93.8 Hz at
-192 kHz**. A Hann window spreads a pure tone across neighbouring bins, so the true edge is known no
-more precisely than a bin, and in practice a little less.
+The FFT was to be 2048 points, so a bin is `sampleRate / 2048` wide: **21.5 Hz at 44.1 kHz, 93.8 Hz at
+192 kHz**. A Hann window spreads a pure tone across neighbouring bins, so the true edge is known no more
+precisely than a bin, and in practice a little less.
+
+**Measured, and worse than that.** Against known hard cut-offs at four bin widths, across 48 and
+192 kHz and FFT 2048/4096/8192, the reported edge sits **3.7 to 4.35 bins above the true one** — the
+Hann skirt reaching the −50 dB threshold. The uncertainty is therefore about **four bins, one-sided
+upward**, not half of one. Group 1 also found that the size itself is not free: the persistence
+criterion is defined on windows, so `fftSize` and `hop` are part of the method identity and the choice
+of 2048 is reopened (§3).
 
 **The measurement therefore reports a frequency together with the resolution it was measured at**, and
 the surface must not print more precision than that supports. `21.73 kHz` is a lie at 192 kHz;

@@ -1,27 +1,70 @@
 # Tasks — significant bandwidth
 
-**Nothing below is implemented.** Group 1 is blocking by design: the threshold and the persistence
-criterion are undetermined, and the spike that motivated this change says so explicitly rather than
-guessing. This is the order `add-loudness-measurement` used — constants settled and sourced before an
-accumulator existed — and the reason its numbers survived review.
+**Nothing below is implemented.** Group 1 is blocking by design: no accumulator exists until the
+methodology is measured. This is the order `add-loudness-measurement` used — constants settled and
+sourced before an accumulator existed — and the reason its numbers survived review.
+
+**Group 1 status.** 1.1–1.4 are settled from measurement in
+`docs/spikes/2026-08-19-significant-bandwidth-methodology.md`: the threshold is **−50 dB relative to the
+loudest bin in the same analysis window**, the persistence criterion is **≥ 10 % of eligible windows**,
+and the two are **not sufficient on their own** — a window-eligibility gate at −60 dB below the file's
+global spectral peak and an absolute silence floor at −120 dBFS are both required, and both are measured
+rather than assumed. 1.5 and 1.6 remain open. ADR-0023 stays `Proposed`.
 
 ## 1. Methodology — decide it before writing an accumulator
 
-- [ ] 1.1 Build **graded fixtures**: a roll-off rather than a cliff, at several slopes. The spike's
+- [x] 1.1 Build **graded fixtures**: a roll-off rather than a cliff, at several slopes. The spike's
       threshold sweep moved only 328 Hz across 80 dB because its fixture had an infinitely sharp edge,
       so it could not discriminate between thresholds and neither can any test built on it.
-- [ ] 1.2 Decide the **threshold**, from measurement, and record what it is relative to: each window's
+      **Done.** Roll-offs at 6/12/24/48/96/192/480 dB per octave above an 8 kHz and a 16 kHz knee, plus
+      graded *level* and graded *persistence* series. Every roll-off reading matches the analytic
+      prediction `knee · 2^(−T/S)`. They discriminate: the same sweep now moves the answer from 8 508 to
+      23 543 Hz. Spike §2, §8.
+- [x] 1.2 Decide the **threshold**, from measurement, and record what it is relative to: each window's
       own peak, the file's overall peak, or its gated loudness. State why the rejected two are worse.
-- [ ] 1.3 Decide the **persistence criterion** — a fraction of windows, and which percentile — against
+      **Decided: −50 dB relative to each window's own spectral peak.** Admissible region [−65, −45],
+      bracketed by fixtures; −50 is its midpoint with 20 dB of margin either way. All four rejected
+      references were measured, not argued: the **file's overall peak** loses a real persistent band to a
+      2 % transient (R4 → 16 008 Hz where the answer is 20 000); **global spectral RMS** and a **robust
+      p95** are statistics over the bin population, not levels, and drift 6.0 dB and 41.8 dB across FFT
+      sizes for identical content; **gated loudness** passes every constraint but its offset from a
+      per-bin magnitude spreads 32.6 dB across fixtures, so one constant is not one sensitivity. Spike §3,
+      §4.
+- [x] 1.3 Decide the **persistence criterion** — a fraction of windows, and which percentile — against
       **non-stationary** material. p50 and p95 agreed on every fixture the spike tried because all of
       them were stationary; that agreement is not evidence.
-- [ ] 1.4 Decide what a **quiet but persistent** band must do, and fix the level at which it must still
+      **Decided: present in ≥ 10 % of eligible windows**, measured against clicks, bursts and graded
+      duty cycles. It is the smallest value that rejects full-band bursts totalling 1 % (4.3 % of windows)
+      and 5 % (8.0 %) with real margin while keeping a band present in 10 % (10.8 %). Percentile
+      restatement, exact: the k-th largest of the bin's per-window levels with `k = ceil(0.10 · N)` — a
+      nearest-rank-from-the-top p90, **not** an interpolated p90 and **not** p95. A burst shorter than the
+      window marks `fftSize / hop` windows, so duty cycle and window presence are different numbers and
+      the criterion is defined on the second. Spike §2.1, §5, §5.1.
+- [x] 1.4 Decide what a **quiet but persistent** band must do, and fix the level at which it must still
       be reported. This is the criterion that separates a measurement from a loudness gate.
+      **Decided.** A persistent band at **−45 dB or above** relative to the loudest bin in the same window
+      is reported in full; at −50 dB it is at the transition and reported partially; at −55 dB or below it
+      is not reported. The threshold is a **sensitivity, not a discriminator** — a weak band and a low
+      noise floor at the same relative level are the same thing spectrally and no threshold separates
+      them. Two consequences are recorded rather than tuned away: continuous noise above the cut-off at
+      −40/−50 dB *is* reported, and a file with a full-scale low end throughout under-reports a real high
+      band 59.5 dB below its window peak. Spike §4, §10.
 - [ ] 1.5 Fix the **resolution claim**: bin width per rate, and how a Hann window's spread widens the
       real uncertainty beyond one bin. Decide whether the reported value is a bin centre, a bin edge, or
       a range.
+      **Measured, not yet decided.** The overshoot above a known hard cut-off is **≈ 4 bins, one-sided
+      upward** — 3.7 to 4.35 bins at four different bin widths, across 48 and 192 kHz and FFT
+      2048/4096/8192. So the honest uncertainty is about four bins, not half of one. Still to settle: bin
+      centre / edge / range, paired with the analytic Hann main-lobe figure rather than this empirical one
+      alone. Also open, and found here: the persistence constant is **tied to the analysis window** — the
+      same signal reads 16 043 Hz at FFT 4096 and 24 000 Hz at FFT 8192 — so the method identity must
+      carry `fftSize` and `hop`, and whether the window should be fixed in *time* rather than in samples
+      is a group 3 question. Spike §7.
 - [ ] 1.6 Record every constant with its source in a spike document, as
       `docs/spikes/2026-08-18-loudness-measurement-validation.md` Part A does.
+      **Table written** at `docs/spikes/2026-08-19-significant-bandwidth-methodology.md` §11, with the
+      source of each of the seven constants settled so far. It cannot be called complete while 1.5's
+      constant does not exist.
 
 ## 2. Fixtures and the oracle
 
