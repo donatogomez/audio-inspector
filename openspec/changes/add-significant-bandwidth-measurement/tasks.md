@@ -231,7 +231,8 @@ the change already specified. 4.1–4.4 are done; nothing about export, presenta
 
 ## 5. The sixth consumer
 
-**Partly done. 5.1 and 5.3 are demonstrated; 5.2 and 5.4 are not, and are not marked.**
+**Done.** All four are demonstrated. 5.2's negative controls now discriminate, and 5.4 was measured in
+Release in one session.
 
 - [x] 5.1 One field on `SharedPCMAnalysisOutcome`, one accumulator in the composition. **The read count
       stays one**, at the gate that already asserts it.
@@ -242,21 +243,54 @@ the change already specified. 4.1–4.4 are done; nothing about export, presenta
       so it has an `absent` flag and no fault of its own. `SharedPCMDecodeCountTests` now asserts the
       read count with programme bandwidth **`.available`** rather than merely present, and pins the
       update order with the sixth last and the five before it unchanged.
-- [ ] 5.2 Isolation: its failure or absence changes nothing about the other five, with negative controls.
-      **Most of it is proved; the negative controls are not, and that is why this stays open.**
-      `SharedProgrammeBandwidthIsolationTests` pins nine properties: absence leaves the five identical
-      to a control and does not shorten the read; a sibling's real failure (true peak overflowing on
-      enormous finite samples) leaves programme bandwidth exactly what the accumulator produces from the
-      same chunks; a producer failure partway, **and after the final chunk**, leaves all six failed with
-      nothing partial; cancellation before the first chunk and mid-read cancels all six, on a handshake;
-      shared equals direct at four rates; chunk independence through the composition at six chunk sizes.
-      **What is missing.** Of six negative controls run, two bite (omitting a chunk only for bandwidth,
-      ignoring cancellation for it) and four do not. One is a genuine coverage gap, found by running it:
-      restoring the multiplication that underflowed leaves `SignificantBandwidthNumericExtremeTests`
-      passing, so that suite does not yet pin its own fix. One targets an unreachable branch — bandwidth's
-      `init?` does not decline a valid stream, so coupling its absence to loudness never fires, the same
-      shape signal level metrics already documents. Two could not be verified as applied. The stale A→B
-      bundle-atomicity property is also not asserted yet.
+- [x] 5.2 Isolation: its failure or absence changes nothing about the other five, with negative controls.
+      **Done.** `SharedProgrammeBandwidthIsolationTests` pins nine properties: absence leaves the five
+      identical to a control and does not shorten the read; a sibling's real failure (true peak
+      overflowing on enormous finite samples) leaves programme bandwidth exactly what the accumulator
+      produces from the same chunks; a producer failure partway, **and after the final chunk**, leaves
+      all six failed with nothing partial; cancellation before the first chunk and mid-read cancels all
+      six, on a handshake; shared equals direct at four rates; chunk independence through the
+      composition at six chunk sizes.
+
+      **The bundle is atomic, and that is a stronger property than "bandwidth of A does not appear".**
+      `InspectionAnalysesStaleAtomicityTests` gives both operations six deliberately distinguishable
+      analyses, so "the presentation is entirely B" is observed rather than inferred from fields that
+      merely stayed `.loading`. The case that matters is a late bundle whose **report equals the one on
+      screen** — the same file inspected twice: there the merge fills every field still `.loading` and
+      keeps every field settled, so without the operation guard A's analyses land on exactly the fields
+      B had not reached, leaving B's waveform beside A's loudness. Three controls, each applied and
+      reverted: routing `.significantBandwidth` around the update guard fails it, routing `.loudness`
+      around it fails the same test, and removing the outcome guard fails both and reports precisely
+      that mixture. **The test protects the bundle, not the field added last.**
+
+      **The four controls that did not bite were diagnosed rather than repeated, and three are now
+      closed.** The suite that did not pin its own fix does now: the magnitudes are computed by two
+      routes, and only the linear DC/Nyquist path carries a denormal amplitude to a positive spectral
+      peak, so a quiet *sine* returns before the budget is computed while a quiet *Nyquist alternation*
+      reaches it. `x · 0.001` underflows to exactly zero at and below **6.99 × 10⁻⁴³**, found by
+      bisection; an amplitude of 5 × 10⁻⁴³ lands inside that region and traps under the old
+      multiplication. The same investigation separated two overflows that had been treated as one — NaN
+      magnitudes, stopped by the eligibility rule, and `+∞` magnitudes above about 3 × 10¹⁶, which pass
+      eligibility and are what the finiteness clamp exists for. Three controls, each trapping exactly
+      one test and leaving the others passing.
+
+      **One prediction in this task was wrong and is corrected here.** It called bandwidth's `init?`
+      declining a valid stream "an unreachable branch", which was right, but treated that as a gap to
+      be worked around. It is a **property**: over every rate from 10⁻³⁰⁰ to `greatestFiniteMagnitude`
+      and channel counts from 1 to 1 024, 126 of 126 valid `PCMStreamDescription`s were accepted and
+      none declined. `.unavailable` **by configuration is unreachable**, because the domain type already
+      guarantees a finite positive rate and at least one channel, and `windowFrames(for:)` cannot return
+      a length `vDSP` refuses. The failable initialiser is defensive against inputs the domain forbids.
+      Programme bandwidth's real absences come from elsewhere and are not fabricated here: `failAll`
+      when the audio does not match its description, and `finish()` returning nothing for a file with no
+      usable window — silence, shorter than one window, or a transform that cannot be represented.
+
+      **The container's own controls need no test, because the compiler is stricter.** Omitting a field
+      from `InspectionAnalyses(…)` is *missing argument for parameter*, and the six outcome types are
+      all distinct, so swapping any two is *cannot convert value of type*. There is no positional debt
+      left to test for. The one place a field **can** be silently dropped is
+      `InspectionPresentation`, whose initialiser does carry `.loading` defaults — and letting the
+      settled state fall back to one fails three suites, including this task's own.
 
 - [x] 5.3 **The container refactor is due.** `SourceInspectionOutcome.inspected` already carries five
       labelled payloads and its own note says a sixth "should not simply be appended". Decide here
@@ -267,11 +301,49 @@ the change already specified. 4.1–4.4 are done; nothing about export, presenta
       than settled outcomes. The migration was landed as its own commit and is **observably neutral**:
       the same 1309 tests in 140 suites passed before and after, with the sixth analysis added only
       afterwards. The new field carries **no default**, so omitting it is a compile error.
-- [ ] 5.4 Measure the real cost 5-against-6, as group 7 of `add-loudness-measurement` did. Baseline for
+- [x] 5.4 Measure the real cost 5-against-6, as group 7 of `add-loudness-measurement` did. Baseline for
       reference: the five-consumer pass takes 1.02 s for 60 s of stereo at 48 kHz and 3.54 s at 192 kHz
       in Debug.
-      **Not measured.** The accumulator's isolated cost is known (0.07/0.07/0.14/0.28 s per audio-minute
-      at 44.1/48/96/192 kHz in Release), but the 5→6 delta through the shared pass has not been run.
+      **Measured.** Release, ten minutes of stereo, one machine and one session, the minimum of three
+      repetitions per cell because the delta is a ~10 % difference between two numbers each carrying
+      ~5 % run-to-run noise — a single sample cannot resolve it, and the first two single-sample runs
+      disagreed by a factor of two.
+
+      | rate | shared 5 | shared 6 | delta | accumulator alone | delta / alone |
+      | --- | --- | --- | --- | --- | --- |
+      | 44.1 kHz | 5.271 s | 5.788 s | 0.517 s | 0.512 s | 1.01 |
+      | 48 kHz | 5.702 s | 6.373 s | 0.671 s | 0.491 s | 1.37 |
+      | 96 kHz | 11.671 s | 12.586 s | 0.915 s | 0.956 s | 0.96 |
+      | 192 kHz | 23.156 s | 24.956 s | 1.800 s | 1.968 s | 0.91 |
+
+      **The sixth consumer costs what it costs alone, and nothing extra.** Three of the four ratios are
+      at or below 1.01, and the one outlier at 48 kHz is noise: repeated single runs at that rate gave
+      1.10, 1.06 and 0.87. At 192 kHz — where the accumulator is most expensive and the measurement best
+      resolved — the delta is 9 % *below* the isolated cost. There is no systematic overhead to
+      diagnose, so nothing was optimised.
+
+      **This measures the consumers, not the whole pass**, and that is deliberate: decode is identical
+      on both sides, and including it would bury a 0.5 s delta under a much larger constant. The figure
+      quoted above as a reference is Debug and includes decode, so it is not comparable with these; what
+      proves decode did not change is the read-count gate, which still reports one decoder, one decode
+      call, one sample read, with programme bandwidth `.available`.
+
+      **Memory, at the allocator rather than at RSS.** RSS could not resolve this at all — the pages
+      were already in the high-water mark — so live allocated bytes were measured instead. The sixth
+      consumer adds **2.4 MB at 48 kHz and 8.7 MB at 192 kHz**, against a theoretical counter array of
+      1.98 and 7.93 MB plus the bounded overlap tail and the preallocated scratch buffers. It is
+      **constant in duration**: quadrupling the audio moves it by 0.4 % and 0.5 %. It is therefore
+      neither a copy of the PCM (184 MB for that material) nor a retained spectrogram (also ~184 MB).
+      At construction the figure is about half, because `counters` is an array of arrays and the second
+      channel's buffer is shared until first written — the copy happens once, not per chunk.
+
+      **The harness was shown to discriminate**, with one regression applied and reverted: retaining
+      every window's magnitudes takes the footprint from 2.4 MB to 60 MB at one audio-minute and 233 MB
+      at four — detected both by size and, more tellingly, by starting to **scale with duration**, which
+      is the signature the bounded design forbids. Its resolution was also established honestly: a
+      genuine per-chunk copy of the channel arrays is *not* detectable, because at 32 KB per chunk it is
+      about 4 % of the accumulator and below the noise. Rebuilding the Hann window per transform is
+      detectable at once — 0.49 s to 1.55 s, a 3.2× regression.
 
 ## 6. Correctness against the fixtures
 
