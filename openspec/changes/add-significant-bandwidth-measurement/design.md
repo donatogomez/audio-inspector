@@ -75,10 +75,19 @@ not this document's expectation of it.
 
 **Still open, and one of them blocking:**
 
-- **The window-eligibility rule (task 1.7) — blocking.** The −60 dB gate erases a real quiet passage
-  70 dB below the file's peak, and no value separates that from a noise floor at the same level. It is a
-  dynamic-range budget and must be stated as one. It decides which windows are looked at, so nothing
-  downstream can be built on it as it stands.
+- **The window-eligibility rule (task 1.7) — blocking, after two attempts.** A −60 dB gate erases a real
+  quiet passage 70 dB below the file's peak. Removing the gate entirely is numerically exact and gets
+  seven of eight collector files right — including a continuously-playing analog transfer, and including
+  a *band-limited* noise floor, which is the case this feature exists for — but lets a *broadband* floor
+  alone in more than 10 % of a file set the answer at any level, down to 200 dB below the programme.
+  Neither spectral flatness (0.564 for both tape hiss and musical "air") nor a persistence curve
+  separates them, because a window holding only a floor is indistinguishable from inside itself from one
+  holding only quiet music. What is left is a **declaration** — how far below a file's programme this
+  product claims to be looking — which must travel with the number. The metric's **name** is blocked on
+  the same decision.
+- **Absence is settled and needs no level.** `FFT(zeros)` is identically zero, so "the window carries
+  energy" is decidable with no epsilon, and the reading is unchanged from 0 to −240 dBFS with no floor at
+  all. A constant signal is DC and legitimately reads 0 Hz, which task 4.4 must handle.
 - **Nothing was measured on real music**, on any codec, or through the production decode path. All of
   group 1's material is synthetic and in memory.
 

@@ -10,11 +10,12 @@ loudest bin in the same analysis window**, the persistence criterion is **>= 10 
 the analysis window is **time-locked at ~42.67 ms with 75 % overlap**, and the reported value is a **bin
 centre plus its resolution**, never an interval.
 
-**The accumulator is NOT authorised.** Deliberate attempts to refute the parameters left the threshold
-and the persistence criterion standing, and broke the **window-eligibility gate** (new task 1.7). It
-decides which windows are looked at, so it blocks groups 2-5. The -120 dBFS floor was replaced by a
-numeric condition — an improvement, but a change to the method rather than a confirmation of it.
-ADR-0023 stays `Proposed`.
+**The accumulator is NOT authorised**, after two rounds of deliberate refutation. The threshold, the
+persistence criterion, the analysis window and the reporting contract all survived. The
+**window-eligibility rule** did not, twice: a level gate has no defensible value, and no gate at all
+lets a broadband noise floor alone in >10 % of a file set the answer at any level whatsoever. What is
+left is a declaration about what the product is looking at, not a measurement (task 1.7). The -120 dBFS
+floor is deleted, replaced by a numeric absence condition. ADR-0023 stays `Proposed`.
 
 ## 1. Methodology — decide it before writing an accumulator
 
@@ -72,17 +73,32 @@ ADR-0023 stays `Proposed`.
 - [ ] 1.6 Record every constant with its source in a spike document, as
       `docs/spikes/2026-08-18-loudness-measurement-validation.md` Part A does.
       **Table written** at `docs/spikes/2026-08-19-significant-bandwidth-methodology.md` §11 and §12.13.
-      It cannot close while two of the constants it records are not settled: the eligibility gate was
-      **rejected** at -60 dB (see 1.7) and the -120 dBFS floor was **replaced** by a numeric condition.
+      One constant is now **deleted rather than sourced**: the -120 dBFS floor was invention twice over,
+      unnecessary and masking 120 dB of range in which the measurement is exact (spike §13b.2). Absence
+      is a numeric condition instead. 1.6 cannot close while 1.7's parameter does not exist.
 
-- [ ] 1.7 **Decide the window-eligibility rule.** Opened by refutation, not by design: the -60 dB gate
-      erases a real quiet passage 70 dB below the file's peak, band and all, and the two failure tables —
-      "reject a noise-floor-only passage" and "keep a real quiet passage" — are exact mirror images,
-      because to a rule that only knows how far below the file's peak a window sits they are the same
-      measurement. **No single value separates them.** Any replacement is a stated **dynamic-range
-      budget**, not a silence test. Absence itself is already solved and needs no level: a file that
-      carries no energy at all has no bandwidth. Spike §12.9, §12.10. **This blocks the accumulator**,
-      because it decides which windows are looked at and sits upstream of everything in groups 3-5.
+- [ ] 1.7 **Decide the window-eligibility rule.** Opened by refutation, not by design, and still open
+      after a second attempt.
+
+      **Attempt 1 — a level gate.** Rejected: the -60 dB gate erases a real quiet passage 70 dB below the
+      file's peak, and the two failure tables ("reject a noise-floor-only passage", "keep a real quiet
+      passage") are exact mirror images, because to such a rule they are the same measurement.
+
+      **Attempt 2 — no gate at all**, eligibility being purely "the window carries energy". Numerically
+      exact: `FFT(zeros)` is identically zero, so the test needs no epsilon, and the reading is unchanged
+      from 0 to -240 dBFS with no floor. It reads seven of eight collector files correctly, including an
+      analog transfer that plays continuously and including a **band-limited** noise floor. It fails on
+      one case: a **broadband** floor alone in more than 10 % of a file sets the answer **at any level,
+      down to 200 dB below the programme**, because such a window is its own reference. Spike §13b.4.
+
+      **Attempts to separate the two without a budget also failed.** Spectral flatness gives 0.564 for
+      both tape hiss and musical "air" at the same per-bin level; a persistence curve separates
+      persistent from intermittent but not noise from content. A window holding only a noise floor is
+      indistinguishable from inside itself from one holding only quiet music. Spike §13b.7, §13b.8.
+
+      **What is left is a product declaration, not a measurement**: how far below a file's programme
+      Audio Inspector claims to still be looking. It must travel with the number. Also blocked on it:
+      the metric's **name** (§13b.9) — "significant" cannot describe a figure a -200 dBFS floor can set.
 
 ## 1b. The analysis window — settled here, listed separately because it was not a numbered task
 
@@ -131,6 +147,9 @@ ADR-0023 stays `Proposed`.
 - [ ] 4.3 **No verdict field of any kind**: no `isBandLimited`, no `suspectedUpsample`, no confidence,
       no comparison against the declared rate.
 - [ ] 4.4 Absence is an optional the producer returns, never a floor. Nyquist is not a result.
+      **And nor is zero, but the measurement can produce it**: a constant signal is DC, so DC is
+      legitimately its highest qualifying bin and the reading is 0 Hz. Decide what the model does with
+      that. Spike §13b.2.
 
 ## 5. The sixth consumer
 
