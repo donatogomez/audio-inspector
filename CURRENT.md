@@ -19,41 +19,50 @@
 **Open thread: `add-significant-bandwidth-measurement`, group 1.** Methodology only — there is no
 production code for this change and none is wanted yet.
 
-Group 1 asked whether a threshold plus a persistence fraction can define "significant bandwidth". The
-measured answer is **no, not on their own**, and that is the useful result of the session rather than a
-setback. Threshold and persistence are settled (−50 dB relative to the loudest bin in the same analysis
-window; presence in ≥ 10 % of eligible windows), but no relative reference at any setting can report
-*absence* for digital silence — on silence the signal and the reference sit on the same numerical floor.
-Two small rules complete it and both were measured rather than assumed: a gain-invariant window-
-eligibility gate, and an absolute silence floor that is deliberately **not** gain-invariant because it
-detects the absence of audio rather than measuring anything.
+**The accumulator is NO-GO, and that is the result rather than a setback.** This session's job was to
+close the resolution claim and then to try to *break* the five parameters group 1 had produced. The
+threshold and the persistence criterion survived deliberate refutation on fixtures that had no part in
+choosing them. The **window-eligibility gate did not**, and it sits upstream of both: it decides which
+windows are looked at, so nothing downstream can be built until it is settled. That is now task 1.7.
 
-The intent behind the constants matters more than the constants. **The threshold is a sensitivity, not a
-discriminator** — a weak real band and a low noise floor at the same relative level are indistinguishable,
-so choosing −50 dB is choosing how deep to look, not choosing what is real. Two consequences are recorded
-in the ADR rather than tuned away: a bass-dominated file under-reports, and a gentle roll-off reports the
-top of the band rather than the filter's knee. This is emphatically **not** a filter-knee detector, and
-the record says so before any surface can imply otherwise.
+Why the gate fails is worth carrying in the head, because it is not a tuning problem. Excluding windows
+more than 60 dB below the file's loudest moment erases a real quiet passage 70 dB down, band and all —
+and the table of "rejects a noise-floor-only passage" and the table of "keeps a real quiet passage" came
+out as **exact mirror images**. They have to be: to a rule that only knows how far below the peak a
+window sits, a noise floor 70 dB down and real music 70 dB down are the same measurement. So the gate is
+a **dynamic-range budget**, not a silence test, and the honest move is to state it as one rather than
+pick a number that reads as principled.
 
-**Next step: task 1.5**, the resolution claim. The empirical half is done — the reported edge sits ≈ 4
-bins above a known cut-off, one-sided upward, at four different bin widths — but the decision it feeds
-(bin centre, bin edge, or range) needs the analytic Hann main-lobe figure beside the measurement, not
-instead of it. 1.6 closes with it.
+Absence, by contrast, got *simpler*. The −120 dBFS floor is gone: it discarded about 60 dB of range in
+which the measurement still works, and it was never needed, because a file that carries no energy at all
+is separable from a signal 180 dB down by a numeric condition with no chosen level in it.
 
-**The open question that outgrew group 1**: the persistence fraction is defined on *windows*, so it is
-not portable across window lengths — the same signal reads 16 043 Hz at FFT 4096 and 24 000 Hz at FFT
-8192. `fftSize` and `hop` are therefore part of the method identity, design.md's choice of 2048 points is
-reopened, and whether the window should be fixed in **time** rather than in samples belongs to group 3
-before an accumulator is written.
+The resolution work turned out better than expected. The earlier "≈ 4 bins" was empirical and slightly
+mysterious; it is now derived — the Hann skirt falls as 1/d³, so a threshold T reaches
+`(1/(π·10^(T/20)))^(1/3)` bins, 4.72 at −50 dB — and the measurement follows the derivation exactly, at
+every rate and every FFT size. The tempting contract, reporting a lower and an upper bound, was derived
+from that and then **falsified**: coherent tones one bin apart overshoot by 8.5 bins, outside any bound
+the leakage supports. So the domain carries a frequency and a resolution, and the ADR carries the
+statement that the frequency is an upper bound on where content ends.
+
+The window is settled and time-locked at ≈ 42.67 ms with 75 % overlap. The evidence was blunt: under a
+fixed 2048-point window, ten bursts totalling 5 % of a file read 12.65 % of windows at 44.1 kHz and
+6.73 % at 192 kHz — the same temporal evidence, significant at one rate and not at another. `vDSP` turns
+out to accept `f · 2^m` for f in {1,3,5,15}, so 1920 and 3840 hold the duration to 2 % where powers of
+two alone would force 8.8 %.
+
+**Next step: task 1.7.** Not more sweeping — the sweeps are done and they agree. What is needed is a
+decision about what the measurement is allowed to ignore, and it is a product decision wearing a DSP
+costume: how far below a file's loudest moment does Audio Inspector still claim to be looking? Whatever
+the answer, it travels with the result.
 
 Everything measured so far is synthetic and in memory. Nothing has touched a real file, a container, a
-codec, or the production decode path. ADR-0023 stays `Proposed`: two of its three promotion conditions —
-an impulse control passing against production code, and human validation of the surface — are untouched.
+codec, or the production decode path. ADR-0023 stays `Proposed`.
 
 **Older threads, neither advanced here**: `add-static-spectrogram-visualization` (manual validation
 battery deferred by product decision); `add-two-file-technical-comparison` (one accessibility criterion
-open, blocked on the VoiceOver traversal gap shared with ADR-0015). The loudness debt recorded in the
-previous snapshot is unchanged and still not a thread: the export chain's third positional optional,
+open, blocked on the VoiceOver traversal gap shared with ADR-0015). The loudness debt recorded two
+snapshots ago is unchanged and still not a thread: the export chain's third positional optional,
 `ReportJSONDTO.swift` at 415 lines against SwiftLint's 400, the absolute gate not being observable from
 outside `LoudnessAccumulator`, and the unaudited `Task.yield()` in `ImportFlowComparisonTests`.
 
