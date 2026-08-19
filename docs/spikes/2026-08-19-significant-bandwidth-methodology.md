@@ -662,6 +662,172 @@ and all eight still pass.
 ADR-0023 stays **Proposed**. Two of its three promotion conditions — an impulse control passing against
 *production* code, and human validation of the surface — are untouched by this session.
 
+## 13b. Part C — the eligibility semantics, and what they cost
+
+Part B rejected the −60 dB gate. Part C tests the hypothesis that replaces it: **there is no level gate
+at all.** A window participates if it carries energy; the threshold decides prominence *inside* a
+window; persistence decides repetition *between* windows. Three layers, three different questions, none
+substituting for another.
+
+### 13b.1 The numeric boundary is real, and there is no epsilon in it
+
+| question | measured |
+| --- | --- |
+| does `FFT(zeros)` give exactly zero? | **yes** — windowed samples all exactly 0, max magnitude `0.0` |
+| where does squaring lose a sample? | in `Float`, below ≈1e-19 the square underflows to 0; accumulated in `Double` it survives to ≈1e-154 |
+| `Float.leastNormalMagnitude` | 1.175e-38 → −758.6 dBFS |
+| `Float.leastNonzeroMagnitude` | 1e-45 → −897.1 dBFS (denormal) |
+| smallest sine that survives window + transform | **−280 dBFS**, peak bin 5.0e-15, still non-zero |
+
+So "the window carries energy" is decidable **with no chosen constant**, provided the energy is
+accumulated in `Double`; the boundary then belongs to the sample type, not to the accumulator, because
+any non-zero `Float` has a non-zero `Double` square.
+
+### 13b.2 Level invariance is total once the floor is gone
+
+The same spectral structure, scaled bodily, with **no floor of any kind** and no magnitude clamp:
+
+| level | −0 | −40 | −80 | −120 | −160 | −200 | −240 dB |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| reading | 20 016 | 20 016 | 20 016 | 20 016 | 20 016 | 20 016 | **20 016** |
+
+Part B's observation that a signal below −180 dBFS "degraded" was an artefact of that harness's 1e-12
+magnitude clamp, not of the arithmetic. **The −120 dBFS floor was invention twice over**: unnecessary,
+and masking 120 dB of range in which the measurement is exact.
+
+Three edge cases, recorded because two of them are surprising:
+
+| case | eligible windows | reading |
+| --- | --- | --- |
+| samples exactly zero | 0 / 465 | **absent** ✔ |
+| one denormal sample (1e-45) in an otherwise zero file | 0 / 465 | **absent** — the Hann multiply underflows it to zero, so the analysis genuinely cannot see it |
+| every sample denormal (a constant) | 465 / 465 | **0 Hz** — a constant is DC, and DC is the highest qualifying bin |
+| real signal at −200 dBFS | 465 / 465 | 20 016 ✔ |
+
+The DC row matters for the domain model: ADR-0023 says zero is not a result, and here the measurement
+legitimately produces one. Task 4.4 has to say what happens to it.
+
+### 13b.3 Without a gate, real quiet content is measured — which is the point
+
+First half loud, second half the same body X dB lower plus a real 19–20 kHz band 30 dB under *that*:
+
+| second half | −40 dB | −60 dB | −80 dB | −100 dB | −120 dB |
+| --- | --- | --- | --- | --- | --- |
+| **no gate** | 20 016 | 20 016 | **20 016** | **20 016** | **20 016** |
+| gate −60 dB | 20 016 | 20 016 | 16 102 | 16 102 | 16 102 |
+
+The hypothesis does exactly what it was proposed to do, and does it at any depth.
+
+### 13b.4 Where it breaks, and the break is not about level
+
+**Noise judged against a programme is handled correctly.** Body to 16 kHz present in every window, plus
+random noise from 16 kHz to Nyquist: counted at −40 and −50 dB (correctly — it is within the stated
+prominence), rejected at −60 dB and below. This case never threatened the hypothesis.
+
+**Noise alone in its own windows is the failure.** A window containing nothing but a noise floor makes
+that noise floor its own reference, so the noise is 0 dB from its own peak and every bin qualifies:
+
+| share of the file that is noise-only | 2 % | 5 % | 8 % | 10 % | **12 %** | 20 % | 40 % |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| reading | 16 102 | 16 102 | 16 102 | 16 195 | **24 000** | 24 000 | 24 000 |
+
+The threshold is exactly the persistence constant, which is the criterion working as designed. What is
+**not** defensible is the next table — the same 40 % noise-only tail at every conceivable level:
+
+| noise level | −40 | −60 | −90 | −120 | −150 | **−200 dBFS** |
+| --- | --- | --- | --- | --- | --- | --- |
+| reading | 24 000 | 24 000 | 24 000 | 24 000 | 24 000 | **24 000** |
+
+**A signal 200 dB below the programme decides the reported bandwidth, because it happens to be alone in
+its window.** No amount of restating the definition makes that a useful fact.
+
+### 13b.5 What a noise floor's bandwidth actually is
+
+| whole-file content | reading |
+| --- | --- |
+| digital silence | **absent** ✔ |
+| white noise at −80 / −100 / −120 dBFS | 24 000 in all three |
+| pink-ish noise, −3 dB/octave | 23 977 |
+| 50 Hz hum + white noise 30 dB under it | **398 Hz** — the hum is the programme and the noise is 60 dB under it, so it is correctly excluded |
+| **band-limited noise floor, to 16 kHz** | **16 102** ✔ |
+
+The last row is the one that saves the feature's purpose: a *band-limited* noise floor — which is what a
+lossy codec leaves behind — is read correctly even when it is all there is. The metric does not need a
+programme to detect a band limit; it needs one to ignore a broadband floor.
+
+### 13b.6 The collector's four files (phase 11)
+
+96 kHz masters, music to 22 kHz, 42.67 ms window:
+
+| scenario | reading | is it the fact wanted? |
+| --- | --- | --- |
+| 1. music to 22 kHz, digital silence above | 22 102 | yes |
+| 1b. the same with a 15 % digitally silent tail | 22 102 | yes |
+| **2. the same + analog hiss to 48 kHz, no quiet passage** | **22 102** | **yes** — a hiss well under the programme per bin is excluded by the threshold |
+| 2b. the same, with a 15 % hiss-only tail | **48 000** | **no** |
+| 2c. the same, with a 5 % hiss-only tail | 22 102 | yes |
+| 2d. band-limited hiss (to 22 kHz), 15 % tail | 22 102 | yes |
+| 3. music to 22 kHz + weak codec spurs above | 26 016 | yes |
+| 4. real weak musical content 22.5–30 kHz | 30 023 | yes |
+
+**Seven of eight are right.** The failure is narrow and specific: a *broadband* floor that is *alone* in
+more than 10 % of the file. It is not "any noisy file" — an analog transfer that plays continuously
+reads correctly.
+
+### 13b.7 Can anything separate a noise floor from noise-like content? (phase 12)
+
+Spectral flatness, over a band all three signals occupy, all three calibrated to the **same per-bin
+level** so only shape differs:
+
+| signal in 25–35 kHz | per-bin peak | flatness |
+| --- | --- | --- |
+| broadband analog hiss (true white noise) | −58.1 dB | **0.564** |
+| band-limited noise 22.5–40 kHz — "air", cymbals | −58.1 dB | **0.564** |
+| tonal spurs every 1 kHz (codec, resampler) | −58.1 dB | 0.000 |
+
+**Identical to three decimals.** Flatness separates *tonal* artefacts from noise, which is a different
+and possibly useful question, and it does not separate the two things that needed separating: a tape
+hiss and a cymbal are the same kind of signal. Two earlier attempts at this probe were discarded as
+confounded — one measured a tone comb's spacing, the other a band the signal only partly occupied — and
+neither is reported as evidence.
+
+A persistence *curve* was tried as a richer representation: read the same measurement at ≥10 %, ≥50 %
+and ≥90 %. It genuinely adds information — it separates persistent content from intermittent — but it
+does not separate noise from content either, because noise-like content fluctuates bin by bin and so
+thins out at high persistence exactly as a noise floor does.
+
+### 13b.8 Why no rule of this shape can work
+
+Three independent attempts converge on one structural fact:
+
+> A window that contains only a noise floor is indistinguishable, **from inside itself**, from a window
+> that contains only quiet music. The difference exists only in comparison with the rest of the file,
+> and any comparison with the rest of the file is a **dynamic-range budget**.
+
+- a *level gate* is that comparison, made explicit — rejected in part B for having no defensible value;
+- *flatness* is not that comparison, and measures something else;
+- a *persistence curve* is not that comparison, and measures something else.
+
+So the choice in phase 9 is **B**, not A: the metric as hypothesised measures any real signal, noise
+floor included, and to mean "programme content" it needs a cross-window comparison. That comparison is a
+**declared parameter of the measurement**, not a constant to be discovered — and that is a materially
+better position than part B ended in, where it was an undeclared constant.
+
+Rejected while here: making the budget adaptive (derived from the file's own dynamic range or its
+loudness range). It would break the rule that the same method identity must imply the same number, since
+identical content in two files would then be measured against two different budgets.
+
+### 13b.9 The name
+
+If option A were taken, **"significant bandwidth" would be a misleading name**: a −200 dBFS floor
+determining the answer is not "significant" in any sense a reader would grant. Under option B the name
+is only honest once the budget is part of it. Candidates, none adopted, no API exists yet:
+
+- *persistent spectral extent* — accurate, and silent about significance;
+- *highest persistent spectral frequency* — accurate and long;
+- *programme bandwidth (within N dB of programme peak)* — carries the budget in the name, which is the
+  only version that stays true under option B.
+
 ## 14. Stopping rule — **NO-GO for the accumulator**
 
 Nine conditions were set for authorising group 2. Seven are met:
@@ -687,3 +853,11 @@ Two are not:
 Item 6 is structural, so the accumulator is not authorised. It is not a defect in the threshold or the
 persistence criterion — both survived — but in the rule that decides *which windows are looked at*, and
 that rule sits upstream of everything else.
+
+**Part C did not lift the NO-GO, and narrowed it to one sentence.** The gateless hypothesis is
+numerically clean, needs no invented constant, and gets seven of the collector's eight files right. It
+fails on one: a broadband noise floor alone in more than 10 % of a file sets the answer, **at any level,
+down to 200 dB below the programme**. Nothing inside a window can tell that floor from quiet music, and
+every rule that can is a dynamic-range budget. So the remaining decision is not a measurement — it is
+**what the product declares it is looking at**, and the answer must travel with the number rather than
+hide inside it.
