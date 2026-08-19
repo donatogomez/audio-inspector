@@ -1,11 +1,13 @@
 # ADR-0023: Significant bandwidth as a measured fact, independent of the spectrogram
 
-- **Status**: **Proposed.** Of its three promotion conditions the first is now **met** — the threshold,
-  the persistence criterion, the analysis window, the reporting contract and the eligibility rule are
-  all decided from measurement on graded fixtures, and the full rule set passes twelve of twelve
-  pre-registered constraints in a single validation. Two remain: the impulse control must pass against
-  **production** code, so an isolated transient provably does not widen the reported band, and the
-  surface must be validated by a person looking at it. Partial evidence does not promote it.
+- **Status**: **Proposed.** Two of its three promotion conditions are now **met**, and one remains.
+  The first: the threshold, the persistence criterion, the analysis window, the reporting contract and
+  the eligibility rule are all decided from measurement on graded fixtures, and the full rule set passes
+  twelve of twelve pre-registered constraints in a single validation. The second: **the production
+  impulse control is satisfied** — an isolated transient provably does not widen the reported band, on
+  the real path from file to published outcome, and the persistence criterion's turnover is asserted on
+  both sides. **Manual surface validation is pending**, and there is no surface yet to validate.
+  Partial evidence does not promote it.
 - **Date**: 2026-08-18
 - **Deciders**: Project maintainer
 - **Related**: **ADR-0016** (the STFT spectrogram this deliberately does *not* build on), ADR-0020 and
@@ -296,6 +298,45 @@ preallocated scratch — and is **constant in duration**: quadrupling the audio 
 percent. It is therefore neither a copy of the PCM nor a retained spectrogram, both of which would be
 about 184 MB for the same material. Retaining every window's magnitudes takes it to 233 MB at four
 audio-minutes and makes it scale with duration, which is how the measurement was shown to discriminate.
+
+### The production impulse control, and what satisfies it
+
+The condition this record set was that **an isolated transient provably does not widen the reported
+band**, against production rather than against the oracle. It is met, and the evidence is worth stating
+precisely because the obvious reading of it is wrong.
+
+**What is satisfied.** A full-scale click inside a 16 kHz programme leaves the published reading
+identical — equality with the undisturbed programme, not a tolerance around it, because a control that
+allowed drift would pass while the transient was moving the answer. The turnover is pinned on both
+sides: `ceil(0.10 × 278) = 28` windows must carry a bin, and it takes **eight** impulses to reach that,
+not the seven that four windows each would predict. The extra one is the Hann taper — of the four
+windows a lone sample falls inside, the outermost carries it near an edge where the window's own
+coefficient is near zero, so it never clears significance and an impulse is worth about three and a half
+windows. Clustering the clicks changes nothing, because the criterion counts windows and not spacing.
+Disabling persistence fails this control directly, which is what makes it a control.
+
+**What is not satisfied, and was never the condition.** A file that is silence plus one click still
+reads broadband, exactly as the degenerate case recorded under *Negative / costs* says it does. That is
+the eligibility rule doing what it is for: a window with no energy is not an observation, so the only
+eligible windows are the ones the click touches and the click is present in all of them. It is not a
+transient within a programme — it is the programme. Change `add-significant-bandwidth-measurement`'s
+task 6.2 predicted the opposite and has been corrected rather than accommodated; the methodology is
+untouched.
+
+**The rest of the production battery**, recorded here because it is the evidence a reader will look for
+before promoting this: four known edges at five rates, all within the leakage the window explains and
+none below its edge; the overshoot agreeing to within one resolution across rates; the method identity
+pinned per rate, which is what makes the time-locked window testable rather than asserted; the three
+layers — persistence, budget, prominence — each with both sides on real files; the undefined cases as
+absences and never a substituted Nyquist; every lossless container publishing the identical measurement;
+a lossy band limit surviving a rewrap identically, with no codec named anywhere. Nine negative controls,
+eight biting and the ninth a documented redundancy: removing the budget's final check alone changes
+nothing, because the ring's capacity already enforces the same 60 dB.
+
+**One case cannot be shown end-to-end.** The denormal amplitudes the underflow arithmetic needs do not
+survive the write-and-decode round trip — evidenced rather than assumed, by the peak of zero the same
+shared read reports for that file — so that evidence stays at the PCM level where it can be exercised.
+The overflow extreme is reachable through a real file and publishes a finite in-range answer.
 
 ### Neutral
 - No port changes, no export version change, no new dependency, and no second read.
