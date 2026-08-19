@@ -91,8 +91,28 @@ not this document's expectation of it.
 
 **Still open:**
 
-- **Nothing was measured on real music**, on any codec, or through the production decode path. All of
-  group 1's material is synthetic and in memory.
+- **Nothing was measured on real music.** Group 2 took the method onto real files — five rates, five
+  lossless containers, AAC, MP3 and rewrap, seven chunk sizes, every file edge — and the fact survived
+  all of it, but every fixture is still synthesised from a specification in this repository. No
+  commercial recording has been measured, and no listener has looked at a result.
+
+## 3b. What group 2 established
+
+The subject stopped being an array in memory. `ProgrammeBandwidthReference` in `Tests/` implements the
+method and is driven by the production decoder, so containers, sample rates, codecs and chunk
+boundaries are exercised **before** an accumulator exists rather than after.
+
+- **The resolution contract is `0 ≤ error ≤ 5 × resolution`**, measured: one-sided upward, worst case
+  4.55 against the analytic Hann reach of 4.72. Raw hertz are not comparable across rates.
+- **Lossless containers read the identical bin**, and so do seven chunk sizes from one frame to the
+  whole file — asserted exactly, with no tolerance.
+- **Lossy transports move the reading without destroying it**, and rewrapping to PCM preserves the bin.
+- **FFmpeg cannot corroborate this quantity**; its `rolloff` measures spectral balance.
+- **Five negative controls** break one constant each, so none of them is decoration.
+
+Two things group 2 handed to later groups: an impulse alone in silence reads as broadband (§13d.4 of
+the spike), and a bounded accumulator cannot use a plain per-bin counter, because the budget needs the
+file's peak — stratifying counters by window peak is one shape that works.
 
 ## 4. Architecture
 

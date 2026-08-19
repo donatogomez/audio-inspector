@@ -10,14 +10,14 @@ loudest bin in the same analysis window**, the persistence criterion is **>= 10 
 the analysis window is **time-locked at ~42.67 ms with 75 % overlap**, and the reported value is a **bin
 centre plus its resolution**, never an interval.
 
-**Group 1 is complete and the accumulator is authorised.** Two rounds of deliberate refutation left the
-threshold, the persistence criterion, the analysis window and the reporting contract standing, and
-turned the eligibility rule from an undeclared constant into a declared one: **programme bandwidth,
-within 60 dB of programme peak**. The full rule set passes twelve of twelve pre-registered constraints
-in a single validation (spike §13c.2). Nothing has touched a real file, a container, a codec or the
-production decode path -- that is group 2, which comes before the accumulator. ADR-0023 stays
-`Proposed`: its remaining two promotion conditions are the impulse control against production code and
-human validation of the surface.
+**Groups 1 and 2 are complete and the accumulator is authorised.** Two rounds of deliberate refutation
+left the threshold, the persistence criterion, the analysis window and the reporting contract standing,
+and turned the eligibility rule from an undeclared constant into a declared one: **programme bandwidth,
+within 60 dB of programme peak**. Group 2 then took the method off in-memory arrays and onto real files:
+five sample rates, five lossless containers, AAC, MP3 and rewrap, seven chunk sizes and every file edge.
+Twenty-nine tests, including five negative controls that break one constant each. ADR-0023 stays
+`Proposed`: its remaining two promotion conditions are the impulse control against **production** code
+and human validation of the surface, and neither can be met before the accumulator exists.
 
 ## 1. Methodology — decide it before writing an accumulator
 
@@ -124,17 +124,45 @@ human validation of the surface.
 
 ## 2. Fixtures and the oracle
 
-- [ ] 2.1 Reuse `AudioFixtureSignal.bandLimitedTones` and the existing format matrix rather than adding
+**Group 2 passes.** The fact survives the transport: real containers, five sample rates, real chunk
+boundaries and both lossy codecs. Evidence is `ProgrammeBandwidthEvidenceTests`,
+`ProgrammeBandwidthLossyEvidenceTests` and `ProgrammeBandwidthNegativeControlTests`, measuring with
+`ProgrammeBandwidthReference` — the method in test code, because **no production accumulator exists and
+nothing here asserts against one**. Spike §13d.
+
+- [x] 2.1 Reuse `AudioFixtureSignal.bandLimitedTones` and the existing format matrix rather than adding
       a generator. Extend it **only** where a graded roll-off or a noise floor cannot be expressed.
-- [ ] 2.2 Cases: pure tone; tones to a known edge; two neighbouring edges; white noise; silence; a lone
+      **Two cases added, and only two**: `sum` and `enveloped(rampFrames:)`, which is what a programme
+      plus a second band at its own level needs. Roll-offs are a `sum` of sines and needed no case.
+      `enveloped` carries a raised-cosine ramp because a hard amplitude step is a **broadband** event
+      that measured as Nyquist in a fixture whose eligible-window count was small. Spike §13d.1.
+- [x] 2.2 Cases: pure tone; tones to a known edge; two neighbouring edges; white noise; silence; a lone
       impulse; high content present ~1 % of the time; the same persistent; a high band at −20, −40 and
       −60 dB.
-- [ ] 2.3 The same described signal at 44.1 / 48 / 88.2 / 96 / 192 kHz, written as real files.
-- [ ] 2.4 WAV / FLAC / ALAC / AIFF equivalence, and AAC separately, on the container matrix's own
+      **Covered**, and extended where group 1's decisions demanded it: edges at 8/12/16/20 kHz, bands at
+      −30/−40/−60/−70 dB, presence at 5/25/50/100 %, budget passages at −40…−80 dB, graded roll-offs,
+      silence, no-audio, sub-window files, a prime frame count, and an impulse both alone and inside a
+      programme.
+- [x] 2.3 The same described signal at 44.1 / 48 / 88.2 / 96 / 192 kHz, written as real files.
+      **Done**, and it produced the resolution contract: the error is one-sided upward and at most
+      **4.55 resolutions** against the analytic reach of 4.72, so the assertion is
+      `0 ≤ error ≤ 5 × resolution`. The raw hertz are **not** comparable across rates — each quantises
+      the edge onto its own grid — and the rates agree to within one resolution. Spike §13d.2.
+- [x] 2.4 WAV / FLAC / ALAC / AIFF equivalence, and AAC separately, on the container matrix's own
       precedent that a lossy codec is a different question.
-- [ ] 2.5 Qualify FFmpeg as a **corroborating oracle only** where it can measure something comparable.
+      **Lossless containers read the identical bin**, asserted exactly rather than within a tolerance.
+      AAC moves the reading four bins and does not reach Nyquist. MP3 at 64 kbps reads its own low-pass
+      (16 790 Hz against a 20 075 Hz source) and at 320 kbps keeps the source's edge; **all three
+      bitrates survive a rewrap to PCM with the identical bin**. The MP3 rows are local evidence only —
+      FFmpeg is not on CI, and a skipped run is not coverage. Spike §13d.5.
+- [x] 2.5 Qualify FFmpeg as a **corroborating oracle only** where it can measure something comparable.
       It is not a normative source here and there is no published target for this quantity — which makes
       the analytic fixtures the primary evidence, not the tool.
+      **Measured, and the answer is that it cannot.** `aspectralstats`'s `rolloff` is the energy
+      percentile ADR-0023 already rejected: it under-reads a 16 kHz limit as 15.2–15.4 kHz, and adding a
+      dominant 100 Hz tone moves it to 12.5–13.4 kHz while the extent does not change. It tracks
+      spectral **balance**, not **extent**. FFmpeg stays a producer of fixtures no macOS encoder can
+      make. Spike §13d.6.
 
 ## 3. The accumulator
 
@@ -143,8 +171,15 @@ human validation of the surface.
 - [ ] 3.2 **Chunk independence**, demonstrated by a test that fails when it is broken, at the same chunk
       sizes loudness uses.
 - [ ] 3.3 Bounded memory: per-bin persistence counters, never a retained spectrogram.
+      Harder than it looks, and group 2 found why: the **budget** compares each window against the
+      file's spectral peak, which is not known until the end, so a plain per-bin counter cannot decide
+      eligibility as it goes. One bounded shape that works: per-bin counters **stratified by the
+      window's own peak**, quantised into fixed dB buckets, summed at the end over the buckets at or
+      above `filePeak − 60 dB`. That is `bins × buckets` counters regardless of duration. Spike §13d.7.
 - [ ] 3.4 Decide mono/stereo handling — per channel, or combined — and state why. Whatever is chosen
       must not assert a channel layout the pipeline does not read.
+      Group 2 deliberately left this open: the reference measures each channel separately and its tests
+      assert per channel, so nothing there presumes an answer.
 
 ## 4. The domain model
 
