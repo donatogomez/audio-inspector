@@ -16,52 +16,56 @@
 >   session protocol in `CLAUDE.md`).
 
 ---
-**Open thread: `add-significant-bandwidth-measurement`, group 1.** Methodology only — there is no
-production code for this change and none is wanted yet.
+**Open thread: `add-significant-bandwidth-measurement`, group 1, task 1.7.** Methodology only — no
+production code exists for this change and none is wanted yet.
 
-**The accumulator is NO-GO, and that is the result rather than a setback.** This session's job was to
-close the resolution claim and then to try to *break* the five parameters group 1 had produced. The
-threshold and the persistence criterion survived deliberate refutation on fixtures that had no part in
-choosing them. The **window-eligibility gate did not**, and it sits upstream of both: it decides which
-windows are looked at, so nothing downstream can be built until it is settled. That is now task 1.7.
+**Still NO-GO, and the reason is now one sentence long.** This session tested the hypothesis that there
+is no eligibility gate at all: a window participates if it carries energy, the threshold decides
+prominence inside a window, persistence decides repetition between windows. The hypothesis is good. It
+needs no invented constant — `FFT(zeros)` is identically zero, so "carries energy" is decidable with no
+epsilon — and it reads seven of the collector's eight files correctly, including an analog transfer that
+plays continuously and, importantly, including a *band-limited* noise floor, which is the case the
+feature exists to catch.
 
-Why the gate fails is worth carrying in the head, because it is not a tuning problem. Excluding windows
-more than 60 dB below the file's loudest moment erases a real quiet passage 70 dB down, band and all —
-and the table of "rejects a noise-floor-only passage" and the table of "keeps a real quiet passage" came
-out as **exact mirror images**. They have to be: to a rule that only knows how far below the peak a
-window sits, a noise floor 70 dB down and real music 70 dB down are the same measurement. So the gate is
-a **dynamic-range budget**, not a silence test, and the honest move is to state it as one rather than
-pick a number that reads as principled.
+It fails on one case, and the failure is not about level: **a broadband noise floor alone in more than
+10 % of a file sets the answer, at any level, down to 200 dB below the programme.** A window that
+contains nothing but a floor is its own reference, so the floor is 0 dB from its own peak and every bin
+qualifies. Level is completely irrelevant, which is what makes it indefensible rather than merely
+awkward.
 
-Absence, by contrast, got *simpler*. The −120 dBFS floor is gone: it discarded about 60 dB of range in
-which the measurement still works, and it was never needed, because a file that carries no energy at all
-is separable from a signal 180 dB down by a numeric condition with no chosen level in it.
+Two escape routes were tried and both closed. Spectral flatness gives **0.564 for tape hiss and 0.564
+for musical "air"** at the same per-bin level — a cymbal and a hiss are the same kind of signal, so
+shape cannot separate them. Reading the measurement at several persistence levels adds real information
+(persistent versus intermittent) but not that information, because noise-like content thins out at high
+persistence exactly as a floor does. Together with part B's rejected level gate, that is three
+independent routes converging on the same structural fact: **a window holding only a noise floor is
+indistinguishable, from inside itself, from one holding only quiet music.** The difference exists only
+in comparison with the rest of the file, and every such comparison is a dynamic-range budget.
 
-The resolution work turned out better than expected. The earlier "≈ 4 bins" was empirical and slightly
-mysterious; it is now derived — the Hann skirt falls as 1/d³, so a threshold T reaches
-`(1/(π·10^(T/20)))^(1/3)` bins, 4.72 at −50 dB — and the measurement follows the derivation exactly, at
-every rate and every FFT size. The tempting contract, reporting a lower and an upper bound, was derived
-from that and then **falsified**: coherent tones one bin apart overshoot by 8.5 bins, outside any bound
-the leakage supports. So the domain carries a frequency and a resolution, and the ADR carries the
-statement that the frequency is an upper bound on where content ends.
+So the remaining decision is not a measurement. It is a declaration: **how far below a file's programme
+does Audio Inspector claim to still be looking?** Whatever the answer, it travels with the number rather
+than hiding inside it. The metric's *name* is blocked on the same decision — "significant" cannot
+describe a figure that a −200 dBFS floor can set, and the honest alternatives either drop the word
+(*persistent spectral extent*) or carry the budget in it (*programme bandwidth, within N dB of programme
+peak*).
 
-The window is settled and time-locked at ≈ 42.67 ms with 75 % overlap. The evidence was blunt: under a
-fixed 2048-point window, ten bursts totalling 5 % of a file read 12.65 % of windows at 44.1 kHz and
-6.73 % at 192 kHz — the same temporal evidence, significant at one rate and not at another. `vDSP` turns
-out to accept `f · 2^m` for f in {1,3,5,15}, so 1920 and 3840 hold the duration to 2 % where powers of
-two alone would force 8.8 %.
+One constant got deleted rather than sourced. The −120 dBFS floor was invention twice over: unnecessary,
+and masking 120 dB of range in which the measurement is exact. Absence is now numeric — a file carrying
+no energy has no bandwidth — and a new edge case came with it: a constant signal is DC, so DC is
+legitimately its highest qualifying bin and the reading is 0 Hz. ADR-0023 says zero is not a result, so
+task 4.4 has to say what the model does with it.
 
-**Next step: task 1.7.** Not more sweeping — the sweeps are done and they agree. What is needed is a
-decision about what the measurement is allowed to ignore, and it is a product decision wearing a DSP
-costume: how far below a file's loudest moment does Audio Inspector still claim to be looking? Whatever
-the answer, it travels with the result.
+**Next step: task 1.7, as a product decision rather than another sweep.** The sweeps are done and they
+agree with each other. What is needed is a number chosen deliberately, with its cost stated: content in
+passages more than that far below the programme is not measured, and a noise floor further down than
+that does not count as content.
 
 Everything measured so far is synthetic and in memory. Nothing has touched a real file, a container, a
 codec, or the production decode path. ADR-0023 stays `Proposed`.
 
 **Older threads, neither advanced here**: `add-static-spectrogram-visualization` (manual validation
 battery deferred by product decision); `add-two-file-technical-comparison` (one accessibility criterion
-open, blocked on the VoiceOver traversal gap shared with ADR-0015). The loudness debt recorded two
+open, blocked on the VoiceOver traversal gap shared with ADR-0015). The loudness debt recorded three
 snapshots ago is unchanged and still not a thread: the export chain's third positional optional,
 `ReportJSONDTO.swift` at 415 lines against SwiftLint's 400, the absolute gate not being observable from
 outside `LoudnessAccumulator`, and the unaudited `Task.yield()` in `ImportFlowComparisonTests`.
