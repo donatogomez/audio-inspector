@@ -141,6 +141,12 @@ enum AudioFixtureSignal: Sendable {
     /// That energy is not part of the signal the segments describe. `rampFrames: 0` keeps the hard step
     /// for callers that want it.
     indirect case enveloped(AudioFixtureSignal, segments: [AudioFixtureSegment], rampFrames: Int)
+    /// A different signal in each channel, cycling if there are fewer than the file has.
+    ///
+    /// `perChannelSine` already does this for sines; a channel decision needs it for anything, because
+    /// "left limited to 16 kHz and right to 20 kHz" is not expressible otherwise and is exactly the
+    /// evidence that separates measuring channels apart from combining them.
+    indirect case perChannel([AudioFixtureSignal])
 
     /// A comb whose **individual components** carry a stated amplitude.
     ///
@@ -250,6 +256,10 @@ enum AudioFixtureSignal: Sendable {
                 )
             }
             return output
+        case let .perChannel(parts):
+            guard !parts.isEmpty else { return [Float](repeating: 0, count: count) }
+            return parts[channel % parts.count]
+                .samples(channel: channel, from: startFrame, count: count, sampleRate: sampleRate)
         case let .bandLimitedTones(_, _, _, amplitude):
             // `toneFrequencies` rebuilds an array from the enum's payload, and reading it per sample is
             // the same retain/release cost the segmented case was written to avoid.
@@ -337,6 +347,9 @@ enum AudioFixtureSignal: Sendable {
         case let .enveloped(inner, segments, rampFrames):
             Self.envelopeAmplitude(at: frame, segments: segments, rampFrames: rampFrames)
                 * inner.sample(channel: channel, frame: frame, sampleRate: sampleRate)
+        case let .perChannel(parts):
+            parts.isEmpty ? 0 : parts[channel % parts.count]
+                .sample(channel: channel, frame: frame, sampleRate: sampleRate)
         }
     }
 }
