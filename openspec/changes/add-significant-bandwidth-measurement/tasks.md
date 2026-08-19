@@ -243,10 +243,21 @@ the change already specified. 4.1–4.4 are done; nothing about export, presenta
       read count with programme bandwidth **`.available`** rather than merely present, and pins the
       update order with the sixth last and the five before it unchanged.
 - [ ] 5.2 Isolation: its failure or absence changes nothing about the other five, with negative controls.
-      **Not demonstrated.** The composition's existing shape makes each consumer's outcome independent,
-      and the producer-failure, cancellation and no-stream paths all carry a sixth value — but no test
-      yet drives those paths *for this consumer*, and none of the negative controls this task asks for
-      has been written. Until they exist this stays open.
+      **Most of it is proved; the negative controls are not, and that is why this stays open.**
+      `SharedProgrammeBandwidthIsolationTests` pins nine properties: absence leaves the five identical
+      to a control and does not shorten the read; a sibling's real failure (true peak overflowing on
+      enormous finite samples) leaves programme bandwidth exactly what the accumulator produces from the
+      same chunks; a producer failure partway, **and after the final chunk**, leaves all six failed with
+      nothing partial; cancellation before the first chunk and mid-read cancels all six, on a handshake;
+      shared equals direct at four rates; chunk independence through the composition at six chunk sizes.
+      **What is missing.** Of six negative controls run, two bite (omitting a chunk only for bandwidth,
+      ignoring cancellation for it) and four do not. One is a genuine coverage gap, found by running it:
+      restoring the multiplication that underflowed leaves `SignificantBandwidthNumericExtremeTests`
+      passing, so that suite does not yet pin its own fix. One targets an unreachable branch — bandwidth's
+      `init?` does not decline a valid stream, so coupling its absence to loudness never fires, the same
+      shape signal level metrics already documents. Two could not be verified as applied. The stale A→B
+      bundle-atomicity property is also not asserted yet.
+
 - [x] 5.3 **The container refactor is due.** `SourceInspectionOutcome.inspected` already carries five
       labelled payloads and its own note says a sixth "should not simply be appended". Decide here
       whether this change introduces the container or records why it does not — do not append silently.
