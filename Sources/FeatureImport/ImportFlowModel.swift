@@ -42,8 +42,15 @@ public final class ImportFlowModel {
         case none
         /// A second file is being chosen or inspected.
         case loading
-        /// The comparison of the report on screen against the second file's report.
-        case ready(FileComparison)
+        /// The comparison of the report on screen against the second file's report, and — once both
+        /// files have settled their measurements — the comparison of those too.
+        ///
+        /// **The second is optional and the first is not**, which is the whole shape of this state. A
+        /// technical comparison is complete the moment the second report exists and must not wait for a
+        /// PCM read; a measurement comparison cannot exist until *both* sides have finished measuring.
+        /// One case with an optional rather than two states, because they are one answer about one pair
+        /// of files: two states could drift apart, and a stale guard would have to protect both.
+        case ready(FileComparison, MeasurementComparison?)
         /// The second file could not be opened for inspection at all.
         case failed(message: String)
     }
@@ -79,6 +86,16 @@ public final class ImportFlowModel {
     /// primary inspection, and a late waveform or spectrogram still lands.
     private var comparisonTask: Task<Void, Never>?
     private var currentComparisonOperation = 0
+
+    /// The compared file's settled measurements, retained so the measurement comparison can be rebuilt
+    /// if the **primary** file finishes measuring afterwards — which it can, because the compare action
+    /// is offered the moment a report is on screen and the two files then read concurrently.
+    ///
+    /// It belongs to whichever comparison operation is current: cleared when one starts, when one is
+    /// dismissed, and when a new primary inspection ends the comparison. Nothing reads it without also
+    /// reading `comparison`, so a bundle can never be paired with another operation's technical
+    /// comparison.
+    private var comparedMeasurements: ReportMeasurements?
 
     public init(action: @escaping SourceInspectionAction) {
         self.action = action
@@ -127,18 +144,25 @@ public final class ImportFlowModel {
         let operation = currentComparisonOperation
 
         let previous = comparison
+        let previousMeasurements = comparedMeasurements
+        comparedMeasurements = nil
         comparison = .loading
 
         let task = Task { [weak self] in
             let outcome = await action { update in
                 guard let self, operation == self.currentComparisonOperation else { return } // superseded
-                // Only the report takes part. The second file's visualisations settle into nothing
-                // here: this slice does not draw them, and they cannot change a technical fact.
+                // **Only the report takes part, and that has not changed.** The technical comparison is
+                // complete the moment it exists and is published immediately; the measurement comparison
+                // is deliberately *not* assembled from these progressive updates, because it must be
+                // atomic — see `settle`.
                 guard case let .report(report) = update else { return }
-                self.comparison = .ready(FileComparison(first: primary, second: report))
+                self.comparison = .ready(FileComparison(first: primary, second: report), nil)
             }
             guard let self, operation == self.currentComparisonOperation else { return } // superseded
-            self.settle(outcome, against: primary, restoringOnCancellation: previous)
+            self.settle(
+                outcome, against: primary,
+                restoringOnCancellation: previous, andMeasurements: previousMeasurements
+            )
         }
         comparisonTask = task
         await task.value
@@ -148,6 +172,7 @@ public final class ImportFlowModel {
     public func dismissComparison() {
         comparisonTask?.cancel()
         currentComparisonOperation += 1 // so a result already in flight cannot land afterwards
+        comparedMeasurements = nil
         comparison = .none
     }
 
@@ -155,20 +180,50 @@ public final class ImportFlowModel {
     private func settle(
         _ outcome: SourceInspectionOutcome,
         against primary: InspectionReport,
-        restoringOnCancellation previous: ComparisonState
+        restoringOnCancellation previous: ComparisonState,
+        andMeasurements previousMeasurements: ReportMeasurements?
     ) {
         switch outcome {
-        case let .inspected(report, _):
-            // Normally already set from the update; this is the backstop for a caller that reported
-            // nothing, so a comparison cannot stay stuck on `loading`. Every sample-based analysis is
-            // discarded here as deliberately as it is above: a comparison compares reports.
-            comparison = .ready(FileComparison(first: primary, second: report))
+        case let .inspected(report, analyses):
+            // The technical half is normally already set from the update; this is the backstop for a
+            // caller that reported nothing, so a comparison cannot stay stuck on `loading`.
+            //
+            // **The measurements are taken here and nowhere else.** They are assembled from the settled
+            // outcome rather than from the progressive updates, so the four are published together or
+            // not at all: a comparison holding this file's loudness beside another file's true peak is
+            // not a thing this flow can produce. The visualisations are still discarded, because
+            // `ReportMeasurements` has no field either could occupy.
+            comparedMeasurements = analyses.settledMeasurements
+            comparison = .ready(FileComparison(first: primary, second: report), nil)
+            publishMeasurementComparisonIfBothSettled()
         case .cancelled:
-            // Neutral: dismissing the picker is not a statement about either file.
+            // Neutral: dismissing the picker is not a statement about either file. The comparison that
+            // was on screen returns **with** the bundle it was built from, so a later settling of the
+            // primary file refreshes that one rather than a superseded file's.
             comparison = previous
+            comparedMeasurements = previousMeasurements
         case .preparationFailed:
             comparison = .failed(message: "That file could not be opened for comparison.")
         }
+    }
+
+    /// Publishes the measurement comparison **only when both files have finished measuring**.
+    ///
+    /// Called from two places, and it has to be: the compared file can settle first, and so can the
+    /// primary one. Whichever finishes last is the one that publishes, and until then the technical
+    /// comparison stands alone rather than being held back for it.
+    ///
+    /// **A primary file still measuring is not a primary file with no measurements.** Publishing then
+    /// would report its loudness as missing when it is a second away — a statement about this run
+    /// dressed up as a fact about the file — which is why `settledMeasurements` returns `nil` for
+    /// *unfinished* and this waits for it.
+    private func publishMeasurementComparisonIfBothSettled() {
+        guard case let .ready(technical, _) = comparison,
+              let second = comparedMeasurements,
+              case let .report(presentation) = state,
+              let first = presentation.settledMeasurements
+        else { return }
+        comparison = .ready(technical, MeasurementComparison(first: first, second: second))
     }
 
     /// Records that a drop could not be turned into an inspection. `state` is deliberately untouched.
@@ -206,6 +261,7 @@ public final class ImportFlowModel {
         // result on screen whose left-hand side the user can no longer see.
         comparisonTask?.cancel()
         currentComparisonOperation += 1
+        comparedMeasurements = nil
         comparison = .none
 
         dropRejection = nil // an accepted operation supersedes any pending refusal
@@ -253,21 +309,25 @@ public final class ImportFlowModel {
             guard let settled = SignalLevelMetricsState(outcome) else { return }
             presentation.signalLevelMetrics = settled
             state = .report(presentation)
+            publishMeasurementComparisonIfBothSettled()
         case let .truePeak(outcome):
             guard case var .report(presentation) = state else { return }
             guard let settled = TruePeakState(outcome) else { return }
             presentation.truePeak = settled
             state = .report(presentation)
+            publishMeasurementComparisonIfBothSettled()
         case let .significantBandwidth(outcome):
             guard case var .report(presentation) = state else { return }
             guard let settled = SignificantBandwidthState(outcome) else { return }
             presentation.significantBandwidth = settled
             state = .report(presentation)
+            publishMeasurementComparisonIfBothSettled()
         case let .loudness(outcome):
             guard case var .report(presentation) = state else { return }
             guard let settled = LoudnessState(outcome) else { return }
             presentation.loudness = settled
             state = .report(presentation)
+            publishMeasurementComparisonIfBothSettled()
         }
     }
 
@@ -306,6 +366,9 @@ public final class ImportFlowModel {
             } else {
                 state = .report(presentation)
             }
+            // The backstop fills whatever was still `loading`, so this is the last moment the primary
+            // file can become settled — and therefore the last chance to publish the pair.
+            publishMeasurementComparisonIfBothSettled()
         case .cancelled:
             state = previous // neutral: back to exactly where the user was
         case .preparationFailed:

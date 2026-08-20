@@ -19,7 +19,7 @@ struct ComparisonFlowPresentationTests {
         switch state {
         case .none: .none
         case .loading: .loading
-        case let .ready(comparison): .ready(comparison)
+        case let .ready(comparison, _): .ready(comparison)
         case let .failed(message): .failed(message: message)
         }
     }

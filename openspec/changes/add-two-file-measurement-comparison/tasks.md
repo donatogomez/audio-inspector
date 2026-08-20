@@ -74,11 +74,10 @@ be promoted by claiming it.
       **Done.** No Foundation, no I/O, no `URL`, no framework; boundaries green.
 - [x] 2.5 **No aggregate of any kind** — no score, similarity, confidence, count of differences or
       `allSame` — and a test that the type exposes none.
-
-## 3. Flow
-
       **Done.** `MeasurementComparisonBoundaryTests` asserts the field set over `Mirror` and sweeps for
       score, similarity, confidence, `allSame`, `isIdentical`, `matches` and the rest.
+
+## 3. Flow
 - [ ] 3.1 Stop discarding the compared file's analyses; collapse `…Outcome` to settled optionals in
       `FeatureImport`, and the primary file's `…State` the same way. No lifecycle reaches the domain.
 - [ ] 3.2 Publish the comparison **twice** — technical when the report arrives, measurements when they

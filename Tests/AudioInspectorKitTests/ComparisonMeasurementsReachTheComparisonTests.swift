@@ -8,19 +8,19 @@ import FeatureImport
 
 @testable import AudioInspectorApp
 
-// **Task 1.1 of `add-two-file-measurement-comparison`, demonstrated rather than read.**
+// **Task 1.1, inverted by task 3.1 — and inverted rather than replaced.**
 //
-// The claim the whole change rests on is that comparing a second file *already pays* for its
-// measurements and then throws them away — so retaining them costs nothing. That claim is easy to make
-// from two lines of source and worth very little until something drives the real pipeline and watches
-// what happens.
+// It began as the evidence that comparing a second file *already pays* for its measurements and then
+// throws them away, and it said so by asserting that nothing the read produced changed the comparison.
+// Group 3 made that false on purpose. What it asserts now is the other half of the same claim: the same
+// measurements, produced by the same single read, **arrive in the comparison** — so the compute cost of
+// the feature really was zero and only retention was added.
 //
-// This suite is also the **baseline** those two lines will be measured against: when the flow stops
-// discarding, the assertions below about the comparison being unchanged are the ones that must flip,
-// and nothing else in them may move.
+// The read count and the "no second inspection" assertions are unchanged from the original, and must
+// stay that way: they are what makes "only retention was added" a measurement rather than a hope.
 @MainActor
-@Suite("Feature — what a comparison computes and then discards")
-struct ComparisonDiscardedMeasurementsTests {
+@Suite("Feature — a comparison measures a file once, and keeps the measurements")
+struct ComparisonMeasurementsReachTheComparisonTests {
 
     /// Counts what the real pipeline actually opened for the compared file.
     private final class Counts: @unchecked Sendable {
@@ -65,7 +65,7 @@ struct ComparisonDiscardedMeasurementsTests {
 
         func run(_ onUpdate: InspectionUpdateHandler) async -> SourceInspectionOutcome {
             runCount += 1
-            await onUpdate(.report(report))
+            onUpdate(.report(report))
             started?.resume(); started = nil
             await withCheckedContinuation { release = $0 }
             return .inspected(report, analyses: InspectionAnalyses(
@@ -104,15 +104,12 @@ struct ComparisonDiscardedMeasurementsTests {
         )
     }
 
-    /// **The whole of task 1.1 in one sequence.** A real file is compared against a report on screen,
-    /// through the real coordinator and the real decoder.
-    ///
-    /// Four things are asserted together because separately none of them means much: the compared file
-    /// really is inspected (one decoder, one read), its four measurements really are produced, the
-    /// comparison really is complete before any of that finishes, and none of it changes the
-    /// comparison afterwards.
-    @Test("comparing a file measures it once, in full, and keeps none of it")
-    func aComparisonComputesEveryMeasurementAndDiscardsThem() async throws {
+    /// **One sequence, five claims.** A real file is compared against a report on screen, through the
+    /// real coordinator and the real decoder: the compared file is inspected exactly once, its four
+    /// measurements are produced, the **technical** comparison is complete before any of that finishes,
+    /// the **measurement** comparison is not published until it settles, and then it is.
+    @Test("comparing a file measures it once and the measurements reach the comparison")
+    func aComparisonMeasuresOnceAndKeepsTheMeasurements() async throws {
         try await withTemporaryDirectory { directory in
             let url = try fixture(in: directory)
             let counts = Counts()
@@ -183,16 +180,14 @@ struct ComparisonDiscardedMeasurementsTests {
         }
     }
 
-    /// **The structural half, stated separately because it cannot be shown dynamically.**
+    /// **The technical half is still a function of the two reports and nothing else**, which is what
+    /// keeps `FileComparison`'s integrity argument intact now that something else travels beside it.
     ///
-    /// D above proves the comparison did not *change*. It cannot prove the measurements are absent from
-    /// it, because `FileComparison` has no field they could occupy: the only way to observe their
-    /// absence is that the type cannot express them. That is evidence of a different kind and is not
-    /// dressed up as the same kind — asserted here as equality with a comparison built from the two
-    /// reports alone, which is the strongest dynamic statement available and still leaves the
-    /// structural claim resting on the type.
-    @Test("the comparison is a function of the two reports and nothing else")
-    func theComparisonIsDerivedFromReportsAlone() async throws {
+    /// And the visualisations are still out: a waveform and a spectrogram are pictures of the samples
+    /// rather than measurements of them, and `ReportMeasurements` has no field either could occupy — so
+    /// their exclusion is enforced by the type, which this states rather than tries to observe.
+    @Test("the technical comparison is still derived from the two reports alone")
+    func theTechnicalComparisonIsDerivedFromReportsAlone() async throws {
         try await withTemporaryDirectory { directory in
             let url = try fixture(in: directory)
             let primary = PrimaryAction(report: report(named: "a.wav"))
@@ -208,12 +203,18 @@ struct ComparisonDiscardedMeasurementsTests {
             })
 
             let second = try #require(capture.secondReport)
-            guard case let .ready(comparison) = flow.comparison else {
+            guard case let .ready(technical, _) = flow.comparison else {
                 Issue.record("no comparison was produced"); return
             }
             #expect(
-                comparison == FileComparison(first: primary.report, second: second),
-                "the comparison carries something the two reports alone do not determine"
+                technical == FileComparison(first: primary.report, second: second),
+                "the technical comparison carries something the two reports alone do not determine"
+            )
+            // `ReportMeasurements` has four fields and neither visualisation is one of them.
+            #expect(
+                Set(Mirror(reflecting: ReportMeasurements.none).children.compactMap(\.label))
+                    == ["signalLevelMetrics", "truePeak", "loudness", "programmeBandwidth"],
+                "a visualisation reached the measurement bundle"
             )
 
             primary.finish()
