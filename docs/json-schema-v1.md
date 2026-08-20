@@ -115,10 +115,10 @@ measurement is byte-identical to one exported before this object existed. Its ab
 warning and never changes `inspectionStatus`; a measurement is orthogonal to whether the file's
 metadata could be read.
 
-It currently holds three **siblings** — `signalLevels`, `truePeak` and `integratedLoudness` — and
-**each is independently omitted** when its own measurement does not exist. All eight combinations are
-therefore representable and none is faked: any one alone, any pair, all three, or none (in which case
-`measurements` itself is absent).
+It currently holds four **siblings** — `signalLevels`, `truePeak`, `integratedLoudness` and
+`programmeBandwidth` — and **each is independently omitted** when its own measurement does not exist.
+All sixteen combinations are therefore representable and none is faked: any one alone, any subset, all
+four, or none (in which case `measurements` itself is absent).
 There is deliberately **no aggregate** over them: nothing says "the measurements succeeded", because
 each answers only for itself. A new measurement adds a sibling key, which is additive and needs no
 version bump.
@@ -298,6 +298,94 @@ determinism, and `schemaVersion` staying `1`) and by
 `EndToEndFlowTests.theRealLoudnessPathReachesTheExportedDocument`, which drives a real file through the
 real decode at 44.1, 48 and 96 kHz and asserts the exported number is the measured one and the exported
 weighting is the one that actually ran.
+
+### `measurements.programmeBandwidth`
+
+How far up the file's programme reaches **persistently**, inside a declared budget — the wire form of
+the domain's `SignificantBandwidth`. Present only when a measurement was actually produced; every state
+that is not one collapses to the key being absent before export is reached, and so does a measurement
+that ran and found no qualifying bin.
+
+**The key names the measurement, not an inference.** It is deliberately not `cutoff` or
+`frequencyLimit`: both assert a filter, and no filter was observed — the value is the centre of the
+highest bin that met the criterion, which is a fact about content, not about processing. It is not
+`effectiveSampleRate`, which would assert the file should have been stored differently. And it is not
+`significantBandwidth`, the domain type's own name, where the product's name is what a document should
+carry.
+
+**The unit is hertz and the value is unrounded.** The report on screen rounds to a step no finer than
+the resolution — `16.1 kHz` for the example below — because a displayed digit must correspond to a
+distinction the analysis can make. That rounding is a display convention applied in the app's UI layer,
+never the datum: `16101.5625` is what travels. No unit string accompanies either number; this contract
+states the unit, the document does not.
+
+| Field | Type | Null? | Notes |
+| --- | --- | --- | --- |
+| `overall.frequency` | number | no | Hertz. The highest reading any channel produced — a summary of the per-channel facts beside it, never a separate measurement and never a combination of them. |
+| `overall.resolution` | number | no | Hertz. The width of one analysis bin. **Not an uncertainty** — see below. |
+| `channels[]` | array | — | One entry per channel, in the stream's own order. An entry is `null` where that channel carried nothing meeting the criterion; the position is the channel index, so an entry is never dropped. No layout is named: the pipeline reads channel counts, never labels. |
+| `channels[].frequency` | number | no | Hertz, as `overall.frequency`. |
+| `channels[].resolution` | number | no | Hertz, as `overall.resolution`. |
+| `method.identifier` | string | no | Stable identifier of the whole rule set (`"programme-bandwidth-60db-v1"`): the intra-window prominence threshold, the persistence criterion and the programme budget are all fixed by it. |
+| `method.windowFrames` | number | no | Frames per transform. Part of the identity, not decoration — the persistence criterion counts windows, so what a window *is* changes what the number means. |
+| `method.hopFrames` | number | no | Frames advanced between transforms. |
+| `method.sampleRate` | number | no | Hertz. The rate the analysis ran at, without which the two above are not interpretable. **Not a comparison against the file's declared rate** — see below. |
+
+**`resolution` is a bin width, and deliberately not an uncertainty.** It states the grid the answer is
+quantised onto, not an interval the true value lies within. It is therefore a **separate field** and
+never an operator: no `±`, no `uncertainty`, no `error`, no `tolerance`, no `margin`. Two things make
+the interval form wrong rather than merely imprecise. It would claim a bound this measurement does not
+support; and the reading is biased **one way** — upward, because an analysis window's spectral leakage
+can light a bin above where content ends but cannot light one below it — so a symmetric interval would
+be wrong in shape as well as in kind.
+
+**The constants behind the method are not exported as fields**, and that is the point of the identifier.
+Threshold, persistence fraction and budget are not independently variable: emitting them as data would
+invite a consumer to believe some other combination was possible, when the versioned identifier is
+precisely what says it was not. `windowFrames`, `hopFrames` and `sampleRate` are exported because they
+are part of the identity — the analysis window is fixed in **time** rather than in samples, so the
+frame counts differ per rate and a consumer cannot reconstruct them.
+
+Every field comes from the measurement's **own** recorded method. The mapper never derives the window
+from the sample rate and never recomputes the resolution from the geometry, so a document always
+describes the methodology that actually ran.
+
+**Nothing here is a verdict, and nothing is an inference about the file's origin.** There is no
+comparison against the declared sample rate — `method.sampleRate` records what the analysis ran at, and
+the document draws no conclusion from it being equal to or different from anything. There is no
+confidence, no flag, no score, and no field naming or guessing at a codec. In particular this
+measurement does **not** show that a file was upsampled, transcoded, or produced from a lossy source:
+a band limit is a fact about content, and the causes that could produce one are not distinguishable
+from it. This contract provides no field in which such a conclusion could be expressed.
+
+Example, beside its three siblings when all four are available:
+
+```json
+"measurements": {
+  "programmeBandwidth": {
+    "overall": { "frequency": 16101.5625, "resolution": 23.4375 },
+    "channels": [
+      { "frequency": 16101.5625, "resolution": 23.4375 },
+      { "frequency": 16101.5625, "resolution": 23.4375 }
+    ],
+    "method": {
+      "identifier": "programme-bandwidth-60db-v1",
+      "windowFrames": 2048,
+      "hopFrames": 512,
+      "sampleRate": 48000
+    }
+  }
+}
+```
+
+Pinned by `JSONReportExportProgrammeBandwidthTests` (unit and precision, the resolution never rendered
+as an interval, the method copied rather than reconstructed, channel indices preserved with `null`,
+exact key sets, absence as an omitted key rather than `null`, byte-identity when absent, coexistence
+with all three siblings, privacy, determinism, and `schemaVersion` staying `1`) and by
+`ProgrammeBandwidthExportFlowTests`, which drives real files through the real decode at 44.1, 48, 96 and
+192 kHz, asserts the exported numbers are the measured ones and the exported window is the one that ran,
+and asserts that a programme with an isolated click in it exports **byte-identical** bytes to the same
+programme without it.
 
 ## Stable codes
 

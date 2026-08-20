@@ -471,9 +471,9 @@ struct ProgrammeBandwidthDTO: Encodable {
 /// so a further measurement adds a sibling key rather than replacing this one or forcing a new
 /// top-level field — which is exactly what `truePeak`, and then `integratedLoudness`, did.
 ///
-/// **Every key is optional and each is omitted when its measurement does not exist**, so all eight
+/// **Every key is optional and each is omitted when its measurement does not exist**, so all sixteen
 /// combinations are representable and none is faked: any one alone (signal levels alone stays
-/// byte-identical to before true peak existed), any pair, all three, or — when none exists — no
+/// byte-identical to before true peak existed), any subset, all four, or — when none exists — no
 /// `measurements` object at all. There is deliberately **no aggregate**: nothing here says "the
 /// measurements succeeded", because nothing downstream should be able to ask a question about them
 /// together.
