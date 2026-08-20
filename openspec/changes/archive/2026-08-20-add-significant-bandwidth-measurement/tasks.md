@@ -608,12 +608,20 @@ ticking it would claim work that does not exist. Each entry below says where the
       `App/AudioInspector.xcodeproj` links it as the shipped app target, and
       `xcodebuild -scheme AudioInspector -configuration Debug build` succeeds — this task's mention of
       it is current, not stale.
-- [ ] 10.2 Decide ADR-0023's status from what was actually done, update `CURRENT.md`, and archive
+- [x] 10.2 Decide ADR-0023's status from what was actually done, update `CURRENT.md`, and archive
       through `openspec archive` **after merge**.
-      **Two of three done; the third is gated on merge by this task's own wording.** ADR-0023's status
-      was decided from what was actually done and is now **`Accepted` (2026-08-20)**, promoted on its
-      three literal conditions and on nothing else, with a `Promotion` section recording the evidence
-      *and* what it does not cover — including that the manual pass was narrower than ADR-0019's, which
-      is stated rather than smoothed over. `CURRENT.md` is updated. **The archive has not run**, and
-      must not: this task places it after merge, and nothing has been pushed, opened as a pull request
-      or merged. This entry stays open until then.
+      **Done, and the third clause waited for the condition it names.** ADR-0023's status was decided
+      from what was actually done and is **`Accepted` (2026-08-20)**, promoted on its three literal
+      conditions and on nothing else, with a `Promotion` section recording the evidence *and* what it
+      does not cover — including that the manual pass was narrower than ADR-0019's, which is stated
+      rather than smoothed over. **Merged** as PR #48: a true two-parent merge commit (`f88efe8`) whose
+      second parent is the branch head (`8d309c2`), verified as an ancestor of `origin/main` rather than
+      inferred from the merge method. `CURRENT.md` was refreshed and the change archived **through the
+      CLI**, after the merge and never before, as `2026-08-20-add-significant-bandwidth-measurement`.
+      The spec promotion was additive — `audio-significant-bandwidth: create`, four ADDED requirements,
+      nothing modified or removed — and the five pre-existing capabilities are byte-identical to what
+      they were before it ran.
+      **This brings the change to 43/47, which is the intended final count.** The archive warned that
+      five tasks were incomplete and archiving proceeded anyway, deliberately: 9.1–9.4 are deferred
+      follow-ups, the CLI moves `tasks.md` verbatim rather than reinterpreting a checkbox, and
+      `add-true-peak-measurement` was archived on the same terms with five of its own left open.
