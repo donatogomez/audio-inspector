@@ -571,17 +571,49 @@ modelling lifecycle that must never reach the wire.
 
 ## 9. Deferred, and named so it is not quietly dropped
 
+**Considered and deliberately scoped out — none of it was started, and none of it is pretended.** The
+checkboxes stay unticked on this repository's own precedent: `add-true-peak-measurement` was archived
+with five deferred tasks open (its group 11), because a deferred item is neither done nor forgotten and
+ticking it would claim work that does not exist. Each entry below says where the work actually lives.
+
 - [ ] 9.1 **Shared STFT stage** — `SpectrogramAccumulator` already computes 1025 bins per hop and
       discards the resolution. Extract it once `average spectrum` gives it a second consumer, proving
       equivalence against the values this change pins. Not done here.
+      **Still deferred, and the trigger is unchanged: it needs a second consumer.** This change measured
+      what a private transform costs rather than assuming it — the sixth consumer adds what it costs
+      alone, 0.05–0.20 s per audio-minute in Release, with no overhead beyond itself (5.4) — so the
+      extraction is an optimisation with a known price rather than a necessity. The equivalence values
+      it would have to reproduce now exist and are pinned by groups 2, 3 and 6.
 - [ ] 9.2 **Average spectrum** — the other unbuilt item of the roadmap's Phase 1b. Not started here.
+      **Still deferred.** It is the second consumer 9.1 waits for, and the two are one piece of work.
 - [ ] 9.3 **Comparison between two files** — an overlap test within resolutions, not equality, and an
       extension of `FileComparison`'s contract rather than a row. Not designed here.
+      **Still deferred, and this change deliberately did not touch comparison at all**: no comparison
+      production file is in its diff. The shape it would need is now more constrained than when this was
+      written — an overlap must be tested within *each file's own* resolution, and this change
+      establishes that the resolution is ~23 Hz at every rate because the window is time-locked.
 - [ ] 9.4 **Findings / Evidence·Inference·Conclusion** — this change builds one indicator; an evidence
       engine needs several. Not started here.
+      **Still deferred, and this change is the strongest argument for keeping it that way.** Programme
+      bandwidth is precisely the indicator a reader most wants turned into a conclusion about a file's
+      origin, and both surfaces refuse to: ADR-0023 §1, the presentation's vocabulary sweep, and the
+      export contract, which provides no field in which such a conclusion could be written.
 
 ## 10. Gates and closure
 
-- [ ] 10.1 Four gates green plus the Xcode build and `git diff --check`.
+- [x] 10.1 Four gates green plus the Xcode build and `git diff --check`.
+      **Done.** `./Scripts/check-boundaries.sh`, `swift build -Xswiftc -warnings-as-errors`,
+      `swift test` (run twice) and `OPENSPEC_TELEMETRY=0 openspec validate --all --strict`, plus
+      `git diff --check` clean. **The Xcode build applies and was run**: the package is SwiftPM but
+      `App/AudioInspector.xcodeproj` links it as the shipped app target, and
+      `xcodebuild -scheme AudioInspector -configuration Debug build` succeeds — this task's mention of
+      it is current, not stale.
 - [ ] 10.2 Decide ADR-0023's status from what was actually done, update `CURRENT.md`, and archive
       through `openspec archive` **after merge**.
+      **Two of three done; the third is gated on merge by this task's own wording.** ADR-0023's status
+      was decided from what was actually done and is now **`Accepted` (2026-08-20)**, promoted on its
+      three literal conditions and on nothing else, with a `Promotion` section recording the evidence
+      *and* what it does not cover — including that the manual pass was narrower than ADR-0019's, which
+      is stated rather than smoothed over. `CURRENT.md` is updated. **The archive has not run**, and
+      must not: this task places it after merge, and nothing has been pushed, opened as a pull request
+      or merged. This entry stays open until then.
