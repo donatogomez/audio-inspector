@@ -275,8 +275,18 @@ struct MeasurementComparisonPresentationTests {
         #expect(reason.contains(mentions), "\"\(reason)\" does not name the side that had no value")
         #expect(row.difference == nil)
         // Absence is words, never a number — and specifically never zero.
+        //
+        // **Asserted as "this is not parseable as a number", not as "this equals the constant".**
+        // A control replacing the constant with "0" slipped straight through a test written against
+        // the constant, which is the tautology every copy assertion is one step away from.
         #expect(row.first.value == nil && row.second.value == nil)
         #expect(!reason.contains("0"))
+        #expect(
+            Double(MeasurementComparisonCopy.noValue) == nil,
+            "an absence is said with the number \(MeasurementComparisonCopy.noValue)"
+        )
+        #expect(row.first.spoken == MeasurementComparisonCopy.noValue)
+        #expect(Double(row.first.spoken) == nil, "an absent side is announced as a number")
     }
 
     @Test("neither file having a value is said once, not twice")
@@ -592,6 +602,24 @@ struct MeasurementComparisonPresentationTests {
             SignalLevelMetricsCopy.title, TruePeakCopy.title,
             LoudnessCopy.title, ProgrammeBandwidthCopy.title,
         ])
+    }
+
+    /// **Colour is never the signal** (task 6.6, and ADR-0017's rule inherited).
+    ///
+    /// The one styling hook the model exposes is `isSecondary`, and it tracks *"this cell is an
+    /// explanation rather than a value"* — nothing else. `Same` and `Different` are styled identically,
+    /// the two bandwidth words are styled identically, and a positive difference is styled exactly as a
+    /// negative one. A reader who cannot distinguish colours loses nothing, because the words carry the
+    /// whole meaning.
+    @Test("nothing but an explanation is styled differently, and the outcome words never are")
+    func colourIsNeverTheSignal() {
+        let outcomes: [MeasurementOutcomeDisplay] = [.same, .different, .indistinguishable, .separated]
+        for outcome in outcomes {
+            #expect(!outcome.isSecondary, "\(outcome.text) is styled apart from its siblings")
+        }
+        #expect(MeasurementOutcomeDisplay.notComparable(reason: "x").isSecondary)
+        // Every outcome is distinguishable by its text alone.
+        #expect(Set(outcomes.map(\.text)).count == outcomes.count)
     }
 
     /// **No aggregate of any kind**, mirroring the domain's own refusal: no count of how many differ,
