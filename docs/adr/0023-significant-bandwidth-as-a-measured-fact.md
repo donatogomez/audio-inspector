@@ -1,14 +1,11 @@
 # ADR-0023: Significant bandwidth as a measured fact, independent of the spectrogram
 
-- **Status**: **Proposed.** Two of its three promotion conditions are now **met**, and one remains.
-  The first: the threshold, the persistence criterion, the analysis window, the reporting contract and
-  the eligibility rule are all decided from measurement on graded fixtures, and the full rule set passes
-  twelve of twelve pre-registered constraints in a single validation. The second: **the production
-  impulse control is satisfied** — an isolated transient provably does not widen the reported band, on
-  the real path from file to published outcome, and the persistence criterion's turnover is asserted on
-  both sides. **Manual surface validation is pending**: the surface now exists and is pinned by tests,
-  and no person has looked at it — the runbook and its pre-computed expected values are in
-  `docs/manual-validation-mvp.md`, marked PREPARED. Partial evidence does not promote it.
+- **Status**: **Accepted** (2026-08-20). Promoted on the three conditions this record set for itself
+  and on nothing else: the threshold and the persistence criterion were decided **from measurement on
+  graded fixtures** rather than from the sharp-edged ones the motivating spike used; the impulse control
+  passes **against production code**, so an isolated transient provably does not widen the reported
+  band; and the surface was **validated by a person looking at it**. The evidence, and what it does
+  **not** cover, is in **Promotion** below.
 - **Date**: 2026-08-18
 - **Deciders**: Project maintainer
 - **Related**: **ADR-0016** (the STFT spectrogram this deliberately does *not* build on), ADR-0020 and
@@ -59,8 +56,8 @@ spike measured whether that works. It does not, and the measurements decided thi
    **Since measured**, on graded fixtures, in
    `docs/spikes/2026-08-19-significant-bandwidth-methodology.md`: the threshold is **−50 dB relative to
    the loudest bin in the same analysis window**, and the persistence criterion is **presence in ≥ 10 %
-   of eligible windows**. This does not promote the record — see the status above, whose other two
-   conditions are untouched.
+   of eligible windows**. That settled the first of the three conditions this record set for itself;
+   the other two were met later, and **Promotion** below records how.
 
 5. **The measurement declares what it is looking at, and the declaration is part of it.**
    Measured: a window containing only a noise floor is indistinguishable, *from inside itself*, from one
@@ -204,6 +201,65 @@ spike measured whether that works. It does not, and the measurements decided thi
 - **Shipping an upsampling indicator with it.** Rejected: one indicator is not an evidence engine, and
   the methodology requires several independent ones with alternative explanations.
 
+## Promotion — what was demonstrated, and what it does not cover
+
+Recorded when this moved from `Proposed` to `Accepted`, on `add-significant-bandwidth-measurement`'s
+group 10. Three conditions, each read literally rather than by summary.
+
+**1. The threshold and the persistence criterion, from measurement on graded fixtures.** The motivating
+spike's fixture had an infinitely sharp edge, so its threshold sweep moved the answer only 328 Hz across
+80 dB — it could not discriminate, and neither could anything built on it. Roll-offs at 6, 12, 24, 48,
+96, 192 and 480 dB per octave above an 8 kHz and a 16 kHz knee replaced it, and every reading matches
+the analytic prediction `knee · 2^(−T/S)`. On those, the same sweep moves the answer from 8 508 to
+23 543 Hz. The threshold is **−50 dB relative to each window's own spectral peak**, the midpoint of an
+admissible region bracketed by fixtures with 20 dB of margin either way; the four rejected references
+were each measured rather than argued out. The persistence criterion is **≥ 10 % of eligible windows**.
+`docs/spikes/2026-08-19-significant-bandwidth-methodology.md`.
+
+**2. The impulse control, against production code.** Every earlier impulse test measured the reference
+method or the accumulator fed chunks from an array. The gate that promotes this drives what the app
+actually does: a written file, the real `AVFoundationAudioDecoder`, `SharedPCMAnalysisGeneration`
+folding each chunk into six consumers, and the outcome the composition publishes. A full-scale click
+inside a 16 kHz programme leaves the published reading **identical** — equality with the undisturbed
+programme, not a tolerance around it, because a control that allowed drift would pass while the
+transient was moving the answer. The turnover is pinned on **both** sides: 28 of 278 windows are needed,
+and it takes eight impulses to reach it rather than the seven that four-windows-each would predict, the
+extra one being the Hann taper on the outermost window. Disabling persistence fails that control
+directly. `ProgrammeBandwidthProductionImpulseTests`.
+
+**3. The manual validation.** A person opened the app and read the section on five files whose expected
+values had been computed through the production path **before** the app was opened: a 16 kHz programme
+(16.1 kHz / 23 Hz), a 20 kHz programme (20.1 kHz / 23 Hz), digital silence ("Not computable for this
+file."), the 16 kHz programme with one full-scale click in it (16.1 kHz / 23 Hz), and a 64 kbps MP3
+(16.8 kHz / 23 Hz). The section sat where it was designed to, after the integrated loudness and before
+the spectrogram. No warning, badge or visual judgement appeared on any of them — including the reading
+near the top of the band, and including the MP3. And the file with the click was **indistinguishable in
+the measurement** from the file without it: decision 2 observed rather than argued, which is the whole
+reason those two fixtures were built as a pair. `docs/manual-validation-mvp.md`.
+
+**What this promotion does not cover, and is not claimed to.**
+
+- **The manual pass is narrower than ADR-0019's was.** Light, dark and window resizing were checked in
+  true peak's pass and were **not** reported in this one; neither was a by-hand A→B stale selection, a
+  word-by-word read of the section for forbidden vocabulary, or the exact wording of the method line.
+  Each is pinned by a test — `ProgrammeBandwidthPresentationTests` asserts the strings
+  character-for-character, `InspectionAnalysesStaleAtomicityTests` asserts the stale bundle — so what is
+  unverified is that they survive to the screen, not that they are right. The condition this record set
+  asks for a person looking at the surface, and that happened; the rest is the runbook's own
+  complementary coverage and stays open.
+- **No VoiceOver coverage.** The traversal gap recorded against ADR-0015 and ADR-0017 is unchanged. This
+  adds a section to the same scrolling area every other analysis lives in, so it inherits the gap rather
+  than fixing or worsening it, and task 7.4 was scoped to the structural half deliberately.
+- **The exported document was not read by hand.** It is pinned by
+  `JSONReportExportProgrammeBandwidthTests` and by `ProgrammeBandwidthExportFlowTests`, which drives real
+  files at four rates and asserts the exported numbers are the measured ones.
+- **The degenerate case is unchanged and is not a defect.** A file that is silence plus one click still
+  reads broadband, because eligibility discards silent windows and the click is then the whole
+  programme. It is recorded under *Negative / costs*, it was measured, and the change's task 6.2 — which
+  predicted the opposite — was corrected rather than the method.
+- **One machine, one appearance, one window size**, and the MP3 row is local evidence only: FFmpeg is not
+  on CI, and a skipped run is not coverage.
+
 ## Consequences
 
 ### Positive
@@ -236,8 +292,8 @@ spike measured whether that works. It does not, and the measurements decided thi
 
 ### What the integration cost, and what it proved
 
-Recorded here because it is evidence, not narrative. None of it promotes this record: the two remaining
-promotion conditions are untouched.
+Recorded here because it is evidence, not narrative. None of it promoted this record on its own — the
+integration is not one of the three conditions — but it is the ground the second and third stand on.
 
 **One read, and the container that made a sixth payload readable.** `InspectionAnalyses` groups only what
 an inspection derives from the file's samples. The report stays outside it — it exists before the first
