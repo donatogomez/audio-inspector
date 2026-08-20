@@ -508,11 +508,66 @@ expected values are in `docs/manual-validation-mvp.md`, marked PREPARED, not exe
 
 ## 8. Export
 
-- [ ] 8.1 Additive under `measurements`, `schemaVersion` stays **1**, key omitted when absent, never
+**Done, and the export chain's own debt was paid first.** `ReportExporting`, `ReportExportAction` and
+`ReportExportModel` each carried a note saying three positional optionals was past the shape's
+comfortable width, that a container was the answer, and that introducing one touches every call site —
+so it was deferred to whoever added a fourth measurement, *precisely* so the refactor would not be
+hidden inside that change. Programme bandwidth is the fourth. `ReportMeasurements` landed on its own
+commit, before anything was added to it, and is **observationally neutral**: the exported bytes for all
+five combinations — nothing, signal levels alone, true peak alone, loudness alone, all three — are
+byte-identical before and after, compared by checksum, with the same 1381 tests passing unchanged.
+
+It lives in `AudioInspectorDomain` because both ends of the chain need it, and holds only settled domain
+measurements. `InspectionAnalyses` was considered and rejected on three independent grounds: it is the
+*flow's* bundle, it carries the waveform and the spectrogram, and its fields are `…Outcome` values
+modelling lifecycle that must never reach the wire.
+
+- [x] 8.1 Additive under `measurements`, `schemaVersion` stays **1**, key omitted when absent, never
       `null`.
-- [ ] 8.2 Carry the frequency, the resolution and the method identity. No verdict, no declared-rate
+      **Done.** A fourth sibling under `measurements`, `schemaVersion` unchanged, and a report exported
+      without it is **byte-identical** to one from before the key existed. Absence is the key not being
+      there — never `null`, never a zero, never Nyquist, never an empty object. A measurement can also
+      exist and carry **no reading** (its windows were eligible and no bin met the persistence
+      criterion); the Feature collapses that to no key as well, so the section's not-computable sentence
+      and the document never disagree. That is loudness's own rule, whose absence likewise has several
+      causes and exports none of them: **the document describes measurements, never why one does not
+      exist.**
+- [x] 8.2 Carry the frequency, the resolution and the method identity. No verdict, no declared-rate
       comparison, no oracle metadata.
-- [ ] 8.3 Document it in `docs/json-schema-v1.md` with the same honesty the loudness section uses.
+      **Done.** Hertz as unrounded `Double`, both numbers. The screen shows `16.1 kHz`; the wire carries
+      `16101.5625`, and a test asserts the two are **different** — a change that exported the displayed
+      number would otherwise pass a test that merely checked for a plausible figure.
+
+      **`resolution` is a separate field and never an interval.** It is the width of an analysis bin,
+      not an uncertainty, so there is no `±` and no `uncertainty`, `error`, `tolerance` or `margin`
+      anywhere. The interval form would be wrong twice: it would claim a bound this measurement does not
+      support, and the reading is biased **one way** — upward, by the window's leakage — so a symmetric
+      interval would be wrong in shape as well as in kind.
+
+      **The method is copied, never reconstructed.** One versioned identifier plus `windowFrames`,
+      `hopFrames` and `sampleRate`. The threshold, the persistence fraction and the budget are *not*
+      duplicated as fields: the identifier stands for the whole rule set, and emitting them as data
+      would invite a consumer to believe some other combination was possible. The frame counts *are*
+      exported because the window is fixed in **time**, so they differ per rate and cannot be
+      reconstructed. Nothing branches on a sample rate — a control that derives the window from the rate
+      fails the multi-rate test.
+
+      **No verdict anywhere.** No comparison against the declared rate, no confidence, no score, no
+      codec named or guessed at, and no field in which such a conclusion could be expressed. Channels
+      keep their index with `null` where a channel carried nothing, and no layout is named.
+- [x] 8.3 Document it in `docs/json-schema-v1.md` with the same honesty the loudness section uses.
+      **Done**, in the same shape and with the same refusals: the field table, why the key is not
+      `cutoff`, `frequencyLimit`, `effectiveSampleRate` or the domain's own name, why `resolution` is a
+      grid rather than an error bar, why the rule set's constants stand behind the identifier instead of
+      travelling as data, and an explicit statement that this measurement does **not** show a file was
+      upsampled, transcoded or produced from a lossy source — a band limit is a fact about content, and
+      the causes that could produce one are not distinguishable from it.
+
+      Ten negative controls, each applied and reverted: a rounded frequency, kilohertz, the resolution
+      rendered as an uncertainty pair, a hardcoded method, a window derived from the sample rate, an
+      explicit `null` key, `schemaVersion` 2, a `cutoffDetected` field, and persistence disabled so the
+      click diverges — all nine fail a test. The tenth, reintroducing positional optionals on the port,
+      is a compile error.
 
 ## 9. Deferred, and named so it is not quietly dropped
 
