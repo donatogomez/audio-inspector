@@ -376,5 +376,45 @@ own strongest spectral level — and the prominence threshold, the persistence f
 its length and its hop stay on the wire, where they are audit facts rather than a specification a reader
 has to parse.
 
+### What it exports, and the container that had to come first
+
+The wire decisions, recorded for the same reason the presentation ones were: each is a refusal, and the
+code alone does not explain what was refused.
+
+**The export chain's own debt was paid before this measurement was added to it.** `ReportExporting`,
+`ReportExportAction` and `ReportExportModel` each carried a note saying three positional optionals was
+past the shape's comfortable width, that a container was the answer, and that introducing one touches
+every call site — so the work was deferred to whoever added a fourth measurement, precisely so the
+refactor would not be hidden inside that change. `ReportMeasurements` landed on its own, proved
+byte-identical across all five existing combinations, before programme bandwidth became a field on it.
+`InspectionAnalyses` was rejected for it on three independent grounds: it is the flow's bundle, it
+carries the waveform and the spectrogram, and its fields model lifecycle that must never reach the wire.
+
+**The key is `programmeBandwidth`, and the unit is hertz.** Not `cutoff` or `frequencyLimit`, which
+assert a filter nobody observed; not `effectiveSampleRate`, which asserts the file should have been
+stored differently. Both numbers travel as the domain's unrounded `Double`: the screen shows `16.1 kHz`
+because a displayed digit must correspond to a distinction the analysis can make, and that rounding is a
+display convention, never the datum. A test asserts the wire value and the displayed value are
+*different*, because the change most likely to erode this is a well-meant tidy-up.
+
+**`resolution` is a separate field on the wire for the same reason it is a separate row on screen.** It
+is a bin width, not an uncertainty. This record already refuses a false bound, and the interval form
+would be wrong twice over — it would claim a bound the measurement does not support, and the reading is
+biased one way, so a symmetric interval would be wrong in shape as well as in kind.
+
+**The method is copied, and the rule set stands behind its identifier.** One versioned identifier plus
+the transform's own geometry. The threshold, the persistence fraction and the budget are deliberately
+*not* exported as fields: they are not independently variable, and emitting them as data would invite a
+consumer to believe some other combination was possible, when the identifier is precisely what says it
+was not. `windowFrames`, `hopFrames` and `sampleRate` are exported because the window is fixed in time,
+so they differ per rate and a consumer cannot reconstruct them. Nothing is derived from the sample rate:
+a document that inferred the method could describe one that never ran.
+
+**Absence is the key not being there**, including the case where a measurement ran and found no
+qualifying bin — the section says so in the report's not-computable words and the document says so by
+omitting the key, so the two never disagree. And the document provides **no field in which a conclusion
+could be expressed**: no comparison against the declared rate, no confidence, no score, no codec. The
+schema stays at version 1, because a new sibling key is additive.
+
 ### Neutral
 - No port changes, no export version change, no new dependency, and no second read.
