@@ -241,6 +241,48 @@ struct MeasurementComparisonAtomicityTests {
         #expect(flow.comparison == established, "cancelling changed the comparison on screen")
     }
 
+    /// **A restored comparison keeps the bundle it was built from**, so a primary file that settles
+    /// afterwards refreshes *that* comparison rather than nothing at all.
+    ///
+    /// Written because a control found it untested: dropping the bundle on cancellation is invisible
+    /// unless the primary settles later, and no other test had that ordering.
+    @Test("a comparison restored by cancellation still completes when the primary settles")
+    func aRestoredComparisonStillCompletes() async throws {
+        let primary = report(named: "a.wav")
+        let primaryAction = ScriptedAction(
+            report: primary,
+            analyses: try measurements(peak: 0.10, truePeakValue: 0.11, lufs: -30, bandwidthHz: 8_000)
+        )
+        let flow = ImportFlowModel(action: primaryAction.run)
+        let running = Task { await flow.selectAndInspect() }
+        await primaryAction.waitUntilStarted()  // the primary is still measuring
+
+        let b = ScriptedAction(
+            report: report(named: "b.wav"),
+            analyses: try measurements(peak: 0.20, truePeakValue: 0.21, lufs: -20, bandwidthHz: 12_000)
+        )
+        let comparingB = Task { await flow.compare(using: b.run) }
+        await b.waitUntilStarted()
+        b.release()
+        await comparingB.value
+        guard case let .ready(_, notYet) = flow.comparison else { Issue.record("no comparison"); return }
+        #expect(notYet == nil, "the pair was published while the primary was still measuring")
+
+        // A replacement the user dismisses: B's comparison comes back.
+        await flow.compare(using: { _ in .cancelled })
+
+        // The primary settles last. B's pair must appear — which it can only do if the bundle came back
+        // with the comparison.
+        primaryAction.release()
+        await running.value
+        guard case let .ready(technical, published) = flow.comparison else {
+            Issue.record("the comparison stopped being ready"); return
+        }
+        #expect(technical.second.file.displayName == "b.wav")
+        let measurements = try #require(published, "the restored comparison never completed")
+        #expect(secondSideFingerprint(measurements) == ["peak=0.2", "truePeak=0.21", "lufs=-20.0", "hz=12000.0"])
+    }
+
     /// **A producer failure is not a technical failure.** Every measurement fails while the report
     /// survives, so the technical comparison stands and the measurement comparison reports that the
     /// second side had nothing — never that the comparison failed.
