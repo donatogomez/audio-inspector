@@ -92,6 +92,17 @@ incomparable would make the feature answer nothing in the situation it was built
 provenance detail, it materially changes the estimate, and no equivalence between two factors has been
 measured. Both fields must match.
 
+**Measured against production, none of these refusals is reachable today** — evidence added after the
+comparator existed, and it does not change this decision. The same signal read at 44.1, 48, 88.2, 96 and
+192 kHz, in mono and stereo, produces **one** true peak method, **one** bandwidth identity, **one**
+loudness algorithm and exactly the two weightings the allow-list admits, so every pair of files this
+product can currently produce compares. That makes the three refusals above statements about methods
+this project might later add rather than about files a user has, and it is why they stay pinned in the
+domain suite — which can construct measurements production cannot — rather than in a fixture pair that
+would have to fake one. `MeasurementComparisonProductionReachTests` asserts the identities that actually
+ran, so the day a second oversampling factor, a second bandwidth identifier or a third weighting appears,
+the pair is **decided** rather than discovered inside a comparison.
+
 ### 5. Programme bandwidth is compared **on its own grid**, and the rule is stated in full
 
 Comparing two bandwidth readings by numeric equality would be wrong in both directions: two readings in

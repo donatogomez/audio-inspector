@@ -1,8 +1,9 @@
 # Tasks — two-file measurement comparison
 
-**Groups 1 and 2 are complete; nothing is wired.** The semantics are settled and the domain comparator
-exists, pure and tested. Nothing in the flow, the surface or the export has changed, and the second
-file's measurements are still discarded — closing that is group 3. Group 1 was blocking by design — the comparison
+**Groups 1 to 5 are complete; nothing is on screen.** The semantics are settled, the domain comparator
+exists, the flow publishes it, and the ten fixture pairs now run through production against real files.
+Nothing in the surface or the export has changed — group 6 is the whole of what is left, and ADR-0024
+stays `Proposed` until a person has looked at it. Group 1 was blocking by design — the comparison
 semantics are settled before a comparator exists, on the order `add-two-file-technical-comparison` used
 and for the same reason.
 
@@ -116,13 +117,45 @@ be promoted by claiming it.
 ## 5. Correctness, on real files through production
 
       **Done.** A second shared pass in the coordinator fails the read count.
-- [ ] 5.1 The ten fixture pairs of `design.md` §7, each discriminating something a simpler rule would
+- [x] 5.1 The ten fixture pairs of `design.md` §7, each discriminating something a simpler rule would
       get wrong.
-- [ ] 5.2 Pairs 8 and 9 specifically: a naive frequency-equality rule must fail them.
-- [ ] 5.3 Pair 7 specifically: a naive method-equality rule must fail it.
-- [ ] 5.4 Negative controls against production, each applied and reverted: bandwidth compared by
+      **Done, and every value came out of a file.** `MeasurementComparisonPairsTests` writes each side,
+      decodes it with `AVFoundationAudioDecoder`, folds it through the six shared consumers and
+      collapses it with `FeatureImport`'s own `settledMeasurements`; nothing in the suite constructs a
+      measurement. Two fixtures had to be *measured* before they were fixed: pair 3 raises the loudness
+      with a second comb interleaved between the first's components, because a loud low tone raises each
+      window's own peak — which the significance threshold is relative to — and moved the reading two
+      bins; pair 4 needed no gain matching at all, a band 30 dB down clearing the threshold while
+      contributing a part in a thousand of the energy, so the fixture states its own equivalence instead
+      of inheriting it from a measurement.
+- [x] 5.2 Pairs 8 and 9 specifically: a naive frequency-equality rule must fail them.
+      **Done, on readings production produced.** 88.2 kHz and 96 kHz put one 16 kHz edge at 16 101.09 Hz
+      on a 22.97 Hz grid and 16 101.56 Hz on a 23.44 Hz one — 0.47 Hz apart against a 23.20 Hz boundary,
+      `indistinguishable` with **unequal** centres. And two edges one bin apart land 23.4375 Hz apart
+      against a 23.4375 Hz boundary: the boundary itself, reachable from production, `separated` because
+      the inequality is strict. Compared by equality of hertz, pair 8 fails; classified with `<=`, pair 9
+      does.
+- [x] 5.3 Pair 7 specifically: a naive method-equality rule must fail it.
+      **Done.** 44.1 kHz against 48 kHz on the same signal: the weightings are read from what actually
+      ran — `itu_r_bs1770_5_48k_prototype_rediscretised_v1` against `itu_r_bs1770_5_tables_1_2_48k` —
+      and the test fails if they ever coincide, so it cannot go quietly vacuous. Emptying the allow-list
+      breaks it.
+- [x] 5.4 Negative controls against production, each applied and reverted: bandwidth compared by
       equality; the cell rule using one side's resolution for both; the loudness gate widened to ignore
       the algorithm; channels compared across differing counts; a difference published for true peak.
+      **Done — twelve controls, applied and reverted one at a time, and three of them are findings.**
+      Bandwidth by equality fails pair 8; bandwidth never separating fails pairs 4 and 9; channels
+      intersected fails pair 6; and true peak grows a difference only as a *stored* field —
+      `Mirror` does not see computed properties, so the structural control covers the shape a difference
+      would have to take and not a derivation someone writes beside it. Seven more bite the same way:
+      dropping the compared file's bundle, emptying the weighting allow-list, a second shared read, an
+      inverted difference, an absence becoming `same(0)`, and a superseded result being allowed to land.
+      **Two do not reach production, and are classified rather than faked.** The loudness gate ignoring
+      the algorithm changes nothing observable, because production runs one algorithm; it stays pinned in
+      the domain suite. The cell rule using one side's resolution alone needs two readings whose
+      separation falls in a sub-hertz window the real grids do not produce — and applying it found the
+      domain suite catching only one of the two directions, so `theCellRule` gained the symmetric row and
+      now catches both.
 
 ## 6. Presentation
 
