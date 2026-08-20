@@ -16,41 +16,39 @@
 >   session protocol in `CLAUDE.md`).
 
 ---
-**Open thread: `add-significant-bandwidth-measurement`.** Groups 1-7 are complete. The DSP is built,
-wired as the sixth consumer of the one shared PCM read, validated against production, and now **on
-screen**: its own section between Integrated loudness and the spectrogram, showing one value, the
-resolution it sits on, and one sentence about how it was measured. No export yet, no comparison, no
-findings.
+**Open thread: `add-significant-bandwidth-measurement`.** Groups 1-8 are complete. Programme bandwidth
+now has a methodology decided by measurement, an accumulator that reproduces its targets, a place as the
+sixth consumer of the one shared PCM read, validation against production, a section on screen, and a key
+in the exported document. What remains is the manual pass and the closing gates.
 
-**Presentation settled three things that were easy to get wrong**, and each is a refusal rather than a
-feature. The visible name is *Programme bandwidth* — not "effective sample rate", which would claim the
-file should have been stored differently, and not "cut-off", which asserts a filter nobody observed. The
-resolution is a **second row, never a `±`**: it is a bin width, not an uncertainty, and the reading is
-already biased upward by leakage, so a symmetric interval would be wrong in kind and in shape. And the
-displayed precision is derived from the resolution, so no digit claims a distinction the bins cannot
-make — one decimal in kilohertz at all five rates, which falls out of the window being fixed in time.
+**Group 8 paid a debt before it spent one.** Three places in the export chain carried a note saying that
+three positional optionals was past the shape's comfortable width and that whoever added a fourth
+measurement owed the container — written that way so the refactor could not be hidden inside the change
+that added one. `ReportMeasurements` landed on its own commit and is byte-identical across all five
+existing combinations. `InspectionAnalyses` was not reused for it: that is the flow's bundle, it carries
+the visualisations, and its fields model lifecycle that must never reach the wire.
 
-**Nothing on the surface judges.** No colour, badge or weight varies with the value; a reading at the top
-of the band renders exactly like one in the middle; nothing compares it to Nyquist or to the declared
-rate; and there is deliberately no disclaimer sentence, because "not an upsampling diagnosis" would
-introduce the frame the measurement refuses and be longer than the fact it qualifies.
+**The wire carries the measurement and nothing else.** Hertz, unrounded — `16101.5625` where the screen
+says `16.1 kHz`, and a test asserts the two are different, because the change most likely to erode this
+is a well-meant tidy-up. The resolution is its own field and never a `±`. The method is copied from what
+ran, with the rule set standing behind a versioned identifier rather than travelling as loose constants.
+Absence is the key not being there. There is no field in which a verdict could be written.
 
-**What group 7 could not do, and did not pretend to.** The surface is pinned by tests down to the exact
-rendered strings, but `swift test` cannot tell whether the section *reads* as a fact to a person seeing
-it in place. That is ADR-0023's third promotion condition and it is still open. The runbook is written
-and the fixtures exist with their expected displays computed **before** the app is opened — five files
-under `/tmp/programme-bandwidth-manual`, recorded in `docs/manual-validation-mvp.md` as PREPARED, not
-executed. Fixture 4 is the one that matters: a 16 kHz programme with one click in it, which must be
+**What is left, exactly.** ADR-0023 stays `Proposed` with two of three promotion conditions met; the
+third is a person looking at the surface, and the runbook with pre-computed expected displays is in
+`docs/manual-validation-mvp.md`, marked PREPARED. Group 9 is the deferred work, named so it is not
+quietly dropped — a shared STFT stage, an average spectrum, comparison between two files, and findings —
+and none of it belongs to this change. Group 10 is the four gates plus the manual pass, and then the
+archive.
+
+**Next step: the manual validation pass.** Everything else in this change is either done or explicitly
+deferred, and the fixtures are already written with their expected values computed before the app is
+opened. Fixture 4 is the one that matters: a 16 kHz programme with one click in it, which must be
 indistinguishable from the same programme without it.
-
-**Next step: group 8, the export** — additive under `measurements`, `schemaVersion` stays 1, the key
-omitted when absent, carrying the frequency, the resolution and the method identity, and no verdict.
-Then group 10's gates and the manual pass that promotes ADR-0023. The record stays `Proposed` with two
-of three conditions met.
 
 **Older threads, neither advanced here**: `add-static-spectrogram-visualization` (manual validation
 battery deferred by product decision); `add-two-file-technical-comparison` (one accessibility criterion
-open, blocked on the VoiceOver traversal gap shared with ADR-0015). The loudness debt recorded nine
+open, blocked on the VoiceOver traversal gap shared with ADR-0015). The loudness debt recorded ten
 snapshots ago is unchanged and still not a thread.
 
 ---
