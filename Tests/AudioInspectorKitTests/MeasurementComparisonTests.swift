@@ -175,6 +175,12 @@ struct MeasurementComparisonTests {
             (16_000.0, 16_046.8750, 23.4375, 23.4375, false, "two bins apart"),
             (21_800.0, 21_850.0, 94.0, 94.0, true, "50 Hz apart on a 94 Hz grid"),
             (21_800.0, 21_850.0, 23.4375, 23.4375, false, "the same 50 Hz on a 23 Hz grid"),
+            // Both orders of one asymmetric pair. The rule sums **two** half-cells, so a version using
+            // either side's resolution alone is wrong — and wrong in a different direction depending on
+            // which side it picked. One row can only catch one of those; a negative control applying the
+            // mutation found the other slipping through.
+            (21_800.0, 21_850.0, 94.0, 23.4375, true, "two grids, the coarse reading first"),
+            (21_800.0, 21_850.0, 23.4375, 94.0, true, "the same two grids, the fine reading first"),
         ]
     )
     func theCellRule(
