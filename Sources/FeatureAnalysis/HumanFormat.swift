@@ -190,6 +190,29 @@ enum HumanFormat {
         return "\(formatted) LUFS"
     }
 
+    /// A **difference** between two integrated loudness values, in `LU`: `3.4` → `+3.4 LU`,
+    /// `-3.4` → `-3.4 LU`, `0` → `0.0 LU`.
+    ///
+    /// **`LU`, never `LUFS`, and the distinction is the whole reason this is a second function.** LUFS
+    /// names a level *relative to full scale*; subtracting two of them cancels the reference, and what
+    /// is left is a plain difference whose unit is LU. Rendering a difference as LUFS would claim a
+    /// level that no file has.
+    ///
+    /// One decimal and the same sign strategy as `loudnessFullScale`, so the two read as the same kind
+    /// of number and a positive difference is never mistaken for a negative one. **The sign is data,
+    /// not a verdict** — nothing anywhere reads it as better, louder or preferable, and no colour,
+    /// weight or icon varies with it.
+    ///
+    /// It exists only for the one metric whose stored quantity is already logarithmic. True peak and the
+    /// signal levels store linear amplitudes, so *their* difference would be a ratio, which ADR-0017 §3
+    /// excludes by name — and there is deliberately no formatter here they could reach for.
+    static func loudnessDifference(_ loudnessUnits: Double) -> String {
+        let formatted = loudnessUnits.formatted(
+            .number.precision(.fractionLength(1)).sign(strategy: .always(includingZero: false)).locale(locale)
+        )
+        return "\(formatted) LU"
+    }
+
     /// A linear, signed value with no unit — DC offset has no good behaviour on a decibel scale, since
     /// it can be negative and sits naturally near zero. Four decimal places: `Float`'s own roughly seven
     /// significant digits give a comfortable margin at this magnitude, and four places already resolve
