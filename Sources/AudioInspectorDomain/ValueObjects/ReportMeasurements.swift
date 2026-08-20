@@ -33,6 +33,8 @@ public struct ReportMeasurements: Sendable, Equatable {
     public var truePeak: TruePeakMeasurement?
     /// The programme's gated loudness.
     public var loudness: LoudnessMeasurement?
+    /// How far up the programme reaches persistently, inside its declared budget.
+    public var programmeBandwidth: SignificantBandwidth?
 
     /// **No defaults.** A container exists so a signature stops growing, not so a field can be
     /// forgotten: every call site names every measurement, and omitting one is a compile error. This is
@@ -41,14 +43,18 @@ public struct ReportMeasurements: Sendable, Equatable {
     public init(
         signalLevelMetrics: SignalLevelMetrics?,
         truePeak: TruePeakMeasurement?,
-        loudness: LoudnessMeasurement?
+        loudness: LoudnessMeasurement?,
+        programmeBandwidth: SignificantBandwidth?
     ) {
         self.signalLevelMetrics = signalLevelMetrics
         self.truePeak = truePeak
         self.loudness = loudness
+        self.programmeBandwidth = programmeBandwidth
     }
 
     /// Nothing was measured. Named rather than spelled out at each call site, because "no measurements"
     /// is a state several callers genuinely have and repeating three `nil`s obscures it.
-    public static let none = ReportMeasurements(signalLevelMetrics: nil, truePeak: nil, loudness: nil)
+    public static let none = ReportMeasurements(
+        signalLevelMetrics: nil, truePeak: nil, loudness: nil, programmeBandwidth: nil
+    )
 }

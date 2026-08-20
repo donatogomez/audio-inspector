@@ -181,12 +181,14 @@ func exportData(
     signalLevelMetrics: SignalLevelMetrics? = nil,
     truePeak: TruePeakMeasurement? = nil,
     loudness: LoudnessMeasurement? = nil,
+    programmeBandwidth: SignificantBandwidth? = nil,
     now: Date = fixedNow,
     generator: ReportGenerator = fixedGenerator
 ) throws -> Data {
     try JSONReportExporter(generator: generator, now: { now })
         .export(report, measurements: ReportMeasurements(
-            signalLevelMetrics: signalLevelMetrics, truePeak: truePeak, loudness: loudness
+            signalLevelMetrics: signalLevelMetrics, truePeak: truePeak, loudness: loudness,
+            programmeBandwidth: programmeBandwidth
         ))
 }
 
@@ -196,12 +198,13 @@ func exportValue(
     signalLevelMetrics: SignalLevelMetrics? = nil,
     truePeak: TruePeakMeasurement? = nil,
     loudness: LoudnessMeasurement? = nil,
+    programmeBandwidth: SignificantBandwidth? = nil,
     now: Date = fixedNow,
     generator: ReportGenerator = fixedGenerator
 ) throws -> JSONValue {
     let data = try exportData(
         report, signalLevelMetrics: signalLevelMetrics, truePeak: truePeak, loudness: loudness,
-        now: now, generator: generator
+        programmeBandwidth: programmeBandwidth, now: now, generator: generator
     )
     return try JSONDecoder().decode(JSONValue.self, from: data)
 }

@@ -380,6 +380,93 @@ struct IntegratedLoudnessDTO: Encodable {
     }
 }
 
+/// One reading: the centre of the highest bin that met the criterion, and the width of a bin.
+///
+/// **Both are hertz, both are the domain's own unrounded `Double`.** The screen rounds to a step no
+/// finer than the resolution — `16.1 kHz` for the value below — because a displayed digit must
+/// correspond to a distinction the analysis can make. That is a display rule, and the datum is what
+/// travels here: `16101.5625`, not `16100`, and never a kilohertz string.
+///
+/// **`resolution` is a bin width, not an uncertainty.** It is a separate field for the same reason the
+/// surface gives it a separate row: `frequency ± resolution` would claim the true value lies in an
+/// interval, which this measurement does not claim, and the reading is biased one way — upward, by the
+/// analysis window's leakage — so a symmetric interval would be wrong in shape as well as in kind.
+/// There is no `±` on the wire because there is no interval to express.
+struct ProgrammeBandwidthReadingDTO: Encodable {
+    let frequency: Double
+    let resolution: Double
+
+    enum CodingKeys: String, CodingKey {
+        case frequency, resolution
+    }
+}
+
+/// How a programme bandwidth was produced (ADR-0006's "the constants are recorded with the result",
+/// ADR-0023).
+///
+/// **One versioned identifier plus the transform's own geometry, and nothing reconstructed.** The
+/// identifier stands for the whole rule set — the −50 dB intra-window prominence threshold, the 10 %
+/// persistence criterion and the 60 dB programme budget — which is why those constants are not
+/// duplicated here as fields: they are not independently variable, and emitting them as data would
+/// invite a consumer to believe some other combination was possible. `windowFrames`, `hopFrames` and
+/// `sampleRate` are part of the identity rather than of the geometry alone: the persistence criterion
+/// counts windows, so what a window *is* changes what the number means, and the window is fixed in
+/// time rather than in samples.
+///
+/// Every field is read from the measurement's **own** recorded method. Nothing here branches on a
+/// sample rate to decide what to name — a document that inferred the method could describe one that
+/// never ran.
+struct ProgrammeBandwidthMethodDTO: Encodable {
+    let identifier: String
+    let windowFrames: Int
+    let hopFrames: Int
+    let sampleRate: Double
+
+    enum CodingKeys: String, CodingKey {
+        case identifier, windowFrames, hopFrames, sampleRate
+    }
+}
+
+/// `measurements.programmeBandwidth`: how far up the programme reaches persistently, per channel and
+/// overall, with the method that produced it.
+///
+/// **The key names the measurement, not an inference.** It is not `cutoff`, `frequencyLimit` or
+/// `effectiveSampleRate`: the first two assert a filter nobody observed, and the third asserts the file
+/// should have been stored differently. It is not `significantBandwidth` either — that is the domain
+/// type's name, and the product's name is the one a document should carry.
+///
+/// **Nothing here is a verdict.** There is no comparison against the declared sample rate, no
+/// confidence, no flag, no codec, and nothing describing what the value might imply about how the file
+/// was made. ADR-0023 §1 forbids that reading and this contract does not provide the fields to express
+/// it.
+///
+/// `channels` is one entry per channel **in the stream's own order, and `null` where that channel
+/// carried nothing meeting the criterion** — the position is the channel index, so an entry cannot be
+/// dropped without renumbering the rest. No layout is named anywhere: the pipeline reads channel counts
+/// and never labels. `overall` is the highest of the per-channel readings, a summary of the facts
+/// beside it rather than a separate measurement, which is why it repeats a reading rather than
+/// combining them.
+struct ProgrammeBandwidthDTO: Encodable {
+    let overall: ProgrammeBandwidthReadingDTO?
+    let channels: [ProgrammeBandwidthReadingDTO?]
+    let method: ProgrammeBandwidthMethodDTO
+
+    private enum CodingKeys: String, CodingKey {
+        case overall, channels, method
+    }
+
+    /// `overall` is written explicitly as `null` when there is no reading, rather than omitted, so a
+    /// consumer never has to tell "no reading" from "this document predates the field". In production
+    /// it is never `null`: the Feature collapses a measurement carrying no reading to no key at all,
+    /// exactly as it does for an absent loudness.
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try encodeExplicit(overall, forKey: .overall, into: &container)
+        try container.encode(channels, forKey: .channels)
+        try container.encode(method, forKey: .method)
+    }
+}
+
 /// The `measurements` object itself. A struct rather than `SignalLevelsDTO` directly at the top level,
 /// so a further measurement adds a sibling key rather than replacing this one or forcing a new
 /// top-level field — which is exactly what `truePeak`, and then `integratedLoudness`, did.
@@ -394,9 +481,10 @@ struct MeasurementsDTO: Encodable {
     let signalLevels: SignalLevelsDTO?
     let truePeak: TruePeakDTO?
     let integratedLoudness: IntegratedLoudnessDTO?
+    let programmeBandwidth: ProgrammeBandwidthDTO?
 
     enum CodingKeys: String, CodingKey {
-        case signalLevels, truePeak, integratedLoudness
+        case signalLevels, truePeak, integratedLoudness, programmeBandwidth
     }
 }
 

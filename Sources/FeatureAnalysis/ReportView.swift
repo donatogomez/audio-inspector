@@ -294,7 +294,8 @@ public struct ReportView: View {
                         measurements: ReportMeasurements(
                             signalLevelMetrics: exportableSignalLevelMetrics,
                             truePeak: exportableTruePeak,
-                            loudness: exportableLoudness
+                            loudness: exportableLoudness,
+                            programmeBandwidth: exportableProgrammeBandwidth
                         )
                     )
                 }
@@ -326,6 +327,20 @@ public struct ReportView: View {
     /// every one of them collapses to the key simply not being there.
     private var exportableLoudness: LoudnessMeasurement? {
         guard case let .measurement(measurement) = loudness else { return nil }
+        return measurement
+    }
+
+    /// The same rule again for the programme bandwidth, **plus one this measurement needs on its own**:
+    /// a measurement can exist and carry no reading at all — its windows were eligible and no bin met
+    /// the persistence criterion — and that is an absence to anyone reading either surface. The section
+    /// says so in the report's not-computable words, and the document says so by omitting the key, so
+    /// the two never disagree. It is the rule loudness already follows, whose absence likewise has
+    /// several causes and exports none of them: **the JSON describes measurements, not why one does not
+    /// exist.**
+    private var exportableProgrammeBandwidth: SignificantBandwidth? {
+        guard case let .measurement(measurement) = programmeBandwidth, measurement.overall != nil else {
+            return nil
+        }
         return measurement
     }
 }

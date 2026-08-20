@@ -138,7 +138,7 @@ struct EndToEndFlowTests {
             let exportModel = ReportExportModel(action: { report, measurements in
                 await exportCoordinator.export(report, measurements: measurements)
             })
-            await exportModel.export(report, measurements: ReportMeasurements(signalLevelMetrics: nil, truePeak: nil, loudness: nil))
+            await exportModel.export(report, measurements: ReportMeasurements(signalLevelMetrics: nil, truePeak: nil, loudness: nil, programmeBandwidth: nil))
 
             #expect(exportModel.phase == .succeeded)
             #expect(suggestedName == "fixture-inspection.json")
@@ -234,7 +234,7 @@ struct EndToEndFlowTests {
                 let exportModel = ReportExportModel(action: { report, measurements in
                 await exportCoordinator.export(report, measurements: measurements)
             })
-                await exportModel.export(presentation.report, measurements: ReportMeasurements(signalLevelMetrics: nil, truePeak: nil, loudness: nil))
+                await exportModel.export(presentation.report, measurements: ReportMeasurements(signalLevelMetrics: nil, truePeak: nil, loudness: nil, programmeBandwidth: nil))
                 #expect(exportModel.phase == .succeeded)
 
                 return (presentation, try Data(contentsOf: destination))
@@ -300,7 +300,7 @@ struct EndToEndFlowTests {
                 let exportModel = ReportExportModel(action: { report, measurements in
                 await exportCoordinator.export(report, measurements: measurements)
             })
-                await exportModel.export(presentation.report, measurements: ReportMeasurements(signalLevelMetrics: nil, truePeak: nil, loudness: nil))
+                await exportModel.export(presentation.report, measurements: ReportMeasurements(signalLevelMetrics: nil, truePeak: nil, loudness: nil, programmeBandwidth: nil))
                 #expect(exportModel.phase == .succeeded)
 
                 return (presentation, try Data(contentsOf: destination))
@@ -393,7 +393,7 @@ struct EndToEndFlowTests {
             let toExport = exportableSignalLevelMetrics(
                 RootView.signalLevelMetricsPresentation(for: presentation.signalLevelMetrics)
             )
-            await exportModel.export(presentation.report, measurements: ReportMeasurements(signalLevelMetrics: toExport, truePeak: nil, loudness: nil))
+            await exportModel.export(presentation.report, measurements: ReportMeasurements(signalLevelMetrics: toExport, truePeak: nil, loudness: nil, programmeBandwidth: nil))
             #expect(exportModel.phase == .succeeded)
 
             let json = try JSONDecoder().decode(JSONValue.self, from: Data(contentsOf: destination))
@@ -446,7 +446,7 @@ struct EndToEndFlowTests {
             })
 
             let toExport = exportableTruePeak(RootView.truePeakPresentation(for: presentation.truePeak))
-            await exportModel.export(presentation.report, measurements: ReportMeasurements(signalLevelMetrics: nil, truePeak: toExport, loudness: nil))
+            await exportModel.export(presentation.report, measurements: ReportMeasurements(signalLevelMetrics: nil, truePeak: toExport, loudness: nil, programmeBandwidth: nil))
             #expect(exportModel.phase == .succeeded)
 
             let json = try JSONDecoder().decode(JSONValue.self, from: Data(contentsOf: destination))
@@ -530,7 +530,7 @@ struct EndToEndFlowTests {
             let toExport = exportableLoudness(RootView.loudnessPresentation(for: presentation.loudness))
             await exportModel.export(
                 presentation.report,
-                measurements: ReportMeasurements(signalLevelMetrics: nil, truePeak: nil, loudness: toExport)
+                measurements: ReportMeasurements(signalLevelMetrics: nil, truePeak: nil, loudness: toExport, programmeBandwidth: nil)
                 )
             #expect(exportModel.phase == .succeeded)
 

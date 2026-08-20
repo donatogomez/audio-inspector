@@ -137,13 +137,38 @@ enum InspectionReportMapper {
     /// the object into existence on its own, which a test pins.
     private static func measurements(from measurements: ReportMeasurements) -> MeasurementsDTO? {
         guard measurements.signalLevelMetrics != nil || measurements.truePeak != nil
-            || measurements.loudness != nil
+            || measurements.loudness != nil || measurements.programmeBandwidth != nil
         else { return nil }
         return MeasurementsDTO(
             signalLevels: measurements.signalLevelMetrics.map(signalLevels(from:)),
             truePeak: measurements.truePeak.map(truePeak(from:)),
-            integratedLoudness: measurements.loudness.map(integratedLoudness(from:))
+            integratedLoudness: measurements.loudness.map(integratedLoudness(from:)),
+            programmeBandwidth: measurements.programmeBandwidth.map(programmeBandwidth(from:))
         )
+    }
+
+    /// The measurement's own numbers and its own recorded method, copied. **Nothing is reconstructed
+    /// here**: the mapper does not derive the window from the sample rate, does not recompute the
+    /// resolution from the geometry, and does not round anything for readability. A document that
+    /// rebuilt the method could describe one that never ran, and a rounded value would make the wire a
+    /// worse copy of the datum than the screen already is on purpose.
+    private static func programmeBandwidth(from measurement: SignificantBandwidth) -> ProgrammeBandwidthDTO {
+        ProgrammeBandwidthDTO(
+            overall: measurement.overall.map(programmeBandwidthReading(from:)),
+            channels: measurement.channels.map { $0.map(programmeBandwidthReading(from:)) },
+            method: ProgrammeBandwidthMethodDTO(
+                identifier: measurement.method.identifier,
+                windowFrames: measurement.method.windowFrames,
+                hopFrames: measurement.method.hopFrames,
+                sampleRate: measurement.method.sampleRate
+            )
+        )
+    }
+
+    private static func programmeBandwidthReading(
+        from channel: SignificantBandwidth.Channel
+    ) -> ProgrammeBandwidthReadingDTO {
+        ProgrammeBandwidthReadingDTO(frequency: channel.frequency, resolution: channel.resolution)
     }
 
     /// **LUFS straight onto the wire, unrounded** — and deliberately not the rule `truePeak` follows.
