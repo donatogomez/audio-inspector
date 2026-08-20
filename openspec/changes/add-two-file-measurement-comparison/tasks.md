@@ -1,9 +1,10 @@
 # Tasks — two-file measurement comparison
 
-**Groups 1 to 5 are complete; nothing is on screen.** The semantics are settled, the domain comparator
-exists, the flow publishes it, and the ten fixture pairs now run through production against real files.
-Nothing in the surface or the export has changed — group 6 is the whole of what is left, and ADR-0024
-stays `Proposed` until a person has looked at it. Group 1 was blocking by design — the comparison
+**Groups 1 to 6 are complete; nothing is exported.** The semantics are settled, the domain comparator
+exists, the flow publishes it, the ten fixture pairs run through production against real files, and the
+sub-section is on screen beneath the technical rows. ADR-0024 stays `Proposed` — its third promotion
+criterion is *a person looking at the surface*, and the surface has existed for one commit. The battery
+that validation runs against is prepared in this change's `README.md`. Group 1 was blocking by design — the comparison
 semantics are settled before a comparator exists, on the order `add-two-file-technical-comparison` used
 and for the same reason.
 
@@ -159,17 +160,58 @@ be promoted by claiming it.
 
 ## 6. Presentation
 
-- [ ] 6.1 One sub-section beneath the technical rows, in the report's own metric order.
-- [ ] 6.2 Bandwidth's outcome words are about the **grid** — `Indistinguishable at these resolutions` /
+- [x] 6.1 One sub-section beneath the technical rows, in the report's own metric order.
+      **Done.** `MeasurementComparisonSection` sits between the eight technical rows and the context
+      block, in the report's own order — levels, true peak, loudness, bandwidth — not reordered by
+      importance and specifically not with loudness first because it is the row carrying a difference.
+      The technical table is untouched: folding both into one would put a fifth column on eight rows
+      that have no use for one. Until **both** files settle, the sub-section says what is happening
+      rather than rendering an empty table, because the rows above it are already complete.
+- [x] 6.2 Bandwidth's outcome words are about the **grid** — `Indistinguishable at these resolutions` /
       `Separated` — not `Same` / `Different`.
-- [ ] 6.3 The difference column exists on the loudness row and nowhere else.
-- [ ] 6.4 `incomparable` says **why** structurally, on ADR-0017 §5's precedent — a reader must be able
+      **Done**, and they are cases of their own in `MeasurementOutcomeDisplay` rather than a relabelling
+      of `same`/`different`, so no later edit can collapse them back. Each side's analysis resolution is
+      on screen beneath its reading — the outcome refers to *these* resolutions, and a reader has to be
+      able to see what they are — labelled with the report's own name for it and never as a `±`.
+- [x] 6.3 The difference column exists on the loudness row and nowhere else.
+      **Done**, and swept rather than exampled: over every comparison shape, no row but integrated
+      loudness carries a `difference` or announces one. The unit is **LU**, never LUFS — subtracting two
+      levels cancels the reference — and `HumanFormat.loudnessDifference` is the only formatter that can
+      produce one, so true peak and the levels have nothing to reach for.
+- [x] 6.4 `incomparable` says **why** structurally, on ADR-0017 §5's precedent — a reader must be able
       to tell "the methods differ" from "the file had no value".
-- [ ] 6.5 Forbidden-vocabulary sweep over every string, extending the existing one with: master,
+      **Done.** The four gaps produce four distinct sentences, asserted distinct rather than assumed:
+      each missing side is named, and `methodsDiffer` says the numbers are not on the same scale. **None
+      of them says anything failed**, because nothing did — the flow ran and both files were inspected.
+      `methodsDiffer` is unreachable from production (group 5's own finding), so it is validated here and
+      deliberately not in the manual battery.
+- [x] 6.5 Forbidden-vocabulary sweep over every string, extending the existing one with: master,
       remaster, transcode, upsample, lossy, compressed, dynamics, louder, quieter, hotter, better,
       worse, original, derived, generation, quality.
-- [ ] 6.6 Nothing varies with the sign of the loudness difference — no colour, badge, icon or weight.
-- [ ] 6.7 Accessibility: the structural half only. The traversal gap is ADR-0015's and stays open.
+      **Done**, over every string reachable from a comparison in every shape one can take, plus the
+      indirect-inference phrases *appears to be*, *probably*, *indicates that*, *points to*. **It needs
+      no exemption**, unlike the technical subtitle: this sub-section's disclaimer denies the inference
+      without naming it, so the blunt scan covers the copy too. A second sweep pins that no domain
+      identity reaches the reader — this surface describes no method, so the rule is no slug at all and
+      there is no fallback that could go stale.
+- [x] 6.6 Nothing varies with the sign of the loudness difference — no colour, badge, icon or weight.
+      **Done.** `+4.0 LU` and `-4.0 LU` produce rows identical in every field but the number, and the one
+      styling hook the model exposes — `isSecondary` — tracks *"this cell is an explanation"* and nothing
+      else, so `Same` and `Different` are styled alike and every outcome is distinguishable by its text
+      alone.
+- [x] 6.7 Accessibility: the structural half only. The traversal gap is ADR-0015's and stays open.
+      **Done, and only that half.** Each row is one element announcing the measurement, both files'
+      values, the outcome and the difference where there is one; an absent side announces the absence
+      rather than falling silent, since a blank is indistinguishable from a zero to a reader who cannot
+      see the row. The traversal gap ADR-0015 and ADR-0017 share is untouched and stays open.
+
+**One thing the design did not anticipate, found by running real files.** Two DC offsets around 10⁻¹⁴
+both print as `0.0000` beside the word `Different`, and two bandwidth readings one bin apart both print
+as `16.1 kHz` beside `Separated` — because `linearOffset` shows what `Float` honestly carries and
+`programmeBandwidth` shows no digit finer than a bin (ADR-0023). Left alone either row reads as a defect.
+The answer is a line saying the display rounds them together, **never another digit**: it states the
+relationship between the display and the measurement and says nothing about how large the difference is,
+which is exactly the digit the limit exists to withhold.
 
 ## 7. Deferred, and named so it is not quietly dropped
 

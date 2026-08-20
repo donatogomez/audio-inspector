@@ -129,6 +129,18 @@ fact about the instrument's grid, and the two outcomes are named for the instrum
 Adjacent bins on one grid are `separated`: Δ = r is not < r. The same bin is `indistinguishable`. Both
 are the intended readings.
 
+**One consequence surfaced only when the surface existed, and it is recorded here because the answer was
+a decision rather than a detail.** Two readings a single bin apart are `separated` — and they *display
+identically*, because `HumanFormat.programmeBandwidth` shows no digit finer than a bin, which is
+ADR-0023's rule and is right. The same collision happens on DC offset, where two values around 10⁻¹⁴ both
+print as `0.0000` beside the word `Different`. Read alone, either row looks like a defect.
+
+The tempting fix is another digit, and it is the wrong one: it would claim a precision the measurement
+does not have, on exactly the metric this record spends §5 refusing to over-state. **So the surface adds
+a sentence instead** — that the two round to the same figure, and that the analysis nevertheless placed
+them in different bins. It states the relationship between the display and the measurement, and
+deliberately not the size of the difference, which is the digit the rounding exists to withhold.
+
 ### 6. Same / different is used **only where a quantum is published**, and `difference` **only where the unit is a difference**
 
 Two continuous measurements are almost never bit-identical, so a `same`/`different` split over them
