@@ -24,11 +24,10 @@ public enum ExportOutcome: Sendable, Equatable {
 /// loading/absent/failed itself before calling), and reacts to the returned `ExportOutcome`. It knows
 /// nothing about how the destination is chosen, written, or how a measurement becomes wire bytes.
 ///
-/// **The third measurement arrived, and the note on `ReportExporting` stands.** Three positional
-/// optionals is past the shape's comfortable width, and a container is the answer — but introducing one
-/// touches every call site of the export chain, and doing it while wiring a new measurement would hide
-/// one change inside another. It is **recorded debt**, on the same reasoning `SourceInspectionOutcome`
-/// applied to its fifth payload, and it belongs to whoever adds the fourth.
+/// **The measurements travel in one value.** The note that stood here deferred a container to whoever
+/// added a fourth measurement; `ReportMeasurements` is that container, introduced on its own and proved
+/// byte-identical before anything was added to it. A further measurement is a field on it rather than
+/// another parameter here, and the Feature still collapses loading, absent and failed to `nil` itself.
 public typealias ReportExportAction = @MainActor (
-    InspectionReport, SignalLevelMetrics?, TruePeakMeasurement?, LoudnessMeasurement?
+    InspectionReport, ReportMeasurements
 ) async -> ExportOutcome

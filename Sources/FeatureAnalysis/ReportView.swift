@@ -291,9 +291,11 @@ public struct ReportView: View {
                 Task {
                     await exportModel.export(
                         report,
-                        signalLevelMetrics: exportableSignalLevelMetrics,
-                        truePeak: exportableTruePeak,
-                        loudness: exportableLoudness
+                        measurements: ReportMeasurements(
+                            signalLevelMetrics: exportableSignalLevelMetrics,
+                            truePeak: exportableTruePeak,
+                            loudness: exportableLoudness
+                        )
                     )
                 }
             }
@@ -532,7 +534,7 @@ extension SignificantBandwidthPresentation {
     ReportView(
         report: .preview, waveform: .preview, spectrogram: .preview, signalLevelMetrics: .preview,
         truePeak: .preview, loudness: .preview, programmeBandwidth: .preview,
-        export: { _, _, _, _ in .succeeded }
+        export: { _, _ in .succeeded }
     )
 }
 #endif

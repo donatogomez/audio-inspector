@@ -185,7 +185,9 @@ func exportData(
     generator: ReportGenerator = fixedGenerator
 ) throws -> Data {
     try JSONReportExporter(generator: generator, now: { now })
-        .export(report, signalLevelMetrics: signalLevelMetrics, truePeak: truePeak, loudness: loudness)
+        .export(report, measurements: ReportMeasurements(
+            signalLevelMetrics: signalLevelMetrics, truePeak: truePeak, loudness: loudness
+        ))
 }
 
 /// Exports and decodes into a typed `JSONValue` tree (via `JSONDecoder`) for structural assertions.

@@ -21,9 +21,7 @@ enum InspectionReportMapper {
     /// describes measurements, never why one does not exist.**
     static func envelope(
         for report: InspectionReport,
-        signalLevelMetrics: SignalLevelMetrics?,
-        truePeak: TruePeakMeasurement?,
-        loudness: LoudnessMeasurement?,
+        measurements: ReportMeasurements,
         generatedAt: Date,
         generator: ReportGenerator
     ) -> ReportEnvelopeDTO {
@@ -35,7 +33,7 @@ enum InspectionReportMapper {
             technicalProperties: technicalProperties(from: report),
             warnings: report.warnings.map(warning(from:)),
             inspectionStatus: status(from: report.status),
-            measurements: measurements(from: signalLevelMetrics, truePeak: truePeak, loudness: loudness)
+            measurements: self.measurements(from: measurements)
         )
     }
 
@@ -133,16 +131,18 @@ enum InspectionReportMapper {
     /// Each measurement is independently optional inside it, so adding true peak did not make signal
     /// levels conditional on it or the other way round: a report with only one of them carries only
     /// that one, and neither key is ever present as `null`.
-    private static func measurements(
-        from metrics: SignalLevelMetrics?,
-        truePeak measurement: TruePeakMeasurement?,
-        loudness: LoudnessMeasurement?
-    ) -> MeasurementsDTO? {
-        guard metrics != nil || measurement != nil || loudness != nil else { return nil }
+    /// `nil` — and therefore no `measurements` object at all — only when **every** measurement is
+    /// absent. The guard is written over the fields rather than over a computed "is empty", so adding a
+    /// field to `ReportMeasurements` without extending it here leaves that measurement unable to bring
+    /// the object into existence on its own, which a test pins.
+    private static func measurements(from measurements: ReportMeasurements) -> MeasurementsDTO? {
+        guard measurements.signalLevelMetrics != nil || measurements.truePeak != nil
+            || measurements.loudness != nil
+        else { return nil }
         return MeasurementsDTO(
-            signalLevels: metrics.map(signalLevels(from:)),
-            truePeak: measurement.map(truePeak(from:)),
-            integratedLoudness: loudness.map(integratedLoudness(from:))
+            signalLevels: measurements.signalLevelMetrics.map(signalLevels(from:)),
+            truePeak: measurements.truePeak.map(truePeak(from:)),
+            integratedLoudness: measurements.loudness.map(integratedLoudness(from:))
         )
     }
 
