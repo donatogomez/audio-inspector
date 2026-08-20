@@ -16,46 +16,41 @@
 >   session protocol in `CLAUDE.md`).
 
 ---
-**Open thread: `add-significant-bandwidth-measurement`.** Groups 1-6 are complete. The DSP is built, it
-is **wired** as the sixth consumer of the one shared PCM read, and it is now **validated against
-production** — a written file, the real decoder, the shared pass, and the outcome the composition
-publishes. Still nothing visible: no UI, no export, no comparison, no findings.
+**Open thread: `add-significant-bandwidth-measurement`.** Groups 1-7 are complete. The DSP is built,
+wired as the sixth consumer of the one shared PCM read, validated against production, and now **on
+screen**: its own section between Integrated loudness and the spectrogram, showing one value, the
+resolution it sits on, and one sentence about how it was measured. No export yet, no comparison, no
+findings.
 
-**The core is unchanged and was not touched by this validation.** Counters stratified by each window's
-own peak, constant in duration; channels measured apart because a summing downmix can cancel
-opposite-polarity content; the budget global because the programme is the file. Group 6 found nothing
-that contradicted the methodology, which is the outcome that makes the measurement worth trusting.
+**Presentation settled three things that were easy to get wrong**, and each is a refusal rather than a
+feature. The visible name is *Programme bandwidth* — not "effective sample rate", which would claim the
+file should have been stored differently, and not "cut-off", which asserts a filter nobody observed. The
+resolution is a **second row, never a `±`**: it is a bin width, not an uncertainty, and the reading is
+already biased upward by leakage, so a symmetric interval would be wrong in kind and in shape. And the
+displayed precision is derived from the resolution, so no digit claims a distinction the bins cannot
+make — one decimal in kilohertz at all five rates, which falls out of the window being fixed in time.
 
-**The impulse control is satisfied, and the interesting part is what it is not.** An isolated
-full-scale click inside a programme leaves the published reading identical — equality, not a tolerance
-— and the turnover is pinned on both sides at eight impulses, where four-windows-each would predict
-seven; the extra one is the Hann taper. What is *not* true, and what task 6.2 wrongly predicted, is that
-a file of silence plus one click reads like silence. It reads broadband, because eligibility discards
-silent windows and the click is then the whole programme. That was already measured and already
-declared in ADR-0023; the task text was corrected rather than the method.
+**Nothing on the surface judges.** No colour, badge or weight varies with the value; a reading at the top
+of the band renders exactly like one in the middle; nothing compares it to Nyquist or to the declared
+rate; and there is deliberately no disclaimer sentence, because "not an upsampling diagnosis" would
+introduce the frame the measurement refuses and be longer than the fact it qualifies.
 
-**Everything else came through the same real path**: four edges at five rates within the leakage the
-window explains and never below the edge; the method identity per rate, which is what makes the
-time-locked window testable; persistence, budget and prominence with both sides on real files;
-undefined cases as absences and never a substituted Nyquist; every lossless container identical; a lossy
-band limit surviving a rewrap identically, with no codec named. Nine negative controls, eight biting,
-the ninth a documented redundancy — the budget is enforced twice, so removing its final check alone
-changes nothing.
+**What group 7 could not do, and did not pretend to.** The surface is pinned by tests down to the exact
+rendered strings, but `swift test` cannot tell whether the section *reads* as a fact to a person seeing
+it in place. That is ADR-0023's third promotion condition and it is still open. The runbook is written
+and the fixtures exist with their expected displays computed **before** the app is opened — five files
+under `/tmp/programme-bandwidth-manual`, recorded in `docs/manual-validation-mvp.md` as PREPARED, not
+executed. Fixture 4 is the one that matters: a 16 kHz programme with one click in it, which must be
+indistinguishable from the same programme without it.
 
-**One limitation is recorded rather than papered over.** The denormal amplitudes the underflow
-arithmetic needs do not survive the write-and-decode round trip, evidenced by the zero peak the same
-shared read reports. That evidence stays at PCM level. The overflow extreme does come through a real
-file and answers finitely.
-
-**Next step: group 7, the presentation** — one row stating what was measured and at what resolution, no
-verdict, no comparison against the declared sample rate, absence in the existing not-computable
-phrasing, and the structural half of accessibility. That surface is also what the **last** outstanding
-promotion condition needs: ADR-0023 now records two of three met, with manual surface validation
-pending and no surface yet to validate. Group 8's export follows it.
+**Next step: group 8, the export** — additive under `measurements`, `schemaVersion` stays 1, the key
+omitted when absent, carrying the frequency, the resolution and the method identity, and no verdict.
+Then group 10's gates and the manual pass that promotes ADR-0023. The record stays `Proposed` with two
+of three conditions met.
 
 **Older threads, neither advanced here**: `add-static-spectrogram-visualization` (manual validation
 battery deferred by product decision); `add-two-file-technical-comparison` (one accessibility criterion
-open, blocked on the VoiceOver traversal gap shared with ADR-0015). The loudness debt recorded eight
+open, blocked on the VoiceOver traversal gap shared with ADR-0015). The loudness debt recorded nine
 snapshots ago is unchanged and still not a thread.
 
 ---
