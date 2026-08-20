@@ -135,12 +135,10 @@ struct EndToEndFlowTests {
                 exporter: JSONReportExporter(generator: fixedGenerator, now: { fixedNow }),
                 chooseDestination: { name in suggestedName = name; return destination }
             )
-            let exportModel = ReportExportModel(action: { report, metrics, peak, loudness in
-                await exportCoordinator.export(
-                    report, signalLevelMetrics: metrics, truePeak: peak, loudness: loudness
-                )
+            let exportModel = ReportExportModel(action: { report, measurements in
+                await exportCoordinator.export(report, measurements: measurements)
             })
-            await exportModel.export(report, signalLevelMetrics: nil, truePeak: nil, loudness: nil)
+            await exportModel.export(report, measurements: ReportMeasurements(signalLevelMetrics: nil, truePeak: nil, loudness: nil, programmeBandwidth: nil))
 
             #expect(exportModel.phase == .succeeded)
             #expect(suggestedName == "fixture-inspection.json")
@@ -233,12 +231,10 @@ struct EndToEndFlowTests {
                     exporter: JSONReportExporter(generator: fixedGenerator, now: { fixedNow }),
                     chooseDestination: { _ in destination }
                 )
-                let exportModel = ReportExportModel(action: { report, metrics, peak, loudness in
-                await exportCoordinator.export(
-                    report, signalLevelMetrics: metrics, truePeak: peak, loudness: loudness
-                )
+                let exportModel = ReportExportModel(action: { report, measurements in
+                await exportCoordinator.export(report, measurements: measurements)
             })
-                await exportModel.export(presentation.report, signalLevelMetrics: nil, truePeak: nil, loudness: nil)
+                await exportModel.export(presentation.report, measurements: ReportMeasurements(signalLevelMetrics: nil, truePeak: nil, loudness: nil, programmeBandwidth: nil))
                 #expect(exportModel.phase == .succeeded)
 
                 return (presentation, try Data(contentsOf: destination))
@@ -301,12 +297,10 @@ struct EndToEndFlowTests {
                     exporter: JSONReportExporter(generator: fixedGenerator, now: { fixedNow }),
                     chooseDestination: { _ in destination }
                 )
-                let exportModel = ReportExportModel(action: { report, metrics, peak, loudness in
-                await exportCoordinator.export(
-                    report, signalLevelMetrics: metrics, truePeak: peak, loudness: loudness
-                )
+                let exportModel = ReportExportModel(action: { report, measurements in
+                await exportCoordinator.export(report, measurements: measurements)
             })
-                await exportModel.export(presentation.report, signalLevelMetrics: nil, truePeak: nil, loudness: nil)
+                await exportModel.export(presentation.report, measurements: ReportMeasurements(signalLevelMetrics: nil, truePeak: nil, loudness: nil, programmeBandwidth: nil))
                 #expect(exportModel.phase == .succeeded)
 
                 return (presentation, try Data(contentsOf: destination))
@@ -389,10 +383,8 @@ struct EndToEndFlowTests {
                 exporter: JSONReportExporter(generator: fixedGenerator, now: { fixedNow }),
                 chooseDestination: { _ in destination }
             )
-            let exportModel = ReportExportModel(action: { report, metrics, peak, loudness in
-                await exportCoordinator.export(
-                    report, signalLevelMetrics: metrics, truePeak: peak, loudness: loudness
-                )
+            let exportModel = ReportExportModel(action: { report, measurements in
+                await exportCoordinator.export(report, measurements: measurements)
             })
 
             // The composition root's own translation, `RootView.signalLevelMetricsPresentation(for:)`,
@@ -401,7 +393,7 @@ struct EndToEndFlowTests {
             let toExport = exportableSignalLevelMetrics(
                 RootView.signalLevelMetricsPresentation(for: presentation.signalLevelMetrics)
             )
-            await exportModel.export(presentation.report, signalLevelMetrics: toExport, truePeak: nil, loudness: nil)
+            await exportModel.export(presentation.report, measurements: ReportMeasurements(signalLevelMetrics: toExport, truePeak: nil, loudness: nil, programmeBandwidth: nil))
             #expect(exportModel.phase == .succeeded)
 
             let json = try JSONDecoder().decode(JSONValue.self, from: Data(contentsOf: destination))
@@ -449,14 +441,12 @@ struct EndToEndFlowTests {
                 exporter: JSONReportExporter(generator: fixedGenerator, now: { fixedNow }),
                 chooseDestination: { _ in destination }
             )
-            let exportModel = ReportExportModel(action: { report, metrics, peak, loudness in
-                await exportCoordinator.export(
-                    report, signalLevelMetrics: metrics, truePeak: peak, loudness: loudness
-                )
+            let exportModel = ReportExportModel(action: { report, measurements in
+                await exportCoordinator.export(report, measurements: measurements)
             })
 
             let toExport = exportableTruePeak(RootView.truePeakPresentation(for: presentation.truePeak))
-            await exportModel.export(presentation.report, signalLevelMetrics: nil, truePeak: toExport, loudness: nil)
+            await exportModel.export(presentation.report, measurements: ReportMeasurements(signalLevelMetrics: nil, truePeak: toExport, loudness: nil, programmeBandwidth: nil))
             #expect(exportModel.phase == .succeeded)
 
             let json = try JSONDecoder().decode(JSONValue.self, from: Data(contentsOf: destination))
@@ -533,16 +523,15 @@ struct EndToEndFlowTests {
                 exporter: JSONReportExporter(generator: fixedGenerator, now: { fixedNow }),
                 chooseDestination: { _ in destination }
             )
-            let exportModel = ReportExportModel(action: { report, metrics, peak, loudness in
-                await exportCoordinator.export(
-                    report, signalLevelMetrics: metrics, truePeak: peak, loudness: loudness
-                )
+            let exportModel = ReportExportModel(action: { report, measurements in
+                await exportCoordinator.export(report, measurements: measurements)
             })
 
             let toExport = exportableLoudness(RootView.loudnessPresentation(for: presentation.loudness))
             await exportModel.export(
-                presentation.report, signalLevelMetrics: nil, truePeak: nil, loudness: toExport
-            )
+                presentation.report,
+                measurements: ReportMeasurements(signalLevelMetrics: nil, truePeak: nil, loudness: toExport, programmeBandwidth: nil)
+                )
             #expect(exportModel.phase == .succeeded)
 
             let json = try JSONDecoder().decode(JSONValue.self, from: Data(contentsOf: destination))

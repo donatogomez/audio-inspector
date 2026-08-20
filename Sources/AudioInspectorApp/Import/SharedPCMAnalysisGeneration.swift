@@ -29,6 +29,7 @@ struct SharedPCMAnalysisOutcome {
     let signalLevelMetrics: SignalLevelMetricsOutcome
     let truePeak: TruePeakOutcome
     let loudness: LoudnessOutcome
+    let significantBandwidth: SignificantBandwidthOutcome
 }
 
 /// Reads a file's PCM **once** and folds every chunk into several analyses, each of which keeps its own
@@ -139,7 +140,8 @@ struct SharedPCMAnalysisGeneration {
             if cancelled {
                 return SharedPCMAnalysisOutcome(
                     waveform: .cancelled, spectrogram: .cancelled,
-                    signalLevelMetrics: .cancelled, truePeak: .cancelled, loudness: .cancelled
+                    signalLevelMetrics: .cancelled, truePeak: .cancelled, loudness: .cancelled,
+                    significantBandwidth: .cancelled
                 )
             }
             guard let stream else {
@@ -149,7 +151,8 @@ struct SharedPCMAnalysisGeneration {
                 // the waveform's own port reports for this file: `makeWaveform` returns `nil`.
                 return SharedPCMAnalysisOutcome(
                     waveform: .unavailable, spectrogram: .unavailable,
-                    signalLevelMetrics: .unavailable, truePeak: .unavailable, loudness: .unavailable
+                    signalLevelMetrics: .unavailable, truePeak: .unavailable, loudness: .unavailable,
+                    significantBandwidth: .unavailable
                 )
             }
             return consumers.finish(stream: stream)
@@ -160,7 +163,8 @@ struct SharedPCMAnalysisGeneration {
             if error.code == .cancelled {
                 return SharedPCMAnalysisOutcome(
                     waveform: .cancelled, spectrogram: .cancelled,
-                    signalLevelMetrics: .cancelled, truePeak: .cancelled, loudness: .cancelled
+                    signalLevelMetrics: .cancelled, truePeak: .cancelled, loudness: .cancelled,
+                    significantBandwidth: .cancelled
                 )
             }
             // Human, neutral, and carrying no path, no framework text and no stable code — those stay
@@ -172,7 +176,8 @@ struct SharedPCMAnalysisGeneration {
                 spectrogram: .failed(message: "The spectrogram for this file could not be produced."),
                 signalLevelMetrics: .failed(message: "The signal level metrics for this file could not be produced."),
                 truePeak: .failed(message: "The true peak for this file could not be measured."),
-                loudness: .failed(message: "The integrated loudness for this file could not be measured.")
+                loudness: .failed(message: "The integrated loudness for this file could not be measured."),
+                significantBandwidth: .failed(message: "The programme bandwidth for this file could not be measured.")
             )
         }
     }
@@ -193,6 +198,7 @@ private extension SharedPCMAnalysisGeneration {
         private var signalLevelMetrics: SignalLevelMetricsAccumulator?
         private var truePeak: TruePeakAccumulator?
         private var loudness: LoudnessAccumulator?
+        private var significantBandwidth: SignificantBandwidthAccumulator?
         private var waveform: WaveformEnvelopeAccumulator?
         private var spectrogramFault: String?
         private var signalLevelMetricsFault: String?
@@ -203,6 +209,11 @@ private extension SharedPCMAnalysisGeneration {
         /// is one this measurement does not claim rather than one it failed at. Reporting it as a
         /// failure would blame the file for a scope we chose (ADR-0022 §3, §4).
         private var loudnessAbsent = false
+        /// Programme bandwidth's own **absence**, kept apart from a fault for loudness's reason: its
+        /// accumulator declines to be built for a stream it does not claim, which is scope rather than
+        /// failure. It has no individual fault of its own because none is reachable — the accumulator
+        /// ignores a chunk that does not match the stream, exactly as its siblings do.
+        private var significantBandwidthAbsent = false
         /// The waveform's one **absence**, kept apart from its faults on purpose: a stream this
         /// resolution cannot be mapped to buckets is a file that offered nothing to size an envelope
         /// against, which its own port reports by returning `nil`. Reporting it as a failure would
@@ -220,7 +231,7 @@ private extension SharedPCMAnalysisGeneration {
         var allFailed: Bool {
             spectrogramFault != nil && signalLevelMetricsFault != nil
                 && truePeakFault != nil && (waveformFault != nil || waveformAbsent)
-                && loudnessAbsent
+                && loudnessAbsent && significantBandwidthAbsent
         }
 
         /// Builds each accumulator once, from the one stream description the read reports.
@@ -275,6 +286,15 @@ private extension SharedPCMAnalysisGeneration {
             if loudness == nil {
                 loudnessAbsent = true
             }
+            // Built from the **same** stream description, and nothing about the method crosses this
+            // seam: the composition asks "can you measure this stream?" and never names a threshold, a
+            // persistence fraction, a budget, a window length or a bucket width.
+            significantBandwidth = SignificantBandwidthAccumulator(
+                sampleRate: stream.sampleRate, channelCount: stream.channelCount
+            )
+            if significantBandwidth == nil {
+                significantBandwidthAbsent = true
+            }
             waveform = WaveformEnvelopeAccumulator(
                 totalFrameCount: stream.frameCount,
                 channelCount: stream.channelCount,
@@ -297,6 +317,7 @@ private extension SharedPCMAnalysisGeneration {
             if signalLevelMetricsFault == nil { signalLevelMetrics?.accumulate(chunk) }
             if truePeakFault == nil { truePeak?.accumulate(chunk) }
             if !loudnessAbsent { loudness?.accumulate(chunk) }
+            if !significantBandwidthAbsent { significantBandwidth?.accumulate(chunk) }
             if waveformFault == nil, !waveformAbsent { accumulateWaveform(chunk) }
         }
 
@@ -357,6 +378,7 @@ private extension SharedPCMAnalysisGeneration {
             // Loudness has no fault of its own to set — see `finishLoudness`. A stream whose audio does
             // not match its description leaves it absent, which is what an unmeasurable file already is.
             loudnessAbsent = true
+            significantBandwidthAbsent = true
             // Not applied to a waveform that is **absent**: that is not a fault waiting to be
             // overwritten, and turning it into one would report a failure for a file that simply
             // offered nothing to size against.
@@ -374,7 +396,8 @@ private extension SharedPCMAnalysisGeneration {
                 spectrogram: finishSpectrogram(stream: stream),
                 signalLevelMetrics: finishSignalLevelMetrics(stream: stream),
                 truePeak: finishTruePeak(stream: stream),
-                loudness: finishLoudness(stream: stream)
+                loudness: finishLoudness(stream: stream),
+                significantBandwidth: finishSignificantBandwidth(stream: stream)
             )
         }
 
@@ -473,6 +496,18 @@ private extension SharedPCMAnalysisGeneration {
         ///
         /// This mirrors the limitation `SignalLevelMetricsAccumulator` already documents for its own
         /// `nil`: recorded honestly rather than met with an invented failure path.
+        /// Programme bandwidth's own result. The methodology is the accumulator's own and is not
+        /// configurable here: the composition asks only whether this stream can be measured, never what
+        /// the threshold, the persistence fraction, the budget or the window length are.
+        private func finishSignificantBandwidth(stream: PCMStreamDescription) -> SignificantBandwidthOutcome {
+            if significantBandwidthAbsent { return .unavailable }
+            let accumulator = significantBandwidth ?? SignificantBandwidthAccumulator(
+                sampleRate: stream.sampleRate, channelCount: stream.channelCount
+            )
+            guard let model = accumulator?.finish() else { return .unavailable }
+            return .available(model)
+        }
+
         private func finishLoudness(stream: PCMStreamDescription) -> LoudnessOutcome {
             if loudnessAbsent { return .unavailable }
             let accumulator = loudness ?? LoudnessAccumulator(

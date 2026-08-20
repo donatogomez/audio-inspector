@@ -127,14 +127,14 @@ struct SignalLevelMetricsFlowTests {
             let coordinator = SourceInspectionCoordinator(makeDecoder: { _ in decoder })
             let outcome = await coordinator.inspect(url, onUpdate: { box.collect($0) })
 
-            guard case let .inspected(report, waveform, spectrogram, _, _, _) = outcome else {
+            guard case let .inspected(report, analyses) = outcome else {
                 Issue.record("expected an inspected outcome"); return
             }
             guard case .failed = report.status else {
                 Issue.record("expected a globally failed report"); return
             }
-            #expect(waveform == .unavailable)
-            #expect(spectrogram == .unavailable)
+            #expect(analyses.waveform == .unavailable)
+            #expect(analyses.spectrogram == .unavailable)
             #expect(box.first == .unavailable, "signal level metrics are absent, not failed")
             #expect(await decoder.spy.callCount == 0, "signal level metrics read samples after a global failure")
         }
@@ -167,7 +167,7 @@ struct SignalLevelMetricsFlowTests {
             )
             let outcome = await coordinator.inspect(url, onUpdate: { box.collect($0) })
 
-            guard case let .inspected(report, waveform, spectrogram, _, _, _) = outcome else {
+            guard case let .inspected(report, analyses) = outcome else {
                 Issue.record("expected an inspected outcome"); return
             }
             if case .failed = report.status {
@@ -178,14 +178,14 @@ struct SignalLevelMetricsFlowTests {
             // means sharing its fate, which is exactly what ADR-0020 decision 2 says a producer
             // failure does. What must still hold — and is what this test now pins — is that each
             // reports its *own* outcome and the report is untouched.
-            guard case let .failed(waveformMessage) = waveform else {
-                Issue.record("expected the waveform to end with the read, got \(waveform)"); return
+            guard case let .failed(waveformMessage) = analyses.waveform else {
+                Issue.record("expected the analyses.waveform to end with the read, got \(analyses.waveform)"); return
             }
             #expect(waveformMessage.contains("waveform"), "the waveform did not report its own failure")
             // A producer failure reaches every consumer of that read — and each still reports its own
             // outcome rather than deferring to another's.
-            guard case .failed = spectrogram else {
-                Issue.record("expected the spectrogram to report its own failure: \(spectrogram)"); return
+            guard case .failed = analyses.spectrogram else {
+                Issue.record("expected the analyses.spectrogram to report its own failure: \(analyses.spectrogram)"); return
             }
             guard case .failed = try #require(box.first) else {
                 Issue.record("expected failed signal level metrics"); return
@@ -224,10 +224,10 @@ struct SignalLevelMetricsFlowTests {
             )
             let outcome = await coordinator.inspect(url, onUpdate: { box.collect($0) })
 
-            guard case let .inspected(_, waveform, _, _, _, _) = outcome else {
+            guard case let .inspected(_, analyses) = outcome else {
                 Issue.record("expected an inspected outcome"); return
             }
-            guard case .failed = waveform else {
+            guard case .failed = analyses.waveform else {
                 Issue.record("expected a failed waveform"); return
             }
             guard case let .available(metrics) = try #require(box.first) else {
@@ -258,15 +258,15 @@ struct SignalLevelMetricsFlowTests {
             )
             let outcome = await coordinator.inspect(url, onUpdate: { box.collect($0) })
 
-            guard case let .inspected(report, waveform, spectrogram, levels, truePeak, _) = outcome else {
+            guard case let .inspected(report, analyses) = outcome else {
                 Issue.record("expected an inspected outcome"); return
             }
             #expect(box.first == .cancelled)
-            #expect(waveform == .cancelled)
-            #expect(spectrogram == .cancelled)
-            #expect(levels == .cancelled)
-            #expect(truePeak == .cancelled)
-            #expect(waveform != .unavailable, "cancellation must not be dressed up as an absence")
+            #expect(analyses.waveform == .cancelled)
+            #expect(analyses.spectrogram == .cancelled)
+            #expect(analyses.signalLevelMetrics == .cancelled)
+            #expect(analyses.truePeak == .cancelled)
+            #expect(analyses.waveform != .unavailable, "cancellation must not be dressed up as an absence")
             if case .failed = report.status {
                 Issue.record("a cancelled read degraded the inspection")
             }
@@ -296,11 +296,11 @@ struct SignalLevelMetricsFlowTests {
             })
             let outcome = await coordinator.inspect(url, onUpdate: { box.collect($0) })
 
-            guard case let .inspected(_, _, spectrogram, signalLevels, _, _) = outcome else {
+            guard case let .inspected(_, analyses) = outcome else {
                 Issue.record("expected an inspected outcome"); return
             }
-            #expect(spectrogram == .cancelled)
-            #expect(signalLevels == .cancelled)
+            #expect(analyses.spectrogram == .cancelled)
+            #expect(analyses.signalLevelMetrics == .cancelled)
             // Cancellation is not absence and not failure: a partial model presented as a result is
             // exactly what this asserts cannot happen.
             #expect(try #require(box.first) == .cancelled)

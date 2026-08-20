@@ -92,7 +92,7 @@ private final class SuspendedAction {
         cancellationContinuation?.resume()
         cancellationContinuation = nil
         if finishesOnCancellation {
-            finish(.inspected(report, waveform: .cancelled, spectrogram: .unavailable, signalLevelMetrics: .unavailable, truePeak: .unavailable, loudness: .unavailable))
+            finish(.inspected(report, analyses: InspectionAnalyses(waveform: .cancelled, spectrogram: .unavailable, signalLevelMetrics: .unavailable, truePeak: .unavailable, loudness: .unavailable, significantBandwidth: .unavailable)))
         }
     }
 
@@ -152,12 +152,12 @@ struct WaveformCoordinationTests {
             var delivered: InspectionReport?
             let outcome = await coordinator.inspect(url, onUpdate: { if case let .report(report) = $0 { delivered = report } })
 
-            guard case let .inspected(report, waveform, _, _, _, _) = outcome else {
+            guard case let .inspected(report, analyses) = outcome else {
                 Issue.record("expected an inspected outcome, got \(outcome)"); return
             }
             #expect(delivered == report, "the report handed back early is the one in the outcome")
-            guard case let .available(envelope) = waveform else {
-                Issue.record("expected an available waveform, got \(waveform)"); return
+            guard case let .available(envelope) = analyses.waveform else {
+                Issue.record("expected an available analyses.waveform, got \(analyses.waveform)"); return
             }
             #expect(envelope.frameCount == 44_100)
             #expect(envelope.channelCount == 2)
@@ -178,10 +178,10 @@ struct WaveformCoordinationTests {
 
             let outcome = await coordinator.inspect(url, onUpdate: { _ in })
 
-            guard case let .inspected(report, waveform, _, _, _, _) = outcome else {
+            guard case let .inspected(report, analyses) = outcome else {
                 Issue.record("expected an inspected outcome"); return
             }
-            #expect(waveform == .unavailable)
+            #expect(analyses.waveform == .unavailable)
             #expect(report.properties.sampleRate == .available(44_100), "the properties are untouched")
         }
     }
@@ -201,11 +201,11 @@ struct WaveformCoordinationTests {
 
             let outcome = await coordinator.inspect(url, onUpdate: { _ in })
 
-            guard case let .inspected(report, waveform, _, _, _, _) = outcome else {
+            guard case let .inspected(report, analyses) = outcome else {
                 Issue.record("expected an inspected outcome"); return
             }
-            guard case let .failed(message) = waveform else {
-                Issue.record("expected a failed waveform, got \(waveform)"); return
+            guard case let .failed(message) = analyses.waveform else {
+                Issue.record("expected a failed analyses.waveform, got \(analyses.waveform)"); return
             }
             #expect(!message.contains("/"), "no path reaches the message")
             #expect(!message.lowercased().contains("avaudio"), "no framework name reaches the message")
@@ -231,11 +231,11 @@ struct WaveformCoordinationTests {
 
             let outcome = await coordinator.inspect(url, onUpdate: { _ in })
 
-            guard case let .inspected(_, waveform, _, _, _, _) = outcome else {
+            guard case let .inspected(_, analyses) = outcome else {
                 Issue.record("expected an inspected outcome"); return
             }
-            #expect(waveform == .cancelled)
-            #expect(waveform != .unavailable, "cancellation must not be dressed up as an absence")
+            #expect(analyses.waveform == .cancelled)
+            #expect(analyses.waveform != .unavailable, "cancellation must not be dressed up as an absence")
         }
     }
 
@@ -250,13 +250,13 @@ struct WaveformCoordinationTests {
 
             let outcome = await coordinator.inspect(url, onUpdate: { _ in })
 
-            guard case let .inspected(report, waveform, _, _, _, _) = outcome else {
+            guard case let .inspected(report, analyses) = outcome else {
                 Issue.record("expected an inspected outcome"); return
             }
             guard case .failed = report.status else {
                 Issue.record("expected a globally failed report"); return
             }
-            #expect(waveform == .unavailable)
+            #expect(analyses.waveform == .unavailable)
             #expect(await decoder.spy.callCount == 0, "no samples are read when nothing could be read at all")
         }
     }
@@ -297,7 +297,7 @@ struct WaveformCoordinationTests {
 
             let outcome = await coordinator.inspect(url, onUpdate: { _ in })
 
-            guard case let .inspected(_, waveform, _, _, _, _) = outcome, case .available = waveform else {
+            guard case let .inspected(_, analyses) = outcome, case .available = analyses.waveform else {
                 Issue.record("expected an available waveform, got \(outcome)"); return
             }
         }
@@ -351,13 +351,13 @@ struct WaveformFlowStateTests {
 
         #expect(model.state == .report(InspectionPresentation(report: action.report, waveform: .loading)))
 
-        action.finish(.inspected(action.report, waveform: .available(envelope()), spectrogram: .unavailable, signalLevelMetrics: .unavailable, truePeak: .unavailable, loudness: .unavailable))
+        action.finish(.inspected(action.report, analyses: InspectionAnalyses(waveform: .available(envelope()), spectrogram: .unavailable, signalLevelMetrics: .unavailable, truePeak: .unavailable, loudness: .unavailable, significantBandwidth: .unavailable)))
         await running.value
 
         #expect(model.state == .report(InspectionPresentation(
             report: action.report, waveform: .available(envelope()), spectrogram: .unavailable,
             signalLevelMetrics: .unavailable, truePeak: .unavailable, loudness: .unavailable
-        )))
+        , significantBandwidth: .unavailable)))
     }
 
     @Test("an unavailable waveform replaces loading without touching the report")
@@ -368,13 +368,13 @@ struct WaveformFlowStateTests {
         let running = Task { await model.selectAndInspect() }
         await action.waitUntilStarted()
         await action.deliverReport()
-        action.finish(.inspected(action.report, waveform: .unavailable, spectrogram: .unavailable, signalLevelMetrics: .unavailable, truePeak: .unavailable, loudness: .unavailable))
+        action.finish(.inspected(action.report, analyses: InspectionAnalyses(waveform: .unavailable, spectrogram: .unavailable, signalLevelMetrics: .unavailable, truePeak: .unavailable, loudness: .unavailable, significantBandwidth: .unavailable)))
         await running.value
 
         #expect(model.state == .report(InspectionPresentation(
             report: action.report, waveform: .unavailable, spectrogram: .unavailable,
             signalLevelMetrics: .unavailable, truePeak: .unavailable, loudness: .unavailable
-        )))
+        , significantBandwidth: .unavailable)))
     }
 
     @Test("a failed waveform never becomes a failed flow")
@@ -385,7 +385,7 @@ struct WaveformFlowStateTests {
         let running = Task { await model.selectAndInspect() }
         await action.waitUntilStarted()
         await action.deliverReport()
-        action.finish(.inspected(action.report, waveform: .failed(message: "The waveform could not be produced."), spectrogram: .unavailable, signalLevelMetrics: .unavailable, truePeak: .unavailable, loudness: .unavailable))
+        action.finish(.inspected(action.report, analyses: InspectionAnalyses(waveform: .failed(message: "The waveform could not be produced."), spectrogram: .unavailable, signalLevelMetrics: .unavailable, truePeak: .unavailable, loudness: .unavailable, significantBandwidth: .unavailable)))
         await running.value
 
         guard case let .report(presentation) = model.state else {
@@ -414,7 +414,7 @@ struct WaveformFlowStateTests {
 
         // Let the first one complete so the test can end; the assertions above already hold.
         await first.deliverReport()
-        first.finish(.inspected(first.report, waveform: .unavailable, spectrogram: .unavailable, signalLevelMetrics: .unavailable, truePeak: .unavailable, loudness: .unavailable))
+        first.finish(.inspected(first.report, analyses: InspectionAnalyses(waveform: .unavailable, spectrogram: .unavailable, signalLevelMetrics: .unavailable, truePeak: .unavailable, loudness: .unavailable, significantBandwidth: .unavailable)))
         await running.value
         #expect(first.callCount == 1)
     }
@@ -440,7 +440,7 @@ struct WaveformFlowStateTests {
         #expect(first.cancellationsObserved == 1, "the pending generation was cancelled")
 
         await second.deliverReport()
-        second.finish(.inspected(second.report, waveform: .available(envelope()), spectrogram: .unavailable, signalLevelMetrics: .unavailable, truePeak: .unavailable, loudness: .unavailable))
+        second.finish(.inspected(second.report, analyses: InspectionAnalyses(waveform: .available(envelope()), spectrogram: .unavailable, signalLevelMetrics: .unavailable, truePeak: .unavailable, loudness: .unavailable, significantBandwidth: .unavailable)))
         await secondRun.value
         _ = await firstRun.value
 
@@ -464,11 +464,11 @@ struct WaveformFlowStateTests {
         let secondRun = Task { await model.inspectDroppedSource(using: second.run) }
         await second.waitUntilStarted()
         await second.deliverReport()
-        second.finish(.inspected(second.report, waveform: .unavailable, spectrogram: .unavailable, signalLevelMetrics: .unavailable, truePeak: .unavailable, loudness: .unavailable))
+        second.finish(.inspected(second.report, analyses: InspectionAnalyses(waveform: .unavailable, spectrogram: .unavailable, signalLevelMetrics: .unavailable, truePeak: .unavailable, loudness: .unavailable, significantBandwidth: .unavailable)))
         await secondRun.value
 
         // The superseded operation now tries to report a completely different result. It must not land.
-        first.finish(.inspected(first.report, waveform: .available(envelope()), spectrogram: .unavailable, signalLevelMetrics: .unavailable, truePeak: .unavailable, loudness: .unavailable))
+        first.finish(.inspected(first.report, analyses: InspectionAnalyses(waveform: .available(envelope()), spectrogram: .unavailable, signalLevelMetrics: .unavailable, truePeak: .unavailable, loudness: .unavailable, significantBandwidth: .unavailable)))
         _ = await firstRun.value
 
         guard case let .report(presentation) = model.state else {
@@ -486,7 +486,7 @@ struct WaveformFlowStateTests {
         let firstRun = Task { await model.selectAndInspect() }
         await first.waitUntilStarted()
         await first.deliverReport()
-        first.finish(.inspected(first.report, waveform: .unavailable, spectrogram: .unavailable, signalLevelMetrics: .unavailable, truePeak: .unavailable, loudness: .unavailable))
+        first.finish(.inspected(first.report, analyses: InspectionAnalyses(waveform: .unavailable, spectrogram: .unavailable, signalLevelMetrics: .unavailable, truePeak: .unavailable, loudness: .unavailable, significantBandwidth: .unavailable)))
         await firstRun.value
 
         let settled = model.state

@@ -87,7 +87,11 @@ struct AudioFixtureSegment: Equatable {
 
 /// The content written into a fixture: a pure function of `(channel, frame)`, so the same
 /// specification always produces the same samples.
-enum AudioFixtureSignal {
+///
+/// `Sendable` is stated rather than inferred: the composite cases below are `indirect`, and an
+/// indirect enum loses the implicit conformance even though every payload here is a value type and
+/// nothing is ever mutated after construction.
+enum AudioFixtureSignal: Sendable {
     /// Every sample zero.
     case silence
     /// A sine of the given frequency and amplitude, identical in every channel.
@@ -117,6 +121,100 @@ enum AudioFixtureSignal {
     /// restarting the phase would inject a step whose broadband energy is not part of the signal the
     /// segments describe.
     case segmentedSine(frequency: Double, segments: [AudioFixtureSegment])
+    /// Several signals added together, sample by sample.
+    ///
+    /// The one primitive `bandLimitedTones` cannot express on its own: a programme *and* a second band
+    /// at a different level, which is what a level-relative measurement has to be shown to separate.
+    /// Nothing is normalised — the caller is responsible for the parts staying inside full scale — so
+    /// the level of each part remains exactly what its own case says it is.
+    indirect case sum([AudioFixtureSignal])
+    /// Another signal scaled by a piecewise-constant envelope, silent past the last segment, with a
+    /// raised-cosine ramp of `rampFrames` at each boundary.
+    ///
+    /// `segmentedSine` already does this for one sine; this does it for anything, which is what turns
+    /// "a band at −30 dB" into "a band at −30 dB present for 10 % of the file". The envelope multiplies
+    /// the inner signal rather than re-deriving it, so the inner phase stays continuous.
+    ///
+    /// **The ramp is not decoration.** An amplitude step is a broadband event: measured, a hard gate on
+    /// a 16 kHz-limited comb put energy in every bin of the four windows straddling the boundary, which
+    /// is enough to move a bandwidth reading to Nyquist whenever the eligible-window count is small.
+    /// That energy is not part of the signal the segments describe. `rampFrames: 0` keeps the hard step
+    /// for callers that want it.
+    indirect case enveloped(AudioFixtureSignal, segments: [AudioFixtureSegment], rampFrames: Int)
+    /// A different signal in each channel, cycling if there are fewer than the file has.
+    ///
+    /// `perChannelSine` already does this for sines; a channel decision needs it for anything, because
+    /// "left limited to 16 kHz and right to 20 kHz" is not expressible otherwise and is exactly the
+    /// evidence that separates measuring channels apart from combining them.
+    indirect case perChannel([AudioFixtureSignal])
+
+    /// A comb whose **individual components** carry a stated amplitude.
+    ///
+    /// `bandLimitedTones` divides its amplitude between the components so a dense comb stays inside
+    /// full scale, which means two combs of different widths at the same `amplitude` do **not** sit at
+    /// the same per-bin level. A measurement that thresholds bins needs the per-bin figure, so this
+    /// states that instead and lets the case do the arithmetic.
+    static func tones(
+        highest: Double, spacing: Double, lowest: Double, perComponentAmplitude: Float
+    ) -> AudioFixtureSignal {
+        let probe = AudioFixtureSignal.bandLimitedTones(
+            highest: highest, spacing: spacing, lowest: lowest, amplitude: 1
+        )
+        let count = max(probe.toneFrequencies.count, 1)
+        return .bandLimitedTones(
+            highest: highest, spacing: spacing, lowest: lowest,
+            amplitude: perComponentAmplitude * Float(count)
+        )
+    }
+
+    /// A comb attenuated above `knee` at a stated slope — a graded roll-off rather than a cliff.
+    ///
+    /// Built as a `sum` of sines rather than a new case, because the only thing it needs that
+    /// `bandLimitedTones` lacks is a per-component amplitude, and `sum` already provides that.
+    static func slopedTones(
+        highest: Double, spacing: Double, lowest: Double, perComponentAmplitude: Float,
+        knee: Double, dBPerOctave: Double
+    ) -> AudioFixtureSignal {
+        var parts: [AudioFixtureSignal] = []
+        var frequency = lowest
+        while frequency <= highest {
+            let attenuation = frequency <= knee ? 0 : dBPerOctave * log2(frequency / knee)
+            parts.append(.sine(
+                frequency: frequency,
+                amplitude: perComponentAmplitude * Float(pow(10.0, -attenuation / 20.0))
+            ))
+            frequency += spacing
+        }
+        return .sum(parts)
+    }
+
+    /// The envelope's value at `frame`, ramps included. Zero past the last segment.
+    static func envelopeAmplitude(
+        at frame: Int, segments: [AudioFixtureSegment], rampFrames: Int
+    ) -> Float {
+        var start = 0
+        for (index, segment) in segments.enumerated() {
+            let end = start + segment.frames
+            if frame < end {
+                guard rampFrames > 0 else { return segment.amplitude }
+                let before = index > 0 ? segments[index - 1].amplitude : 0
+                let after = index + 1 < segments.count ? segments[index + 1].amplitude : 0
+                if frame - start < rampFrames {
+                    let position = Double(frame - start) / Double(rampFrames)
+                    let weight = Float(0.5 - 0.5 * cos(Double.pi * position))
+                    return before + (segment.amplitude - before) * weight
+                }
+                if end - frame <= rampFrames {
+                    let position = Double(end - frame) / Double(rampFrames)
+                    let weight = Float(0.5 - 0.5 * cos(Double.pi * position))
+                    return after + (segment.amplitude - after) * weight
+                }
+                return segment.amplitude
+            }
+            start = end
+        }
+        return 0
+    }
 
     /// The components of a `bandLimitedTones` signal, highest first.
     var toneFrequencies: [Double] {
@@ -140,11 +238,53 @@ enum AudioFixtureSignal {
     /// the enum's associated array is retained and released once per sample, and hoisting it out of the
     /// loop is the whole optimisation.
     func samples(channel: Int, from startFrame: Int, count: Int, sampleRate: Double) -> [Float] {
-        guard case let .segmentedSine(frequency, segments) = self else {
+        switch self {
+        case let .sum(parts):
+            // Each part gets the same hoisting the whole expression does, so a programme built from
+            // three combs costs three fast passes rather than one slow one per sample.
+            var output = [Float](repeating: 0, count: count)
+            for part in parts {
+                let partial = part.samples(channel: channel, from: startFrame, count: count, sampleRate: sampleRate)
+                for index in 0 ..< count { output[index] += partial[index] }
+            }
+            return output
+        case let .enveloped(inner, segments, rampFrames):
+            var output = inner.samples(channel: channel, from: startFrame, count: count, sampleRate: sampleRate)
+            for index in 0 ..< count {
+                output[index] *= Self.envelopeAmplitude(
+                    at: startFrame + index, segments: segments, rampFrames: rampFrames
+                )
+            }
+            return output
+        case let .perChannel(parts):
+            guard !parts.isEmpty else { return [Float](repeating: 0, count: count) }
+            return parts[channel % parts.count]
+                .samples(channel: channel, from: startFrame, count: count, sampleRate: sampleRate)
+        case let .bandLimitedTones(_, _, _, amplitude):
+            // `toneFrequencies` rebuilds an array from the enum's payload, and reading it per sample is
+            // the same retain/release cost the segmented case was written to avoid.
+            let frequencies = toneFrequencies
+            guard !frequencies.isEmpty else { return [Float](repeating: 0, count: count) }
+            // The expression is `amplitude * Float(total) / Float(count)`, associated exactly as
+            // `sample(channel:frame:sampleRate:)` writes it: `(a / c) * t` is not bit-identical to
+            // `a * t / c`, and `AudioFixtureSupportTests` asserts the two entry points agree.
+            let divisor = Float(frequencies.count)
+            var output = [Float](repeating: 0, count: count)
+            for index in 0 ..< count {
+                let frame = Double(startFrame + index)
+                var total = 0.0
+                for frequency in frequencies { total += sin(2.0 * Double.pi * frequency * frame / sampleRate) }
+                output[index] = amplitude * Float(total) / divisor
+            }
+            return output
+        case .segmentedSine:
+            break
+        default:
             return (0 ..< count).map {
                 sample(channel: channel, frame: startFrame + $0, sampleRate: sampleRate)
             }
         }
+        guard case let .segmentedSine(frequency, segments) = self else { return [] }
         var output = [Float](repeating: 0, count: count)
         let end = startFrame + count
         output.withUnsafeMutableBufferPointer { buffer in
@@ -202,6 +342,14 @@ enum AudioFixtureSignal {
                 * amplitude * Float(sin(2.0 * Double.pi * frequency * Double(frame) / sampleRate))
         case let .impulse(amplitude, frameIndex):
             frame == frameIndex ? amplitude : 0
+        case let .sum(parts):
+            parts.reduce(0) { $0 + $1.sample(channel: channel, frame: frame, sampleRate: sampleRate) }
+        case let .enveloped(inner, segments, rampFrames):
+            Self.envelopeAmplitude(at: frame, segments: segments, rampFrames: rampFrames)
+                * inner.sample(channel: channel, frame: frame, sampleRate: sampleRate)
+        case let .perChannel(parts):
+            parts.isEmpty ? 0 : parts[channel % parts.count]
+                .sample(channel: channel, frame: frame, sampleRate: sampleRate)
         }
     }
 }

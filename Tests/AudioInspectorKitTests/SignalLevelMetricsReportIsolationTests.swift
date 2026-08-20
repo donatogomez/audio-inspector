@@ -43,10 +43,10 @@ struct SignalLevelMetricsReportIsolationTests {
     ) async throws -> (report: InspectionReport, signalLevelMetrics: SignalLevelMetricsOutcome) {
         let coordinator = SourceInspectionCoordinator(makeDecoder: { _ in decoder })
         let outcome = await coordinator.inspect(url, onUpdate: { _ in })
-        guard case let .inspected(report, _, _, signalLevelMetrics, _, _) = outcome else {
+        guard case let .inspected(report, analyses) = outcome else {
             throw InspectionDidNotComplete()
         }
-        return (report, signalLevelMetrics)
+        return (report, analyses.signalLevelMetrics)
     }
 
     private func fixture(in directory: URL) throws -> URL {

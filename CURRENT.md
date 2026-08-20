@@ -16,37 +16,43 @@
 >   session protocol in `CLAUDE.md`).
 
 ---
-**No loudness thread is open.** `add-loudness-measurement` is merged, archived, and its capability is
-canonical. Two older threads remain, neither touched by it.
+**Thread complete, not yet published: `add-significant-bandwidth-measurement`.** Groups 1-8 are closed,
+group 9 is deferred without pretence, and group 10 is done except the archive, which its own wording
+places after merge. **ADR-0023 is `Accepted`** as of 2026-08-20.
 
-Integrated loudness (LUFS-I) shipped end to end and closed the chain it set out to close: **the
-normative documents → the DSP → the multi-rate weighting → the one shared PCM read → the report surface
-→ the JSON contract → automated and manual validation.** ADR-0022 is `Accepted`, and
-`openspec/specs/audio-loudness-measurement` now carries three requirements and twelve scenarios,
-promoted from the change's own delta without touching any other capability.
+**What exists.** A methodology decided by measurement on graded fixtures — −50 dB prominence against
+each window's own peak, ≥ 10 % persistence, a 60 dB programme budget, a Hann window fixed in *time* at
+~42.67 ms with 75 % overlap. A `SignificantBandwidth` domain value that carries no verdict. An
+accumulator whose memory is constant in duration — 2.4 MB at 48 kHz, 8.7 MB at 192 — because counters
+are stratified by each window's own peak rather than a spectrogram being kept. It is the sixth consumer
+of the one shared PCM read, and the read count is still one. It is validated against production, shown
+as its own section between the integrated loudness and the spectrogram, and exported under
+`measurements.programmeBandwidth` at `schemaVersion` 1.
 
-What the product measures is one quantity, and the record is precise about how far that claim goes: the
-48 kHz coefficients are BS.1770-5's own, every other supported rate runs a derivation **this project**
-performed and names as such on the wire, and no conformance, certification or platform target is
-asserted anywhere. FFmpeg was, and remains, a corroborating oracle rather than a source of authority.
+**What promoted the ADR, and what did not.** Its three literal conditions: the constants from graded
+fixtures; the impulse control against *production* code, where a full-scale click inside a programme
+leaves the reading identical and the turnover is pinned on both sides; and a person looking at the
+surface, who saw the five fixtures read their pre-computed values and saw the file with a click in it
+be indistinguishable from the file without. **The manual pass was narrower than ADR-0019's** — light,
+dark, resize, a by-hand stale selection and a word-by-word vocabulary read were not reported, and are
+recorded as unticked rather than inferred. That is in the ADR's `Promotion` section and in the manual
+runbook, both of which say what is not claimed.
 
-**Real debt that outlived the change**, none of it a thread:
+**Two containers were introduced, each on its own commit and each proved neutral.**
+`InspectionAnalyses` for the flow, and `ReportMeasurements` for the export chain — the latter paying a
+debt three separate notes had deferred to whoever added a fourth measurement, byte-identical across all
+five existing combinations before anything was added to it.
 
-- **The export chain takes a third positional optional.** Its own note called that the moment to
-  introduce a container; doing it inside a feature change would have hidden a refactor. It belongs to
-  whoever adds the fourth measurement, and `SourceInspectionOutcome`'s fifth payload carries the sibling
-  version of the same debt.
-- **`ReportJSONDTO.swift` is 415 lines against SwiftLint's 400.** SwiftLint is not one of the four gates,
-  and the alternatives were splitting the wire DTOs or cutting documentation.
-- **The absolute gate is not observable from outside `LoudnessAccumulator`.** Deliberate: the domain
-  value was not widened to expose a DSP intermediate. The evidence lives one layer down.
-- **`ImportFlowComparisonTests` has one `Task.yield()`** never audited in depth; no failure has ever been
-  attributed to it.
+**Deferred, and named**: a shared STFT stage and an average spectrum (one piece of work, waiting for the
+second consumer), comparison between two files, and findings. None was started; none is ticked.
 
-**Open threads** (see `openspec list` for their real counts, not restated here):
-`add-static-spectrogram-visualization` — manual validation battery deferred by product decision;
-`add-two-file-technical-comparison` — one accessibility criterion open, blocked on a known VoiceOver
-traversal gap shared with ADR-0015.
+**Next step: publish.** Nothing is pushed, no branch tracks a remote, and no pull request exists. The
+archive runs `after merge`, by task 10.2's own wording — not before.
+
+**Older threads, neither advanced here**: `add-static-spectrogram-visualization` (manual validation
+battery deferred by product decision); `add-two-file-technical-comparison` (one accessibility criterion
+open, blocked on the VoiceOver traversal gap shared with ADR-0015). The loudness debt recorded eleven
+snapshots ago is unchanged and still not a thread.
 
 ---
-_Last touched: 2026-08-18. Overwrite freely; empty is fine._
+_Last touched: 2026-08-20. Overwrite freely; empty is fine._

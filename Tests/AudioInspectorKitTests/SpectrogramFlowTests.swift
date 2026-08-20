@@ -126,13 +126,13 @@ struct SpectrogramFlowTests {
             let coordinator = SourceInspectionCoordinator(makeDecoder: { _ in decoder })
             let outcome = await coordinator.inspect(url, onUpdate: { box.collect($0) })
 
-            guard case let .inspected(report, waveform, _, _, _, _) = outcome else {
+            guard case let .inspected(report, analyses) = outcome else {
                 Issue.record("expected an inspected outcome"); return
             }
             guard case .failed = report.status else {
                 Issue.record("expected a globally failed report"); return
             }
-            #expect(waveform == .unavailable)
+            #expect(analyses.waveform == .unavailable)
             #expect(box.first == .unavailable, "the spectrogram is absent, not failed")
             #expect(await decoder.spy.callCount == 0, "the spectrogram read samples after a global failure")
         }
@@ -155,7 +155,7 @@ struct SpectrogramFlowTests {
             )
             let outcome = await coordinator.inspect(url, onUpdate: { box.collect($0) })
 
-            guard case let .inspected(report, waveform, _, _, _, _) = outcome else {
+            guard case let .inspected(report, analyses) = outcome else {
                 Issue.record("expected an inspected outcome"); return
             }
             if case .failed = report.status {
@@ -166,8 +166,8 @@ struct SpectrogramFlowTests {
             // means sharing its fate, which is exactly what ADR-0020 decision 2 says a producer
             // failure does. What must still hold — and is what this test now pins — is that each
             // reports its *own* outcome and the report is untouched.
-            guard case let .failed(waveformMessage) = waveform else {
-                Issue.record("expected the waveform to end with the read, got \(waveform)"); return
+            guard case let .failed(waveformMessage) = analyses.waveform else {
+                Issue.record("expected the analyses.waveform to end with the read, got \(analyses.waveform)"); return
             }
             #expect(waveformMessage.contains("waveform"), "the waveform did not report its own failure")
             guard case .failed = try #require(box.first) else {
@@ -207,10 +207,10 @@ struct SpectrogramFlowTests {
             )
             let outcome = await coordinator.inspect(url, onUpdate: { box.collect($0) })
 
-            guard case let .inspected(_, waveform, _, _, _, _) = outcome else {
+            guard case let .inspected(_, analyses) = outcome else {
                 Issue.record("expected an inspected outcome"); return
             }
-            guard case .failed = waveform else {
+            guard case .failed = analyses.waveform else {
                 Issue.record("expected a failed waveform"); return
             }
             guard case let .available(model) = try #require(box.first) else {
@@ -241,15 +241,15 @@ struct SpectrogramFlowTests {
             )
             let outcome = await coordinator.inspect(url, onUpdate: { box.collect($0) })
 
-            guard case let .inspected(report, waveform, spectrogram, levels, truePeak, _) = outcome else {
+            guard case let .inspected(report, analyses) = outcome else {
                 Issue.record("expected an inspected outcome"); return
             }
             #expect(box.first == .cancelled)
-            #expect(waveform == .cancelled)
-            #expect(spectrogram == .cancelled)
-            #expect(levels == .cancelled)
-            #expect(truePeak == .cancelled)
-            #expect(waveform != .unavailable, "cancellation must not be dressed up as an absence")
+            #expect(analyses.waveform == .cancelled)
+            #expect(analyses.spectrogram == .cancelled)
+            #expect(analyses.signalLevelMetrics == .cancelled)
+            #expect(analyses.truePeak == .cancelled)
+            #expect(analyses.waveform != .unavailable, "cancellation must not be dressed up as an absence")
             if case .failed = report.status {
                 Issue.record("a cancelled read degraded the inspection")
             }
