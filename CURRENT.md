@@ -16,31 +16,44 @@
 >   session protocol in `CLAUDE.md`).
 
 ---
-**No open thread on programme bandwidth.** `add-significant-bandwidth-measurement` is merged
-(PR #48, merge commit `f88efe8`) and archived as
-`openspec/changes/archive/2026-08-20-add-significant-bandwidth-measurement`. **ADR-0023 is `Accepted`.**
+**Open thread: `add-two-file-measurement-comparison` — design only, nothing implemented.** ADR-0024 is
+`Proposed`, the change validates at 0/35, and no production file was touched.
 
-**What `main` now has.** Programme bandwidth — the highest frequency a file carries persistently, within
-60 dB of its own programme peak — as a measured fact, end to end: a `SignificantBandwidth` domain value
-carrying no verdict, an accumulator whose memory is constant in duration, the sixth consumer of the one
-shared PCM read (the read count is still one), its own report section between the integrated loudness and
-the spectrogram, and an additive `measurements.programmeBandwidth` key. **`schemaVersion` stays 1.**
+**The problem.** The A/B comparison compares what the header declares. Everything measured from the
+samples — signal levels, true peak, loudness, programme bandwidth — is computed for the second file by
+the same shared read and then **discarded**, in two places the code names deliberately. ADR-0017 §9
+deferred this because *"none of the metrics it would compare exist yet"*; all four now do, so the compute
+cost of the feature is **zero** and what it adds is retention.
 
-**What it refuses to say, by construction.** It is not a cut-off, not an effective sample rate, and not
-evidence of upsampling, transcoding, a codec or a quality level. The promoted capability spec carries
-that as a requirement of its own — *Draw no conclusion about origin, quality or provenance* — so the
-prohibition is now part of the spec rather than only of the surfaces.
+**The decisions worth knowing before implementing.** They come from the units, not from taste:
 
-**Group 9 was not implemented, and is not pretended to be.** Four follow-ups stay deferred in the
-archived tasks: the **shared STFT stage** and **average spectrum** (one piece of work, waiting for the
-second consumer that would justify extracting it), **two-file comparison**, and **findings**. The change
-archived at 43/47 on this repository's own precedent — `add-true-peak-measurement` archived with five of
-its own open — because a deferred item is neither done nor forgotten.
+- **Programme bandwidth is never compared by equality of hertz.** Each reading names a cell
+  `[f − r/2, f + r/2]`, and two readings are *indistinguishable at their own resolutions* exactly when
+  `|f₁ − f₂| < (r₁ + r₂)/2`. That is a statement about the instrument's grid, **not** an uncertainty
+  interval — ADR-0023 refuses to publish one and this does not either.
+- **Only integrated loudness carries a difference**, in LU, because it is the only metric whose stored
+  quantity is already logarithmic and whose difference is a named unit. True peak and signal levels store
+  **linear** amplitudes, so their difference would be a *ratio* — which ADR-0017 §3 excludes by name.
+- **Loudness compares across the two weightings; true peak does not compare across oversampling
+  factors.** The first is licensed by a passing rate-invariance test, the second by nothing — so it is
+  written as an explicit pair allow-list, and a third weighting is incomparable until someone measures it.
+- **Channels by index only.** Differing counts compare the overall figures and report the mismatch,
+  rather than silently asserting that index 0 means the same thing in both files.
+
+**The boundary this feature defends.** It compares measurements. It does not say whether two files hold
+the same master, whether one is a remaster, transcode, upsample or lossy source, which has more dynamics,
+or which is better. Those are Findings' work; this is a **producer of facts for it**.
+
+**Inherited, and not to be claimed as fixed**: `add-two-file-technical-comparison` is still open at 52/58
+and **ADR-0017 is still `Proposed`**, blocked on the VoiceOver traversal gap shared with ADR-0015. This
+change extends that surface and inherits that gap.
+
+**Next step: group 1** — confirm the discard against production code and pin the two comparability
+gates, before any comparator exists.
 
 **Older threads, neither advanced here**: `add-static-spectrogram-visualization` (manual validation
-battery deferred by product decision); `add-two-file-technical-comparison` (one accessibility criterion
-open, blocked on the VoiceOver traversal gap shared with ADR-0015). The loudness debt recorded twelve
-snapshots ago is unchanged and still not a thread.
+battery deferred by product decision). Programme bandwidth is done, merged and archived; ADR-0023
+`Accepted`.
 
 ---
 _Last touched: 2026-08-20. Overwrite freely; empty is fine._
