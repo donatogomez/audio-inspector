@@ -235,9 +235,10 @@ public enum SignificantBandwidthOutcome: Sendable, Equatable {
 
 /// What the surface can say about a programme bandwidth right now.
 ///
-/// It exists so the flow can **carry** the measurement to the surface that will one day render it.
-/// Nothing renders it yet, and this change deliberately adds no view: a value that reached the model
-/// and stopped there would be a wiring bug nobody could see.
+/// It carries the measurement from the flow to the surface, which renders it as its own section
+/// between the integrated loudness and the spectrogram. It was deliberately introduced one group
+/// *before* that view existed, so that a value which reached the model and stopped there would be a
+/// wiring bug the flow tests could see rather than one hidden behind a missing surface.
 public enum SignificantBandwidthState: Sendable, Equatable {
     case loading
     case available(SignificantBandwidth)
@@ -302,7 +303,7 @@ public struct InspectionPresentation: Sendable, Equatable {
     public var signalLevelMetrics: SignalLevelMetricsState
     public var truePeak: TruePeakState
     public var loudness: LoudnessState
-    /// Carried, not yet shown: no view reads this, and the flow tests assert it arrives.
+    /// Shown as its own section, and asserted by the flow tests to arrive here before it can be.
     public var significantBandwidth: SignificantBandwidthState
 
     public init(
