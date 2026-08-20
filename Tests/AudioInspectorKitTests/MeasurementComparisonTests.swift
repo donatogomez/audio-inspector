@@ -308,3 +308,47 @@ struct MeasurementComparisonTests {
         #expect(entries[1] == .incomparable(.firstMissing))
     }
 }
+
+// MARK: - What the type cannot say
+
+/// Task 2.5, and ADR-0024 §8. These read as trivia until someone adds a convenience; they are here so
+/// that adding one is a deliberate act against a failing test rather than a tidy-up.
+@Suite("Domain — what a measurement comparison cannot express")
+struct MeasurementComparisonBoundaryTests {
+
+    /// **No aggregate of any kind.** *"Every comparable measurement agreed"* and *"the two files are
+    /// the same"* are different statements, and one bit cannot hold both (ADR-0017).
+    @Test func theComparisonOffersNoAggregate() {
+        let names = Set(
+            Mirror(reflecting: MeasurementComparison(first: .none, second: .none))
+                .children.compactMap(\.label)
+        )
+        #expect(names == ["signalLevels", "truePeak", "loudness", "programmeBandwidth"])
+        for forbidden in ["score", "similarity", "confidence", "allSame", "isIdentical", "matches",
+                          "differenceCount", "summary", "verdict", "rank", "preferred", "better"] {
+            #expect(!names.contains(forbidden), "\(forbidden) appeared on the comparison")
+        }
+    }
+
+    /// **The difference exists on exactly one metric.** True peak and signal levels store linear
+    /// amplitudes, so a difference between them would be a ratio; bandwidth's would assert a precision
+    /// its grid does not have.
+    @Test func onlyLoudnessCarriesADifference() throws {
+        let method = try #require(TruePeakMethod(oversamplingFactor: 8, filter: .polyphaseFIRv1))
+        let channel = try #require(TruePeakMeasurement.Channel(sampleCount: 1, truePeak: 0.5))
+        let peak = try #require(TruePeakMeasurement(channels: [channel], method: method))
+        let other = try #require(TruePeakMeasurement.Channel(sampleCount: 1, truePeak: 0.9))
+        let peakB = try #require(TruePeakMeasurement(channels: [other], method: method))
+
+        let c = MeasurementComparison(
+            first: ReportMeasurements(signalLevelMetrics: nil, truePeak: peak, loudness: nil, programmeBandwidth: nil),
+            second: ReportMeasurements(signalLevelMetrics: nil, truePeak: peakB, loudness: nil, programmeBandwidth: nil)
+        )
+        // The only shape a differing true peak can take carries two values and nothing else.
+        guard case let .different(first, second) = c.truePeak.overall else {
+            Issue.record("expected a difference of values, got \(c.truePeak.overall)"); return
+        }
+        #expect(first == 0.5 && second == 0.9)
+        #expect(Mirror(reflecting: c.truePeak).children.compactMap(\.label) == ["overall", "channels"])
+    }
+}

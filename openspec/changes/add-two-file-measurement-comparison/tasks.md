@@ -1,7 +1,8 @@
 # Tasks — two-file measurement comparison
 
-**Nothing below is implemented.** This change is design only so far: ADR-0024 records the decisions,
-`design.md` the shape, and the delta spec the behaviour. Group 1 is blocking by design — the comparison
+**Groups 1 and 2 are complete; nothing is wired.** The semantics are settled and the domain comparator
+exists, pure and tested. Nothing in the flow, the surface or the export has changed, and the second
+file's measurements are still discarded — closing that is group 3. Group 1 was blocking by design — the comparison
 semantics are settled before a comparator exists, on the order `add-two-file-technical-comparison` used
 and for the same reason.
 
@@ -12,40 +13,72 @@ be promoted by claiming it.
 
 ## 1. Semantics — decide them before writing a comparator
 
-- [ ] 1.1 Confirm against production code that the second file's four measurements are computed and
+- [x] 1.1 Confirm against production code that the second file's four measurements are computed and
       discarded today, and that the waveform and spectrogram are too. Record the two lines that discard
       them, so the "cost is already paid" claim is evidence rather than assertion.
-- [ ] 1.2 Decide the comparability gate per metric, from the **domain identities** and never from a
+      **Done.** `ComparisonDiscardedMeasurementsTests` drives the real coordinator and the real decoder
+      over a real file: the compared file gets exactly one decoder and one read, all four measurements
+      *and* both visualisations are produced, the comparison is already complete when the report lands,
+      and nothing the read produces changes it. The structural half is stated separately rather than
+      dressed up as dynamic evidence — that the measurements are *absent* cannot be shown, because
+      `FileComparison` has no field they could occupy. Two controls bite: a second decode, and bandwidth
+      ceasing to be produced.
+- [x] 1.2 Decide the comparability gate per metric, from the **domain identities** and never from a
       displayed string. ADR-0024 §4 is the decision; this task is the test matrix that pins it.
-- [ ] 1.3 **Demonstrate the loudness weighting equivalence rather than assuming it.** The rule admits
+      **Done.** `MeasurementComparisonTests` pins all four gates, including that identical values do
+      not rescue an incompatible method. Seven mutations bite.
+- [x] 1.3 **Demonstrate the loudness weighting equivalence rather than assuming it.** The rule admits
       one specific pair of weightings because an end-to-end rate-invariance test reads the same signal
       identically at every rate. Cite that test; if it does not cover the pair, the rule narrows to
       exact method equality and 1.2's table changes with it.
-- [ ] 1.4 Fix the bandwidth cell rule — `|f₁ − f₂| < (r₁ + r₂)/2` — and pin **both** sides of it,
+      **Done, and the evidence holds.** `LoudnessProductionMatrixTests` reads one signal at 44.1, 48,
+      88.2, 96 and 192 kHz through the whole production path and requires the spread within 0.03 LU;
+      production selects the published tables at 48 kHz and the rediscretised prototype everywhere else,
+      so that test crosses exactly this pair. The rule therefore stayed as designed rather than
+      narrowing to exact method equality.
+- [x] 1.4 Fix the bandwidth cell rule — `|f₁ − f₂| < (r₁ + r₂)/2` — and pin **both** sides of it,
       including the same-bin case, the exactly-one-bin-apart case and a two-different-grids case.
-- [ ] 1.5 Decide where a difference is published. ADR-0024 §6 says LU only; the task is to state the
+      **Done.** Eight parameterised cases across the boundary, plus adjacent bins, two different grids
+      and an A/B symmetry check. The boundary itself is `separated`; `<=` and exact-frequency equality
+      both bite.
+- [x] 1.5 Decide where a difference is published. ADR-0024 §6 says LU only; the task is to state the
       unit argument in the tests so a later change cannot add a dB "difference" that is a ratio.
-- [ ] 1.6 **Promotion criteria for ADR-0024**, written before implementation: the comparison against
+      **Done.** The difference is `second − first` in LU, asserted positive, negative and zero, absent
+      on an incompatible method and absent on a missing side. A structural test pins that no other
+      metric carries one.
+- [x] 1.6 **Promotion criteria for ADR-0024**, written before implementation: the comparison against
       production code reusing the existing measurements, the bandwidth rule demonstrated on both sides,
       and a person looking at the surface. Not before, and never on partial evidence.
 
 ## 2. The domain types
 
-- [ ] 2.1 `MeasurementComparison` in `AudioInspectorDomain`, built **only** from two
+      **Done.** They are ADR-0024's `Status`, written before any of this existed.
+- [x] 2.1 `MeasurementComparison` in `AudioInspectorDomain`, built **only** from two
       `ReportMeasurements`, with the memberwise initialiser suppressed exactly as `FileComparison` does.
-- [ ] 2.2 Four per-metric comparison types. **Not one generic type** — the four differ in gate, in
+      **Done.** Built only from two `ReportMeasurements`; the declared initialiser suppresses the
+      memberwise one.
+- [x] 2.2 Four per-metric comparison types. **Not one generic type** — the four differ in gate, in
       channels, in difference and in classification, and one parameterised rule would be four rules
       wearing one name.
-- [ ] 2.3 Reuse ADR-0017's structural gap vocabulary for "one side had nothing", rather than a second
+      **Done.** `MeasurementValueComparison`, `LoudnessComparison`, `BandwidthReadingComparison` and
+      `ChannelComparison`, composed into four named fields.
+- [x] 2.3 Reuse ADR-0017's structural gap vocabulary for "one side had nothing", rather than a second
       spelling of the same idea. Widen `ReportMeasurements`' documentation: it is the settled-measurement
       bundle, and export is one of its two consumers rather than its definition.
-- [ ] 2.4 Purity: synchronous, total, deterministic, no `throws`, no Foundation, no `URL`, no framework,
+      **Done.** `MeasurementGap` is `ComparisonGap`'s sibling and not a second spelling of it: it has a
+      reason that occurs *while both sides are available* — the methods differ — which `ComparisonGap`'s
+      shape makes unrepresentable by construction. `ReportMeasurements` now documents that it has two
+      consumers and that export is only the first.
+- [x] 2.4 Purity: synchronous, total, deterministic, no `throws`, no Foundation, no `URL`, no framework,
       no I/O. Domain tests only.
-- [ ] 2.5 **No aggregate of any kind** — no score, similarity, confidence, count of differences or
+      **Done.** No Foundation, no I/O, no `URL`, no framework; boundaries green.
+- [x] 2.5 **No aggregate of any kind** — no score, similarity, confidence, count of differences or
       `allSame` — and a test that the type exposes none.
 
 ## 3. Flow
 
+      **Done.** `MeasurementComparisonBoundaryTests` asserts the field set over `Mirror` and sweeps for
+      score, similarity, confidence, `allSame`, `isIdentical`, `matches` and the rest.
 - [ ] 3.1 Stop discarding the compared file's analyses; collapse `…Outcome` to settled optionals in
       `FeatureImport`, and the primary file's `…State` the same way. No lifecycle reaches the domain.
 - [ ] 3.2 Publish the comparison **twice** — technical when the report arrives, measurements when they

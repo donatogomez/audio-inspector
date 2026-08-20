@@ -1,5 +1,11 @@
-/// Every measurement a report can export, gathered so that adding one more does not lengthen a
-/// signature.
+/// The settled measurements one inspection derived from a file's samples, gathered so that adding one
+/// more does not lengthen a signature.
+///
+/// **It has two consumers, and export is only the first.** It was introduced for the export chain and
+/// its shape is what a comparison needs too — four optionals where `nil` means *nothing to report*, no
+/// lifecycle, no defaults, four distinct types. `MeasurementComparison` takes two of these, so the
+/// collapse from loading/absent/failed/cancelled happens once, in the feature, rather than once per
+/// consumer.
 ///
 /// **This is the container the export chain's own notes said the fourth measurement would have to
 /// bring**, and it brings it. Three positional optionals were past the shape's comfortable width;
