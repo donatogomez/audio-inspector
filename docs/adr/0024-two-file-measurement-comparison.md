@@ -1,0 +1,196 @@
+# ADR-0024: Comparing measurements between two files, and why only one of them carries a difference
+
+- **Status**: **Proposed.** It stays Proposed until three things are true: the comparison exists against
+  production code and is shown to reuse the second file's *already-computed* measurements rather than
+  recomputing anything; the resolution-aware bandwidth rule is demonstrated on fixture pairs that sit on
+  both sides of it; and the surface is validated by a person looking at it. Partial evidence does not
+  promote it.
+- **Date**: 2026-08-20
+- **Deciders**: Project maintainer
+- **Related**: **ADR-0017** (two-file technical comparison — this record *extends its vocabulary to a
+  second kind of fact and must not weaken it*; **referenced, never edited**), ADR-0008 (availability and
+  certainty), ADR-0018/**ADR-0019** (true peak), **ADR-0022** (integrated loudness),
+  **ADR-0023** (programme bandwidth), ADR-0009, `docs/analysis-methodology.md`, change
+  `add-two-file-measurement-comparison`
+
+## Context
+
+The A/B comparison compares `TechnicalProperties`: container, duration, rate, channels, bit depth,
+codec, three bitrates. Those are **read from the file's metadata**.
+
+Everything derived from the file's *samples* travels beside the report, not inside it — signal level
+metrics, true peak, integrated loudness, programme bandwidth — and the comparison discards all of it.
+That is not an oversight; it is written into the code twice, once where the progressive update is
+filtered to the report alone and once where `case let .inspected(report, _)` drops the analyses. It was
+correct when it was written: ADR-0017 §9 deferred an evidence-level comparison because *"none of the
+metrics it would compare exist yet."*
+
+**All four now exist**, each self-describing and each already produced for the second file by the same
+one shared PCM read. The condition that deferred this has expired, and what is left is a decision about
+*semantics*, not about capability.
+
+The temptation this record exists to refuse is specific. A collector holding two copies of an album
+wants to know which to keep. Four measurements side by side look like they answer that. They do not, and
+every step from "these differ" to "this one is a lossy transcode" is an inference with a threshold — the
+Findings capability's work, not this one's.
+
+## Decision
+
+### 1. Measurement comparison inherits ADR-0017 §1 unchanged
+
+A measurement comparison SHALL state whether two measured facts are the same, different, or not
+comparable, and SHALL NOT state, imply, rank, order or score which file is better, more authentic,
+higher quality, less compressed, more dynamic, or worth keeping. ADR-0017's constraint is on the
+**types**, and it is inherited here as a constraint on these types.
+
+### 2. It is a **sibling** of `FileComparison`, never an extension of it
+
+`FileComparison` is derived from two **reports** and cannot be assembled — that is its whole integrity
+argument. Measurements do not live in a report and never will (ADR-0018), so folding them in would mean
+either widening its initialiser to accept values it cannot derive, or teaching the domain that a report
+implies measurements. Both weaken it.
+
+So: a separate pure value, `MeasurementComparison`, built from two settled measurement bundles. A
+surface may present the two together; the domain keeps them apart.
+
+### 3. Its input is settled values, never lifecycle
+
+The comparator takes two `ReportMeasurements` — the container introduced by
+`add-significant-bandwidth-measurement`, holding four optionals where `nil` means *nothing to compare*.
+Loading, absent, failed and cancelled are collapsed to `nil` by the feature **before** the domain sees
+them, exactly as the export path already does it. The comparison therefore has no error case, nothing
+to await, and no way to confuse *"this measurement failed on this run"* with *"these two files differ."*
+
+### 4. Two comparabilities, and method identity decides one of them
+
+A pair is comparable when both sides carry a value **and** the two were produced by methods whose
+numbers mean the same thing. The second half is read from the domain's own identities, never from a
+displayed string:
+
+| metric | identity | compatible when | incomparable when |
+| --- | --- | --- | --- |
+| signal level metrics | *none — a direct reduction over stored samples* | always, when both present | never on method grounds |
+| true peak | `TruePeakMethod{oversamplingFactor, filter}` | both fields equal | either differs |
+| integrated loudness | `LoudnessMethod{algorithm, weighting}` | `algorithm` equal **and** the weighting pair is one this project has demonstrated equivalent | algorithm differs, or an undemonstrated weighting pair |
+| programme bandwidth | `SignificantBandwidthMethod{identifier, …}` | `identifier` equal | identifier differs |
+
+**Loudness is the one place where an identity may differ and the numbers still compare, and it is
+allowed only because it was measured.** The published 48 kHz tables and the rediscretised prototype are
+two different constructions, and `LoudnessMeasurement` says so plainly — the identity names the method
+rather than the goal, *"because two different constructions could both claim to match a response."*
+What licenses comparing across them is not that argument but the end-to-end rate-invariance test, which
+reads the same signal identically at every supported rate. Since that is evidence about a **specific
+pair** of weightings, the rule is written as an explicit pair allow-list rather than as *"ignore the
+weighting"*: a third weighting added later is `incomparable` until someone demonstrates it, instead of
+being silently admitted.
+
+Refusing this would be the wrong kind of caution. The commonest real comparison a collector makes is
+44.1 kHz against 48 or 96, which is exactly the case the two weightings exist to serve; declaring it
+incomparable would make the feature answer nothing in the situation it was built for.
+
+**True peak takes the opposite ruling for the opposite reason.** An oversampling factor is not a
+provenance detail, it materially changes the estimate, and no equivalence between two factors has been
+measured. Both fields must match.
+
+### 5. Programme bandwidth is compared **on its own grid**, and the rule is stated in full
+
+Comparing two bandwidth readings by numeric equality would be wrong in both directions: two readings in
+the *same* bin can differ in hertz, and two readings a bin apart are genuinely distinguished. The
+reading is a bin centre and `resolution` is the bin width, so each reading names an observable cell:
+
+    cell(f, r) = [ f − r/2 , f + r/2 ]
+
+Two readings are **indistinguishable at their own resolutions** exactly when their cells overlap:
+
+    | f₁ − f₂ |  <  ( r₁ + r₂ ) / 2
+
+and **separated** otherwise. The rule is symmetric, uses only published quantities, invents no
+tolerance, and holds when the two files have different grids — which they do whenever their sample rates
+differ, the window being fixed in time.
+
+**This is not an uncertainty interval, and the wording matters.** ADR-0023 refuses to publish a bound on
+where the true extent lies, and this does not publish one either: a cell is what the analysis could
+*resolve*, not where the answer *might be*. The reading is also biased one way — upward, by the window's
+leakage — so a symmetric interval would be wrong in shape as well as in kind. What the rule states is a
+fact about the instrument's grid, and the two outcomes are named for the instrument (`indistinguishable`,
+`separated`) rather than for the files (`same`, `different`).
+
+Adjacent bins on one grid are `separated`: Δ = r is not < r. The same bin is `indistinguishable`. Both
+are the intended readings.
+
+### 6. Same / different is used **only where a quantum is published**, and `difference` **only where the unit is a difference**
+
+Two continuous measurements are almost never bit-identical, so a `same`/`different` split over them
+would report floating-point noise as a finding. And ADR-0017 §3 removed delta, ratio and direction from
+the property comparison deliberately. Neither rule is discarded here; both are applied to a different
+kind of quantity, and the answer comes from the **units**, not from taste:
+
+- **Programme bandwidth** is classified — `indistinguishable` / `separated` — because the method
+  publishes its own quantum. It carries **no hertz difference**: printing "+50 Hz" against a 94 Hz grid
+  would assert a precision the grid does not have.
+- **Integrated loudness** carries a **difference, in LU**. It is the only one that does: the domain
+  already stores a logarithmic quantity, so `second − first` is a plain subtraction with no conversion,
+  and the result is a standard named unit which *is* a difference. Nothing about the sign is
+  interpreted, coloured or worded.
+- **True peak and signal levels carry no difference.** Their domain values are **linear** amplitudes.
+  The difference a reader would want is a decibel one, which is a **ratio** of the stored values — the
+  thing ADR-0017 §3 names explicitly. Both values are shown, in their own unit; the reader is not
+  prevented from subtracting, and the type does not do it for them.
+- **Exact equality is still reported where it happens**, for every metric, because two identical files
+  genuinely produce identical measurements and saying so costs nothing.
+
+### 7. Channels are compared by **index**, and a differing count is not a failure
+
+Signal levels, true peak and programme bandwidth are per channel. Channels are compared **by index and
+by index alone** — the pipeline reads channel counts and never labels, so nothing here says *left* or
+*right*, and no layout is inferred (ADR-0023, ADR-0019).
+
+When the two files carry different channel counts, the **overall** figures still compare and the
+per-channel list reports the mismatch rather than the intersection. Comparing the first two channels of
+a stereo file against the first two of a 5.1 file would silently assert that index 0 means the same
+thing in both, which is exactly the layout claim the pipeline refuses to make.
+
+### 8. What this record excludes, and why the exclusions are decisions
+
+- **Every conclusion about provenance or quality.** Same master, remaster, transcode, upsample, lossy
+  source, dynamic-range judgement, "which is better". These are the Findings capability's, they need
+  evidence, alternatives and a confidence level (`docs/analysis-methodology.md`), and this record
+  provides no field in which any of them could be written.
+- **Export.** ADR-0017 §9 settled it and nothing here reopens it: `schemaVersion` 1 describes **one**
+  file, no second `inspectedFile` will ever be added, and a comparison document is a kind of its own
+  decided in its own record.
+- **Waveform and spectrogram comparison.** Still `add-two-file-visual-comparison`'s, unchanged.
+- **Alignment, gain matching, residual, correlation.** ADR-0017 §9's evidence comparison. This record
+  compares scalars that already exist; it performs no signal processing of any kind and starts no read.
+- **Aggregates.** No score, no similarity, no count of differences, no `allSame`. ADR-0017's reasoning
+  applies verbatim: *"every comparable measurement agreed"* and *"the two files are the same"* are
+  different statements, and one bit cannot hold both.
+
+## Consequences
+
+### Positive
+- The second file's measurements stop being computed and thrown away. The cost is **already paid** —
+  the same `SourceInspectionAction`, the same single shared PCM read — so this retains four small value
+  types and starts nothing.
+- The comparison finally answers the question a collector actually opens it for at the level it can be
+  answered honestly: *did the loudness change, did the peak change, did the bandwidth change, did the
+  levels change* — without answering *why*.
+- Four self-describing measurements make their own compatibility decidable. Nothing here needs a
+  tolerance constant, and there is nowhere to put one.
+
+### Negative / costs
+- **One more surface that looks like a verdict and is not.** Loudness side by side is the single most
+  judgement-inviting pair in the product, which is why §6 gives it a difference and no adjective.
+- **`incomparable` will be common and will look like a defect.** Two files at different rates compare
+  their loudness (§4) but a true peak measured at a different oversampling factor does not, and a reader
+  who does not know why will read it as a bug. The surface has to say the reason structurally, as
+  ADR-0017 §5 already requires.
+- **The bandwidth rule needs its own explanation on screen.** "Indistinguishable at these resolutions"
+  is not a phrase a reader arrives with.
+- **It inherits ADR-0017's open accessibility gap.** The technical comparison's own surface is still
+  blocked on the VoiceOver traversal problem shared with ADR-0015, and adding rows to that same surface
+  neither fixes nor worsens it.
+
+### Neutral
+- No new port, no new read, no export change, no `schemaVersion` change, and no new dependency.
+- `FileComparison`, `PropertyComparison` and ADR-0017 are untouched.
