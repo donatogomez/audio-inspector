@@ -910,9 +910,13 @@ separate harness, on the same file, in a different process.
 - Screen Recording and Accessibility remain denied to the session that drove the build, so there is no
   screenshot and no scripted traversal — the observations above are a person's, reported back.
 
-## Programme bandwidth — prepared, not executed (2026-08-20)
+## Programme bandwidth — prepared (2026-08-20)
 
-**Status: PREPARED. Nothing below has been observed.** Group 7 of
+**Status: EXECUTED. The pass and its results are recorded in the section that follows this one.**
+What is below is the runbook as it was written *before* the app was opened, kept unedited so the
+expected values can be seen to have been computed in advance rather than fitted afterwards.
+
+**Originally: PREPARED. Nothing below had been observed.** Group 7 of
 `add-significant-bandwidth-measurement` implemented the surface and pinned it with automated tests;
 this section is the runbook for the pass that has not run. ADR-0023's third promotion condition — a
 person looking at the surface — is **not** satisfied by anything here, and the record stays `Proposed`
@@ -976,3 +980,65 @@ A wrong *number* would contradict group 6 and is the less likely outcome. The fa
 actually looking for is a **framing** one: the section reading as a verdict because of where it sits,
 what surrounds it, or how the eye pairs it with the declared sample rate two sections down. That is a
 presentation defect, and it is the reason the condition asks for a person rather than a test.
+
+## Programme bandwidth — executed, PASS on the promotion criterion (2026-08-20)
+
+**A person opened the app and looked at the surface.** That is ADR-0023's third promotion condition
+stated literally — "the surface has been validated by a person looking at it" — and it is met. What
+follows separates what was **reported** from what was **not**, because the runbook above says a skipped
+line is not a pass and that rule applies to this record too.
+
+### OBSERVED — the five fixtures
+
+Every expected value was computed through the production path before the app was opened, and is the
+table in the runbook above; nothing was fitted afterwards.
+
+| # | file | expected | observed | |
+| --- | --- | --- | --- | --- |
+| 1 | `01-programme-16k.wav` | 16.1 kHz / 23 Hz | **16.1 kHz / 23 Hz** | PASS |
+| 2 | `02-programme-20k.wav` | 20.1 kHz / 23 Hz | **20.1 kHz / 23 Hz** | PASS |
+| 3 | `03-silence.wav` | "Not computable for this file." | **"Not computable for this file."** | PASS |
+| 4 | `04-programme-16k-plus-click.wav` | 16.1 kHz / 23 Hz | **16.1 kHz / 23 Hz** | PASS |
+| 5 | `05-mp3-64k.mp3` | 16.8 kHz / 23 Hz | **16.8 kHz / 23 Hz** | PASS |
+
+### OBSERVED — the three properties that are not a number
+
+- **Placement.** The section appears after *Integrated loudness* and before the spectrogram, which is
+  where it was designed to sit.
+- **No verdict on screen.** No warning, badge or visual judgement on any fixture — including fixture 2,
+  whose reading sits near the top of the band, and fixture 5, which is a low-bitrate MP3.
+- **The impulse control, by eye.** Fixtures 1 and 4 are **indistinguishable in the measurement**. This is
+  the property the whole design exists for, and it is the reason the two files were built as a pair: a
+  person seeing them side by side is the only check that catches a difference a test's tolerance would
+  swallow.
+
+### NOT EVALUATED — and deliberately not inferred
+
+Four lines of the runbook's checklist were **not reported and are not ticked**. None of them is part of
+ADR-0023's promotion condition, which asks for a person looking at the surface and nothing more; they
+are the runbook's own complementary coverage, and they stay open.
+
+- **The method line's exact wording.** That it reads "The highest frequency this programme carries
+  persistently, within 60 dB of its own strongest spectral level." was not reported. It is asserted
+  character-for-character by `ProgrammeBandwidthPresentationTests`, so what is unverified is only that
+  the string reaches the screen intact.
+- **Light / dark / resize.** Not reported. **ADR-0019's own manual pass did cover this**, so this
+  promotion rests on a slightly narrower observation than true peak's did — recorded here rather than
+  smoothed over.
+- **A→B stale by hand.** Not reported. The property is pinned at the flow layer by
+  `InspectionAnalysesStaleAtomicityTests`, including the bundle-atomicity case, so what is unverified is
+  the behaviour through a real double selection in the app.
+- **Reading every word on screen for forbidden vocabulary.** Not reported as a word-by-word read. The
+  weaker "no visual verdict" *was* reported, and the strings themselves are swept by
+  `ProgrammeBandwidthPresentationTests`.
+
+### What this pass does and does not claim
+
+It claims the surface was seen by a person and showed the measured facts, in the right place, without a
+judgement, and that the file with an isolated click in it is indistinguishable from the one without.
+
+It does not claim VoiceOver coverage: the traversal gap recorded earlier in this document is unchanged,
+this change adds a section to the same scrolling area every other analysis lives in, and it inherits the
+gap rather than fixing or worsening it. It does not claim the exported document was read by hand — that
+is pinned by `JSONReportExportProgrammeBandwidthTests` and `ProgrammeBandwidthExportFlowTests`, and no
+manual export was reported. And it is one machine, one appearance, one window size.
