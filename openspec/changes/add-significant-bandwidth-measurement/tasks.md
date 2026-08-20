@@ -439,14 +439,72 @@ the same thing at all five rates.
 
 ## 7. Presentation
 
-- [ ] 7.1 One row, its own section or beside the spectrogram, stating what was measured and at what
+**Done.** One section, on `LoudnessSection`'s precedent, placed after the level sections and before the
+spectrogram: it is the first measurement in the report about *frequency* rather than level, and it
+precedes the spectrogram because it is a settled number and that is a picture. It is deliberately **not**
+a caption on the spectrogram — that is a different transform at a different resolution, and pairing them
+would suggest one can be checked against the other by eye.
+
+**The visible name is "Programme bandwidth", never the domain's own.** The type keeps
+`SignificantBandwidth` for symmetry with its state and its outcome; the surface uses the product's name,
+and a test sweeps every string it can produce to keep the two apart. None of the names that would
+overclaim is used: not "effective sample rate", not "real"/"true" bandwidth, not "audio resolution", not
+"cut-off frequency". The name describes a measurement, not a property of the world.
+
+**Note on ADR-0023.** Closing this group does **not** satisfy the record's third promotion condition. That
+asks for a person looking at the surface, and no such pass has run — the runbook and the pre-computed
+expected values are in `docs/manual-validation-mvp.md`, marked PREPARED, not executed.
+
+- [x] 7.1 One row, its own section or beside the spectrogram, stating what was measured and at what
       resolution. No precision beyond the resolution.
-- [ ] 7.2 **No verdict and no comparison against the declared sample rate.** The forbidden vocabulary
+      **Done, as two rows and a method line.** The value, the resolution as a quantity of its own, and
+      one sentence saying what was measured. `HumanFormat.programmeBandwidth(_:resolution:)` rounds to
+      the smallest power of ten that is **at least** the resolution, so the last digit shown is always
+      worth more than one bin: `16 101.5625 Hz` reads `16.1 kHz`, and `20 015.625 Hz` reads `20 kHz`
+      rather than `20.02 kHz`, which would imply a 10 Hz distinction the bins cannot make.
+
+      **The rule is identical at all five rates, and that is a consequence rather than a coincidence.**
+      Because the window is fixed in *time*, the resolution is 22.97–23.44 Hz whether the file is 44.1
+      or 192 kHz, so the display step is 100 Hz and the form is one decimal in kilohertz everywhere. A
+      sample-locked window would make the displayed precision depend on the file's rate, and the
+      per-rate test would catch it. Beyond the reference points the rule is **swept** — every frequency
+      from 1 to 96 kHz on six different grids — because it is a one-sided guarantee and one
+      counter-example would break it.
+
+      **The resolution is never an uncertainty.** It is the width of an analysis bin, and ADR-0023
+      refuses to publish a false bound of uncertainty, so it is a second row with its own name and never
+      `16.1 ± 0.02 kHz`. That form claims the true value lies in an interval, which this measurement does
+      not claim — and the reading is already biased one way, upward by the window's leakage, so a
+      symmetric interval would be wrong twice. The sweep rejects `±`, `+/-`, and any string describing
+      the resolution as error, tolerance, margin, accuracy or confidence.
+- [x] 7.2 **No verdict and no comparison against the declared sample rate.** The forbidden vocabulary
       sweep that loudness uses, extended with: upsample, transcode, fake, lossy, suspicious,
       unnecessary, wasted, real/true resolution.
-- [ ] 7.3 Absence in the existing not-computable phrasing.
-- [ ] 7.4 Accessibility: the value and its unit announced together — **structural only**; the VoiceOver
+      **Done, and extended past the list.** Loudness's sweep plus every word above, plus codec, mp3,
+      aac, cutoff, rolloff, filtered, truncated, genuine, authentic, and the phrases that smuggle an
+      inference in without using any of them — "appears to be", "was probably", "suggests that". Word-
+      split rather than substring, because "bandwidth" contains "band" and "programme" contains "gram".
+      Nothing names a platform or a container format, and nothing invokes Nyquist or the declared rate:
+      that is asserted twice over, by the sweep and by comparing a mid-band reading against one at the
+      top of the band and requiring the same strings. Nothing is coloured, badged or weighted by what
+      the value contains, and there is **no disclaimer sentence** — one would introduce the very frame
+      the measurement refuses, and would be longer than the fact it qualifies.
+- [x] 7.3 Absence in the existing not-computable phrasing.
+      **Done**, in the report's own words: "Not computable for this file.", with the detail sentence and
+      the "Everything else in this report is unchanged." closing every sibling uses. Never a number —
+      not zero, not Nyquist — and the words "silence", "silent" and "insufficient" are swept for, since
+      the cause is not something presentation knows. A **measurement that carries no reading** (eligible
+      windows, no bin meeting persistence) reads as the same absence rather than as a zero or a dash; it
+      is not a second enum case, because the distinction is about what to show.
+- [x] 7.4 Accessibility: the value and its unit announced together — **structural only**; the VoiceOver
       traversal gap that blocks ADR-0015 and ADR-0017 is not this change's to close.
+      **Done, structurally.** "Programme bandwidth, 16.1 kHz" as one sentence, and "Analysis resolution,
+      23 Hz" as its own — the resolution is a separate quantity spoken separately, for the same reason it
+      is not appended with a `±`. Every non-measured state names the section first, so a reader landing
+      on the sentence knows what it is about. The method line is announced as part of the measurement
+      rather than as decoration. **The traversal gap is untouched**: this adds a section to the same
+      scrolling area every other analysis lives in, so it inherits the gap rather than fixing or
+      worsening it, exactly as true peak's own validation recorded.
 
 ## 8. Export
 
