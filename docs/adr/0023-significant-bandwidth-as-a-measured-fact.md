@@ -6,8 +6,9 @@
   twelve of twelve pre-registered constraints in a single validation. The second: **the production
   impulse control is satisfied** — an isolated transient provably does not widen the reported band, on
   the real path from file to published outcome, and the persistence criterion's turnover is asserted on
-  both sides. **Manual surface validation is pending**, and there is no surface yet to validate.
-  Partial evidence does not promote it.
+  both sides. **Manual surface validation is pending**: the surface now exists and is pinned by tests,
+  and no person has looked at it — the runbook and its pre-computed expected values are in
+  `docs/manual-validation-mvp.md`, marked PREPARED. Partial evidence does not promote it.
 - **Date**: 2026-08-18
 - **Deciders**: Project maintainer
 - **Related**: **ADR-0016** (the STFT spectrogram this deliberately does *not* build on), ADR-0020 and
@@ -337,6 +338,43 @@ nothing, because the ring's capacity already enforces the same 60 dB.
 survive the write-and-decode round trip — evidenced rather than assumed, by the peak of zero the same
 shared read reports for that file — so that evidence stays at the PCM level where it can be exercised.
 The overflow extreme is reachable through a real file and publishes a finite in-range answer.
+
+### How it is presented, and the three decisions that were not obvious
+
+The surface exists, and these are the decisions it settled. None of them changes what is measured; each
+is about refusing to let the presentation add a claim the measurement does not make.
+
+**The visible name is "Programme bandwidth".** The domain type keeps its own name for symmetry with its
+state and outcome, and the surface never says it — a test sweeps for it. The names that were rejected
+were rejected for one reason each: "effective sample rate" claims the file should have been stored
+differently, "real" or "true" bandwidth implies the declared one is false, "audio resolution" borrows a
+word this report already uses for bit depth, and "cut-off frequency" asserts a filter nobody observed.
+The name has to describe the measurement, not a property of the world.
+
+**The resolution is a second row, never a `±`.** This is the presentation decision most easily got wrong,
+and this record already refuses a false bound of uncertainty, so it is stated plainly here: `resolution`
+is the width of an analysis bin — the grid the answer is quantised onto — and rendering it as
+`16.1 ± 0.02 kHz` would claim the true value lies in an interval. It does not. The reading is biased one
+way, upward by the window's leakage, so a symmetric interval around it would be wrong twice over: wrong
+in kind, and wrong in shape. Two rows, two names, no operator between them.
+
+**Precision follows the resolution, and is one-sided.** The displayed value is rounded to the smallest
+power of ten at least as coarse as the resolution, so the last digit shown is always worth more than one
+bin. Because the window is fixed in time rather than in samples, the resolution is about 23 Hz at every
+supported rate, so the form is one decimal in kilohertz at 44.1, 48, 88.2, 96 and 192 kHz alike — a
+sample-locked window would have made the *displayed precision* depend on the file's rate, which is a
+second, quieter reason the window is time-locked.
+
+**And what is deliberately absent.** No colour, badge, icon or weight varies with the value; a reading at
+the top of the band renders exactly as one in the middle. Nothing compares the reading to Nyquist or to
+the declared sample rate. The per-channel readings are not shown — they would invite comparing one
+channel against another, which is a step towards a verdict — and they travel on the wire instead. There
+is **no disclaimer sentence**: "not a codec or upsampling diagnosis" would introduce the exact frame the
+measurement refuses, and would be longer than the fact it qualifies. The method line states what was
+measured in three ideas — the highest frequency, carried persistently, within 60 dB of the programme's
+own strongest spectral level — and the prominence threshold, the persistence fraction, the window shape,
+its length and its hop stay on the wire, where they are audit facts rather than a specification a reader
+has to parse.
 
 ### Neutral
 - No port changes, no export version change, no new dependency, and no second read.

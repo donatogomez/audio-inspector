@@ -909,3 +909,70 @@ separate harness, on the same file, in a different process.
   which happened; it does not ask for VoiceOver, and none is claimed.
 - Screen Recording and Accessibility remain denied to the session that drove the build, so there is no
   screenshot and no scripted traversal — the observations above are a person's, reported back.
+
+## Programme bandwidth — prepared, not executed (2026-08-20)
+
+**Status: PREPARED. Nothing below has been observed.** Group 7 of
+`add-significant-bandwidth-measurement` implemented the surface and pinned it with automated tests;
+this section is the runbook for the pass that has not run. ADR-0023's third promotion condition — a
+person looking at the surface — is **not** satisfied by anything here, and the record stays `Proposed`
+until it is.
+
+### Why this needs a person at all
+
+Everything about the *number* is already automated, from the file to the string: group 6 validated the
+measurement through the production path, and group 7's suites assert the exact rendered text, the
+rounding rule at all five sample rates, the absence phrasing, and a forbidden-vocabulary sweep. What
+`swift test` cannot answer is whether the section **reads** as a fact rather than as a judgement to a
+person seeing it in place, at a real window size, in both appearances — which is precisely what
+ADR-0023's condition asks.
+
+### The fixtures, and what each must show
+
+Regenerate with the production path itself rather than by hand; every figure below was computed
+**before** the app was opened, by running each file through the real decoder, the shared read and the
+composition root's mapping.
+
+| # | file | production reading | displayed value | displayed resolution |
+| --- | --- | --- | --- | --- |
+| 1 | `01-programme-16k.wav` — 5 s, 48 kHz, stereo, comb to 16 kHz | 16 101.5625 Hz on a 23.4375 Hz grid | **16.1 kHz** | **23 Hz** |
+| 2 | `02-programme-20k.wav` — same, comb to 20 kHz | 20 085.9375 Hz on a 23.4375 Hz grid | **20.1 kHz** | **23 Hz** |
+| 3 | `03-silence.wav` — 5 s of digital silence | none | **"Not computable for this file."** | not shown |
+| 4 | `04-programme-16k-plus-click.wav` — fixture 1 plus one full-scale click | 16 101.5625 Hz | **16.1 kHz** | **23 Hz** |
+| 5 | `05-mp3-64k.mp3` — 5 s comb to 20 kHz at 44.1 kHz, encoded at 64 kbps | 16 790.1562 Hz on a 22.9688 Hz grid | **16.8 kHz** | **23 Hz** |
+
+Fixture 4 is the one to look at hardest: **it must be indistinguishable from fixture 1.** That is the
+property the whole design exists for, and the only way to see it fail on screen is to have both in
+front of you. Fixture 5 must read as a plain number like the rest — nothing on screen may hint at how
+the file was encoded, and the word "MP3" must not appear anywhere in the section.
+
+### Checklist
+
+Tick only what was seen. A skipped line is not a pass.
+
+- [ ] **Section** — "Programme bandwidth" appears as its own section, after Integrated loudness and
+      before the spectrogram.
+- [ ] **Value** — fixtures 1, 2, 4, 5 show exactly the displayed value in the table above.
+- [ ] **Resolution** — shown as its own row, "Analysis resolution — 23 Hz", with **no `±`** anywhere and
+      no operator joining it to the value.
+- [ ] **Copy** — the method line reads "The highest frequency this programme carries persistently,
+      within 60 dB of its own strongest spectral level." and nothing else is added beside it.
+- [ ] **Absence** — fixture 3 shows the report's own not-computable phrasing, and **no number at all**:
+      not 0 Hz, not 24 kHz, not Nyquist.
+- [ ] **No warnings** — no colour, badge, icon, bold or alarm on any fixture, including fixture 2 where
+      the reading sits near the top of the band. Fixture 2 must look exactly like fixture 1.
+- [ ] **The impulse control, by eye** — fixtures 1 and 4 are identical in every respect.
+- [ ] **Light / dark / resize** — the section survives both appearances and a narrow window; the method
+      line wraps rather than truncating or clipping.
+- [ ] **A→B stale** — inspect fixture 1, then fixture 2 before the first finishes: the section must show
+      fixture 2's value, never a mixture.
+- [ ] **Forbidden vocabulary** — read every word on screen. No "upsampled", "transcoded", "codec",
+      "cut-off", "lossy", "real"/"true" resolution, no quality word, no comparison with the file's
+      declared sample rate.
+
+### What a failure here would mean
+
+A wrong *number* would contradict group 6 and is the less likely outcome. The failure this pass is
+actually looking for is a **framing** one: the section reading as a verdict because of where it sits,
+what surrounds it, or how the eye pairs it with the declared sample rate two sections down. That is a
+presentation defect, and it is the reason the condition asks for a person rather than a test.
