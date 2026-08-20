@@ -19,7 +19,7 @@ struct ComparisonFlowPresentationTests {
         switch state {
         case .none: .none
         case .loading: .loading
-        case let .ready(comparison, _): .ready(comparison)
+        case let .ready(comparison, measurements): .ready(comparison, measurements: measurements)
         case let .failed(message): .failed(message: message)
         }
     }
@@ -99,7 +99,7 @@ struct ComparisonFlowPresentationTests {
         let comparing = Task { await flow.compare(using: second.run) }
         await second.waitUntilStarted()
 
-        guard case let .ready(comparison) = presentation(for: flow.comparison) else {
+        guard case let .ready(comparison, _) = presentation(for: flow.comparison) else {
             Issue.record("expected a ready comparison")
             return
         }
@@ -133,7 +133,7 @@ struct ComparisonFlowPresentationTests {
         cAction.finish(.inspected(c, analyses: InspectionAnalyses(waveform: .unavailable, spectrogram: .unavailable, signalLevelMetrics: .unavailable, truePeak: .unavailable, loudness: .unavailable, significantBandwidth: .unavailable)))
         await comparingC.value
 
-        guard case let .ready(comparison) = presentation(for: flow.comparison) else {
+        guard case let .ready(comparison, _) = presentation(for: flow.comparison) else {
             Issue.record("expected a ready comparison")
             return
         }
@@ -207,7 +207,7 @@ struct ComparisonFlowPresentationTests {
         second.finish(.inspected(primary, analyses: InspectionAnalyses(waveform: .unavailable, spectrogram: .unavailable, signalLevelMetrics: .unavailable, truePeak: .unavailable, loudness: .unavailable, significantBandwidth: .unavailable)))
         await comparing.value
 
-        guard case let .ready(comparison) = presentation(for: flow.comparison) else {
+        guard case let .ready(comparison, _) = presentation(for: flow.comparison) else {
             Issue.record("expected a ready comparison")
             return
         }
