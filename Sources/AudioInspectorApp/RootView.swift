@@ -145,6 +145,25 @@ public struct RootView: View {
         }
     }
 
+    /// Translates the flow's programme bandwidth state into the report surface's own, in the shape the
+    /// five analyses before it already established.
+    ///
+    /// Total by construction, with no default case — every state the flow can hold has exactly one
+    /// presentation, and none is invented. A `default` here would be the same silent omission the
+    /// container refactor removed from `InspectionAnalyses`: it would quietly render a state nobody had
+    /// thought about as "still loading". `unavailable` becomes `absent` exactly as its siblings' does,
+    /// and the several causes behind it stay where they are known.
+    nonisolated static func programmeBandwidthPresentation(
+        for state: SignificantBandwidthState
+    ) -> SignificantBandwidthPresentation {
+        switch state {
+        case .loading: .loading
+        case let .available(measurement): .measurement(measurement)
+        case .unavailable: .absent
+        case let .failed(message): .failed(message: message)
+        }
+    }
+
     /// The inspected report plus the way back to picking another file. `ReportView` is used exactly as
     /// group 5 shipped it — the export action is passed straight through, unchanged.
     /// The comparison's own controls, beside the existing way to pick another file.
@@ -195,6 +214,7 @@ public struct RootView: View {
                 signalLevelMetrics: Self.signalLevelMetricsPresentation(for: presentation.signalLevelMetrics),
                 truePeak: Self.truePeakPresentation(for: presentation.truePeak),
                 loudness: Self.loudnessPresentation(for: presentation.loudness),
+                programmeBandwidth: Self.programmeBandwidthPresentation(for: presentation.significantBandwidth),
                 comparison: Self.comparisonPresentation(for: flow.comparison),
                 export: export
             )

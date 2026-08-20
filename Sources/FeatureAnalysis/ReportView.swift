@@ -16,6 +16,7 @@ public struct ReportView: View {
     private let signalLevelMetrics: SignalLevelMetricsPresentation
     private let truePeak: TruePeakPresentation
     private let loudness: LoudnessPresentation
+    private let programmeBandwidth: SignificantBandwidthPresentation
     private let comparison: ComparisonPresentation
     @State private var exportModel: ReportExportModel
 
@@ -28,6 +29,7 @@ public struct ReportView: View {
         signalLevelMetrics: SignalLevelMetricsPresentation,
         truePeak: TruePeakPresentation,
         loudness: LoudnessPresentation,
+        programmeBandwidth: SignificantBandwidthPresentation,
         comparison: ComparisonPresentation = .none,
         export: @escaping ReportExportAction
     ) {
@@ -37,6 +39,7 @@ public struct ReportView: View {
         self.signalLevelMetrics = signalLevelMetrics
         self.truePeak = truePeak
         self.loudness = loudness
+        self.programmeBandwidth = programmeBandwidth
         self.comparison = comparison
         _exportModel = State(initialValue: ReportExportModel(action: export))
     }
@@ -63,6 +66,16 @@ public struct ReportView: View {
                 // why it is a section of its own rather than a fifth signal-levels row — the method has
                 // to travel with it (ADR-0006, ADR-0022), and a row has nowhere to put one.
                 loudnessSection
+                // **After the level sections, before the spectrogram.** It is the first measurement in
+                // the report about *frequency* rather than level, so it leaves the three that reduce
+                // amplitude behind it — and it comes before the spectrogram because it is a settled
+                // number and that is a picture, the same order the waveform and the signal levels
+                // already follow. It is a section of its own rather than a caption on the spectrogram
+                // because it is a measurement with a method that has to travel with it (ADR-0023), and
+                // because it is not a reading *of* that picture: the spectrogram is a different
+                // transform at a different resolution, and putting them together would suggest one can
+                // be checked against the other by eye.
+                programmeBandwidthSection
                 spectrogramSection
                 propertiesSection
                 // **After this file's own facts, before its warnings.** A comparison is a statement
@@ -168,6 +181,15 @@ public struct ReportView: View {
     }
 
     // MARK: - File identity (safe metadata only — never a location)
+
+    /// Its own section, on `loudnessSection`'s precedent: one number, plus the resolution it sits on,
+    /// plus the method that produced it. Present in every state, so an absence is a sentence rather than
+    /// a gap the reader has to interpret.
+    private var programmeBandwidthSection: some View {
+        ReportSection(ProgrammeBandwidthCopy.title) {
+            ProgrammeBandwidthSection(presentation: programmeBandwidth)
+        }
+    }
 
     private var fileSection: some View {
         ReportSection("File") {
@@ -493,10 +515,24 @@ private extension TruePeakPresentation {
     }
 }
 
+extension SignificantBandwidthPresentation {
+    /// A 48 kHz programme reading 16.1 kHz on a 23 Hz grid — an ordinary measurement, shown as the
+    /// plain fact it is, with nothing about it treated as remarkable.
+    static var preview: SignificantBandwidthPresentation {
+        guard let method = SignificantBandwidthMethod(windowFrames: 2_048, hopFrames: 512, sampleRate: 48_000),
+              let channel = SignificantBandwidth.Channel(frequency: 16_101.5625, resolution: 23.4375),
+              let measurement = SignificantBandwidth(channels: [channel, channel], method: method) else {
+            return .absent
+        }
+        return .measurement(measurement)
+    }
+}
+
 #Preview {
     ReportView(
         report: .preview, waveform: .preview, spectrogram: .preview, signalLevelMetrics: .preview,
-        truePeak: .preview, loudness: .preview, export: { _, _, _, _ in .succeeded }
+        truePeak: .preview, loudness: .preview, programmeBandwidth: .preview,
+        export: { _, _, _, _ in .succeeded }
     )
 }
 #endif

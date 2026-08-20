@@ -201,6 +201,39 @@ enum HumanFormat {
         )
     }
 
+    // MARK: - Programme bandwidth
+
+    /// A programme bandwidth reading, rounded so that **no digit claims a distinction the analysis
+    /// cannot make**.
+    ///
+    /// The measurement carries a frequency and the bin width that produced it, and the bin width is the
+    /// quantisation of the value — *not* an uncertainty (ADR-0023). So this does not print a `±`; it
+    /// simply refuses to show a digit finer than the bin. The displayed value is rounded to the
+    /// smallest power of ten that is **at least** the resolution, and the number of decimals follows
+    /// from that step, so the last digit shown is always worth more than one bin.
+    ///
+    /// Worked: at every supported rate the window is fixed in *time*, so the resolution is about 23 Hz
+    /// whether the file is 44.1 or 192 kHz. The step is therefore 100 Hz and the form is one decimal in
+    /// kilohertz at all five rates — `16 101.5625 Hz` reads `16.1 kHz`, and `20 015.625 Hz` reads
+    /// `20 kHz` rather than `20.02 kHz`, which would imply a 10 Hz distinction the bins do not support.
+    ///
+    /// Decimals are capped at two, matching the vocabulary the rest of the report already uses. The cap
+    /// can only ever show *less* precision than the resolution allows, which is the safe direction; the
+    /// rule is one-sided by design, and no input makes it show more.
+    static func programmeBandwidth(_ hertz: Double, resolution: Double) -> String {
+        guard hertz.isFinite, hertz >= 0, resolution.isFinite, resolution > 0 else { return "—" }
+        let exponent = Int(ceil(log10(resolution)))
+        let step = pow(10.0, Double(exponent))
+        let rounded = (hertz / step).rounded() * step
+        guard rounded >= 1_000 else {
+            return "\(rounded.formatted(.number.precision(.fractionLength(0 ... 0)).locale(locale))) Hz"
+        }
+        let decimals = min(2, max(0, 3 - exponent))
+        let kilohertz = (rounded / 1_000)
+            .formatted(.number.precision(.fractionLength(0 ... decimals)).locale(locale))
+        return "\(kilohertz) kHz"
+    }
+
     // MARK: - Shared
 
     /// Divides and drops trailing zeros, so `48000/1000` reads `48` and `44100/1000` reads `44.1`.
