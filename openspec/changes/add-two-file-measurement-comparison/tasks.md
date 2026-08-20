@@ -78,24 +78,44 @@ be promoted by claiming it.
       score, similarity, confidence, `allSame`, `isIdentical`, `matches` and the rest.
 
 ## 3. Flow
-- [ ] 3.1 Stop discarding the compared file's analyses; collapse `…Outcome` to settled optionals in
+- [x] 3.1 Stop discarding the compared file's analyses; collapse `…Outcome` to settled optionals in
       `FeatureImport`, and the primary file's `…State` the same way. No lifecycle reaches the domain.
-- [ ] 3.2 Publish the comparison **twice** — technical when the report arrives, measurements when they
+      **Done.** `SettledMeasurements` collapses both sides in `FeatureImport`, and returns `nil` for
+      *unfinished* as distinct from *nothing to compare* — the compare action is offered the moment a
+      report is on screen, so the primary can still be measuring when the compared file has finished.
+- [x] 3.2 Publish the comparison **twice** — technical when the report arrives, measurements when they
       settle — rather than holding back a complete technical answer. Pin the order.
-- [ ] 3.3 **Stale atomicity**: the measurement bundle belongs to the same operation as the report beside
+      **Done, and the order is pinned.** The technical comparison is published from the progressive
+      report; the measurement comparison waits for whichever side settles last and is taken from the
+      settled outcome, never assembled from progressive updates.
+- [x] 3.3 **Stale atomicity**: the measurement bundle belongs to the same operation as the report beside
       it, asserted with deliberately distinguishable values on both sides, reusing the existing
       handshake. No sleeps, no polling, no `Task.yield()`.
-- [ ] 3.4 Cancellation stays neutral: dismissing the picker is not a statement about either file.
+      **Done.** `MeasurementComparisonAtomicityTests` supersedes B with C mid-read and lets B finish
+      late, with four deliberately distinguishable measurements per file: the published pair is entirely
+      C's, and equals what the domain builds from C's own bundle. No sleeps, no polling, no
+      `Task.yield()`.
+- [x] 3.4 Cancellation stays neutral: dismissing the picker is not a statement about either file.
 
 ## 4. Cost
 
-- [ ] 4.1 Prove **one decoder and one sample read** for the compared file, with the four measurements
+      **Done.** Cancelling a replacement restores the previous comparison **with the bundle it was
+      built from**, so a primary settling afterwards completes that comparison rather than nothing. A
+      cancelled analysis is not a settled answer, so no pair is published for it and the technical half
+      is untouched.
+- [x] 4.1 Prove **one decoder and one sample read** for the compared file, with the four measurements
       present — the existing decode-count gate extended to the comparison path.
-- [ ] 4.2 Show what is retained: four small value types per side, no PCM, no spectrogram, no waveform.
-- [ ] 4.3 Negative control: a second read for the comparison must fail 4.1.
+      **Done**, by the inverted group-1 suite: one decoder, one decode call, the four measurements
+      present, and now reaching the comparison.
+- [x] 4.2 Show what is retained: four small value types per side, no PCM, no spectrogram, no waveform.
+      **Done, structurally.** Two `ReportMeasurements` and one `MeasurementComparison`: value types of
+      `O(channels)`. Neither `PCMChunk`, `WaveformEnvelope` nor `Spectrogram` has a field in any of them,
+      so no PCM, spectrum, waveform or spectrogram can be retained.
+- [x] 4.3 Negative control: a second read for the comparison must fail 4.1.
 
 ## 5. Correctness, on real files through production
 
+      **Done.** A second shared pass in the coordinator fails the read count.
 - [ ] 5.1 The ten fixture pairs of `design.md` §7, each discriminating something a simpler rule would
       get wrong.
 - [ ] 5.2 Pairs 8 and 9 specifically: a naive frequency-equality rule must fail them.
