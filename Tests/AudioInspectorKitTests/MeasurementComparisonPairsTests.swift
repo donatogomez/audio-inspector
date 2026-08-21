@@ -472,7 +472,12 @@ struct MeasurementComparisonPairsTests {
             let c = pair.comparison
 
             #expect(pair.second.loudness == nil, "the short file measured a loudness after all")
-            #expect(c.loudness == .incomparable(.secondMissing), "an absent loudness became \(c.loudness)")
+            #expect(c.loudness.gapReason == .secondMissing, "an absent loudness became \(c.loudness)")
+            // **The first file's own number survives the second file's absence**, taken from what
+            // production measured rather than from a literal, so the assertion cannot drift from the
+            // fixture. Without this, the surface prints "No value" under a file that has a loudness.
+            let measuredFirst = try #require(pair.first.loudness).integratedLoudness
+            #expect(c.loudness == .incomparable(.secondMissing(first: measuredFirst)))
             // Not a zero and not an equality: `same(0)` and `different(x, 0)` are both statements about
             // a value, and there is no value on that side.
             if case let .different(_, second, _) = c.loudness {
@@ -514,8 +519,14 @@ struct MeasurementComparisonPairsTests {
             )
             let c = pair.comparison
 
-            #expect(c.loudness == .incomparable(.secondMissing))
-            #expect(c.programmeBandwidth.overall == .incomparable(.secondMissing))
+            #expect(c.loudness.gapReason == .secondMissing)
+            #expect(c.programmeBandwidth.overall.gapReason == .secondMissing)
+            // Silence has neither, and the programme file has both — so both gaps keep the first file's.
+            let measuredLoudness = try #require(pair.first.loudness).integratedLoudness
+            let measuredBandwidth = try #require(pair.first.bandwidth)
+            let measuredReading = try #require(measuredBandwidth.overall)
+            #expect(c.loudness == .incomparable(.secondMissing(first: measuredLoudness)))
+            #expect(c.programmeBandwidth.overall == .incomparable(.secondMissing(first: measuredReading)))
 
             guard case let .different(_, silentTrue) = c.truePeak.overall,
                   case let .different(_, silentPeak) = c.signalLevels.overall.peakSample

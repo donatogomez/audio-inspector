@@ -92,8 +92,8 @@ struct MeasurementComparisonTests {
         let a = try truePeak(0.9, oversampling: firstFactor)
         let b = try truePeak(0.9, oversampling: secondFactor, filter: other)
         let c = compare(bundle(truePeak: a), bundle(truePeak: b))
-        #expect(c.truePeak.overall == .incomparable(.methodsDiffer), "\(which) was ignored")
-        #expect(c.truePeak.channels == .incomparable(.methodsDiffer))
+        #expect(c.truePeak.overall.gapReason == .methodsDiffer, "\(which) was ignored")
+        #expect(c.truePeak.channels.gapReason == .methodsDiffer)
     }
 
     /// **Identical values do not rescue an incompatible method.** Two numbers on different scales that
@@ -103,7 +103,7 @@ struct MeasurementComparisonTests {
             bundle(truePeak: try truePeak(0.9, oversampling: 8)),
             bundle(truePeak: try truePeak(0.9, oversampling: 4))
         )
-        #expect(c.truePeak.overall == .incomparable(.methodsDiffer))
+        #expect(c.truePeak.overall.gapReason == .methodsDiffer)
     }
 
     /// **1.3, applied.** The two weightings compare because `LoudnessProductionMatrixTests` reads one
@@ -130,7 +130,7 @@ struct MeasurementComparisonTests {
             bundle(loudness: try loudness(-14.0, weighting: .publishedAt48kHz)),
             bundle(loudness: try loudness(-14.0, weighting: unknown))
         )
-        #expect(c.loudness == .incomparable(.methodsDiffer))
+        #expect(c.loudness.gapReason == .methodsDiffer)
     }
 
     @Test func adifferentLoudnessAlgorithmIsNotComparable() throws {
@@ -139,7 +139,7 @@ struct MeasurementComparisonTests {
             bundle(loudness: try loudness(-14.0)),
             bundle(loudness: try loudness(-14.0, algorithm: other))
         )
-        #expect(c.loudness == .incomparable(.methodsDiffer))
+        #expect(c.loudness.gapReason == .methodsDiffer)
     }
 
     /// **Bandwidth is gated on the identifier alone.** The window geometry beside it varies by design
@@ -150,14 +150,14 @@ struct MeasurementComparisonTests {
             bundle(bandwidth: try bandwidth([16_000], resolution: 22.96875, windowFrames: 1_920, rate: 44_100)),
             bundle(bandwidth: try bandwidth([16_000], resolution: 23.4375, windowFrames: 2_048, rate: 48_000))
         )
-        #expect(sameIdentity.programmeBandwidth.overall != .incomparable(.methodsDiffer),
+        #expect(sameIdentity.programmeBandwidth.overall.gapReason != .methodsDiffer,
                 "differing geometry was mistaken for a differing method")
 
         let otherIdentity = compare(
             bundle(bandwidth: try bandwidth([16_000])),
             bundle(bandwidth: try bandwidth([16_000], identifier: "programme-bandwidth-experimental-v9"))
         )
-        #expect(otherIdentity.programmeBandwidth.overall == .incomparable(.methodsDiffer))
+        #expect(otherIdentity.programmeBandwidth.overall.gapReason == .methodsDiffer)
     }
 
     // MARK: 1.4 — the cell rule, both sides of it
@@ -256,13 +256,21 @@ struct MeasurementComparisonTests {
         let c = compare(
             bundle(loudness: try loudness(-14.0)), bundle(loudness: try loudness(-9.3, algorithm: other))
         )
-        #expect(c.loudness == .incomparable(.methodsDiffer))
+        #expect(c.loudness.gapReason == .methodsDiffer)
     }
 
     @Test func noDifferenceIsPublishedWhenASideIsMissing() throws {
-        #expect(compare(bundle(loudness: try loudness(-14)), bundle()).loudness == .incomparable(.secondMissing))
-        #expect(compare(bundle(), bundle(loudness: try loudness(-14))).loudness == .incomparable(.firstMissing))
-        #expect(compare(bundle(), bundle()).loudness == .incomparable(.neitherPresent))
+        let secondMissing = compare(bundle(loudness: try loudness(-14)), bundle()).loudness
+        let firstMissing = compare(bundle(), bundle(loudness: try loudness(-14))).loudness
+        let neither = compare(bundle(), bundle()).loudness
+        #expect(secondMissing.gapReason == .secondMissing)
+        #expect(firstMissing.gapReason == .firstMissing)
+        #expect(neither.gapReason == .neitherPresent)
+        // **The side that measured keeps its number, and no difference is published for it.** One value
+        // cannot be subtracted from nothing, whatever survives.
+        #expect(secondMissing == .incomparable(.secondMissing(first: -14)))
+        #expect(firstMissing == .incomparable(.firstMissing(second: -14)))
+        #expect(neither == .incomparable(.neitherPresent))
     }
 
     // MARK: Absence, and channels
@@ -270,11 +278,17 @@ struct MeasurementComparisonTests {
     /// A missing measurement is never a zero, never a `same`, and never a failure.
     @Test func absenceIsNeverInvented() throws {
         let c = compare(bundle(levels: try levels(), truePeak: try truePeak(), bandwidth: try bandwidth([16_000])), bundle())
-        #expect(c.signalLevels.overall.peakSample == .incomparable(.secondMissing))
-        #expect(c.signalLevels.overall.clippedSampleCount == .incomparable(.secondMissing))
-        #expect(c.truePeak.overall == .incomparable(.secondMissing))
-        #expect(c.programmeBandwidth.overall == .incomparable(.secondMissing))
-        #expect(c.loudness == .incomparable(.neitherPresent))
+        #expect(c.signalLevels.overall.peakSample.gapReason == .secondMissing)
+        #expect(c.signalLevels.overall.clippedSampleCount.gapReason == .secondMissing)
+        #expect(c.truePeak.overall.gapReason == .secondMissing)
+        #expect(c.programmeBandwidth.overall.gapReason == .secondMissing)
+        // The bundle carries no loudness on **either** side, which is a different answer again.
+        #expect(c.loudness.gapReason == .neitherPresent)
+        // **And nothing the first file measured was thrown away with the second file's absence.** The
+        // gap names the missing side; it does not erase the side that is there.
+        #expect(c.truePeak.overall.gapValue?.first != nil)
+        #expect(c.programmeBandwidth.overall.gapValue?.first?.frequency == 16_000)
+        #expect(c.signalLevels.overall.peakSample.gapValue?.second == nil)
     }
 
     /// Differing channel counts keep the **overall** comparison and report the mismatch. The
@@ -311,7 +325,11 @@ struct MeasurementComparisonTests {
         guard case let .byIndex(entries) = compare(bundle(bandwidth: a), bundle(bandwidth: b)).programmeBandwidth.channels else {
             Issue.record("channels were not compared by index"); return
         }
-        #expect(entries[1] == .incomparable(.firstMissing))
+        // The second channel measured nothing in the first file and 16 kHz in the second. The gap names
+        // which side, and **keeps the reading that exists** — it is not 0 Hz and it is not discarded.
+        #expect(entries[1].gapReason == .firstMissing)
+        let secondFileReading = try #require(b.channels[1])
+        #expect(entries[1] == .incomparable(.firstMissing(second: secondFileReading)))
     }
 }
 

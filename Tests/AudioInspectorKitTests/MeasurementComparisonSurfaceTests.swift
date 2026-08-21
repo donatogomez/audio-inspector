@@ -187,8 +187,15 @@ struct MeasurementComparisonSurfaceTests {
 
             let row = try rowNamed(LoudnessCopy.title, pair)
             #expect(row.outcome == .notComparable(reason: MeasurementComparisonCopy.secondHasNoValue))
-            #expect(row.first.value == nil && row.second.value == nil)
             #expect(row.difference == nil)
+
+            // **The first file's own figure is on screen, and it is the one production measured.**
+            // Taken from the measurement rather than written out, so the assertion cannot drift from
+            // the fixture — and so it is genuinely testing that the number survived the comparison
+            // rather than that someone typed the same string twice.
+            let measured = try #require(pair.first.loudness).integratedLoudness
+            #expect(row.first.value == HumanFormat.loudnessFullScale(measured))
+            #expect(row.second.value == nil, "the file with no loudness was given one")
             // Never a zero, and never a word that reads as a fault.
             #expect(!row.accessibilityLabel.contains("0.0 LUFS"))
             #expect(!row.accessibilityLabel.contains("0.0 LU"))
@@ -200,6 +207,30 @@ struct MeasurementComparisonSurfaceTests {
             #expect(try rowNamed(MeasurementComparisonCopy.peakSample, pair).outcome == .same)
             #expect(try rowNamed(TruePeakCopy.title, pair).outcome == .same)
             #expect(try rowNamed(ProgrammeBandwidthCopy.title, pair).outcome == .indistinguishable)
+        }
+    }
+
+    /// **The same pair with the two files swapped**, so nothing about the rule is positional: the file
+    /// that measured keeps its figure whichever column it is in, and the outcome names the other one.
+    @Test("pair 10 reversed — the surviving figure follows the file, not the column")
+    func absencePairReversed() async throws {
+        try await withTemporaryDirectory { directory in
+            let signal = productionProgramme(to: 16_000)
+            let pair = try await MeasurementProduction.pair(
+                programme("surface-short-first", signal, seconds: 0.1),
+                programme("surface-long-second", signal),
+                in: directory
+            )
+            #expect(pair.first.loudness == nil, "the short file measured a loudness after all")
+
+            let row = try rowNamed(LoudnessCopy.title, pair)
+            #expect(row.outcome == .notComparable(reason: MeasurementComparisonCopy.firstHasNoValue))
+            let measured = try #require(pair.second.loudness).integratedLoudness
+            #expect(row.first.value == nil, "the file with no loudness was given one")
+            #expect(row.second.value == HumanFormat.loudnessFullScale(measured))
+            #expect(row.difference == nil)
+            #expect(row.accessibilityLabel.contains(MeasurementComparisonCopy.noValue))
+            #expect(row.accessibilityLabel.contains(HumanFormat.loudnessFullScale(measured)))
         }
     }
 

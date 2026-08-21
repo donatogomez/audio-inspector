@@ -307,8 +307,13 @@ struct MeasurementComparisonAtomicityTests {
         }
         #expect(technical == FileComparison(first: primary, second: b.report))
         let measurements = try #require(published, "the pair was withheld because a measurement failed")
-        #expect(measurements.loudness == .incomparable(.secondMissing))
-        #expect(measurements.truePeak.overall == .incomparable(.secondMissing))
+        // The compared file's measurements all failed, so it has nothing on that side — and the primary
+        // file's numbers are **still there**, which is what the surface needs to avoid printing
+        // "No value" under a file that has one.
+        #expect(measurements.loudness.gapReason == .secondMissing)
+        #expect(measurements.truePeak.overall.gapReason == .secondMissing)
+        #expect(measurements.loudness.gapValue?.first != nil, "the primary file's loudness was dropped")
+        #expect(measurements.truePeak.overall.gapValue?.first != nil, "the primary file's true peak was dropped")
     }
 
     /// A cancelled analysis is **not** a settled answer, so no pair is published for it — but the

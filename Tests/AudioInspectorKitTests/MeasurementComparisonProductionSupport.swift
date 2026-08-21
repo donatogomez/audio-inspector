@@ -165,17 +165,17 @@ extension MeasurementComparison {
     ///
     /// It gathers rather than counts: a count would be an aggregate, and the type refuses those for a
     /// reason. What comes back is the list of reasons, which is what a failure message needs.
-    var gaps: [MeasurementGap] {
-        var found: [MeasurementGap] = []
+    var gaps: [MeasurementGapReason] {
+        var found: [MeasurementGapReason] = []
         func take<Value>(_ comparison: MeasurementValueComparison<Value>) {
-            if case let .incomparable(gap) = comparison { found.append(gap) }
+            if case let .incomparable(gap) = comparison { found.append(gap.reason) }
         }
         func take(_ figures: SignalLevelFiguresComparison) {
             take(figures.peakSample); take(figures.rms)
             take(figures.dcOffset); take(figures.clippedSampleCount)
         }
         func take(_ reading: BandwidthReadingComparison) {
-            if case let .incomparable(gap) = reading { found.append(gap) }
+            if case let .incomparable(gap) = reading { found.append(gap.reason) }
         }
         func take<C>(_ channels: ChannelComparison<C>, each: (C) -> Void) {
             switch channels {
@@ -188,7 +188,7 @@ extension MeasurementComparison {
         take(signalLevels.channels, each: take)
         take(truePeak.overall)
         take(truePeak.channels, each: take)
-        if case let .incomparable(gap) = loudness { found.append(gap) }
+        if case let .incomparable(gap) = loudness { found.append(gap.reason) }
         take(programmeBandwidth.overall)
         take(programmeBandwidth.channels, each: take)
         return found
@@ -202,5 +202,56 @@ extension ChannelComparison {
     /// 1 against 2"* in one expression instead of pattern-matching three times over three metrics.
     var differingCounts: (first: Int, second: Int)? {
         if case let .countsDiffer(first, second) = self { (first, second) } else { nil }
+    }
+}
+
+// MARK: - Reading a gap's reason without restating what it carries
+
+// The gap grew payloads when the surviving-value defect was fixed, so `== .incomparable(.methodsDiffer)`
+// stopped compiling everywhere it appeared. These readers exist so a suite that is asserting **why**
+// nothing was compared says exactly that, and a suite asserting **what survived** reaches for the gap
+// itself. Writing the payload into an assertion that never cared about it would couple the two.
+
+extension MeasurementValueComparison {
+    /// Why nothing was compared, or `nil` when something was.
+    var gapReason: MeasurementGapReason? {
+        if case let .incomparable(gap) = self { gap.reason } else { nil }
+    }
+}
+
+extension LoudnessComparison {
+    var gapReason: MeasurementGapReason? {
+        if case let .incomparable(gap) = self { gap.reason } else { nil }
+    }
+}
+
+extension BandwidthReadingComparison {
+    var gapReason: MeasurementGapReason? {
+        if case let .incomparable(gap) = self { gap.reason } else { nil }
+    }
+}
+
+extension ChannelComparison {
+    var gapReason: MeasurementGapReason? {
+        if case let .incomparable(reason) = self { reason } else { nil }
+    }
+}
+
+extension MeasurementValueComparison {
+    /// The gap itself, for a suite asserting **what survived** rather than why.
+    var gapValue: MeasurementGap<Value>? {
+        if case let .incomparable(gap) = self { gap } else { nil }
+    }
+}
+
+extension BandwidthReadingComparison {
+    var gapValue: MeasurementGap<SignificantBandwidth.Channel>? {
+        if case let .incomparable(gap) = self { gap } else { nil }
+    }
+}
+
+extension LoudnessComparison {
+    var gapValue: MeasurementGap<Double>? {
+        if case let .incomparable(gap) = self { gap } else { nil }
     }
 }

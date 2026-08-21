@@ -165,8 +165,59 @@ struct MeasurementComparisonPresentationTests {
         for word in ["failed", "failure", "error", "broken", "invalid"] {
             #expect(!row.outcome.text.lowercased().contains(word), "\"\(row.outcome.text)\" says \(word)")
         }
-        // Identical values do not rescue an incompatible method, and the surface does not print them.
-        #expect(row.first.value == nil && row.second.value == nil)
+        // **Both values stay on screen.** A method mismatch is the one gap that occurs while both sides
+        // measured, so hiding the two numbers would tell a reader the files measured nothing when what
+        // actually happened is that the numbers are not on one scale.
+        #expect(row.first.value == HumanFormat.decibelsTruePeak(0.9))
+        #expect(row.second.value == HumanFormat.decibelsTruePeak(0.9))
+        // And showing them does not make them comparable: the outcome is still the refusal.
+        #expect(row.outcome == .notComparable(reason: MeasurementComparisonCopy.methodsDiffer))
+        #expect(row.difference == nil)
+    }
+
+    /// **The other two metrics, on the same rule.** A method mismatch is the one gap that occurs while
+    /// both sides measured, so every row it can appear on must keep both numbers — and none of them may
+    /// publish a difference over them, because a difference needs two numbers on one scale.
+    @Test("a method mismatch keeps both values on loudness and on bandwidth too")
+    func methodsDifferKeepsBothValuesEverywhere() throws {
+        let loudnessRow = try rowNamed(
+            LoudnessCopy.title,
+            bundle(loudness: try loudness(-14.2)),
+            bundle(loudness: try loudness(-10.8, algorithm: LoudnessAlgorithmIdentifier(rawValue: "other_v1")))
+        )
+        #expect(loudnessRow.outcome == .notComparable(reason: MeasurementComparisonCopy.methodsDiffer))
+        #expect(loudnessRow.first.value == HumanFormat.loudnessFullScale(-14.2))
+        #expect(loudnessRow.second.value == HumanFormat.loudnessFullScale(-10.8))
+        #expect(loudnessRow.difference == nil, "two numbers on different scales were subtracted")
+
+        let bandwidthRow = try rowNamed(
+            ProgrammeBandwidthCopy.title,
+            bundle(bandwidth: try bandwidth(16_000)),
+            bundle(bandwidth: try bandwidth(20_000, identifier: "other-v1"))
+        )
+        #expect(bandwidthRow.outcome == .notComparable(reason: MeasurementComparisonCopy.methodsDiffer))
+        #expect(bandwidthRow.first.value != nil && bandwidthRow.second.value != nil)
+        // A surviving reading keeps its resolution: the figure is only interpretable against its grid.
+        #expect(bandwidthRow.first.detail == MeasurementComparisonCopy.resolution(23.4375))
+        #expect(bandwidthRow.second.detail == MeasurementComparisonCopy.resolution(23.4375))
+        #expect(bandwidthRow.difference == nil)
+        // And neither outcome became one of the grid words: the analysis never ran on one scale.
+        #expect(bandwidthRow.outcome != .indistinguishable)
+        #expect(bandwidthRow.outcome != .separated)
+    }
+
+    /// A surviving value on a **bandwidth** absence keeps its resolution too, so the one number on
+    /// screen is still interpretable.
+    @Test("a surviving bandwidth reading keeps its resolution, and the absent side keeps nothing")
+    func survivingBandwidthKeepsItsResolution() throws {
+        let row = try rowNamed(
+            ProgrammeBandwidthCopy.title, bundle(bandwidth: try bandwidth(16_101.5625)), bundle()
+        )
+        #expect(row.outcome == .notComparable(reason: MeasurementComparisonCopy.secondHasNoValue))
+        #expect(row.first.value == HumanFormat.programmeBandwidth(16_101.5625, resolution: 23.4375))
+        #expect(row.first.detail == MeasurementComparisonCopy.resolution(23.4375))
+        #expect(row.second.value == nil)
+        #expect(row.second.detail == nil, "the absent side was given a resolution it never measured on")
     }
 
     // MARK: 5–7 — loudness, the one row with a difference
@@ -274,19 +325,30 @@ struct MeasurementComparisonPresentationTests {
         }
         #expect(reason.contains(mentions), "\"\(reason)\" does not name the side that had no value")
         #expect(row.difference == nil)
+        #expect(!reason.contains("0"))
+
+        // **The side that measured keeps its number; only the side that did not says so.**
+        //
+        // This used to assert that *both* columns were empty, and that was the defect: a pair where the
+        // first file measured −14.0 LUFS and the second measured nothing printed "No value" under both,
+        // stating something false about the first file. The outcome names the missing side; the columns
+        // now agree with it.
+        let measuredSide = hasFirst ? row.first : row.second
+        let absentSide = hasFirst ? row.second : row.first
+        #expect(measuredSide.value == HumanFormat.loudnessFullScale(-14.0), "the measured side lost its value")
+        #expect(absentSide.value == nil, "the absent side grew a value")
+
         // Absence is words, never a number — and specifically never zero.
         //
         // **Asserted as "this is not parseable as a number", not as "this equals the constant".**
         // A control replacing the constant with "0" slipped straight through a test written against
         // the constant, which is the tautology every copy assertion is one step away from.
-        #expect(row.first.value == nil && row.second.value == nil)
-        #expect(!reason.contains("0"))
         #expect(
             Double(MeasurementComparisonCopy.noValue) == nil,
             "an absence is said with the number \(MeasurementComparisonCopy.noValue)"
         )
-        #expect(row.first.spoken == MeasurementComparisonCopy.noValue)
-        #expect(Double(row.first.spoken) == nil, "an absent side is announced as a number")
+        #expect(absentSide.spoken == MeasurementComparisonCopy.noValue)
+        #expect(Double(absentSide.spoken) == nil, "an absent side is announced as a number")
     }
 
     @Test("neither file having a value is said once, not twice")
@@ -300,7 +362,7 @@ struct MeasurementComparisonPresentationTests {
     /// *"this file had no value"*, which is exactly what task 6.4 requires.
     @Test("the four gaps are four different sentences")
     func everyGapIsDistinguishable() {
-        let sentences = [MeasurementGap.firstMissing, .secondMissing, .neitherPresent, .methodsDiffer]
+        let sentences = [MeasurementGapReason.firstMissing, .secondMissing, .neitherPresent, .methodsDiffer]
             .map(MeasurementComparisonFormatter.reason(for:))
         #expect(Set(sentences).count == 4, "two gaps read identically: \(sentences)")
     }
