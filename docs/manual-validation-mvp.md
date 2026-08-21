@@ -1130,3 +1130,26 @@ place, in a real window.
 **ADR-0024 stays `Proposed`.** Its Status line has said since its first commit that partial evidence
 does not promote it, and two of its three conditions are met while the third — the one this entry is
 about — is not. Nothing in the ADR, `tasks.md` or this document has been reworded to close that gap.
+
+### Retry (2026-08-21) — still blocked, on a build that now carries the absence fix
+
+Attempted again after the defect the headless render found was fixed. **Both permissions are refused in
+exactly the same way**, verified with four probes rather than assumed: `screencapture` produces no image
+(`could not create image from display`); `System Events` lists process names — which needs no
+Accessibility grant — but reading a window fails with −1719 and reading an `AX` attribute fails with
+−1728. No further diagnosis, per this document's own standing instruction.
+
+Two things changed and are recorded so the next attempt does not validate the wrong thing:
+
+- **The app was cleaned and rebuilt from `f2058d2`**, so the binary now postdates the fix in `97a4dc0`.
+  The build prepared on 2026-08-20 predates it and must not be used.
+- **The battery's pair-10 expectation changed with the fix**, and gained its mirror. A row where the
+  first file measured and the second did not now reads `-24.9 LUFS` · `No value`, and the reversed pair
+  reads `No value` · `-24.9 LUFS`. Both are in the change's `README.md` as pairs 10 and 10R, and both
+  were measured through the production path before the app was opened.
+
+**No headless render was produced this time.** The one on 2026-08-20 had a job — it found a defect — and
+it is not evidence for this condition, so repeating it would only pad the record.
+
+**ADR-0024 stays `Proposed`**, for the same reason and on the same words: partial evidence does not
+promote it.

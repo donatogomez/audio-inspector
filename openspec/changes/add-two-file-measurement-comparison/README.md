@@ -24,8 +24,13 @@ Build each pair as mono 48 kHz float WAV of one second unless the row says other
 | 9 | comb → 16 000 Hz | comb → 16 023.4375 Hz | Programme bandwidth | `16.1 kHz` · `16.1 kHz` · **Separated at these resolutions**, plus the line saying they fall in different bins |
 | 10 | comb → 16 kHz, 1 s | same comb, **0.1 s** | Integrated loudness | `-24.9 LUFS` · `No value` · *Not comparable — the second file has no value for this.* |
 | 10 | " | " | True peak | `-12.21 dBTP` · `-12.21 dBTP` · Same — the absence took nothing with it |
+| 10R | same comb, **0.1 s** | comb → 16 kHz, 1 s | Integrated loudness | `No value` · `-24.9 LUFS` · *Not comparable — the first file has no value for this.* |
 | 6 | comb → 16 kHz, **mono** | same comb, **stereo** | channel note, on three blocks | *Not compared per channel — the files carry 1 and 2 channels…* |
 | 6 | " | " | Integrated loudness | `-24.9 LUFS` · `-21.9 LUFS` · Different · `+3.0 LU` |
+
+Pair 10 and 10R are the same two files in both orders, and they are the battery's own control on the
+surviving-value defect: **the figure follows the file, never the column.** A row reading
+`No value` under *both* files is the failure this pair exists to catch.
 
 **What a person is checking that a test cannot.** That the sub-section reads as one thing beneath the
 technical rows rather than as a second table; that seven rows and their notes are legible at a narrow
