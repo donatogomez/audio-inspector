@@ -1042,3 +1042,91 @@ this change adds a section to the same scrolling area every other analysis lives
 gap rather than fixing or worsening it. It does not claim the exported document was read by hand — that
 is pinned by `JSONReportExportProgrammeBandwidthTests` and `ProgrammeBandwidthExportFlowTests`, and no
 manual export was reported. And it is one machine, one appearance, one window size.
+
+## The measurement comparison's manual validation — prepared, then blocked by the same permissions (2026-08-21)
+
+Change `add-two-file-measurement-comparison`. Its only outstanding gate is ADR-0024's third promotion
+condition — *"the surface is validated by a person looking at it"* — and **that did not happen.** This
+entry records what was prepared, what blocked it, what stands in for observation, and the limit of that
+substitute, so the next attempt starts from a runnable state rather than repeating the preparation.
+
+### What was prepared
+
+**Twelve fixtures, six pairs**, written with the same `AudioFixtureSupport` writer the tests use, into a
+scratch directory outside the repository. Every expected figure was measured **through the production
+path before anything was opened** — file → `AVFoundationAudioDecoder` → `SharedPCMAnalysisGeneration` →
+`FeatureImport`'s settled collapse → `MeasurementComparison` → `MeasurementComparisonFormatter` — so a
+person running the pass reads the surface against numbers that already exist. The pairs are the battery
+in the change's `README.md`: gain-only, cross-weighting loudness, bandwidth indistinguishable, bandwidth
+separated, a missing measurement, and a channel-count mismatch.
+
+The app was **cleaned and rebuilt** from the branch head, and the binary confirmed newer than the head
+commit, against the stale-instance trap this document records at 2026-08-11. No instance was running
+before the build.
+
+### What blocked the pass
+
+The same two permissions that blocked `add-two-file-technical-comparison`'s group 7 on 2026-08-08, in
+the same way, verified rather than assumed:
+
+- **Screen Recording** — `screencapture` fails with `could not create image from display`. No screenshot
+  of the running app can be obtained.
+- **Accessibility** — `osascript`/`System Events` can list process names and nothing more; reading a
+  window's accessibility tree fails with *"osascript no tiene permitido el acceso de ayuda"* (−1719). So
+  the file panel cannot be driven, *Compare with another file…* cannot be clicked, and no second file
+  can be chosen.
+
+Neither is grantable from an unattended session, and this project's own rule forbids changing security
+or privacy settings on its own. No further diagnosis was attempted, in keeping with the same
+instruction the 2026-08-08 entry gives itself.
+
+### What stands in for observation, and its limit
+
+**The sub-section was rendered headlessly** — `ImageRenderer` over `MeasurementComparisonSection`, fed a
+`MeasurementComparison` built by the production path from real files — at two widths and in both
+appearances, and the images were inspected. That is more than a source read and **less than the
+condition ADR-0024 sets**: it renders one component in isolation, not the application, so it says
+nothing about the sub-section's placement beneath the technical rows in the real window, the flow that
+reaches it, a real resize, or VoiceOver.
+
+What the renders showed, recorded as what they are — component-level evidence, not the pass:
+
+- The four metrics appear in the report's own order; the difference column carries `+6.0 LU` on the
+  loudness row and is empty on the other six; bandwidth reads `Indistinguishable at these resolutions`
+  and `Separated at these resolutions` with each side's `Analysis resolution: 23 Hz` beneath its value.
+- At 520 pt nothing truncates: the outcome wraps to two lines and the resolutions wrap beneath their
+  values. `Indistinguishable` hyphenates.
+- In dark appearance the content is identical and legible; no outcome is distinguished by colour — the
+  only colour distinction anywhere is `.secondary` on already-worded explanatory text.
+
+**Three observations that a person should rule on**, raised here rather than acted on, because the
+condition this blocks is precisely a person's judgement:
+
+1. **A missing measurement shows `No value` in *both* columns.** In the pair-10 render, file A has a
+   loudness of −24.9 LUFS and the row reads `No value` · `No value` · *"Not comparable — the second file
+   has no value for this."* The outcome names the right side, but the first column asserts an absence
+   about a file that has a value. The cause is structural: the domain's gap carries no surviving number,
+   so the surface has none to show. Fixing it means publishing both measurement bundles beside the
+   comparison, which is a flow change with the atomicity cost group 3 exists to prevent — not a change
+   to make on a render.
+2. **Every single-row block repeats its own name.** `True peak` appears as a group title immediately
+   above a row called `True peak`, and likewise for integrated loudness and programme bandwidth. Only
+   `Signal levels` genuinely groups. Cosmetic.
+3. **The channel-count note repeats verbatim in three blocks**, and the rounding note can appear on
+   three rows of one pair. Both are correct and both are wordy.
+
+### Re-running this pass
+
+Grant **Screen Recording** and **Accessibility** to the process that runs the shell commands (System
+Settings → Privacy & Security), confirm both with `screencapture` and an `osascript` window read, then
+regenerate the fixtures — the change's `README.md` states each pair's signal, rate, channel count and
+duration, and `MeasurementComparisonSurfaceTests` writes exactly the same ones — rebuild, launch with
+`open -n`, and work the battery in that README. The expected strings are in it, and the automated
+suites assert every one of them, so what the pass adds is that they reach the screen, in the right
+place, in a real window.
+
+### Consequence
+
+**ADR-0024 stays `Proposed`.** Its Status line has said since its first commit that partial evidence
+does not promote it, and two of its three conditions are met while the third — the one this entry is
+about — is not. Nothing in the ADR, `tasks.md` or this document has been reworded to close that gap.
