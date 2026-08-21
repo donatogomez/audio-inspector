@@ -29,10 +29,13 @@ Nothing in the export, the JSON schema, Findings or the two visualisations was t
 Accessibility are both refused to this session, exactly as they were for `add-two-file-technical-comparison`
 on 2026-08-08. Partial evidence does not promote it, by the ADR's own words.
 
-**Next step: a person runs the battery.** Everything is prepared — twelve fixtures, six pairs, every
+**Next step: a person runs the battery.** Everything is prepared — fourteen fixtures, seven pairs, every
 expected string measured through production *before* the app was opened, in the change's `README.md`;
-the app cleaned and rebuilt from the branch head. **The pair-10 row now reads the first file's own
-loudness beside `No value` for the second**, so that expectation in the battery has changed. `docs/manual-validation-mvp.md` (2026-08-21) has the
+the app cleaned and rebuilt from `f2058d2`, so the binary postdates the fix. Pair 10 now reads
+`-24.9 LUFS` · `No value`, and pair 10R is its mirror: the figure follows the file, never the column.
+
+**Both permissions were re-probed on 2026-08-21 and both are still refused** — no screen image, and
+`System Events` cannot read a window. The 2026-08-20 build must not be used; it predates the fix. `docs/manual-validation-mvp.md` (2026-08-21) has the
 re-run instructions and what blocked it. Then decide ADR-0024, then push, PR, merge, and
 `openspec archive` — in that order.
 
