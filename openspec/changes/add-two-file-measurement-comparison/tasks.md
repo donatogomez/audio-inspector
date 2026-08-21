@@ -227,6 +227,19 @@ which is exactly the digit the limit exists to withhold.
 
 ## 8. Gates and closure
 
-- [ ] 8.1 Four gates green plus the Xcode build and `git diff --check`.
+- [x] 8.1 Four gates green plus the Xcode build and `git diff --check`.
+      **Done**, from the final tree: architecture boundaries, a zero-warnings build, the Xcode app
+      target, the suite twice, OpenSpec strict, and `git diff --check`.
 - [ ] 8.2 Decide ADR-0024's status from what was actually done, update `CURRENT.md`, and archive through
       `openspec archive` **after merge**.
+      **Decided, and the decision is that it stays `Proposed`.** Two of its three literal conditions are
+      met — the comparison runs against production reusing the already-computed measurements, and the
+      resolution-aware bandwidth rule is demonstrated on production readings sitting on **both** sides of
+      it, the exact boundary included. The third asks for *a person looking at the surface*, and that did
+      not happen: the same two macOS permissions that blocked `add-two-file-technical-comparison`'s group
+      7 on 2026-08-08 — Screen Recording and Accessibility — block it again, verified rather than assumed.
+      The battery, the twelve fixtures and every expected string were prepared, the app was cleaned and
+      rebuilt, and the sub-section was rendered headlessly and inspected; **none of that is the condition**,
+      and `docs/manual-validation-mvp.md` records the attempt, the substitute and its limit. The ADR's own
+      Status line has said since its first commit that partial evidence does not promote it. This task
+      stays open for the archive, which is post-merge regardless.
