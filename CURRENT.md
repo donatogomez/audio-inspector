@@ -17,48 +17,42 @@
 
 ---
 
-**Open thread: `add-two-file-measurement-comparison` — groups 1 to 6 closed, nothing exported.**
-ADR-0024 is `Proposed` and stays there.
+**Open thread: `add-two-file-measurement-comparison` — built, tested and on screen; blocked on one
+manual observation.** ADR-0024 is `Proposed` and **stays there**.
 
-**Focus.** The measurement comparison is on screen: a sub-section beneath the technical rows, in the
-report's own metric order, with four figures for the levels, one for true peak, one difference in LU on
-loudness alone, and two grid-shaped words for bandwidth. Fourteen negative controls were applied and
-reverted. Nothing in the export, the JSON schema, Findings or the two visualisations was touched, and
-Domain did not need to change at all.
+**Focus.** Groups 1 to 6 are closed and 8.1 is green. The measurement comparison runs against production
+on real files, the flow publishes it atomically, and the sub-section renders beneath the technical rows.
+Nothing in the export, the JSON schema, Findings or the two visualisations was touched.
 
-**Next step: the manual validation ADR-0024 is waiting on.** Its third promotion criterion is a person
-looking at the surface. The battery is prepared with real production figures and expected strings in
-`openspec/changes/add-two-file-measurement-comparison/README.md`, so the check is against numbers that
-already exist rather than a judgement made at the window. After that: group 8's gates and closure, and
-`openspec archive` **after merge**.
+**Why the ADR is not promoted.** Two of its three literal conditions are met. The third —
+*"the surface is validated by a person looking at it"* — did not happen: Screen Recording and
+Accessibility are both refused to this session, exactly as they were for `add-two-file-technical-comparison`
+on 2026-08-08. Partial evidence does not promote it, by the ADR's own words.
 
-**What that person is checking that a test cannot.** Whether seven rows plus their notes stay legible at
-a narrow window; whether the difference column reads as a missing value on the six rows that have none;
-and whether anything on screen invites ranking the two files.
+**Next step: a person runs the battery.** Everything is prepared — twelve fixtures, six pairs, every
+expected string measured through production *before* the app was opened, in the change's `README.md`;
+the app cleaned and rebuilt from the branch head. `docs/manual-validation-mvp.md` (2026-08-21) has the
+re-run instructions and what blocked it. Then decide ADR-0024, then push, PR, merge, and
+`openspec archive` — in that order.
 
-**One decision the surface forced, now recorded in ADR-0024 §5.** Honest formatters make two rows look
-self-contradictory: two bandwidth readings one bin apart both display as `16.1 kHz` beside `Separated`,
-and two DC offsets around 10⁻¹⁴ both display as `0.0000` beside `Different`. The answer is a sentence
-saying the display rounds them together — **never another digit**, which would claim precision the
-measurement does not have.
+**Three things for that person to rule on**, seen in a headless render and deliberately not acted on:
 
-**Open question carried forward.** `incomparable(.methodsDiffer)` is a state the surface renders and
-**no pair of real files can produce**: production runs one true peak method, one bandwidth identity and
-one loudness algorithm with only the two allow-listed weightings. It is validated in the presentation
-tests. Adding a public setting so a screenshot could be taken would be a worse answer than the gap, so
-the manual battery names the exclusion instead of faking it.
+- A missing measurement shows `No value` in **both** columns, though the first file has a value. The
+  domain's gap carries no surviving number, so the surface has none to show; fixing it means publishing
+  both bundles beside the comparison, which is a flow change with the atomicity cost group 3 exists to
+  prevent.
+- Every single-row block repeats its own name — `True peak` above a row called `True peak`. Only
+  `Signal levels` genuinely groups.
+- The channel-count note repeats verbatim in three blocks, and the rounding note can land on three rows
+  of one pair. Both correct, both wordy.
 
-**A limit worth knowing before the surface is judged.** When a measurement is `incomparable`, **neither
-column shows a value**, because the domain's gap carries no surviving number — so a file whose sibling
-has no loudness shows `No value` on both sides rather than its own figure beside the absence. That
-figure is on screen anyway, in the primary file's own report section above. Widening the flow to publish
-both bundles alongside the comparison would change that, and it was left out of scope deliberately: it
-puts two values and one outcome on the surface from two different places, which is the atomicity risk
-group 3 exists to prevent.
+**Also unobserved, and not this change's to fix**: `incomparable(.methodsDiffer)` is a state no pair of
+real files can produce, so it is validated in the presentation tests and named as an exclusion in the
+battery rather than faked.
 
 **Inherited, and not to be claimed as fixed**: `add-two-file-technical-comparison` is still open at 52/58
-and **ADR-0017 is still `Proposed`**, blocked on the VoiceOver traversal gap shared with ADR-0015. This
-change extends that surface and inherits that gap.
+and **ADR-0017 is still `Proposed`**, blocked on the same permissions and on the VoiceOver traversal gap
+shared with ADR-0015. This change extends that surface and inherits both.
 
 **Older threads, neither advanced here**: `add-static-spectrogram-visualization` (manual validation
 battery deferred by product decision).
