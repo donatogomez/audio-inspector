@@ -358,6 +358,34 @@ struct MeasurementComparisonPresentationTests {
         #expect(row.outcome.text.contains("neither"))
     }
 
+    /// **An empty column stays empty, on every row — not only on the one this defect was found on.**
+    ///
+    /// A control fabricating `"0"` for a missing side slipped through the first time, because the only
+    /// test looking at the columns of an incomparable row was the loudness one, and loudness has a
+    /// branch of its own. This sweeps all seven rows, on all three shapes of absence.
+    @Test("an absent side is empty on every row, never a fabricated figure")
+    func noRowFabricatesAValueForAnAbsentSide() throws {
+        let full = bundle(
+            levels: try levels(peak: 0.5, rms: 0.2), truePeak: try truePeak(0.9),
+            loudness: try loudness(-14.2), bandwidth: try bandwidth(16_000)
+        )
+        let empty = bundle()
+
+        for row in blocks(empty, empty).flatMap(\.rows) {
+            #expect(row.first.value == nil, "\(row.name) invented \(row.first.value ?? "") for the first file")
+            #expect(row.second.value == nil, "\(row.name) invented \(row.second.value ?? "") for the second file")
+            #expect(row.first.detail == nil && row.second.detail == nil)
+        }
+        for row in blocks(full, empty).flatMap(\.rows) {
+            #expect(row.second.value == nil, "\(row.name) invented \(row.second.value ?? "") for the absent side")
+            #expect(row.first.value != nil, "\(row.name) dropped the value the first file has")
+        }
+        for row in blocks(empty, full).flatMap(\.rows) {
+            #expect(row.first.value == nil, "\(row.name) invented \(row.first.value ?? "") for the absent side")
+            #expect(row.second.value != nil, "\(row.name) dropped the value the second file has")
+        }
+    }
+
     /// The four gaps produce four distinct sentences: a reader can tell *"the methods differ"* from
     /// *"this file had no value"*, which is exactly what task 6.4 requires.
     @Test("the four gaps are four different sentences")
@@ -682,6 +710,26 @@ struct MeasurementComparisonPresentationTests {
         #expect(MeasurementOutcomeDisplay.notComparable(reason: "x").isSecondary)
         // Every outcome is distinguishable by its text alone.
         #expect(Set(outcomes.map(\.text)).count == outcomes.count)
+    }
+
+    /// **The surface cannot reach a measurement bundle, so it cannot pair one with another operation's
+    /// comparison.**
+    ///
+    /// This is the alternative the fix rejected, pinned so it cannot creep back. Looking a missing
+    /// number up from a `ReportMeasurements` travelling beside the comparison would put two values and
+    /// one outcome on screen from two different places, free to belong to two different operations —
+    /// the defect `MeasurementComparisonAtomicityTests` exists for. The sub-section is given exactly one
+    /// thing, and everything it shows is derived from it.
+    @Test("the sub-section is given the comparison and nothing else")
+    func theSurfaceHasNoSecondSource() throws {
+        let section = MeasurementComparisonSection(comparison: nil)
+        let fields = Mirror(reflecting: section).children.compactMap(\.label)
+        #expect(fields == ["comparison"], "the sub-section grew a second source: \(fields)")
+
+        // And what it holds is the comparison, never a bundle either side could have been read from.
+        let held = Mirror(reflecting: section).children.first?.value
+        #expect(held is MeasurementComparison?)
+        #expect(!(held is ReportMeasurements), "a measurement bundle reached the surface")
     }
 
     /// **No aggregate of any kind**, mirroring the domain's own refusal: no count of how many differ,
