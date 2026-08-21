@@ -22,7 +22,7 @@ Build each pair as mono 48 kHz float WAV of one second unless the row says other
 | 7 | comb → 16 kHz @ **44.1 kHz** | same comb @ **48 kHz** | Integrated loudness | `-24.9 LUFS` · `-24.9 LUFS` · Different · `0.0 LU`, plus the line saying both round to the same figure |
 | 8 | comb → 16 kHz @ **88.2 kHz** | same comb @ **96 kHz** | Programme bandwidth | `16.1 kHz` · `16.1 kHz`, resolutions `23 Hz` · `23 Hz`, Indistinguishable at these resolutions |
 | 9 | comb → 16 000 Hz | comb → 16 023.4375 Hz | Programme bandwidth | `16.1 kHz` · `16.1 kHz` · **Separated at these resolutions**, plus the line saying they fall in different bins |
-| 10 | comb → 16 kHz, 1 s | same comb, **0.1 s** | Integrated loudness | `No value` · `No value` · *Not comparable — the second file has no value for this.* |
+| 10 | comb → 16 kHz, 1 s | same comb, **0.1 s** | Integrated loudness | `-24.9 LUFS` · `No value` · *Not comparable — the second file has no value for this.* |
 | 10 | " | " | True peak | `-12.21 dBTP` · `-12.21 dBTP` · Same — the absence took nothing with it |
 | 6 | comb → 16 kHz, **mono** | same comb, **stereo** | channel note, on three blocks | *Not compared per channel — the files carry 1 and 2 channels…* |
 | 6 | " | " | Integrated loudness | `-24.9 LUFS` · `-21.9 LUFS` · Different · `+3.0 LU` |

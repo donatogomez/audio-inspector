@@ -71,6 +71,13 @@ be promoted by claiming it.
       reason that occurs *while both sides are available* — the methods differ — which `ComparisonGap`'s
       shape makes unrepresentable by construction. `ReportMeasurements` now documents that it has two
       consumers and that export is only the first.
+      **Amended after group 6.** The gap carried the reason alone, and that dropped the surviving value:
+      a pair whose first file measured and whose second did not reached the surface as
+      `No value | No value`, false of the first file. It is now generic over its value and each case
+      carries exactly what exists, so the contradictory state is unrepresentable. The alternative —
+      passing both bundles to the surface so a formatter could look the number up — was refused for the
+      reason group 3 exists: two values and one outcome from two different places can belong to two
+      different operations. `MeasurementAbsenceTests`, and ADR-0024 §3.
 - [x] 2.4 Purity: synchronous, total, deterministic, no `throws`, no Foundation, no `URL`, no framework,
       no I/O. Domain tests only.
       **Done.** No Foundation, no I/O, no `URL`, no framework; boundaries green.
@@ -185,6 +192,11 @@ be promoted by claiming it.
       of them says anything failed**, because nothing did — the flow ran and both files were inspected.
       `methodsDiffer` is unreachable from production (group 5's own finding), so it is validated here and
       deliberately not in the manual battery.
+      **And the columns now agree with the sentence.** A headless render of the sub-section showed the
+      row saying *"the second file has no value"* while printing `No value` under **both** files, the
+      first of which has one. The value was already gone before the formatter saw it; the fix is in the
+      domain, and the surface shows each file's own figure beside the reason — including both figures
+      when the methods differ, which is the one gap that occurs while both sides measured.
 - [x] 6.5 Forbidden-vocabulary sweep over every string, extending the existing one with: master,
       remaster, transcode, upsample, lossy, compressed, dynamics, louder, quieter, hotter, better,
       worse, original, derived, generation, quality.

@@ -61,6 +61,25 @@ Loading, absent, failed and cancelled are collapsed to `nil` by the feature **be
 them, exactly as the export path already does it. The comparison therefore has no error case, nothing
 to await, and no way to confuse *"this measurement failed on this run"* with *"these two files differ."*
 
+**And an outcome that compared nothing still carries what each side had** — added after the surface
+existed, because leaving it out was a defect rather than a simplification. The first shape of
+`MeasurementGap` carried the reason alone, so a pair where the first file measured −24.9 LUFS and the
+second measured nothing arrived on screen with **no number on either side**: a row about a file that has
+a loudness printed *"No value"* under it, which is false of that file however true it is of the other.
+
+The alternative was to send both `ReportMeasurements` along beside the comparison so a formatter could
+look the number up. **That is refused**, and the refusal is the same one §2 makes: it would put two
+values and one outcome on screen from two different places, free to belong to two different operations,
+which is exactly the atomicity this change's stale handling exists to protect. The comparison is
+self-sufficient, so the value travels inside it.
+
+Each case carries exactly what exists and nothing more — `secondMissing` a first, `firstMissing` a
+second, `neitherPresent` none — so a gap naming a missing side while carrying a value for it is
+unrepresentable rather than merely untested. `methodsDiffer` is the one exception and the only case with
+optional payloads: it is a statement about the two **methodologies** and says nothing about presence, so
+whatever it carries cannot contradict it, and both numbers survive it. This adds no lifecycle, no error
+case and no second source; it only stops the domain from discarding a fact it was handed.
+
 ### 4. Two comparabilities, and method identity decides one of them
 
 A pair is comparable when both sides carry a value **and** the two were produced by methods whose
