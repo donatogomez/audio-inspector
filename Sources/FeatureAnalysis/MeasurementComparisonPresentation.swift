@@ -240,8 +240,11 @@ enum MeasurementComparisonFormatter {
         case let .incomparable(gap):
             MeasurementRowDisplay(
                 name: LoudnessCopy.title,
-                first: .noValue, second: .noValue,
-                outcome: .notComparable(reason: reason(for: gap)),
+                first: side(gap.first.map(HumanFormat.loudnessFullScale)),
+                second: side(gap.second.map(HumanFormat.loudnessFullScale)),
+                outcome: .notComparable(reason: reason(for: gap.reason)),
+                // **No difference, whatever survived.** Two numbers that are not on one scale cannot be
+                // subtracted, and one number cannot be subtracted from nothing.
                 difference: nil, precisionNote: nil
             )
         }
@@ -268,8 +271,8 @@ enum MeasurementComparisonFormatter {
         case let .incomparable(gap):
             MeasurementRowDisplay(
                 name: ProgrammeBandwidthCopy.title,
-                first: .noValue, second: .noValue,
-                outcome: .notComparable(reason: reason(for: gap)),
+                first: bandwidthSide(gap.first), second: bandwidthSide(gap.second),
+                outcome: .notComparable(reason: reason(for: gap.reason)),
                 difference: nil, precisionNote: nil
             )
         }
@@ -326,9 +329,15 @@ enum MeasurementComparisonFormatter {
                 precisionNote: precisionNote(.different, format(first), format(second))
             )
         case let .incomparable(gap):
+            // **Whatever survived stays on screen.** A file that measured keeps its number even when the
+            // pair cannot be compared: printing `No value` under it would be a false statement about
+            // that file, which is what the outcome beside it already tells the truth about.
             MeasurementRowDisplay(
-                name: name, first: .noValue, second: .noValue,
-                outcome: .notComparable(reason: reason(for: gap)), difference: nil, precisionNote: nil
+                name: name,
+                first: side(gap.first.map(format), detail: detail?.first),
+                second: side(gap.second.map(format), detail: detail?.second),
+                outcome: .notComparable(reason: reason(for: gap.reason)), difference: nil,
+                precisionNote: nil
             )
         }
     }
@@ -358,6 +367,23 @@ enum MeasurementComparisonFormatter {
 
     private static func side(_ value: String) -> MeasurementSideDisplay {
         MeasurementSideDisplay(value: value, detail: nil)
+    }
+
+    /// One side of a row nothing could be compared on: its own value where it has one, and the words
+    /// for an absence where it does not. **`nil` in, `nil` out** — the view says `No value`, never a
+    /// zero and never a bare dash.
+    private static func side(_ value: String?, detail: String? = nil) -> MeasurementSideDisplay {
+        MeasurementSideDisplay(value: value, detail: value == nil ? nil : detail)
+    }
+
+    /// A surviving bandwidth reading keeps its resolution beside it, exactly as a compared one does —
+    /// the figure is only interpretable against the grid it was quantised onto (ADR-0023).
+    private static func bandwidthSide(_ reading: SignificantBandwidth.Channel?) -> MeasurementSideDisplay {
+        guard let reading else { return .noValue }
+        return MeasurementSideDisplay(
+            value: HumanFormat.programmeBandwidth(reading.frequency, resolution: reading.resolution),
+            detail: MeasurementComparisonCopy.resolution(reading.resolution)
+        )
     }
 
     /// The per-channel values of both sides, or `nil` when no index was compared.
@@ -390,9 +416,9 @@ enum MeasurementComparisonFormatter {
             case let .different(first, second):
                 firsts.append("\(label): \(format(first))")
                 seconds.append("\(label): \(format(second))")
-            case .incomparable:
-                firsts.append("\(label): \(MeasurementComparisonCopy.noValue)")
-                seconds.append("\(label): \(MeasurementComparisonCopy.noValue)")
+            case let .incomparable(gap):
+                firsts.append("\(label): \(gap.first.map(format) ?? MeasurementComparisonCopy.noValue)")
+                seconds.append("\(label): \(gap.second.map(format) ?? MeasurementComparisonCopy.noValue)")
             }
         }
         return (firsts.joined(separator: " · "), seconds.joined(separator: " · "))
@@ -409,12 +435,16 @@ enum MeasurementComparisonFormatter {
             case let .indistinguishable(first, second), let .separated(first, second):
                 firsts.append("\(label): \(HumanFormat.programmeBandwidth(first.frequency, resolution: first.resolution))")
                 seconds.append("\(label): \(HumanFormat.programmeBandwidth(second.frequency, resolution: second.resolution))")
-            case .incomparable:
-                firsts.append("\(label): \(MeasurementComparisonCopy.noValue)")
-                seconds.append("\(label): \(MeasurementComparisonCopy.noValue)")
+            case let .incomparable(gap):
+                firsts.append("\(label): \(gap.first.map(bandwidthText) ?? MeasurementComparisonCopy.noValue)")
+                seconds.append("\(label): \(gap.second.map(bandwidthText) ?? MeasurementComparisonCopy.noValue)")
             }
         }
         return (firsts.joined(separator: " · "), seconds.joined(separator: " · "))
+    }
+
+    private static func bandwidthText(_ reading: SignificantBandwidth.Channel) -> String {
+        HumanFormat.programmeBandwidth(reading.frequency, resolution: reading.resolution)
     }
 
     /// Why the per-channel figures were not compared, when they were not.
@@ -434,7 +464,7 @@ enum MeasurementComparisonFormatter {
     /// **None of these is a failure**, and none of them says so. A comparison that could not be made is
     /// not a comparison that broke: the flow ran, both files were inspected, and one of them simply has
     /// no value to put here.
-    static func reason(for gap: MeasurementGap) -> String {
+    static func reason(for gap: MeasurementGapReason) -> String {
         switch gap {
         case .secondMissing: MeasurementComparisonCopy.secondHasNoValue
         case .firstMissing: MeasurementComparisonCopy.firstHasNoValue

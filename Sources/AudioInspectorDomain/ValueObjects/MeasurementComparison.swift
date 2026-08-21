@@ -1,24 +1,96 @@
-/// Why two measurements could not be compared.
+/// Why two measurements could not be compared, stripped of the values — for the one place that has
+/// none to carry.
 ///
-/// It is `ComparisonGap`'s sibling and deliberately **not** the same type. That one splits five
-/// property states so that "both available" has no spelling; this one has a reason that occurs *while*
-/// both sides are available — the methods that produced them do not mean the same thing — so the same
-/// trick does not apply and pretending it did would be worse than a second type.
-///
-/// **It carries a reason, never a message.** The words a surface uses live in presentation, as they do
-/// for `ComparisonGap`.
-public enum MeasurementGap: Sendable, Equatable {
+/// `MeasurementGap` carries this plus whatever survived. They are two types rather than one because
+/// `ChannelComparison` genuinely has nothing to keep: when no index was compared there are no
+/// per-channel figures to show, and a generic parameter existing only to be empty would be a worse
+/// answer than a second name.
+public enum MeasurementGapReason: Sendable, Equatable {
     /// The first side had a value; the second had none.
     case secondMissing
     /// The second side had a value; the first had none.
     case firstMissing
     /// Neither side had a value.
     case neitherPresent
-    /// Both sides had a value, produced by methods whose numbers do not mean the same thing.
+    /// Both sides were measured by methods whose numbers do not mean the same thing.
+    case methodsDiffer
+}
+
+/// Why two measurements could not be compared — **and whatever value survived it.**
+///
+/// It is `ComparisonGap`'s sibling and deliberately **not** the same type. That one splits five
+/// property states so that "both available" has no spelling; this one has a reason that occurs *while*
+/// both sides are available — the methods that produced them do not mean the same thing — so the same
+/// trick does not apply and pretending it did would be worse than a second type.
+///
+/// **It carries a reason and values, never a message.** The words a surface uses live in presentation,
+/// as they do for `ComparisonGap`.
+///
+/// ## Why it carries the values at all
+///
+/// The first shape of this type carried the reason alone, and that lost something real. A pair where the
+/// first file measured −24.9 LUFS and the second measured nothing reached the surface with **no number
+/// on either side** — so a row about a file that has a loudness printed *"No value"* under it. The
+/// sentence was true of the second file and false of the first, and the surface had no honest way to fix
+/// it: the value it needed had already been dropped here.
+///
+/// The alternative was to send both `ReportMeasurements` along beside the comparison so a formatter
+/// could look the number up. That reintroduces exactly the defect group 3 was written against — two
+/// values and one outcome arriving on screen from two different places, free to belong to two different
+/// operations. **The comparison has to be self-sufficient**, so the value travels inside it.
+///
+/// ## Why each case carries exactly what it does
+///
+/// A gap that named a missing side while carrying a value for it would be a contradiction, so no case
+/// has a field one could go in: `secondMissing` has a first and nothing else, `firstMissing` has a
+/// second and nothing else, and `neitherPresent` has none. The state is unrepresentable rather than
+/// merely untested.
+///
+/// `methodsDiffer` is the exception, and it is the only one whose payloads are optional. It is a
+/// statement about the two **methodologies** and says nothing about presence — it is equally true when
+/// both sides measured and when one of them could not — so whatever it carries cannot contradict it.
+public enum MeasurementGap<Value>: Sendable, Equatable where Value: Sendable & Equatable {
+    /// The first side had a value; the second had none. The first side's value travels with it.
+    case secondMissing(first: Value)
+    /// The second side had a value; the first had none.
+    case firstMissing(second: Value)
+    /// Neither side had a value. **Nothing is carried, and nothing is invented** — a zero here would
+    /// manufacture a measurement out of an absence.
+    case neitherPresent
+    /// Both sides were measured by methods whose numbers do not mean the same thing.
     ///
     /// **This is not a defect of either file**, and a surface must not present it as one. It says the
-    /// two numbers are not on the same scale, which is a fact about how they were measured.
-    case methodsDiffer
+    /// two numbers are not on the same scale, which is a fact about how they were measured — and both
+    /// numbers travel with it, because a reader can still be shown what each file measured.
+    case methodsDiffer(first: Value?, second: Value?)
+
+    /// The reason alone, for a caller that only needs to say *why*.
+    public var reason: MeasurementGapReason {
+        switch self {
+        case .secondMissing: .secondMissing
+        case .firstMissing: .firstMissing
+        case .neitherPresent: .neitherPresent
+        case .methodsDiffer: .methodsDiffer
+        }
+    }
+
+    /// What the first file measured, where it measured anything.
+    public var first: Value? {
+        switch self {
+        case let .secondMissing(value): value
+        case .firstMissing, .neitherPresent: nil
+        case let .methodsDiffer(value, _): value
+        }
+    }
+
+    /// What the second file measured, where it measured anything.
+    public var second: Value? {
+        switch self {
+        case .secondMissing, .neitherPresent: nil
+        case let .firstMissing(value): value
+        case let .methodsDiffer(_, value): value
+        }
+    }
 }
 
 /// What comparing one measured figure across two files establishes.
@@ -34,16 +106,17 @@ public enum MeasurementValueComparison<Value>: Sendable, Equatable where Value: 
     case same(Value)
     /// Both sides carried a value and the values are not equal.
     case different(first: Value, second: Value)
-    /// Nothing was compared.
-    case incomparable(MeasurementGap)
+    /// Nothing was compared — and whichever value existed travels with the reason.
+    case incomparable(MeasurementGap<Value>)
 
-    /// The single rule, written once. Two optionals compare only when both are present; the caller has
-    /// already decided method compatibility and passes `methodsDiffer` rather than two values.
+    /// The single rule, written once. Two optionals compare only when both are present, and a side that
+    /// **is** present keeps its value even when the other is not: the caller has already decided method
+    /// compatibility and passes a `methodsDiffer` gap rather than two values.
     init(first: Value?, second: Value?) {
         switch (first, second) {
         case let (.some(a), .some(b)): self = a == b ? .same(a) : .different(first: a, second: b)
-        case (.some, .none): self = .incomparable(.secondMissing)
-        case (.none, .some): self = .incomparable(.firstMissing)
+        case let (.some(a), .none): self = .incomparable(.secondMissing(first: a))
+        case let (.none, .some(b)): self = .incomparable(.firstMissing(second: b))
         case (.none, .none): self = .incomparable(.neitherPresent)
         }
     }
@@ -63,7 +136,10 @@ public enum ChannelComparison<Comparison>: Sendable, Equatable where Comparison:
     /// the layout claim the pipeline refuses to make. The overall figures still compare.
     case countsDiffer(first: Int, second: Int)
     /// Nothing was compared at all — a side was missing, or the methods differ.
-    case incomparable(MeasurementGap)
+    ///
+    /// **The reason alone**, because there are no per-channel figures to keep: this case says no index
+    /// was compared, and the overall figures beside it carry whatever survived.
+    case incomparable(MeasurementGapReason)
 }
 
 /// What comparing two integrated loudness measurements establishes.
@@ -83,8 +159,10 @@ public enum LoudnessComparison: Sendable, Equatable {
     case same(Double)
     /// Both sides measured, compatibly, and the values differ.
     case different(first: Double, second: Double, differenceLU: Double)
-    /// Nothing was compared.
-    case incomparable(MeasurementGap)
+    /// Nothing was compared — and whichever side measured keeps its value. **No difference is carried
+    /// here**: a difference needs two numbers on one scale, and that is exactly what this case says
+    /// there are not.
+    case incomparable(MeasurementGap<Double>)
 }
 
 /// What comparing two programme bandwidth readings establishes.
@@ -115,8 +193,8 @@ public enum BandwidthReadingComparison: Sendable, Equatable {
     case indistinguishable(first: SignificantBandwidth.Channel, second: SignificantBandwidth.Channel)
     /// The cells do not overlap.
     case separated(first: SignificantBandwidth.Channel, second: SignificantBandwidth.Channel)
-    /// Nothing was compared.
-    case incomparable(MeasurementGap)
+    /// Nothing was compared — and whichever side produced a reading keeps it, resolution included.
+    case incomparable(MeasurementGap<SignificantBandwidth.Channel>)
 
     /// The rule, applied to two readings already known to come from compatible methods.
     init(first: SignificantBandwidth.Channel, second: SignificantBandwidth.Channel) {
@@ -265,10 +343,13 @@ public struct MeasurementComparison: Sendable, Equatable {
 // MARK: - The four rules, each written out because the four are not the same rule
 
 private extension MeasurementComparison {
-    /// The gap two absent sides describe, or `nil` when both are present.
-    static func gap<A, B>(_ first: A?, _ second: B?) -> MeasurementGap? {
+    /// Why no index was compared, from which side had a measurement at all.
+    ///
+    /// **The reason without the values**, because `ChannelComparison` has none to keep — the overall
+    /// figures beside it carry whatever survived, each one already knowing its own.
+    static func channelReason<A, B>(_ first: A?, _ second: B?) -> MeasurementGapReason {
         switch (first, second) {
-        case (.some, .some): nil
+        case (.some, .some): .neitherPresent // unreachable: the caller has already returned
         case (.some, .none): .secondMissing
         case (.none, .some): .firstMissing
         case (.none, .none): .neitherPresent
@@ -291,24 +372,26 @@ private extension MeasurementComparison {
     static func compareSignalLevels(
         _ first: SignalLevelMetrics?, _ second: SignalLevelMetrics?
     ) -> SignalLevelsComparison {
-        guard let a = first, let b = second else {
-            let reason = gap(first, second) ?? .neitherPresent
-            return SignalLevelsComparison(
-                overall: SignalLevelFiguresComparison(
-                    peakSample: .incomparable(reason), rms: .incomparable(reason),
-                    dcOffset: .incomparable(reason), clippedSampleCount: .incomparable(reason)
-                ),
-                channels: .incomparable(reason)
-            )
-        }
+        // **Optional chaining spells all four states, so the whole-metric guard is gone.** It used to
+        // stamp one reason across the four figures and drop every number with it; each figure now
+        // decides for itself, and a file that measured keeps what it measured.
         let overall = SignalLevelFiguresComparison(
-            peakSample: MeasurementValueComparison(first: a.overallPeakSample, second: b.overallPeakSample),
-            rms: MeasurementValueComparison(first: a.overallRMS, second: b.overallRMS),
-            dcOffset: MeasurementValueComparison(first: a.overallDCOffset, second: b.overallDCOffset),
+            peakSample: MeasurementValueComparison(
+                first: first?.overallPeakSample, second: second?.overallPeakSample
+            ),
+            rms: MeasurementValueComparison(first: first?.overallRMS, second: second?.overallRMS),
+            dcOffset: MeasurementValueComparison(
+                first: first?.overallDCOffset, second: second?.overallDCOffset
+            ),
             clippedSampleCount: MeasurementValueComparison(
-                first: a.overallClippedSampleCount, second: b.overallClippedSampleCount
+                first: first?.overallClippedSampleCount, second: second?.overallClippedSampleCount
             )
         )
+        guard let a = first, let b = second else {
+            return SignalLevelsComparison(
+                overall: overall, channels: .incomparable(channelReason(first, second))
+            )
+        }
         guard a.channels.count == b.channels.count else {
             return SignalLevelsComparison(
                 overall: overall,
@@ -325,11 +408,22 @@ private extension MeasurementComparison {
         _ first: TruePeakMeasurement?, _ second: TruePeakMeasurement?
     ) -> TruePeakComparison {
         guard let a = first, let b = second else {
-            let reason = gap(first, second) ?? .neitherPresent
-            return TruePeakComparison(overall: .incomparable(reason), channels: .incomparable(reason))
+            return TruePeakComparison(
+                overall: MeasurementValueComparison(
+                    first: first?.overallTruePeak, second: second?.overallTruePeak
+                ),
+                channels: .incomparable(channelReason(first, second))
+            )
         }
         guard MethodCompatibility.compatible(a.method, b.method) else {
-            return TruePeakComparison(overall: .incomparable(.methodsDiffer), channels: .incomparable(.methodsDiffer))
+            // Both files measured; the two numbers are simply not on one scale. They travel with the
+            // gap, because a reader can still be shown what each file measured.
+            return TruePeakComparison(
+                overall: .incomparable(
+                    .methodsDiffer(first: a.overallTruePeak, second: b.overallTruePeak)
+                ),
+                channels: .incomparable(.methodsDiffer)
+            )
         }
         let overall = MeasurementValueComparison(first: a.overallTruePeak, second: b.overallTruePeak)
         guard a.channels.count == b.channels.count else {
@@ -348,8 +442,18 @@ private extension MeasurementComparison {
     static func compareLoudness(
         _ first: LoudnessMeasurement?, _ second: LoudnessMeasurement?
     ) -> LoudnessComparison {
-        guard let a = first, let b = second else { return .incomparable(gap(first, second) ?? .neitherPresent) }
-        guard MethodCompatibility.compatible(a.method, b.method) else { return .incomparable(.methodsDiffer) }
+        guard let a = first, let b = second else {
+            switch (first, second) {
+            case let (.some(x), .none): return .incomparable(.secondMissing(first: x.integratedLoudness))
+            case let (.none, .some(y)): return .incomparable(.firstMissing(second: y.integratedLoudness))
+            default: return .incomparable(.neitherPresent)
+            }
+        }
+        guard MethodCompatibility.compatible(a.method, b.method) else {
+            return .incomparable(
+                .methodsDiffer(first: a.integratedLoudness, second: b.integratedLoudness)
+            )
+        }
         guard a.integratedLoudness != b.integratedLoudness else { return .same(a.integratedLoudness) }
         // `second − first`, in the order the user supplied the files. LUFS is already logarithmic, so
         // this is a plain subtraction and the result is LU. Nothing is converted and nothing is rounded.
@@ -364,12 +468,15 @@ private extension MeasurementComparison {
         _ first: SignificantBandwidth?, _ second: SignificantBandwidth?
     ) -> ProgrammeBandwidthComparison {
         guard let a = first, let b = second else {
-            let reason = gap(first, second) ?? .neitherPresent
-            return ProgrammeBandwidthComparison(overall: .incomparable(reason), channels: .incomparable(reason))
+            return ProgrammeBandwidthComparison(
+                overall: reading(first?.overall, second?.overall),
+                channels: .incomparable(channelReason(first, second))
+            )
         }
         guard MethodCompatibility.compatible(a.method, b.method) else {
             return ProgrammeBandwidthComparison(
-                overall: .incomparable(.methodsDiffer), channels: .incomparable(.methodsDiffer)
+                overall: .incomparable(.methodsDiffer(first: a.overall, second: b.overall)),
+                channels: .incomparable(.methodsDiffer)
             )
         }
         let overall = reading(a.overall, b.overall)
@@ -388,9 +495,11 @@ private extension MeasurementComparison {
     static func reading(
         _ first: SignificantBandwidth.Channel?, _ second: SignificantBandwidth.Channel?
     ) -> BandwidthReadingComparison {
-        guard let a = first, let b = second else {
-            return .incomparable(gap(first, second) ?? .neitherPresent)
+        switch (first, second) {
+        case let (.some(a), .some(b)): return BandwidthReadingComparison(first: a, second: b)
+        case let (.some(a), .none): return .incomparable(.secondMissing(first: a))
+        case let (.none, .some(b)): return .incomparable(.firstMissing(second: b))
+        case (.none, .none): return .incomparable(.neitherPresent)
         }
-        return BandwidthReadingComparison(first: a, second: b)
     }
 }
