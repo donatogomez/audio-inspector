@@ -31,16 +31,20 @@ on 2026-08-08. Partial evidence does not promote it, by the ADR's own words.
 
 **Next step: a person runs the battery.** Everything is prepared — twelve fixtures, six pairs, every
 expected string measured through production *before* the app was opened, in the change's `README.md`;
-the app cleaned and rebuilt from the branch head. `docs/manual-validation-mvp.md` (2026-08-21) has the
+the app cleaned and rebuilt from the branch head. **The pair-10 row now reads the first file's own
+loudness beside `No value` for the second**, so that expectation in the battery has changed. `docs/manual-validation-mvp.md` (2026-08-21) has the
 re-run instructions and what blocked it. Then decide ADR-0024, then push, PR, merge, and
 `openspec archive` — in that order.
 
-**Three things for that person to rule on**, seen in a headless render and deliberately not acted on:
+**One of the three render findings was a defect and is fixed.** A missing measurement showed `No value`
+in **both** columns although the first file had one. The value was gone before the formatter saw it:
+`MeasurementGap` carried only a reason. It is now generic over its value and each case carries exactly
+what exists, so the surface shows each file's own figure beside the reason — and both figures when the
+methods differ. Passing the two bundles to the surface instead was refused: two values and one outcome
+from two different places can belong to two different operations. ADR-0024 §3.
 
-- A missing measurement shows `No value` in **both** columns, though the first file has a value. The
-  domain's gap carries no surviving number, so the surface has none to show; fixing it means publishing
-  both bundles beside the comparison, which is a flow change with the atomicity cost group 3 exists to
-  prevent.
+**Two remain, both cosmetic, deliberately untouched for the person validating:**
+
 - Every single-row block repeats its own name — `True peak` above a row called `True peak`. Only
   `Signal levels` genuinely groups.
 - The channel-count note repeats verbatim in three blocks, and the rounding note can land on three rows
