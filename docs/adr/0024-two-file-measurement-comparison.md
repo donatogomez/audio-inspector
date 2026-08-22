@@ -1,10 +1,12 @@
 # ADR-0024: Comparing measurements between two files, and why only one of them carries a difference
 
-- **Status**: **Proposed.** It stays Proposed until three things are true: the comparison exists against
-  production code and is shown to reuse the second file's *already-computed* measurements rather than
-  recomputing anything; the resolution-aware bandwidth rule is demonstrated on fixture pairs that sit on
-  both sides of it; and the surface is validated by a person looking at it. Partial evidence does not
-  promote it.
+- **Status**: **Accepted** (2026-08-22). Promoted on the three conditions this record set for itself and
+  on nothing else: the comparison exists **against production code** and reuses the second file's
+  already-computed measurements — one decoder and one sample read per file, counted through the real
+  decoder — rather than recomputing anything; the resolution-aware bandwidth rule is demonstrated on
+  production readings sitting on **both** sides of it, the exact boundary included; and the surface was
+  **validated by a person looking at it**, on a build postdating the surviving-value fix. The evidence,
+  what class each piece of it belongs to, and what it does **not** cover, is in **Promotion** below.
 - **Date**: 2026-08-20
 - **Deciders**: Project maintainer
 - **Related**: **ADR-0017** (two-file technical comparison — this record *extends its vocabulary to a
@@ -207,6 +209,80 @@ thing in both, which is exactly the layout claim the pipeline refuses to make.
 - **Aggregates.** No score, no similarity, no count of differences, no `allSame`. ADR-0017's reasoning
   applies verbatim: *"every comparable measurement agreed"* and *"the two files are the same"* are
   different statements, and one bit cannot hold both.
+
+## Promotion — what was demonstrated, and what it does not cover
+
+Recorded when this moved from `Proposed` to `Accepted`, on `add-two-file-measurement-comparison`'s
+groups 5, 6 and 8. Three conditions, each read literally rather than by summary, and each labelled with
+the kind of evidence that settled it.
+
+**1. The comparison against production code, reusing what was already measured — automated.** Comparing
+a second file was already paying for its four measurements and throwing them away, in two places the
+code named deliberately. What promotes this is not that claim but its inversion:
+`ComparisonMeasurementsReachTheComparisonTests` drives the real coordinator and the real
+`AVFoundationAudioDecoder` over a written file and counts **one decoder and one decode call** for the
+compared file, with the four measurements present and reaching the comparison. Driven end to end over
+two real files, `MeasurementComparisonProductionReachTests` counts two and two — one per file, and not
+one more — and asserts the flow publishes exactly `MeasurementComparison(first:second:)` over the two
+settled bundles. A negative control adding a second shared pass fails the read count directly. **The
+compute cost of this change is zero; what it adds is retention** of four small value types per side.
+
+**2. The cell rule on both sides, from readings production produced — automated.** The rule is
+`|f₁ − f₂| < (r₁ + r₂)/2`, and both sides of it are reached by real files rather than by constructed
+measurements. 88.2 kHz and 96 kHz put one 16 kHz edge at 16 101.09 Hz on a 22.97 Hz grid and
+16 101.56 Hz on a 23.44 Hz one — **centres 0.47 Hz apart against a 23.20 Hz boundary, and therefore
+`indistinguishable` while being unequal**, which is exactly what a rule comparing hertz for equality
+would get wrong. Two edges one bin apart land 23.4375 Hz apart against a 23.4375 Hz boundary: **the
+boundary itself, reachable from production**, and `separated`, because the inequality is strict. Four
+negative controls bite — equality of hertz, a `<=` boundary, one side's resolution used for both, and
+never separating. `MeasurementComparisonPairsTests`.
+
+**3. The surface, validated by a person — manual, and the observation is the operator's own.** On
+2026-08-22 a person ran the seven-pair battery against the real application on a build postdating the
+surviving-value fix, and reported what `docs/manual-validation-mvp.md` records verbatim. **This session
+did not see the app**: Screen Recording and Accessibility are refused to it, two attempts are recorded
+above that date, and no headless render or source reading stands in for this condition.
+
+What was seen: a 6 dB gain reading `+6.0 LU` on the loudness row **and nowhere else**; the same content
+at two rates comparing across two K-weighting constructions with no identifier on screen; two grids
+reading `Indistinguishable at these resolutions` and not `Same`; two edges one bin apart reading
+`Separated at these resolutions` with the bins note, **intelligible although both displayed values read
+16.1 kHz** — the one point in this surface that only a person could settle; a missing loudness showing
+the other file's −24.9 LUFS beside `No value`, and its mirror showing the figure follow the file rather
+than the column; and a channel-count mismatch keeping the overall figures while refusing to compare an
+index. The operator reported **no language ranking the two files, nothing inviting an inference about a
+master, a remaster, a transcode or a source, no outcome carried by colour, and no blocking defect**.
+
+### What this promotion does not cover, and is not claimed to
+
+- **It establishes facts, and no more.** Nothing here says whether two files hold the same master,
+  whether one is a remaster, a transcode, an upsample or a lossy source, which has more dynamic range,
+  which is of higher quality, or which is worth keeping. Those need evidence, alternatives and a
+  confidence level, and are the Findings capability's. This is a producer of facts for it, and the type
+  provides no field in which such a conclusion could be written.
+- **`incomparable(.methodsDiffer)` was not observed by anyone, and cannot be.** Measured across five
+  rates in mono and stereo, production produces one true peak method, one bandwidth identity and one
+  loudness algorithm carrying exactly the two allow-listed weightings, so **no pair of real files can
+  reach it** (`MeasurementComparisonProductionReachTests`). It is pinned in the domain and presentation
+  suites, and the battery names the exclusion rather than faking it with a public setting added so a
+  screenshot could be taken. The day a second factor, identifier or third weighting appears, that test
+  fails and the new pair is decided rather than discovered inside a comparison.
+- **The manual pass is one observation, not a regression test**, on one machine. Light, dark and window
+  resizing were **not** reported — ADR-0019's pass covered them and this one, like ADR-0023's, is
+  narrower. DC offset, clipped samples and the block titles were not individually reported, and no
+  word-by-word read of every string was claimed; the vocabulary sweep in
+  `MeasurementComparisonPresentationTests` covers every string the sub-section can render, which is
+  exhaustive where a by-eye pass is sampled.
+- **No VoiceOver coverage, and the traversal gap is unchanged.** It belongs to ADR-0015 and ADR-0017,
+  this change adds a sub-section to the same scrolling area every other analysis lives in, and it
+  inherits the gap rather than fixing or worsening it. **ADR-0017 is not promoted by this record and is
+  not touched by it** — that ADR's own condition is about the technical comparison's surface, and
+  nothing here discharges it.
+- **One cosmetic defect stands, reported and not fixed.** The channel-mismatch note repeats verbatim in
+  three blocks. The operator classified it as redundant but non-blocking, and it was left alone rather
+  than turned into production work inside a validation pass.
+- **The exported document is untouched and was not read by hand**, because there is nothing new in it:
+  a comparison document is a kind of its own and is deferred by §8 and ADR-0017 §9.
 
 ## Consequences
 

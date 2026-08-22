@@ -32,4 +32,4 @@ disguise. Copy `0000-adr-template.md` for new ones.
 | [0021](0021-one-pcm-read-per-inspection.md) | One PCM read per inspection — the waveform joins the shared read | Accepted |
 | [0022](0022-integrated-loudness-scope-and-compliance.md) | Integrated loudness — how far compliance is claimed, and what the domain stores | Accepted |
 | [0023](0023-significant-bandwidth-as-a-measured-fact.md) | Significant bandwidth as a measured fact, independent of the spectrogram | Accepted |
-| [0024](0024-two-file-measurement-comparison.md) | Comparing measurements between two files — facts only, and only one difference | Proposed |
+| [0024](0024-two-file-measurement-comparison.md) | Comparing measurements between two files — facts only, and only one difference | Accepted |
