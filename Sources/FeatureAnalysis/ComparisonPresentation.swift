@@ -10,8 +10,15 @@ public enum ComparisonPresentation: Equatable, Sendable {
     case none
     /// A second file is being chosen or inspected. The report stays fully visible.
     case loading
-    /// A comparison of the report on screen against a second file.
-    case ready(FileComparison)
+    /// A comparison of the report on screen against a second file, and — once **both** files have
+    /// settled their measurements — the comparison of those too.
+    ///
+    /// **The second is optional and the first is not**, which is the whole shape of this state and the
+    /// one the flow already publishes. A technical comparison is complete the moment the second report
+    /// exists and must not wait for a PCM read; a measurement comparison cannot exist until both sides
+    /// have finished measuring. One case with an optional rather than two states, because they are one
+    /// answer about one pair of files.
+    case ready(FileComparison, measurements: MeasurementComparison?)
     /// The second file could not be opened for inspection at all — a failure of the comparison, never
     /// of the report on screen.
     case failed(message: String)

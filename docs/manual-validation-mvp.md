@@ -1042,3 +1042,211 @@ this change adds a section to the same scrolling area every other analysis lives
 gap rather than fixing or worsening it. It does not claim the exported document was read by hand — that
 is pinned by `JSONReportExportProgrammeBandwidthTests` and `ProgrammeBandwidthExportFlowTests`, and no
 manual export was reported. And it is one machine, one appearance, one window size.
+
+## The measurement comparison's manual validation — prepared, then blocked by the same permissions (2026-08-21)
+
+Change `add-two-file-measurement-comparison`. Its only outstanding gate is ADR-0024's third promotion
+condition — *"the surface is validated by a person looking at it"* — and **that did not happen.** This
+entry records what was prepared, what blocked it, what stands in for observation, and the limit of that
+substitute, so the next attempt starts from a runnable state rather than repeating the preparation.
+
+### What was prepared
+
+**Twelve fixtures, six pairs**, written with the same `AudioFixtureSupport` writer the tests use, into a
+scratch directory outside the repository. Every expected figure was measured **through the production
+path before anything was opened** — file → `AVFoundationAudioDecoder` → `SharedPCMAnalysisGeneration` →
+`FeatureImport`'s settled collapse → `MeasurementComparison` → `MeasurementComparisonFormatter` — so a
+person running the pass reads the surface against numbers that already exist. The pairs are the battery
+in the change's `README.md`: gain-only, cross-weighting loudness, bandwidth indistinguishable, bandwidth
+separated, a missing measurement, and a channel-count mismatch.
+
+The app was **cleaned and rebuilt** from the branch head, and the binary confirmed newer than the head
+commit, against the stale-instance trap this document records at 2026-08-11. No instance was running
+before the build.
+
+### What blocked the pass
+
+The same two permissions that blocked `add-two-file-technical-comparison`'s group 7 on 2026-08-08, in
+the same way, verified rather than assumed:
+
+- **Screen Recording** — `screencapture` fails with `could not create image from display`. No screenshot
+  of the running app can be obtained.
+- **Accessibility** — `osascript`/`System Events` can list process names and nothing more; reading a
+  window's accessibility tree fails with *"osascript no tiene permitido el acceso de ayuda"* (−1719). So
+  the file panel cannot be driven, *Compare with another file…* cannot be clicked, and no second file
+  can be chosen.
+
+Neither is grantable from an unattended session, and this project's own rule forbids changing security
+or privacy settings on its own. No further diagnosis was attempted, in keeping with the same
+instruction the 2026-08-08 entry gives itself.
+
+### What stands in for observation, and its limit
+
+**The sub-section was rendered headlessly** — `ImageRenderer` over `MeasurementComparisonSection`, fed a
+`MeasurementComparison` built by the production path from real files — at two widths and in both
+appearances, and the images were inspected. That is more than a source read and **less than the
+condition ADR-0024 sets**: it renders one component in isolation, not the application, so it says
+nothing about the sub-section's placement beneath the technical rows in the real window, the flow that
+reaches it, a real resize, or VoiceOver.
+
+What the renders showed, recorded as what they are — component-level evidence, not the pass:
+
+- The four metrics appear in the report's own order; the difference column carries `+6.0 LU` on the
+  loudness row and is empty on the other six; bandwidth reads `Indistinguishable at these resolutions`
+  and `Separated at these resolutions` with each side's `Analysis resolution: 23 Hz` beneath its value.
+- At 520 pt nothing truncates: the outcome wraps to two lines and the resolutions wrap beneath their
+  values. `Indistinguishable` hyphenates.
+- In dark appearance the content is identical and legible; no outcome is distinguished by colour — the
+  only colour distinction anywhere is `.secondary` on already-worded explanatory text.
+
+**Three observations that a person should rule on**, raised here rather than acted on, because the
+condition this blocks is precisely a person's judgement:
+
+1. **A missing measurement shows `No value` in *both* columns.** In the pair-10 render, file A has a
+   loudness of −24.9 LUFS and the row reads `No value` · `No value` · *"Not comparable — the second file
+   has no value for this."* The outcome names the right side, but the first column asserts an absence
+   about a file that has a value. The cause is structural: the domain's gap carries no surviving number,
+   so the surface has none to show. Fixing it means publishing both measurement bundles beside the
+   comparison, which is a flow change with the atomicity cost group 3 exists to prevent — not a change
+   to make on a render.
+2. **Every single-row block repeats its own name.** `True peak` appears as a group title immediately
+   above a row called `True peak`, and likewise for integrated loudness and programme bandwidth. Only
+   `Signal levels` genuinely groups. Cosmetic.
+3. **The channel-count note repeats verbatim in three blocks**, and the rounding note can appear on
+   three rows of one pair. Both are correct and both are wordy.
+
+### Re-running this pass
+
+Grant **Screen Recording** and **Accessibility** to the process that runs the shell commands (System
+Settings → Privacy & Security), confirm both with `screencapture` and an `osascript` window read, then
+regenerate the fixtures — the change's `README.md` states each pair's signal, rate, channel count and
+duration, and `MeasurementComparisonSurfaceTests` writes exactly the same ones — rebuild, launch with
+`open -n`, and work the battery in that README. The expected strings are in it, and the automated
+suites assert every one of them, so what the pass adds is that they reach the screen, in the right
+place, in a real window.
+
+### Consequence
+
+**ADR-0024 stays `Proposed`.** Its Status line has said since its first commit that partial evidence
+does not promote it, and two of its three conditions are met while the third — the one this entry is
+about — is not. Nothing in the ADR, `tasks.md` or this document has been reworded to close that gap.
+
+### Retry (2026-08-21) — still blocked, on a build that now carries the absence fix
+
+Attempted again after the defect the headless render found was fixed. **Both permissions are refused in
+exactly the same way**, verified with four probes rather than assumed: `screencapture` produces no image
+(`could not create image from display`); `System Events` lists process names — which needs no
+Accessibility grant — but reading a window fails with −1719 and reading an `AX` attribute fails with
+−1728. No further diagnosis, per this document's own standing instruction.
+
+Two things changed and are recorded so the next attempt does not validate the wrong thing:
+
+- **The app was cleaned and rebuilt from `f2058d2`**, so the binary now postdates the fix in `97a4dc0`.
+  The build prepared on 2026-08-20 predates it and must not be used.
+- **The battery's pair-10 expectation changed with the fix**, and gained its mirror. A row where the
+  first file measured and the second did not now reads `-24.9 LUFS` · `No value`, and the reversed pair
+  reads `No value` · `-24.9 LUFS`. Both are in the change's `README.md` as pairs 10 and 10R, and both
+  were measured through the production path before the app was opened.
+
+**No headless render was produced this time.** The one on 2026-08-20 had a job — it found a defect — and
+it is not evidence for this condition, so repeating it would only pad the record.
+
+**ADR-0024 stays `Proposed`**, for the same reason and on the same words: partial evidence does not
+promote it.
+
+## The measurement comparison — passed, on a post-fix build (2026-08-22)
+
+Change `add-two-file-measurement-comparison`. **A person ran the battery against the real application**
+and reported what follows; it is recorded exactly as reported. The two blocked attempts above
+(2026-08-20, 2026-08-21) are superseded by this, not deleted — the preparation they describe is what
+this pass ran against.
+
+**The observation is the operator's own.** This session did not see the app: Screen Recording and
+Accessibility are still refused to it, and no attempt was made to work around that. Nothing below was
+produced by a test, a headless render, or a reading of the source.
+
+**The build.** The app was cleaned and rebuilt from `f2058d2`, so the binary postdates the surviving-value
+fix in `97a4dc0`. The seven pairs are the ones in the change's `README.md`, generated outside the
+repository, with every expected figure measured through the production path **before** the app was
+opened.
+
+### Observed — the seven pairs
+
+**Pair 2, gain-only** (`pair2-a-gain-low.wav` against `pair2-b-gain-high.wav`). Peak sample
+−12.64 dBFS / −6.62 dBFS, `Different`. RMS −27.96 dBFS / −21.94 dBFS, `Different`. True peak
+−12.21 dBTP / −6.19 dBTP, `Different`. Integrated loudness −24.9 LUFS / −18.9 LUFS, `Different`,
+**+6.0 LU**. Programme bandwidth 16.1 kHz / 23 Hz on both sides, `Indistinguishable at these
+resolutions`. **No difference appeared on the signal levels, on true peak or on bandwidth** — the LU
+figure appeared on the loudness row and nowhere else.
+
+**Pair 7, two rates** (`pair7-a-44100.wav` against `pair7-b-48000.wav`). The technical rows read
+44.1 kHz against 48 kHz, `Different`. Integrated loudness −24.9 LUFS on both sides, `Different`,
+`0.0 LU`, with the line saying both round to the same figure though the measurements are not equal.
+Programme bandwidth 16.1 kHz / 23 Hz on both sides, `Indistinguishable at these resolutions`. **No
+internal weighting or method identifier appeared anywhere on screen.**
+
+**Pair 8, two grids** (`pair8-a-88200.wav` against `pair8-b-96000.wav`). 88.2 kHz against 96 kHz,
+`Different`. Programme bandwidth 16.1 kHz / 23 Hz on both sides, `Indistinguishable at these
+resolutions`. **The surface does not call it `Same`.**
+
+**Pair 9, the boundary** (`pair9-a-edge-lower.wav` against `pair9-b-edge-upper.wav`). Programme
+bandwidth 16.1 kHz / 23 Hz on both sides, `Separated at these resolutions`, with the note *"Both
+readings round to the same figure on this grid; the analysis placed them in different bins."* It is not
+called `Different files`, `Same`, or anything equivalent. **The two displayed values round alike and the
+explanation makes the `Separated` outcome intelligible** — which is the one point in this whole surface
+that could only be settled by a person, and it was.
+
+**Pair 10, an absence on the second side** (`pair10-a-one-second.wav` against
+`pair10-b-tenth-second.wav`). Integrated loudness −24.9 LUFS on the first file, `No value` on the
+second, *"Not comparable — the second file has no value for this."* **This is the fix in `97a4dc0`
+confirmed by eye**: the first file's figure is not lost, and the absence is not a zero.
+
+**Pair 10R, the mirror** (`pair10r-a-tenth-second.wav` against `pair10r-b-one-second.wav`). Integrated
+loudness `No value` on the first file, −24.9 LUFS on the second, *"Not comparable — the first file has
+no value for this."* **The figure follows the file, not a fixed column.** The absence is not a zero.
+
+**Pair 6, mono against stereo** (`pair6-a-mono.wav` against `pair6-b-stereo.wav`). Channel count mono
+against stereo, `Different`. The overall figures still compare. **No per-index comparison is
+fabricated**, and the surface says *"Not compared per channel — the files carry 1 and 2 channels, so an
+index does not mean the same thing in both. The overall figures above still compare."* on signal levels,
+true peak and programme bandwidth. Integrated loudness −24.9 LUFS / −21.9 LUFS, `Different`, **+3.0 LU**.
+Programme bandwidth 16.1 kHz / 23 Hz on both sides, `Indistinguishable at these resolutions`.
+
+### Observed — the operator's own reading of the surface
+
+1. `Indistinguishable at these resolutions` reads as a statement limited by the analysis's resolution,
+   **not** as a claim that the two files are the same.
+2. `Separated at these resolutions`, with the bins note, is intelligible even though both displayed
+   values read `16.1 kHz`.
+3. Pairs 10 and 10R show the surviving figure and `No value` on the correct sides.
+4. An absence is not confused with a zero.
+5. The channel mismatch is honest: the overall figures survive and the surface explains why no index is
+   compared.
+6. **No language was seen saying which file is better or worse, and nothing invited an inference about a
+   master, a remaster, a transcode or a source.**
+7. **No outcome depended on colour.**
+8. The channel-mismatch note repeating three times is visually redundant — recorded as **cosmetic and
+   non-blocking**.
+9. **No defect blocking the feature was observed.**
+
+### What this pass does not cover
+
+- **Light, dark and window resizing were not reported.** ADR-0019's own pass covered them; this one, like
+  ADR-0023's, is narrower, and that is recorded rather than smoothed over. The strings themselves are
+  asserted character-for-character by `MeasurementComparisonPresentationTests`, so what is unverified is
+  that they survive a resize and both appearances, not that they are right.
+- **No VoiceOver or Accessibility Inspector observation.** The traversal gap recorded against ADR-0015
+  and ADR-0017 is unchanged. This change adds a sub-section to the same scrolling area every other
+  analysis lives in, and inherits the gap rather than fixing or worsening it — task 6.7 was scoped to the
+  structural half deliberately.
+- **`incomparable(.methodsDiffer)` was not observed, and cannot be.** Production runs one true peak
+  method, one bandwidth identity and one loudness algorithm carrying only the two allow-listed
+  weightings, so no pair of real files can produce it — measured in
+  `MeasurementComparisonProductionReachTests`. It is pinned in the domain and presentation suites, and
+  the battery names the exclusion rather than faking it with a setting added for a screenshot.
+- **DC offset, clipped samples and the per-metric block titles were not individually reported**, and no
+  word-by-word read of every string was claimed. The weaker "nothing invites an inference" *was*
+  reported, and the vocabulary sweep in `MeasurementComparisonPresentationTests` covers every string the
+  sub-section can render.
+- **One machine, one appearance, one window size**, and it is a one-off observation rather than a
+  regression test.

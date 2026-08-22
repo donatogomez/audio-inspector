@@ -16,31 +16,39 @@
 >   session protocol in `CLAUDE.md`).
 
 ---
-**No open thread on programme bandwidth.** `add-significant-bandwidth-measurement` is merged
-(PR #48, merge commit `f88efe8`) and archived as
-`openspec/changes/archive/2026-08-20-add-significant-bandwidth-measurement`. **ADR-0023 is `Accepted`.**
 
-**What `main` now has.** Programme bandwidth — the highest frequency a file carries persistently, within
-60 dB of its own programme peak — as a measured fact, end to end: a `SignificantBandwidth` domain value
-carrying no verdict, an accumulator whose memory is constant in duration, the sixth consumer of the one
-shared PCM read (the read count is still one), its own report section between the integrated loudness and
-the spectrogram, and an additive `measurements.programmeBandwidth` key. **`schemaVersion` stays 1.**
+**Open thread: `add-two-file-measurement-comparison` — done and validated; waiting on publication.**
+**ADR-0024 is `Accepted` (2026-08-22).**
 
-**What it refuses to say, by construction.** It is not a cut-off, not an effective sample rate, and not
-evidence of upsampling, transcoding, a codec or a quality level. The promoted capability spec carries
-that as a requirement of its own — *Draw no conclusion about origin, quality or provenance* — so the
-prohibition is now part of the spec rather than only of the surfaces.
+**Focus.** The measurement comparison is built, validated against production on real files, and on
+screen beneath the technical rows. A person ran the seven-pair battery against the real application on
+2026-08-22 — on a build postdating the surviving-value fix — and reported no blocking defect. That
+observation was the ADR's last outstanding condition, and it is recorded verbatim in
+`docs/manual-validation-mvp.md`.
 
-**Group 9 was not implemented, and is not pretended to be.** Four follow-ups stay deferred in the
-archived tasks: the **shared STFT stage** and **average spectrum** (one piece of work, waiting for the
-second consumer that would justify extracting it), **two-file comparison**, and **findings**. The change
-archived at 43/47 on this repository's own precedent — `add-true-peak-measurement` archived with five of
-its own open — because a deferred item is neither done nor forgotten.
+**Next step: push, PR, merge — then `openspec archive`, and only then.** The archive is post-merge by
+task 8.2's own words and has not run. Nothing else in this change is outstanding.
+
+**What was deliberately left out, and stays out**: comparison export (a comparison document is a kind of
+its own, ADR-0017 §9), visual comparison, evidence comparison, and Findings. They are group 7's named
+follow-ups, not omissions.
+
+**One cosmetic finding stands, reported and not fixed**: the channel-mismatch note repeats verbatim in
+three blocks. The operator classified it as redundant but non-blocking, and turning a validation pass
+into production work was refused.
+
+**What no one has seen, and it is written down rather than assumed**: light, dark and window resizing
+were not reported in this pass; there is no VoiceOver observation; and `incomparable(.methodsDiffer)` is
+a state **no pair of real files can produce** — production runs one true peak method, one bandwidth
+identity and one loudness algorithm with only the two allow-listed weightings — so it is pinned in the
+domain and presentation suites and named as an exclusion in the battery.
+
+**Inherited, and not fixed by this**: `add-two-file-technical-comparison` is still open at 52/58 and
+**ADR-0017 is still `Proposed`**, blocked on its own manual condition and on the VoiceOver traversal gap
+shared with ADR-0015. This change extends that surface and inherits the gap; nothing here discharges it.
 
 **Older threads, neither advanced here**: `add-static-spectrogram-visualization` (manual validation
-battery deferred by product decision); `add-two-file-technical-comparison` (one accessibility criterion
-open, blocked on the VoiceOver traversal gap shared with ADR-0015). The loudness debt recorded twelve
-snapshots ago is unchanged and still not a thread.
+battery deferred by product decision).
 
 ---
-_Last touched: 2026-08-20. Overwrite freely; empty is fine._
+_Last touched: 2026-08-22. Overwrite freely; empty is fine._

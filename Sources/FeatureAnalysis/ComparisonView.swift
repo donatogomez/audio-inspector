@@ -26,8 +26,8 @@ struct ComparisonSection: View {
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel("\(ComparisonCopy.failedHeadline) \(message)")
             }
-        case let .ready(comparison):
-            container { readyBody(comparison) }
+        case let .ready(comparison, measurements):
+            container { readyBody(comparison, measurements) }
         }
     }
 
@@ -45,10 +45,17 @@ struct ComparisonSection: View {
     }
 
     @ViewBuilder
-    private func readyBody(_ comparison: FileComparison) -> some View {
+    private func readyBody(
+        _ comparison: FileComparison, _ measurements: MeasurementComparison?
+    ) -> some View {
         VStack(alignment: .leading, spacing: 16) {
             fileNames(comparison)
             comparedRows(comparison)
+            // **Beneath the technical rows, never mixed into them** (task 6.1). Those describe what the
+            // two headers declare; these describe what the two files' samples measure, they arrive
+            // later, and one of them carries a difference the others must never grow. Folding both into
+            // one table would put a fifth column on eight rows that have no use for it.
+            MeasurementComparisonSection(comparison: measurements)
             contextBlock(comparison)
         }
     }

@@ -200,7 +200,10 @@ public struct RootView: View {
         switch state {
         case .none: .none
         case .loading: .loading
-        case let .ready(comparison): .ready(comparison)
+        // Both halves travel together, exactly as the flow publishes them: the technical comparison the
+        // moment the second report exists, and the measurements once **both** files have settled theirs.
+        // The surface renders whichever it has.
+        case let .ready(technical, measurements): .ready(technical, measurements: measurements)
         case let .failed(message): .failed(message: message)
         }
     }
