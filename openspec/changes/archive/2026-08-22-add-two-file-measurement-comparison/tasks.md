@@ -243,9 +243,9 @@ which is exactly the digit the limit exists to withhold.
 - [x] 8.1 Four gates green plus the Xcode build and `git diff --check`.
       **Done**, from the final tree: architecture boundaries, a zero-warnings build, the Xcode app
       target, the suite twice, OpenSpec strict, and `git diff --check`.
-- [ ] 8.2 Decide ADR-0024's status from what was actually done, update `CURRENT.md`, and archive through
+- [x] 8.2 Decide ADR-0024's status from what was actually done, update `CURRENT.md`, and archive through
       `openspec archive` **after merge**.
-      **Two of its three actions are done; the third is post-merge, so this stays open.**
+      **Done — all three actions, in that order, and the third only after the merge it names.**
 
       **Decided: ADR-0024 is `Accepted` (2026-08-22).** All three of its literal conditions are now met.
       The first two were automated and already stood — the comparison runs against production reusing the
@@ -260,5 +260,15 @@ which is exactly the digit the limit exists to withhold.
 
       **`CURRENT.md` updated.**
 
-      **`openspec archive` has not run and must not**, which is what keeps this task open: it is
-      post-merge by this list's own words, and the change is still on a feature branch with no PR.
+      **Archived after merge, which is what this task waited for.** PR
+      [#49](https://github.com/donatogomez/audio-inspector/pull/49) merged 2026-08-22 as a real merge
+      commit — `63e8f2a`, two parents, the published branch head `5f18412` among them and an ancestor of
+      `main`, so containment is by ancestry rather than by an equivalence argument. `openspec archive`
+      then ran on that merged `main` and created the `audio-two-file-comparison` capability with **+5
+      requirements and 10 scenarios, 0 modified and 0 removed**; the seven pre-existing capabilities were
+      verified **byte-identical** by checksum before and after. Archived at
+      `openspec/changes/archive/2026-08-22-add-two-file-measurement-comparison/`.
+
+      **7.1–7.4 stay open on purpose and are not closed by this**, here or anywhere: they are group 7's
+      named follow-ups — comparison export, visual comparison, evidence comparison, Findings — and
+      marking them would be the opposite of what naming them was for.
