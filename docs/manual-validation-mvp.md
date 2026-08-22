@@ -1153,3 +1153,100 @@ it is not evidence for this condition, so repeating it would only pad the record
 
 **ADR-0024 stays `Proposed`**, for the same reason and on the same words: partial evidence does not
 promote it.
+
+## The measurement comparison — passed, on a post-fix build (2026-08-22)
+
+Change `add-two-file-measurement-comparison`. **A person ran the battery against the real application**
+and reported what follows; it is recorded exactly as reported. The two blocked attempts above
+(2026-08-20, 2026-08-21) are superseded by this, not deleted — the preparation they describe is what
+this pass ran against.
+
+**The observation is the operator's own.** This session did not see the app: Screen Recording and
+Accessibility are still refused to it, and no attempt was made to work around that. Nothing below was
+produced by a test, a headless render, or a reading of the source.
+
+**The build.** The app was cleaned and rebuilt from `f2058d2`, so the binary postdates the surviving-value
+fix in `97a4dc0`. The seven pairs are the ones in the change's `README.md`, generated outside the
+repository, with every expected figure measured through the production path **before** the app was
+opened.
+
+### Observed — the seven pairs
+
+**Pair 2, gain-only** (`pair2-a-gain-low.wav` against `pair2-b-gain-high.wav`). Peak sample
+−12.64 dBFS / −6.62 dBFS, `Different`. RMS −27.96 dBFS / −21.94 dBFS, `Different`. True peak
+−12.21 dBTP / −6.19 dBTP, `Different`. Integrated loudness −24.9 LUFS / −18.9 LUFS, `Different`,
+**+6.0 LU**. Programme bandwidth 16.1 kHz / 23 Hz on both sides, `Indistinguishable at these
+resolutions`. **No difference appeared on the signal levels, on true peak or on bandwidth** — the LU
+figure appeared on the loudness row and nowhere else.
+
+**Pair 7, two rates** (`pair7-a-44100.wav` against `pair7-b-48000.wav`). The technical rows read
+44.1 kHz against 48 kHz, `Different`. Integrated loudness −24.9 LUFS on both sides, `Different`,
+`0.0 LU`, with the line saying both round to the same figure though the measurements are not equal.
+Programme bandwidth 16.1 kHz / 23 Hz on both sides, `Indistinguishable at these resolutions`. **No
+internal weighting or method identifier appeared anywhere on screen.**
+
+**Pair 8, two grids** (`pair8-a-88200.wav` against `pair8-b-96000.wav`). 88.2 kHz against 96 kHz,
+`Different`. Programme bandwidth 16.1 kHz / 23 Hz on both sides, `Indistinguishable at these
+resolutions`. **The surface does not call it `Same`.**
+
+**Pair 9, the boundary** (`pair9-a-edge-lower.wav` against `pair9-b-edge-upper.wav`). Programme
+bandwidth 16.1 kHz / 23 Hz on both sides, `Separated at these resolutions`, with the note *"Both
+readings round to the same figure on this grid; the analysis placed them in different bins."* It is not
+called `Different files`, `Same`, or anything equivalent. **The two displayed values round alike and the
+explanation makes the `Separated` outcome intelligible** — which is the one point in this whole surface
+that could only be settled by a person, and it was.
+
+**Pair 10, an absence on the second side** (`pair10-a-one-second.wav` against
+`pair10-b-tenth-second.wav`). Integrated loudness −24.9 LUFS on the first file, `No value` on the
+second, *"Not comparable — the second file has no value for this."* **This is the fix in `97a4dc0`
+confirmed by eye**: the first file's figure is not lost, and the absence is not a zero.
+
+**Pair 10R, the mirror** (`pair10r-a-tenth-second.wav` against `pair10r-b-one-second.wav`). Integrated
+loudness `No value` on the first file, −24.9 LUFS on the second, *"Not comparable — the first file has
+no value for this."* **The figure follows the file, not a fixed column.** The absence is not a zero.
+
+**Pair 6, mono against stereo** (`pair6-a-mono.wav` against `pair6-b-stereo.wav`). Channel count mono
+against stereo, `Different`. The overall figures still compare. **No per-index comparison is
+fabricated**, and the surface says *"Not compared per channel — the files carry 1 and 2 channels, so an
+index does not mean the same thing in both. The overall figures above still compare."* on signal levels,
+true peak and programme bandwidth. Integrated loudness −24.9 LUFS / −21.9 LUFS, `Different`, **+3.0 LU**.
+Programme bandwidth 16.1 kHz / 23 Hz on both sides, `Indistinguishable at these resolutions`.
+
+### Observed — the operator's own reading of the surface
+
+1. `Indistinguishable at these resolutions` reads as a statement limited by the analysis's resolution,
+   **not** as a claim that the two files are the same.
+2. `Separated at these resolutions`, with the bins note, is intelligible even though both displayed
+   values read `16.1 kHz`.
+3. Pairs 10 and 10R show the surviving figure and `No value` on the correct sides.
+4. An absence is not confused with a zero.
+5. The channel mismatch is honest: the overall figures survive and the surface explains why no index is
+   compared.
+6. **No language was seen saying which file is better or worse, and nothing invited an inference about a
+   master, a remaster, a transcode or a source.**
+7. **No outcome depended on colour.**
+8. The channel-mismatch note repeating three times is visually redundant — recorded as **cosmetic and
+   non-blocking**.
+9. **No defect blocking the feature was observed.**
+
+### What this pass does not cover
+
+- **Light, dark and window resizing were not reported.** ADR-0019's own pass covered them; this one, like
+  ADR-0023's, is narrower, and that is recorded rather than smoothed over. The strings themselves are
+  asserted character-for-character by `MeasurementComparisonPresentationTests`, so what is unverified is
+  that they survive a resize and both appearances, not that they are right.
+- **No VoiceOver or Accessibility Inspector observation.** The traversal gap recorded against ADR-0015
+  and ADR-0017 is unchanged. This change adds a sub-section to the same scrolling area every other
+  analysis lives in, and inherits the gap rather than fixing or worsening it — task 6.7 was scoped to the
+  structural half deliberately.
+- **`incomparable(.methodsDiffer)` was not observed, and cannot be.** Production runs one true peak
+  method, one bandwidth identity and one loudness algorithm carrying only the two allow-listed
+  weightings, so no pair of real files can produce it — measured in
+  `MeasurementComparisonProductionReachTests`. It is pinned in the domain and presentation suites, and
+  the battery names the exclusion rather than faking it with a setting added for a screenshot.
+- **DC offset, clipped samples and the per-metric block titles were not individually reported**, and no
+  word-by-word read of every string was claimed. The weaker "nothing invites an inference" *was*
+  reported, and the vocabulary sweep in `MeasurementComparisonPresentationTests` covers every string the
+  sub-section can render.
+- **One machine, one appearance, one window size**, and it is a one-off observation rather than a
+  regression test.
