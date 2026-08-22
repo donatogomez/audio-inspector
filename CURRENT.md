@@ -17,52 +17,38 @@
 
 ---
 
-**Open thread: `add-two-file-measurement-comparison` — built, tested and on screen; blocked on one
-manual observation.** ADR-0024 is `Proposed` and **stays there**.
+**Open thread: `add-two-file-measurement-comparison` — done and validated; waiting on publication.**
+**ADR-0024 is `Accepted` (2026-08-22).**
 
-**Focus.** Groups 1 to 6 are closed and 8.1 is green. The measurement comparison runs against production
-on real files, the flow publishes it atomically, and the sub-section renders beneath the technical rows.
-Nothing in the export, the JSON schema, Findings or the two visualisations was touched.
+**Focus.** The measurement comparison is built, validated against production on real files, and on
+screen beneath the technical rows. A person ran the seven-pair battery against the real application on
+2026-08-22 — on a build postdating the surviving-value fix — and reported no blocking defect. That
+observation was the ADR's last outstanding condition, and it is recorded verbatim in
+`docs/manual-validation-mvp.md`.
 
-**Why the ADR is not promoted.** Two of its three literal conditions are met. The third —
-*"the surface is validated by a person looking at it"* — did not happen: Screen Recording and
-Accessibility are both refused to this session, exactly as they were for `add-two-file-technical-comparison`
-on 2026-08-08. Partial evidence does not promote it, by the ADR's own words.
+**Next step: push, PR, merge — then `openspec archive`, and only then.** The archive is post-merge by
+task 8.2's own words and has not run. Nothing else in this change is outstanding.
 
-**Next step: a person runs the battery.** Everything is prepared — fourteen fixtures, seven pairs, every
-expected string measured through production *before* the app was opened, in the change's `README.md`;
-the app cleaned and rebuilt from `f2058d2`, so the binary postdates the fix. Pair 10 now reads
-`-24.9 LUFS` · `No value`, and pair 10R is its mirror: the figure follows the file, never the column.
+**What was deliberately left out, and stays out**: comparison export (a comparison document is a kind of
+its own, ADR-0017 §9), visual comparison, evidence comparison, and Findings. They are group 7's named
+follow-ups, not omissions.
 
-**Both permissions were re-probed on 2026-08-21 and both are still refused** — no screen image, and
-`System Events` cannot read a window. The 2026-08-20 build must not be used; it predates the fix. `docs/manual-validation-mvp.md` (2026-08-21) has the
-re-run instructions and what blocked it. Then decide ADR-0024, then push, PR, merge, and
-`openspec archive` — in that order.
+**One cosmetic finding stands, reported and not fixed**: the channel-mismatch note repeats verbatim in
+three blocks. The operator classified it as redundant but non-blocking, and turning a validation pass
+into production work was refused.
 
-**One of the three render findings was a defect and is fixed.** A missing measurement showed `No value`
-in **both** columns although the first file had one. The value was gone before the formatter saw it:
-`MeasurementGap` carried only a reason. It is now generic over its value and each case carries exactly
-what exists, so the surface shows each file's own figure beside the reason — and both figures when the
-methods differ. Passing the two bundles to the surface instead was refused: two values and one outcome
-from two different places can belong to two different operations. ADR-0024 §3.
+**What no one has seen, and it is written down rather than assumed**: light, dark and window resizing
+were not reported in this pass; there is no VoiceOver observation; and `incomparable(.methodsDiffer)` is
+a state **no pair of real files can produce** — production runs one true peak method, one bandwidth
+identity and one loudness algorithm with only the two allow-listed weightings — so it is pinned in the
+domain and presentation suites and named as an exclusion in the battery.
 
-**Two remain, both cosmetic, deliberately untouched for the person validating:**
-
-- Every single-row block repeats its own name — `True peak` above a row called `True peak`. Only
-  `Signal levels` genuinely groups.
-- The channel-count note repeats verbatim in three blocks, and the rounding note can land on three rows
-  of one pair. Both correct, both wordy.
-
-**Also unobserved, and not this change's to fix**: `incomparable(.methodsDiffer)` is a state no pair of
-real files can produce, so it is validated in the presentation tests and named as an exclusion in the
-battery rather than faked.
-
-**Inherited, and not to be claimed as fixed**: `add-two-file-technical-comparison` is still open at 52/58
-and **ADR-0017 is still `Proposed`**, blocked on the same permissions and on the VoiceOver traversal gap
-shared with ADR-0015. This change extends that surface and inherits both.
+**Inherited, and not fixed by this**: `add-two-file-technical-comparison` is still open at 52/58 and
+**ADR-0017 is still `Proposed`**, blocked on its own manual condition and on the VoiceOver traversal gap
+shared with ADR-0015. This change extends that surface and inherits the gap; nothing here discharges it.
 
 **Older threads, neither advanced here**: `add-static-spectrogram-visualization` (manual validation
 battery deferred by product decision).
 
 ---
-_Last touched: 2026-08-21. Overwrite freely; empty is fine._
+_Last touched: 2026-08-22. Overwrite freely; empty is fine._
