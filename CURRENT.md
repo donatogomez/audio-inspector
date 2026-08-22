@@ -17,37 +17,37 @@
 
 ---
 
-**Open thread: `add-two-file-measurement-comparison` — done and validated; waiting on publication.**
-**ADR-0024 is `Accepted` (2026-08-22).**
+**No thread is open.** `add-two-file-measurement-comparison` is merged, archived and closed:
+PR [#49](https://github.com/donatogomez/audio-inspector/pull/49) landed on `main` as merge commit
+`63e8f2a` on 2026-08-22, **ADR-0024 is `Accepted` (2026-08-22)**, and the change is archived at
+`openspec/changes/archive/2026-08-22-add-two-file-measurement-comparison/`, which created the
+`audio-two-file-comparison` capability with five requirements.
 
-**Focus.** The measurement comparison is built, validated against production on real files, and on
-screen beneath the technical rows. A person ran the seven-pair battery against the real application on
-2026-08-22 — on a build postdating the surviving-value fix — and reported no blocking defect. That
-observation was the ADR's last outstanding condition, and it is recorded verbatim in
-`docs/manual-validation-mvp.md`.
+Two files' measurements now compare beneath the technical rows — signal levels, true peak, integrated
+loudness and programme bandwidth — reusing what the second file's single shared read already measured.
+Only loudness carries a difference, in LU. Bandwidth speaks about the grid rather than the files. An
+absence is words, never a zero, and the side that measured keeps its figure.
 
-**Next step: push, PR, merge — then `openspec archive`, and only then.** The archive is post-merge by
-task 8.2's own words and has not run. Nothing else in this change is outstanding.
+**Named follow-ups, deferred by decision and not started** — group 7 of the archived change:
 
-**What was deliberately left out, and stays out**: comparison export (a comparison document is a kind of
-its own, ADR-0017 §9), visual comparison, evidence comparison, and Findings. They are group 7's named
-follow-ups, not omissions.
+- **comparison export** — `schemaVersion` 1 describes one file; a comparison document is a kind of its
+  own (ADR-0017 §9);
+- **visual comparison** — waveforms and spectrograms side by side (`add-two-file-visual-comparison`);
+- **evidence comparison** — alignment, gain matching, residual, correlation, spectral difference; every
+  step is a heuristic with a threshold;
+- **Findings** — same master, remaster, transcode, upsample, lossy source, dynamics, quality,
+  provenance. This feature is a **producer of facts** for that capability, never a small version of it.
 
-**One cosmetic finding stands, reported and not fixed**: the channel-mismatch note repeats verbatim in
-three blocks. The operator classified it as redundant but non-blocking, and turning a validation pass
-into production work was refused.
+**Inherited debt, untouched by any of this.** `add-two-file-technical-comparison` is still open at 52/58
+and **ADR-0017 is still `Proposed`** — its own manual condition is unmet and it carries the VoiceOver
+traversal gap it shares with ADR-0015. The measurement sub-section lives in the same scrolling area and
+inherits that gap rather than fixing or worsening it.
 
-**What no one has seen, and it is written down rather than assumed**: light, dark and window resizing
-were not reported in this pass; there is no VoiceOver observation; and `incomparable(.methodsDiffer)` is
-a state **no pair of real files can produce** — production runs one true peak method, one bandwidth
-identity and one loudness algorithm with only the two allow-listed weightings — so it is pinned in the
-domain and presentation suites and named as an exclusion in the battery.
+**One cosmetic finding stands, reported and non-blocking**: the channel-mismatch note repeats verbatim
+in three blocks. The maintainer saw it during the manual pass and classified it as redundant but not a
+defect.
 
-**Inherited, and not fixed by this**: `add-two-file-technical-comparison` is still open at 52/58 and
-**ADR-0017 is still `Proposed`**, blocked on its own manual condition and on the VoiceOver traversal gap
-shared with ADR-0015. This change extends that surface and inherits the gap; nothing here discharges it.
-
-**Older threads, neither advanced here**: `add-static-spectrogram-visualization` (manual validation
+**Also open, and not advanced here**: `add-static-spectrogram-visualization` (73/89, manual validation
 battery deferred by product decision).
 
 ---
