@@ -1,10 +1,11 @@
 # Tasks — two-file measurement comparison
 
-**Groups 1 to 6 are complete; nothing is exported.** The semantics are settled, the domain comparator
-exists, the flow publishes it, the ten fixture pairs run through production against real files, and the
-sub-section is on screen beneath the technical rows. ADR-0024 stays `Proposed` — its third promotion
-criterion is *a person looking at the surface*, and the surface has existed for one commit. The battery
-that validation runs against is prepared in this change's `README.md`. Group 1 was blocking by design — the comparison
+**Groups 1 to 6 are complete and ADR-0024 is `Accepted` (2026-08-22).** The semantics are settled, the
+domain comparator exists, the flow publishes it, the ten fixture pairs run through production against
+real files, the sub-section is on screen beneath the technical rows, and a person ran the seven-pair
+battery against the real application and reported no blocking defect. **What is left is publication:**
+the deferred follow-ups in group 7, which were never in scope, and `openspec archive`, which is
+post-merge. Group 1 was blocking by design — the comparison
 semantics are settled before a comparator exists, on the order `add-two-file-technical-comparison` used
 and for the same reason.
 
@@ -244,14 +245,20 @@ which is exactly the digit the limit exists to withhold.
       target, the suite twice, OpenSpec strict, and `git diff --check`.
 - [ ] 8.2 Decide ADR-0024's status from what was actually done, update `CURRENT.md`, and archive through
       `openspec archive` **after merge**.
-      **Decided, and the decision is that it stays `Proposed`.** Two of its three literal conditions are
-      met — the comparison runs against production reusing the already-computed measurements, and the
-      resolution-aware bandwidth rule is demonstrated on production readings sitting on **both** sides of
-      it, the exact boundary included. The third asks for *a person looking at the surface*, and that did
-      not happen: the same two macOS permissions that blocked `add-two-file-technical-comparison`'s group
-      7 on 2026-08-08 — Screen Recording and Accessibility — block it again, verified rather than assumed.
-      The battery, the twelve fixtures and every expected string were prepared, the app was cleaned and
-      rebuilt, and the sub-section was rendered headlessly and inspected; **none of that is the condition**,
-      and `docs/manual-validation-mvp.md` records the attempt, the substitute and its limit. The ADR's own
-      Status line has said since its first commit that partial evidence does not promote it. This task
-      stays open for the archive, which is post-merge regardless.
+      **Two of its three actions are done; the third is post-merge, so this stays open.**
+
+      **Decided: ADR-0024 is `Accepted` (2026-08-22).** All three of its literal conditions are now met.
+      The first two were automated and already stood — the comparison runs against production reusing the
+      already-computed measurements at one decoder and one read per file, and the resolution-aware
+      bandwidth rule is demonstrated on production readings on **both** sides of it, the exact boundary
+      included. The third — *a person looking at the surface* — was met on 2026-08-22, when a person ran
+      the seven-pair battery against the real application on a build postdating the surviving-value fix
+      and reported no blocking defect. Two earlier attempts were blocked by the same macOS permissions
+      that blocked `add-two-file-technical-comparison`'s group 7, and both are recorded rather than
+      quietly superseded. `docs/manual-validation-mvp.md` (2026-08-22) has the observation verbatim; the
+      ADR's own **Promotion** section has what it does and does not cover.
+
+      **`CURRENT.md` updated.**
+
+      **`openspec archive` has not run and must not**, which is what keeps this task open: it is
+      post-merge by this list's own words, and the change is still on a feature branch with no PR.

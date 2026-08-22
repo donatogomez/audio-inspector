@@ -4,7 +4,13 @@ Compare what two files' **samples** measure — signal levels, true peak, integr
 bandwidth — beneath the technical comparison that already exists. It states four facts side by side and
 one difference in LU; it says nothing about where either file came from or which one to keep.
 
-## Manual validation battery
+## Manual validation battery — **passed 2026-08-22**
+
+A person ran all seven pairs against the real application on a build postdating the surviving-value fix,
+and reported no blocking defect. The observation is recorded verbatim in
+[`docs/manual-validation-mvp.md`](../../../docs/manual-validation-mvp.md), and it is what promoted
+ADR-0024 to `Accepted`. One cosmetic finding stands and was deliberately not acted on: the
+channel-mismatch note repeats verbatim in three blocks.
 
 **Prepared before the app is opened**, so a person checking the surface is comparing it against numbers
 that already exist rather than deciding on the spot whether what they see is right. Every figure below
