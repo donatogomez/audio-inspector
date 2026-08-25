@@ -16,18 +16,47 @@ removed, and the removal reverted in full. A control that has never been seen to
 
 ## 1. Contracts — the settled shapes, before any behaviour
 
-- [ ] 1.1 A **per-file visual container** in `FeatureImport`: what became of the envelope, what became of
+- [x] 1.1 A **per-file visual container** in `FeatureImport`: what became of the envelope, what became of
       the spectral model, and the `PCMStreamDescription` the read produced. A sibling of
       `ReportMeasurements`, **never a field of it** (ADR-0025 §3). `Sendable`, `Equatable`, not `Codable`.
-- [ ] 1.2 A **settled pair** value carrying both files' containers, constructible only from two settled
+      `FileVisuals`, in `Sources/FeatureImport/SettledVisuals.swift`. **It lives here and not beside
+      `ReportMeasurements` in the domain**, and the reason is a real difference rather than a filing
+      preference: that container is a domain type because the domain consumes it — `MeasurementComparison`
+      takes two of them and the export DTO maps from it — and this one has no domain consumer and never
+      will, because nothing compares two drawings and nothing serialises one. Not `Codable` and not
+      `Comparable`, asserted rather than intended.
+- [x] 1.2 A **settled pair** value carrying both files' containers, constructible only from two settled
       sides. `loading` and `cancelled` MUST be unrepresentable in it (ADR-0025 §5 and design §3).
-- [ ] 1.3 Collapse lifecycle to settled **once, in `FeatureImport`**, for both sides, in the seam
+      `PairedVisuals`, with `init?(first:second:)` over two optionals so *"a side that has not settled"*
+      is answered by the type rather than by each caller. Neither lifecycle case is representable at all:
+      `SettledWaveform` and `SettledSpectrogram` have three cases, and the collapse returns `nil` for the
+      other two. It carries **no operation token** — which operation a pair belongs to is answered by
+      where the flow stores it (group 3), not by an identifier kept in advance of a need.
+- [x] 1.3 Collapse lifecycle to settled **once, in `FeatureImport`**, for both sides, in the seam
       `SettledMeasurements.swift` already established: the first file's `…State` and the compared file's
       `…Outcome`. `cancelled` collapses to *not settled*; `unavailable` and `failed` stay **distinct**.
-- [ ] 1.4 Assert the type refuses what the spec refuses: no pair from an unsettled side, absence and
+      `settledVisuals(from:)` on `InspectionPresentation` and on `InspectionAnalyses`, in a file beside
+      the measurements' own collapse rather than inside it: the two take opposite halves of the same
+      bundle and collapse for **opposite** reasons — a measurement's failure and absence both become
+      `nil` because the wire describes measurements and not why one is missing, and a drawing's must not,
+      because the paired surface has to say which happened. The stream description is **passed in**,
+      because neither source type carries one and it belongs to the read; it is never rebuilt from the
+      report's declared properties, which are what the header claims rather than what was decoded.
+- [x] 1.4 Assert the type refuses what the spec refuses: no pair from an unsettled side, absence and
       failure not interchangeable, and a zero-column model carried as its own answer rather than as an
       absence.
-- [ ] 1.5 Confirm nothing in group 1 adds a field, a case or a conformance to any domain type.
+      `SettledVisualsTests`, 18 tests, plus a fourth refusal the audit found: **an available artefact
+      with no stream description is unrepresentable.** A read reports no description exactly when the
+      file exposed no usable frame count, and then every analysis is absent — so a drawing whose axis
+      cannot be stated is a combination no read produces, and the initialiser fails on it.
+      **Three negative controls seen to fail, and reverted:** collapsing `cancelled` to `unavailable`
+      (2 issues), collapsing `failed` into `unavailable` (2 issues), and removing the stream-description
+      guard (2 issues). Each restoration was verified by checksum against a pristine copy.
+- [x] 1.5 Confirm nothing in group 1 adds a field, a case or a conformance to any domain type.
+      `Sources/AudioInspectorDomain/` is byte-identical to `main`. `WaveformEnvelope` gained no sample
+      rate, `Spectrogram` gained nothing, `ReportMeasurements` gained no field, and no existing type
+      moved module. The new types are additive and, at the end of this group, have **no production
+      caller at all** — connecting them is group 2's.
 
 ## 2. Retention — stop discarding what the second file already produced
 
