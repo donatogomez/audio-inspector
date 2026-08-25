@@ -33,3 +33,4 @@ disguise. Copy `0000-adr-template.md` for new ones.
 | [0022](0022-integrated-loudness-scope-and-compliance.md) | Integrated loudness — how far compliance is claimed, and what the domain stores | Accepted |
 | [0023](0023-significant-bandwidth-as-a-measured-fact.md) | Significant bandwidth as a measured fact, independent of the spectrogram | Accepted |
 | [0024](0024-two-file-measurement-comparison.md) | Comparing measurements between two files — facts only, and only one difference | Accepted |
+| [0025](0025-two-file-paired-visuals.md) | Two files' waveforms and spectrograms side by side — a paired presentation, not a visual comparison | Proposed (pending reuse, atomicity and two manual axis checks) |
