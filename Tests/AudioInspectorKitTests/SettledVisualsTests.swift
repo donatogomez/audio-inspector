@@ -42,6 +42,7 @@ struct SettledVisualsTests {
     }
 
     private func analyses(
+        stream: PCMStreamDescription?,
         waveform: WaveformOutcome,
         spectrogram: SpectrogramOutcome
     ) -> InspectionAnalyses {
@@ -51,7 +52,8 @@ struct SettledVisualsTests {
             signalLevelMetrics: .unavailable,
             truePeak: .unavailable,
             loudness: .unavailable,
-            significantBandwidth: .unavailable
+            significantBandwidth: .unavailable,
+            stream: stream
         )
     }
 
@@ -82,16 +84,16 @@ struct SettledVisualsTests {
     @Test("an available envelope is carried through exactly")
     func availableEnvelopeIsCarried() {
         let produced = envelope(peak: 0.75)
-        let settled = analyses(waveform: .available(produced), spectrogram: .unavailable)
-            .settledVisuals(from: stream())
+        let settled = analyses(stream: stream(), waveform: .available(produced), spectrogram: .unavailable)
+            .settledVisuals
         #expect(settled?.waveform == .available(produced))
     }
 
     @Test("an available spectral model is carried through exactly")
     func availableModelIsCarried() {
         let produced = model()
-        let settled = analyses(waveform: .unavailable, spectrogram: .available(produced))
-            .settledVisuals(from: stream())
+        let settled = analyses(stream: stream(), waveform: .unavailable, spectrogram: .available(produced))
+            .settledVisuals
         #expect(settled?.spectrogram == .available(produced))
     }
 
@@ -100,8 +102,8 @@ struct SettledVisualsTests {
     @Test("a model with no columns stays available, and never becomes an absence")
     func noColumnsIsNotAnAbsence() {
         let short = modelWithNoColumns()
-        let settled = analyses(waveform: .unavailable, spectrogram: .available(short))
-            .settledVisuals(from: stream())
+        let settled = analyses(stream: stream(), waveform: .unavailable, spectrogram: .available(short))
+            .settledVisuals
         #expect(settled?.spectrogram == .available(short))
         #expect(settled?.spectrogram != .unavailable)
     }
@@ -110,29 +112,29 @@ struct SettledVisualsTests {
 
     @Test("an unavailable envelope stays unavailable")
     func unavailableEnvelopeStays() {
-        let settled = analyses(waveform: .unavailable, spectrogram: .unavailable)
-            .settledVisuals(from: stream())
+        let settled = analyses(stream: stream(), waveform: .unavailable, spectrogram: .unavailable)
+            .settledVisuals
         #expect(settled?.waveform == .unavailable)
     }
 
     @Test("a failed envelope stays failed, with its sentence")
     func failedEnvelopeStays() {
-        let settled = analyses(waveform: .failed(message: "The samples could not be read."), spectrogram: .unavailable)
-            .settledVisuals(from: stream())
+        let settled = analyses(stream: stream(), waveform: .failed(message: "The samples could not be read."), spectrogram: .unavailable)
+            .settledVisuals
         #expect(settled?.waveform == .failed(message: "The samples could not be read."))
     }
 
     @Test("an unavailable spectral model stays unavailable")
     func unavailableModelStays() {
-        let settled = analyses(waveform: .unavailable, spectrogram: .unavailable)
-            .settledVisuals(from: stream())
+        let settled = analyses(stream: stream(), waveform: .unavailable, spectrogram: .unavailable)
+            .settledVisuals
         #expect(settled?.spectrogram == .unavailable)
     }
 
     @Test("a failed spectral model stays failed, with its sentence")
     func failedModelStays() {
-        let settled = analyses(waveform: .unavailable, spectrogram: .failed(message: "The transform did not complete."))
-            .settledVisuals(from: stream())
+        let settled = analyses(stream: stream(), waveform: .unavailable, spectrogram: .failed(message: "The transform did not complete."))
+            .settledVisuals
         #expect(settled?.spectrogram == .failed(message: "The transform did not complete."))
     }
 
@@ -140,11 +142,11 @@ struct SettledVisualsTests {
     /// this must not make. A paired surface has to say which of the two happened.
     @Test("absence and failure are not interchangeable, for either artefact")
     func absenceAndFailureAreNotTheSame() {
-        let absent = analyses(waveform: .unavailable, spectrogram: .unavailable)
-            .settledVisuals(from: stream())
+        let absent = analyses(stream: stream(), waveform: .unavailable, spectrogram: .unavailable)
+            .settledVisuals
         let failed = analyses(
-            waveform: .failed(message: "no"), spectrogram: .failed(message: "no")
-        ).settledVisuals(from: stream())
+            stream: stream(), waveform: .failed(message: "no"), spectrogram: .failed(message: "no")
+        ).settledVisuals
 
         #expect(absent != failed)
         #expect(absent?.waveform != failed?.waveform)
@@ -156,8 +158,8 @@ struct SettledVisualsTests {
     @Test("the stream description is carried through exactly, and never rebuilt")
     func streamIsCarried() {
         let read = stream(sampleRate: 96_000, frameCount: 480_000)
-        let settled = analyses(waveform: .available(envelope()), spectrogram: .available(model()))
-            .settledVisuals(from: read)
+        let settled = analyses(stream: read, waveform: .available(envelope()), spectrogram: .available(model()))
+            .settledVisuals
         #expect(settled?.stream == read)
     }
 
@@ -195,12 +197,12 @@ struct SettledVisualsTests {
     /// blame the file for the user's own action — the refusal `WaveformState.init?(_:)` already makes.
     @Test("cancellation never produces a settled value, and never becomes an absence")
     func cancellationNeverSettles() {
-        #expect(analyses(waveform: .cancelled, spectrogram: .cancelled)
-            .settledVisuals(from: stream()) == nil)
-        #expect(analyses(waveform: .cancelled, spectrogram: .available(model()))
-            .settledVisuals(from: stream()) == nil)
-        #expect(analyses(waveform: .available(envelope()), spectrogram: .cancelled)
-            .settledVisuals(from: stream()) == nil)
+        #expect(analyses(stream: stream(), waveform: .cancelled, spectrogram: .cancelled)
+            .settledVisuals == nil)
+        #expect(analyses(stream: stream(), waveform: .cancelled, spectrogram: .available(model()))
+            .settledVisuals == nil)
+        #expect(analyses(stream: stream(), waveform: .available(envelope()), spectrogram: .cancelled)
+            .settledVisuals == nil)
 
         // The stronger statement: not merely "no pair", but never mistaken for the file having nothing.
         #expect(SettledWaveform(WaveformOutcome.cancelled) == nil)
@@ -271,8 +273,8 @@ struct SettledVisualsTests {
         let produced = envelope()
         let fromState = presentation(waveform: .available(produced), spectrogram: .unavailable)
             .settledVisuals(from: stream())
-        let fromOutcome = analyses(waveform: .available(produced), spectrogram: .unavailable)
-            .settledVisuals(from: stream())
+        let fromOutcome = analyses(stream: stream(), waveform: .available(produced), spectrogram: .unavailable)
+            .settledVisuals
         #expect(fromState == fromOutcome)
     }
 }

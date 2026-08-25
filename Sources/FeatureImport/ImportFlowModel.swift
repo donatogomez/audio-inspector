@@ -97,6 +97,21 @@ public final class ImportFlowModel {
     /// comparison.
     private var comparedMeasurements: ReportMeasurements?
 
+    /// The compared file's settled pictures, retained for exactly as long as, and by exactly the same
+    /// events as, `comparedMeasurements` above.
+    ///
+    /// **The read that produced them already happened.** Its envelope and its spectral model were
+    /// computed by the same single shared pass that produced the measurements beside them, and until now
+    /// they were dropped one line later because `ReportMeasurements` has no field either could occupy.
+    /// Keeping them costs no read, no decode and no transform (ADR-0025 §1, §11).
+    ///
+    /// **Nothing in production reads it yet.** Pairing it with the primary file's own pictures,
+    /// publishing that pair, and proving it can never mix two operations are group 3's; this group only
+    /// stops the loss. The getter is internal rather than private for one reason — a value nothing reads
+    /// cannot be observed indirectly, and retention that is not observed is retention that is asserted.
+    /// The setter stays private: nothing outside this model decides what is retained.
+    private(set) var comparedVisuals: FileVisuals?
+
     public init(action: @escaping SourceInspectionAction) {
         self.action = action
     }
@@ -145,7 +160,9 @@ public final class ImportFlowModel {
 
         let previous = comparison
         let previousMeasurements = comparedMeasurements
+        let previousVisuals = comparedVisuals
         comparedMeasurements = nil
+        comparedVisuals = nil
         comparison = .loading
 
         let task = Task { [weak self] in
@@ -161,7 +178,8 @@ public final class ImportFlowModel {
             guard let self, operation == self.currentComparisonOperation else { return } // superseded
             self.settle(
                 outcome, against: primary,
-                restoringOnCancellation: previous, andMeasurements: previousMeasurements
+                restoringOnCancellation: previous,
+                andMeasurements: previousMeasurements, andVisuals: previousVisuals
             )
         }
         comparisonTask = task
@@ -173,6 +191,7 @@ public final class ImportFlowModel {
         comparisonTask?.cancel()
         currentComparisonOperation += 1 // so a result already in flight cannot land afterwards
         comparedMeasurements = nil
+        comparedVisuals = nil
         comparison = .none
     }
 
@@ -181,7 +200,8 @@ public final class ImportFlowModel {
         _ outcome: SourceInspectionOutcome,
         against primary: InspectionReport,
         restoringOnCancellation previous: ComparisonState,
-        andMeasurements previousMeasurements: ReportMeasurements?
+        andMeasurements previousMeasurements: ReportMeasurements?,
+        andVisuals previousVisuals: FileVisuals?
     ) {
         switch outcome {
         case let .inspected(report, analyses):
@@ -191,9 +211,16 @@ public final class ImportFlowModel {
             // **The measurements are taken here and nowhere else.** They are assembled from the settled
             // outcome rather than from the progressive updates, so the four are published together or
             // not at all: a comparison holding this file's loudness beside another file's true peak is
-            // not a thing this flow can produce. The visualisations are still discarded, because
-            // `ReportMeasurements` has no field either could occupy.
+            // not a thing this flow can produce.
+            //
+            // **The visualisations are taken here too, and from the same bundle.** They stopped being
+            // discarded when a container that can hold them arrived: `FileVisuals` carries what became
+            // of each drawing together with the stream description that read produced, so an artefact
+            // can never be paired with another read's axis. Cancellation is not a settled answer, so a
+            // cancelled inspection leaves this `nil` rather than an absence — the file is not blamed for
+            // an operation the user replaced.
             comparedMeasurements = analyses.settledMeasurements
+            comparedVisuals = analyses.settledVisuals
             comparison = .ready(FileComparison(first: primary, second: report), nil)
             publishMeasurementComparisonIfBothSettled()
         case .cancelled:
@@ -202,6 +229,7 @@ public final class ImportFlowModel {
             // primary file refreshes that one rather than a superseded file's.
             comparison = previous
             comparedMeasurements = previousMeasurements
+            comparedVisuals = previousVisuals
         case .preparationFailed:
             comparison = .failed(message: "That file could not be opened for comparison.")
         }
@@ -262,6 +290,7 @@ public final class ImportFlowModel {
         comparisonTask?.cancel()
         currentComparisonOperation += 1
         comparedMeasurements = nil
+        comparedVisuals = nil
         comparison = .none
 
         dropRejection = nil // an accepted operation supersedes any pending refusal

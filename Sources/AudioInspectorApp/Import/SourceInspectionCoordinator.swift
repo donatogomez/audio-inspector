@@ -107,7 +107,9 @@ struct SourceInspectionCoordinator {
                 signalLevelMetrics: .unavailable,
                 truePeak: .unavailable,
                 loudness: .unavailable,
-                significantBandwidth: .unavailable
+                significantBandwidth: .unavailable,
+                // No read was started, so there is no stream to describe. Not an omission.
+                stream: nil
             ))
         }
 
@@ -144,7 +146,11 @@ struct SourceInspectionCoordinator {
             signalLevelMetrics: shared.signalLevelMetrics,
             truePeak: shared.truePeak,
             loudness: shared.loudness,
-            significantBandwidth: shared.significantBandwidth
+            significantBandwidth: shared.significantBandwidth,
+            // The description that read produced, carried through unchanged. It is never rebuilt from
+            // the report's declared properties: those are what the header claims, this is what the
+            // decoder found.
+            stream: shared.stream
         ))
     }
 

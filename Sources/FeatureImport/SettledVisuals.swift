@@ -212,7 +212,11 @@ extension InspectionAnalyses {
     /// **The four measurements are deliberately not here**, exactly as the two drawings are deliberately
     /// not in `settledMeasurements`. The two collapses read the same bundle and take different halves of
     /// it, and neither is derivable from the other.
-    func settledVisuals(from stream: PCMStreamDescription?) -> FileVisuals? {
+    ///
+    /// **It takes no stream description**, unlike the primary side's, and that is the point: the bundle
+    /// carries the one it was produced from, so pairing an artefact with another read's description is
+    /// unrepresentable here rather than merely unlikely.
+    var settledVisuals: FileVisuals? {
         guard let waveform = SettledWaveform(self.waveform),
               let spectrogram = SettledSpectrogram(self.spectrogram)
         else { return nil }
