@@ -60,16 +60,54 @@ removed, and the removal reverted in full. A control that has never been seen to
 
 ## 2. Retention — stop discarding what the second file already produced
 
-- [ ] 2.1 Retain the compared file's visual container where `analyses.settledMeasurements` is already
+- [x] 2.1 Retain the compared file's visual container where `analyses.settledMeasurements` is already
       taken, in `ImportFlowModel.settle(…)`. Nothing else about that method changes.
-- [ ] 2.2 Take the primary file's side from the state it already holds in `InspectionPresentation`. **It
+      `comparedVisuals = analyses.settledVisuals`, on the line after `comparedMeasurements`. The
+      technical and measurement halves of that method are byte-for-byte what they were; the one other
+      edit is the parameter that carries the previous visuals for the picker-cancel restore, which 2.3
+      needs and which mirrors `andMeasurements` exactly.
+      **Getting the description there was the real work, and the seam chosen is the one that makes the
+      wrong answer unrepresentable.** `AudioDecoding.decode` returns it, `SharedPCMAnalysisGeneration.run`
+      held it and dropped it at `SharedPCMAnalysisOutcome`, which had no field for it. It now carries one
+      (**no default** — every return path of `run` names it, and forgetting one is a compile error), the
+      coordinator passes it into `InspectionAnalyses`, and `InspectionAnalyses.settledVisuals` became a
+      **property that reads its own** rather than a function taking one: pairing an artefact with another
+      read's description is now unrepresentable at that seam instead of merely unlikely.
+      `InspectionAnalyses.stream` **does** carry a default, and the type's own no-default rule is
+      answered rather than ignored: that rule exists so an *analysis* cannot be forgotten, this is not
+      one, production builds the value in a single place, and a caller that omits it gets **no visual
+      bundle at all** rather than a quietly wrong axis — because `FileVisuals` refuses an artefact whose
+      stream is unknown. Honouring it literally would have meant rewriting 94 unrelated test call sites
+      in a turn scoped to retention.
+- [x] 2.2 Take the primary file's side from the state it already holds in `InspectionPresentation`. **It
       is not re-retained** and not copied into the comparison's own storage (ADR-0025 §4).
-- [ ] 2.3 Confirm the retained value is released by the same three events that already release
+      **Nothing was added for the first file**, and the prohibition is asserted rather than assumed:
+      *"the first file's pictures are untouched, and are not copied anywhere"* compares its
+      `WaveformState` and `SpectrogramState` across a settled comparison and checks the retained side is
+      the **second** file's, and the production-reach suite does the same over two real files at two
+      different rates. Where the first file's own description will come from when the pair is assembled
+      is group 3's question; nothing here answers it early.
+- [x] 2.3 Confirm the retained value is released by the same three events that already release
       `comparedMeasurements`: a comparison starting, a comparison dismissed, and a new primary inspection
       ending the comparison.
-- [ ] 2.4 **Negative control — a second read would be caught.** Extend the counting harness
+      All three, plus the fourth half of the same lifecycle: the picker-cancel path **restores** the
+      previous comparison's visuals exactly as it restores its measurements. Not restoring would leave
+      one comparison's measurements beside another's pictures, which is the pairing defect group 3 exists
+      to prevent — so mirroring is the conservative reading of *"the same events"*, not an extension of
+      them. Four tests, one per event.
+      **Cancelled analyses are a separate thing from a cancelled picker**, and both are pinned: a settled
+      outcome whose drawings were cancelled retains **nothing** (the group 1 collapse returns `nil`), and
+      an *absence* is retained as an absence, because that is a settled answer about the file.
+- [x] 2.4 **Negative control — a second read would be caught.** Extend the counting harness
       `ComparisonMeasurementsReachTheComparisonTests` already uses so that a second `decode` call, or a
       second decoder, fails the suite. Demonstrate the failure by adding one temporarily, then revert.
+      `ProductionReadCounts` gained `reportedStreams` — every description the decoder actually returned,
+      in call order — so *"the retained description is the one the read produced"* is provable against the
+      decoder rather than against a number that happens to agree. The new production-reach suite asserts
+      **two decoders and two decode calls** for two files, with the pair retained.
+      **Seen to fail.** `sharedAnalyses(for:at:)` was made to run the shared pass twice; the suite failed
+      with `(counts.decodersMade → 4) == 2` and `(counts.decodeCalls → 4) == 2` — both counters, not one.
+      Reverted from a pristine copy, verified by checksum and by grep, and the suite is green again.
 
 ## 3. The pair's lifecycle — atomic publication, staleness, cancellation
 

@@ -58,6 +58,13 @@ struct MeasuredPair {
 final class ProductionReadCounts: @unchecked Sendable {
     var decodersMade = 0
     var decodeCalls = 0
+    /// Every description the decoder actually reported, in call order.
+    ///
+    /// Added for `add-two-file-visual-comparison` group 2: *"the retained stream description is the one
+    /// the read produced"* is only provable against what the decoder itself returned. Anything computed
+    /// from the report, the envelope or the spectral model would be a reconstruction, and a
+    /// reconstruction that happened to match would prove nothing.
+    var reportedStreams: [PCMStreamDescription] = []
 }
 
 /// Delegates to the real decoder and counts the call. It changes nothing about the read.
@@ -71,7 +78,9 @@ struct CountingDecoder: AudioDecoding {
         receive: (PCMStreamDescription, PCMChunk) -> PCMChunkDisposition
     ) async throws(AudioDecodingError) -> PCMStreamDescription? {
         counts.decodeCalls += 1
-        return try await wrapped.decode(file, chunkFrames: chunkFrames, receive: receive)
+        let stream = try await wrapped.decode(file, chunkFrames: chunkFrames, receive: receive)
+        if let stream { counts.reportedStreams.append(stream) }
+        return stream
     }
 }
 
