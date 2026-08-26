@@ -156,6 +156,10 @@ removed, and the removal reverted in full. A control that has never been seen to
       cannot land afterwards.
       Both reassign `comparison` wholesale, so the pair goes with it rather than being walked back, and
       both bump the comparison operation first so a result in flight is dropped before it can settle.
+      **The intermediate state of a replacement is pinned separately**: B settles and publishes a pair, C
+      is then chosen and is still working, and B's pair is gone *while C works* rather than merely being
+      replaced once C finishes. A pair on screen beside a loading comparison would describe a file the
+      user had already replaced.
 - [x] 3.6 **A second file that could not be opened** leaves the comparison's failure exactly as it is
       today and publishes no pair.
       `.preparationFailed` still produces `.failed(message:)` — never a `.ready` — so there is no case a

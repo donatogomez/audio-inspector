@@ -134,9 +134,13 @@ struct ComparedVisualsProductionReachTests {
             #expect(pair.first == presentation.settledVisuals)
             #expect(pair.second == flow.comparedVisuals)
 
-            // And the three halves of the comparison describe the same two files.
+            // And the three halves of the comparison describe the same two files: the technical facts,
+            // the measurements and the pair are published together, for one operation.
             #expect(technical.first.file.displayName == "pair-primary.wav")
             #expect(technical.second.file.displayName == "pair-compared.wav")
+            guard case let .ready(_, measurements, _) = flow.comparison, measurements != nil else {
+                Issue.record("the measurement half is missing beside a published pair"); return
+            }
         }
     }
 

@@ -254,6 +254,36 @@ struct PairedVisualsAtomicityTests {
                 "the retained side is not C's: \(String(describing: flow.comparedVisuals))")
     }
 
+    /// **The intermediate state of a replacement.** B settles and publishes a pair; C is then chosen and
+    /// is still in flight. The pair B published must be gone *while C is working* — not merely replaced
+    /// once C finishes — because a pair on screen beside a comparison that is loading would describe a
+    /// file the user has already replaced.
+    @Test("choosing a third file removes the settled pair while the new one is still in flight")
+    func replacingASettledComparisonRemovesItsPairImmediately() async {
+        let (flow, _) = await flowWithSettledPrimary(peak: 0.10, rate: 44_100)
+
+        let b = ScriptedAction(report: report(named: "b.wav"), analyses: drawings(peak: 0.20, rate: 48_000))
+        let comparingB = Task { await flow.compare(using: b.run) }
+        await b.waitUntilStarted()
+        b.release()
+        await comparingB.value
+        #expect(publishedPair(flow)?.second == expectedVisuals(peak: 0.20, rate: 48_000),
+                "B's pair was never published, so there is nothing to invalidate")
+
+        // C is chosen and has not settled.
+        let c = ScriptedAction(report: report(named: "c.wav"), analyses: drawings(peak: 0.30, rate: 96_000))
+        let comparingC = Task { await flow.compare(using: c.run) }
+        await c.waitUntilStarted()
+
+        // B's pair is gone, and nothing has taken its place yet.
+        #expect(publishedPair(flow) == nil, "B's pair survived into C's comparison")
+        #expect(flow.comparedVisuals == nil, "B's retained side survived into C's comparison")
+
+        c.release()
+        await comparingC.value
+        #expect(publishedPair(flow)?.second == expectedVisuals(peak: 0.30, rate: 96_000))
+    }
+
     // MARK: - Nothing published for a file that never settled
 
     @Test("a cancelled second inspection publishes no pair, and no side stands in as absent")
