@@ -370,25 +370,82 @@ removed, and the removal reverted in full. A control that has never been seen to
 
 ## 7. Copy — absence, failure, out-of-range, and the words that are not allowed
 
-- [ ] 7.1 Per side and per artefact: **absent**, **failed** and — for the spectral model — **too short to
+- [x] 7.1 Per side and per artefact: **absent**, **failed** and — for the spectral model — **too short to
       analyse** are three distinct statements. Reuse the sentences the single-file surfaces already use
       where they fit; do not invent a second vocabulary for the same fact.
-- [ ] 7.2 A neutral failure sentence naming no path and no framework, as today.
-- [ ] 7.3 Words for the two out-of-range regions: *this file has no audio beyond here* and *this file
+      `PairedVisualsCopy` **borrows rather than invents**: a lane's three states are the three the
+      single-file surfaces already have sentences for, and those sentences arrive verbatim through
+      `WaveformCopy.text(for:)` and `SpectrogramCopy.text(for:)`. What is added is only what a pair needs
+      and one file does not — which file a lane is, and what the part of the axis it does not reach means.
+      The three statements are asserted distinct on both sides and for both artefacts, and the two
+      artefacts' absences are asserted **different from each other**: one sentence for both would lose
+      which drawing is missing.
+- [x] 7.2 A neutral failure sentence naming no path and no framework, as today.
+      The failure's own message, unchanged, and asserted neutral: no `/`, no framework name, no error
+      code, on both sides and for both artefacts. A failure is also asserted **never equal** to an
+      absence — the collapse the measurements make deliberately is the one this surface may not make.
+- [x] 7.3 Words for the two out-of-range regions: *this file has no audio beyond here* and *this file
       cannot represent this range*. They must be **different sentences**, because they are different
       facts, and a person has to be able to tell them apart in group 10.
-- [ ] 7.4 One side's absence or failure never withholds the other side's drawing and never removes the
+      *"This file carries no audio beyond here."* and *"This file cannot represent this range."* —
+      ADR-0025 §12's own wording for both rows. Asserted different, asserted bound to their own axis
+      (the time remainder never speaks about frequency and vice versa), and asserted **absent** when a
+      file reaches the whole of its axis. Each is swept against its own forbidden list: the time
+      remainder may not be called *silence*, *silent*, *no signal*, *empty* or *missing*; the frequency
+      remainder may not be called *floor*, *no energy*, *low energy*, *truncated*, *missing* or
+      *unsupported*.
+      *(`tasks.md` writes the first as "has no audio"; ADR-0025 §12 writes it "carries no audio". The
+      record's wording is used — same fact, and the record is where the row lives.)*
+- [x] 7.4 One side's absence or failure never withholds the other side's drawing and never removes the
       shared axis.
-- [ ] 7.5 Attribution is **first** and **second**, by position, reusing `ComparisonCopy`'s existing
+      Group 6 pinned this at the presentation level; group 7 pins it in the words. An absent side gets
+      its own sentence, the drawn side keeps its drawing and its own detail line, and **neither
+      mentions the other** — asserted by checking each lane's label for the other lane's attribution.
+      The shared axis lines are the section's and survive either lane's state.
+- [x] 7.5 Attribution is **first** and **second**, by position, reusing `ComparisonCopy`'s existing
       wording — never *original*, *copy*, *source* or *derived*.
-- [ ] 7.6 **Negative control — forbidden vocabulary fails the suite.** A sweep over **every** string this
+      `PairedVisualsCopy.attribution(_:)` returns `ComparisonCopy.firstFile` / `.secondFile` — the rule
+      that neither file is *original*, *copy*, *source* or *derived* is one rule and lives in one place.
+      **The words follow the position, never the content**: the same lane placed on the other side is
+      named the other way round and nothing else about what it says changes, asserted over every lane
+      state for both artefacts.
+- [x] 7.6 **Negative control — forbidden vocabulary fails the suite.** A sweep over **every** string this
       surface can render, in every state, for the terms ADR-0025 §12 forbids. Demonstrate it fails by
       adding one temporarily; revert.
-- [ ] 7.7 Accessibility: each drawing is one element labelled with the artefact and its file; the shared
+      The denylist is **read from ADR-0025 §12's table** rather than remembered, plus ADR-0017's refused
+      attributions: *same, identical, different, separated, similar, indistinguishable, matching, louder,
+      quieter, high-frequency, source, original, copy, derived, master, remaster, transcode, upsample,
+      quality, better, worse, confidence, reference, candidate*. Matched on **word boundaries**, case
+      insensitively.
+      **The sweep's scope is this surface and nothing else** — 2 sides × 4 waveform lane states × 2
+      answers to *does it reach the whole axis*, the same for 4 spectral lane states, plus both
+      attributions and both axis lines: 100+ strings, every one of them reachable from a rendered view.
+      A sweep of the repository would fail on the ADR that lists the terms and on the tests that check
+      they are absent, so it is not one.
+      **Seen to fail:** *"— a lower quality rate."* appended to the frequency remainder, a string the
+      surface really renders. **18 issues**, and the sweep named the term: `offences → ["quality"]`,
+      once per string carrying it, plus the two assertions on the sentence itself. Reverted from a
+      pristine copy, verified by checksum and by a `MUTATION` grep.
+- [x] 7.7 Accessibility: each drawing is one element labelled with the artefact and its file; the shared
       extents are available as text; nothing depends on colour alone.
-- [ ] 7.8 **Differing channel counts produce no statement here.** Two files with different channel counts
+      Each **lane** is one element — not the section, and not one element per bucket or per cell. The
+      lane's own `.accessibilityElement(children: .ignore)` folds the drawing's element into it, and the
+      label is *attribution, then the drawing's own sentence, then what the unreached part of the axis
+      means*. Asserted: every lane's label begins with its file and names its artefact, in every state;
+      an absent or failed lane announces **that** rather than a drawing that is not there; and the
+      label is **identical for a 1-column grid and a 1 024-column one**, and for 2 buckets and 2 048 —
+      which is what *one element per drawing* means in a value a test can read.
+      The shared extents are stated in words (`timeAxis`, `frequencyAxis`), and the region above a file's
+      Nyquist is **both** drawn in group 5's treatment **and** said in a sentence, so the distinction from
+      the ramp's floor never rests on colour alone.
+- [x] 7.8 **Differing channel counts produce no statement here.** Two files with different channel counts
       are drawn as they are, and nothing on this surface compares, reconciles or remarks on the counts —
       ADR-0024 §7 already compares them where a per-channel measurement exists.
+      Each lane says what its **own** file carries — *combined across 1 channel*, *combined across 2
+      channels* — which is the single-file sentence reused and a fact about that file, not a comparison.
+      The whole surface is then swept at both channel counts for *not compared per channel*, *channel
+      counts*, *channels differ*, *1 and 2 channels*, *channel mismatch* and *differing channel*: none
+      appears. `MeasurementComparison`'s own channel note stays where it is and does not leak here.
 
 ## 8. Production reach — the pair really is what the inspection produced
 
