@@ -238,24 +238,71 @@ removed, and the removal reverted in full. A control that has never been seen to
 
 ## 5. Spectrogram — shared time, shared frequency, and the range that is not the floor
 
-- [ ] 5.1 Time reuses group 4's shared extent, from the same source, so a waveform lane and a spectrogram
+- [x] 5.1 Time reuses group 4's shared extent, from the same source, so a waveform lane and a spectrogram
       lane cannot disagree about how long a file is. Assert it.
-- [ ] 5.2 Shared frequency extent = `max` of the two Nyquists; each side's vertical fraction =
+      `PairedSpectrogramAxes` **composes** `PairedWaveformAxis` rather than copying its formula, and
+      fails wherever it fails — so agreement is true **by construction** rather than by convention. The
+      cross-test drives four duration pairs through both types and asserts the shared extent, both
+      fractions and both durations are the same values. Group 4 is not modified.
+- [x] 5.2 Shared frequency extent = `max` of the two Nyquists; each side's vertical fraction =
       `its nyquist / the shared nyquist`. Assert equal rates, 44.1 against 96, and **96 against 44.1** so
       the rule is not order-dependent.
-- [ ] 5.3 Above a file's own Nyquist: **no cell**. Assert the region yields no drawn value, and that the
+      All three, plus 96 against 192 in both orders and the bounds: no fraction above `1`, the
+      higher-rate side exactly `1`, and `sharedNyquist == max(rate) / 2` over four pairs.
+      **The Nyquist comes from `PCMStreamDescription` and from nothing else.** `Spectrogram` carries the
+      same rate — it is built from that description — but consulting it would tie the *axis* to a
+      *drawing*: a file whose model is absent or failed still has a Nyquist, and the shared axis the
+      other file is drawn against must survive that. One source for both axes also makes mixing them
+      unrepresentable. That the two agree is **verified** by a test rather than assumed.
+- [x] 5.3 Above a file's own Nyquist: **no cell**. Assert the region yields no drawn value, and that the
       axis is labelled to the **shared** Nyquist rather than to the lower one.
-- [ ] 5.4 The out-of-range region is rendered **distinguishably from the ramp's floor colour**. Assert it
+      `occupiedRect` sits at the **bottom** — 0 Hz is at the bottom, the convention
+      `SpectrogramGeometry.verticalBand` already imposes — and `outOfRangeRect` is the strip above it.
+      The two never intersect. Handing the occupied rect to the **existing** `SpectrogramGeometry`
+      lands every band inside it, and an index past the model's own bands still resolves to `nil`: no
+      band is invented to fill the strip. `SpectrogramAxes.frequencyMarks(nyquist:)` is reused unchanged
+      and asserted to end at 48 kHz for a 44.1/96 pair — **not** at the lower file's 22.05 kHz.
+      **The out-of-range strip spans the file's own time, not the shared width**, because past its last
+      frame there is a *different* absence and group 4's remainder already names that one.
+- [x] 5.4 The out-of-range region is rendered **distinguishably from the ramp's floor colour**. Assert it
       as a value — the treatment used there is not the colour `SpectrogramColourRamp` produces at the
       floor — rather than by looking at a rendering. `SpectrogramColourRamp` itself is **not modified**.
-- [ ] 5.5 Both lanes use the same ramp, the same floor and **one** legend describing both. Assert as
+      `outOfRangeTreatment` is a mid-grey, and the claim is asserted twice. By **value**: it differs from
+      `components(for: floorDecibels)` and its relative luminance is more than 0.2 above it, so the
+      difference is separable rather than merely non-zero. And **structurally**: it is achromatic, and
+      the ramp never is — swept across 241 levels from −120 to +120 dBFS, every colour the ramp produces
+      keeps red apart from blue, so an equal-component treatment cannot be any level it can show.
+      The final styling is group 6's; what this fixes is that the two facts cannot collide.
+      `SpectrogramColourRamp` is byte-identical to `main`.
+- [x] 5.5 Both lanes use the same ramp, the same floor and **one** legend describing both. Assert as
       values.
-- [ ] 5.6 **Negative control — floor and out-of-range colliding would be caught.** Paint the out-of-range
+      `energyRange(for:)` and `floorDecibels(for:)` are asked per lane and answer `SpectrogramColourRamp.range`
+      and `Spectrogram.floorDecibels` for both — the parameter exists so the rule is answered rather than
+      assumed, exactly as group 4's `amplitudeRange(for:)` does. One legend: the swatches and ticks are
+      the ramp's own statics, not a lane's, and the same level is the same colour whichever lane asks.
+- [x] 5.6 **Negative control — floor and out-of-range colliding would be caught.** Paint the out-of-range
       region with the floor colour temporarily and demonstrate 5.4 fails; revert.
-- [ ] 5.7 **Negative control — cropping to the lower Nyquist would be caught.** Set the shared extent to
+      `outOfRangeTreatment` set to `components(for: floorDecibels)`. **4 issues** across both of 5.4's
+      tests: the treatment equalled the floor, its luminance delta fell to exactly `0.0`, it stopped
+      being achromatic, and the ramp was found reproducing it. **Nothing geometric moved.**
+- [x] 5.7 **Negative control — cropping to the lower Nyquist would be caught.** Set the shared extent to
       `min` temporarily and demonstrate 5.2 and 5.3 fail; revert.
-- [ ] 5.8 Confirm no raster is built at anything other than the model's own size, and that
+      `sharedNyquist` set to `min`. **14 issues** across seven tests, and the signature is the one this
+      control exists for: the shared extent became the **lower** Nyquist (22 050 for a 44.1/96 pair),
+      fractions rose **above 1** (`2.17`, `2.0`), and — the point — the axis label dropped to 22 050, so
+      **the 96 kHz file's upper range disappeared silently**. Both 5.2 and 5.3 failed, as the task says.
+      **A third mutation was run**, because cropping and stretching are different defects at different
+      sites: every `frequencyFraction` forced to `1` while `sharedNyquist` stayed the maximum. Distinct
+      signature again — **not one `sharedNyquist` assertion failed**, no fraction exceeded 1, and what
+      broke was the fractions, the out-of-range fraction falling to `0`, and the occupied rect filling
+      the whole height. All three reverted from a pristine copy, verified by checksum and a `MUTATION`
+      grep, suite green.
+- [x] 5.8 Confirm no raster is built at anything other than the model's own size, and that
       `SpectrogramRaster`'s no-interpolation rule still holds for both lanes.
+      Asserted for both lanes, at two different grid sizes: the buffer's width and height are the model's
+      own `columnCount` and `bandCount`, and its byte count is exactly `columns × bands × bytesPerPixel`.
+      The lane's area is a **drawing** size and never a raster size — asserted to differ from the
+      buffer's dimensions — so nothing here resamples. `SpectrogramRaster` is byte-identical to `main`.
 
 ## 6. Replacement — the paired drawings stand in for the single ones
 
