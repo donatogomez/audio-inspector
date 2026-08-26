@@ -181,22 +181,60 @@ removed, and the removal reverted in full. A control that has never been seen to
 
 ## 4. Waveform — shared axes, computed as arithmetic and asserted without rendering
 
-- [ ] 4.1 Shared time extent = `max` of the two files' `frameCount / sampleRate`, each from **that file's
+- [x] 4.1 Shared time extent = `max` of the two files' `frameCount / sampleRate`, each from **that file's
       own** stream description. One function, outside the view, in the shape `WaveformGeometry` already
       has — *"every property worth guaranteeing here … is arithmetic that needs no rendering at all."*
-- [ ] 4.2 Each side's drawn fraction = `its extent / the shared extent`; the longer file's is exactly `1`.
+      `PairedWaveformAxis` in `FeatureAnalysis`, a pure value with no rendering and no envelope. It takes
+      two `PCMStreamDescription?` — a **domain** type, which is what lets it live beside
+      `WaveformGeometry` at all: `FeatureAnalysis` cannot see `PairedVisuals`, and joining the two is the
+      composition root's job (group 6). Seconds are `frameCount / sampleRate` and **never frames alone**:
+      the same duration at 44.1 and 48 kHz holds different frame counts, and comparing frames would
+      report a difference in time where there is none.
+      **Failable, on the two cases that have no axis**: neither file reported a stream, or both reported
+      one carrying no audio. A shared extent of zero is refused rather than divided by.
+- [x] 4.2 Each side's drawn fraction = `its extent / the shared extent`; the longer file's is exactly `1`.
       Assert the equal-duration case, the second-shorter case and the first-shorter case.
-- [ ] 4.3 The existing bucket→band arithmetic is reused **unchanged** inside each side's fraction. A
+      All three, plus the bounds: no fraction exceeds `1`, one side always reaches exactly `1`, and every
+      fraction is finite. **A read that reported no stream gets no lane**, never a lane of zero seconds —
+      *no extent was measured* and *this file lasts no time* are different statements, and a file that
+      opened holding no audio genuinely is the second.
+- [x] 4.3 The existing bucket→band arithmetic is reused **unchanged** inside each side's fraction. A
       resize re-runs geometry and nothing else.
-- [ ] 4.4 Beyond a file's own extent: **no bar, no baseline, no substituted silent bucket**. Assert that
+      `laneSize(_:in:)` returns that file's share of the width and the whole height; the caller builds
+      the **existing** `WaveformGeometry` against it. Asserted by value: a lane's bands are identical to
+      what one file alone gets at that size, and the last bucket's trailing edge is the **lane's** width
+      rather than the pair's. `WaveformGeometry` is not modified.
+- [x] 4.4 Beyond a file's own extent: **no bar, no baseline, no substituted silent bucket**. Assert that
       the remainder yields no drawn value at all, and that `WaveformBucket.silent` is never introduced
       there.
-- [ ] 4.5 Amplitude uses the existing fixed range for **both** lanes, with the clamp applied when drawing
+      The geometry knows only the envelope's own bucket count and returns `nil` past it, so no band lands
+      in the remainder and none is invented to fill it. `remainderFraction` names the region as *outside
+      this file's audio* and carries no sample, so it cannot be confused with the measured zero
+      `WaveformBucket.silent` is. Asserted that the same envelope is byte-identical after being paired
+      with a file 100× longer, that its bucket count is unchanged, and that it contains no `.silent`.
+      A lane of zero width yields **no geometry at all** rather than something stretched into place.
+- [x] 4.5 Amplitude uses the existing fixed range for **both** lanes, with the clamp applied when drawing
       and only then. Assert both lanes are driven by the same range **as values**.
-- [ ] 4.6 **Negative control — per-file normalisation would be caught.** Re-range one lane to its own peak
+      `amplitudeRange(for:)` is asked per lane and answers `WaveformGeometry.drawnRange` for both — the
+      parameter exists so the rule is answered rather than assumed. Asserted as values, and asserted
+      through the geometry: the two lanes differ in width and not in height, so six amplitudes land at
+      identical heights in both.
+- [x] 4.6 **Negative control — per-file normalisation would be caught.** Re-range one lane to its own peak
       temporarily and demonstrate 4.5 fails; revert.
-- [ ] 4.7 **Negative control — a stretched lane would be caught.** Make the shorter file fill the axis
+      `amplitudeRange(for: .first)` returned `-0.9 ... 0.9`. **3 issues**, all in 4.5's test, all
+      amplitude: the two lanes' ranges differ, and neither matches `drawnRange`. Nothing temporal moved.
+- [x] 4.7 **Negative control — a stretched lane would be caught.** Make the shorter file fill the axis
       temporarily and demonstrate 4.2 fails; revert.
+      Every lane's `fraction` forced to `1` while `shared` stayed the maximum. **13 issues** across six
+      tests, and the signature is what makes it a different defence from 4.6: fractions became `1` where
+      they should be `0.5`, `0.625` and `0`, lane widths became the pair's, remainders became `0` — and
+      **not one `sharedSeconds` assertion failed.** The shared extent was still right; only the geometry
+      derived from it was wrong, which is exactly the defect this control exists for.
+      **A third mutation was run**, because *"each side normalised against its own extent"* is a different
+      site from either of the above: the shared extent was taken from the first file instead of the
+      maximum. Its signature is distinct again — `sharedSeconds` itself wrong (`5.0` for a 10 s pair), and
+      **fractions above `1`** (`2.0`, and a maximum of `9.0`), which neither 4.6 nor 4.7 can produce.
+      All three reverted from a pristine copy, verified by checksum and by a `MUTATION` grep, suite green.
 
 ## 5. Spectrogram — shared time, shared frequency, and the range that is not the floor
 
