@@ -449,16 +449,60 @@ removed, and the removal reverted in full. A control that has never been seen to
 
 ## 8. Production reach — the pair really is what the inspection produced
 
-- [ ] 8.1 Drive the **real** pipeline for two real files: real coordinator, real decoder, real
+- [x] 8.1 Drive the **real** pipeline for two real files: real coordinator, real decoder, real
       accumulators. Assert **one decoder and one decode call per file**, with the pair retained.
-- [ ] 8.2 Assert each side's envelope and spectral model in the pair are **equal** to the values that
+      `PairedVisualsProductionReachTests`, over two files that differ in **rate, length and level** —
+      44.1 kHz / 1.0 s / 0.01 against 48 kHz / 2.0 s / 0.04 — so a side on the wrong lane anywhere on the
+      path is a wrong number rather than a coincidence.
+      **One counter per file**, not one for the pair: *one decoder and one read per file* is asserted per
+      file rather than inferred from a total two files could share unevenly. The counters cover the whole
+      operation — report, measurements, waveform, spectral model and the pair — and are **never reset
+      between phases**. The pair is asserted genuinely settled, with all four drawings available, so the
+      counts are the cost of a finished comparison rather than of an abandoned one.
+- [x] 8.2 Assert each side's envelope and spectral model in the pair are **equal** to the values that
       file's own inspection produced — reuse, not a lookalike.
-- [ ] 8.3 **Negative control — recomputation would be caught.** Rebuild one artefact from a second pass
+      Compared against the outcomes **captured at the coordinator's own boundary**, never against an
+      artefact rebuilt in the test: `paired.first.waveform == .available(firstAnalyses.waveform's
+      envelope)`, and the same for the model and for both sides. The stream descriptions are asserted to
+      be those inspections' own, and to carry the right rate and frame count per side.
+      **No swap**, asserted in both directions: the two files' envelopes, models and descriptions are
+      first asserted **different from each other** — so the fixtures still discriminate — and then each
+      lane is asserted to hold its own.
+- [x] 8.3 **Negative control — recomputation would be caught.** Rebuild one artefact from a second pass
       temporarily and demonstrate 8.1 or 8.2 fails; revert.
-- [ ] 8.4 The pair, the technical comparison and the measurement comparison on screen together all
+      **A real second pass, not a changed value**: the coordinator was made to rebuild the *spectral
+      model* from a second `SharedPCMAnalysisGeneration` run over the same file — a second decoder and a
+      second `decode`. **8 issues**, all of them counters: `decodersMade → 2` and `decodeCalls → 2` for
+      **each** file against the expected 1, and `→ 4` against the expected 2 in aggregate. Reverted from
+      a pristine copy, verified by checksum and by a `MUTATION` grep.
+      **A second control was run**, because 8.4's test could in principle pass on values that happened to
+      agree: the two sides of the pair were swapped where the flow assembles it. **21 issues across three
+      tests** — the reuse test (10), the coherence test (4) and the end-to-end reach test (7, including
+      the shorter file's share of the time axis flipping from `0.5` to `1.0`). Reverted the same way.
+- [x] 8.4 The pair, the technical comparison and the measurement comparison on screen together all
       describe the same two inspections, over real files.
-- [ ] 8.5 Confirm the report is still emitted before any sample is read, unchanged — the ordering the
+      Read out of **one** `.ready` value: the technical half is asserted equal to
+      `FileComparison(first:second:)` over the two reports those inspections returned; the measurement
+      half equal to what the domain builds from the two bundles they settled on; and the visual half to
+      carry those same inspections' stream descriptions. The three are then asserted to **agree about
+      which file is which** — 44.1 kHz then 48 kHz in the technical rows and in the pair alike — and the
+      fixtures are asserted to discriminate for the measurements too, their loudness differing.
+- [x] 8.5 Confirm the report is still emitted before any sample is read, unchanged — the ordering the
       existing suites already pin.
+      Not *before the other updates* — **before a sample exists**. The decoder is asked, at the moment
+      each report arrives, whether it had been called yet, in the shape `SharedPCMDecodeCountTests`
+      already uses; asserted `false` for **both** inspections. Each is then asserted to have really read
+      its file once, so a report that preceded nothing could not pass, and the pair is asserted to settle
+      afterwards: report-first did not cost the drawings.
+      **No sleep, no polling, no `Task.yield()`** anywhere in this group — the flow's own calls are
+      awaited.
+
+      **No production changed.** Group 8 set out to find a piece of groups 1–7 reachable only through a
+      constructor in a test, and found none: the diff is one test file. The end-to-end test walks the
+      whole path on the two real files — settled contracts, the retained pair, the time axis at `0.5`
+      against `1`, the frequency axis shared at 24 000 with the lower file at `22 050/24 000`, the paired
+      sections standing in exactly once, and the two out-of-range sentences appearing on the side that
+      earns each and on neither other.
 
 ## 9. Cost, boundaries and the export
 
