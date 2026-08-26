@@ -342,7 +342,7 @@ struct MeasurementComparisonSurfaceTests {
         switch state {
         case .none: .none
         case .loading: .loading
-        case let .ready(comparison, measurements): .ready(comparison, measurements: measurements)
+        case let .ready(comparison, measurements, _): .ready(comparison, measurements: measurements)
         case let .failed(message): .failed(message: message)
         }
     }

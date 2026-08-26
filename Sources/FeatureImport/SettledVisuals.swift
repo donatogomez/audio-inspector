@@ -194,11 +194,15 @@ public struct PairedVisuals: Sendable, Equatable {
 extension InspectionPresentation {
     /// The pictures this file has **settled on**, or `nil` while either is still being produced.
     ///
-    /// The stream description is passed in because neither this type nor `InspectionAnalyses` carries
-    /// one: it belongs to the read, and the caller that owns the read is the one that has it. It is
-    /// never derived from the report's declared properties — those are what the file's header claims,
-    /// and the axes describe what was actually decoded.
-    func settledVisuals(from stream: PCMStreamDescription?) -> FileVisuals? {
+    /// **It takes no stream description, exactly as the compared side's does not.** Both sides now carry
+    /// the one their own read produced, so the two routes from a decoder to a settled bundle are the
+    /// same route, and handing either side another read's description is unrepresentable rather than
+    /// merely unlikely.
+    ///
+    /// A file whose drawings have settled but whose read has not yet reported its description is **not
+    /// settled here**: `FileVisuals` refuses an artefact whose stream is unknown, so this returns `nil`
+    /// until the outcome carrying it has arrived.
+    var settledVisuals: FileVisuals? {
         guard let waveform = SettledWaveform(self.waveform),
               let spectrogram = SettledSpectrogram(self.spectrogram)
         else { return nil }

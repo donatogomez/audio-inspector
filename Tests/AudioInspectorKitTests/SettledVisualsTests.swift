@@ -59,7 +59,8 @@ struct SettledVisualsTests {
 
     private func presentation(
         waveform: WaveformState,
-        spectrogram: SpectrogramState
+        spectrogram: SpectrogramState,
+        stream: PCMStreamDescription? = nil
     ) -> InspectionPresentation {
         InspectionPresentation(
             report: InspectionReport(
@@ -75,7 +76,8 @@ struct SettledVisualsTests {
                 status: .completed
             ),
             waveform: waveform,
-            spectrogram: spectrogram
+            spectrogram: spectrogram,
+            stream: stream
         )
     }
 
@@ -185,12 +187,12 @@ struct SettledVisualsTests {
     /// a file's drawings as missing when they are a second away.
     @Test("loading never produces a settled value")
     func loadingNeverSettles() {
-        #expect(presentation(waveform: .loading, spectrogram: .available(model()))
-            .settledVisuals(from: stream()) == nil)
-        #expect(presentation(waveform: .available(envelope()), spectrogram: .loading)
-            .settledVisuals(from: stream()) == nil)
-        #expect(presentation(waveform: .loading, spectrogram: .loading)
-            .settledVisuals(from: stream()) == nil)
+        #expect(presentation(waveform: .loading, spectrogram: .available(model()), stream: stream())
+            .settledVisuals == nil)
+        #expect(presentation(waveform: .available(envelope()), spectrogram: .loading, stream: stream())
+            .settledVisuals == nil)
+        #expect(presentation(waveform: .loading, spectrogram: .loading, stream: stream())
+            .settledVisuals == nil)
     }
 
     /// Cancellation belongs to an operation the user already replaced. Rendering it as an absence would
@@ -271,8 +273,8 @@ struct SettledVisualsTests {
     @Test("a state and an outcome describing the same thing settle identically")
     func bothSidesAgree() {
         let produced = envelope()
-        let fromState = presentation(waveform: .available(produced), spectrogram: .unavailable)
-            .settledVisuals(from: stream())
+        let fromState = presentation(waveform: .available(produced), spectrogram: .unavailable, stream: stream())
+            .settledVisuals
         let fromOutcome = analyses(stream: stream(), waveform: .available(produced), spectrogram: .unavailable)
             .settledVisuals
         #expect(fromState == fromOutcome)

@@ -192,7 +192,7 @@ struct ImportFlowComparisonTests {
         await second.waitUntilStarted()
 
         // Ready already — the second file's visualisations have not even been started.
-        guard case let .ready(comparison, _) = flow.comparison else {
+        guard case let .ready(comparison, _, _) = flow.comparison else {
             Issue.record("expected a comparison")
             return
         }
@@ -315,7 +315,7 @@ struct ImportFlowComparisonTests {
         second.finish(.inspected(broken, analyses: InspectionAnalyses(waveform: .unavailable, spectrogram: .unavailable, signalLevelMetrics: .unavailable, truePeak: .unavailable, loudness: .unavailable, significantBandwidth: .unavailable)))
         await comparing.value
 
-        guard case let .ready(comparison, _) = flow.comparison else {
+        guard case let .ready(comparison, _, _) = flow.comparison else {
             Issue.record("expected a comparison")
             return
         }
@@ -373,7 +373,7 @@ struct ImportFlowComparisonTests {
         await cAction.waitUntilStarted()
 
         // C is already the comparison on screen.
-        guard case let .ready(afterC, _) = flow.comparison else {
+        guard case let .ready(afterC, _, _) = flow.comparison else {
             Issue.record("expected C's comparison")
             return
         }
@@ -387,7 +387,7 @@ struct ImportFlowComparisonTests {
         )
         await comparingB.value
 
-        guard case let .ready(afterStaleB, _) = flow.comparison else {
+        guard case let .ready(afterStaleB, _, _) = flow.comparison else {
             Issue.record("a superseded second file replaced the comparison on screen")
             return
         }
@@ -397,7 +397,7 @@ struct ImportFlowComparisonTests {
         cAction.finish(.inspected(c, analyses: InspectionAnalyses(waveform: .unavailable, spectrogram: .unavailable, signalLevelMetrics: .unavailable, truePeak: .unavailable, loudness: .unavailable, significantBandwidth: .unavailable)))
         await comparingC.value
 
-        guard case let .ready(final, _) = flow.comparison else {
+        guard case let .ready(final, _, _) = flow.comparison else {
             Issue.record("expected a comparison")
             return
         }
@@ -442,7 +442,7 @@ struct ImportFlowComparisonTests {
         #expect(presentation.spectrogram == .unavailable)
 
         // And the comparison is still there, unaffected by either.
-        guard case let .ready(comparison, _) = flow.comparison else {
+        guard case let .ready(comparison, _, _) = flow.comparison else {
             Issue.record("expected a comparison")
             return
         }
@@ -511,7 +511,7 @@ struct ImportFlowComparisonTests {
         )
         await second.value
 
-        guard case let .ready(comparison, _) = flow.comparison else {
+        guard case let .ready(comparison, _, _) = flow.comparison else {
             Issue.record("expected a comparison")
             return
         }
@@ -536,7 +536,7 @@ struct ImportFlowComparisonTests {
         second.finish(.inspected(primary, analyses: InspectionAnalyses(waveform: .unavailable, spectrogram: .unavailable, signalLevelMetrics: .unavailable, truePeak: .unavailable, loudness: .unavailable, significantBandwidth: .unavailable)))
         await comparing.value
 
-        guard case let .ready(comparison, _) = flow.comparison else {
+        guard case let .ready(comparison, _, _) = flow.comparison else {
             Issue.record("expected a comparison")
             return
         }

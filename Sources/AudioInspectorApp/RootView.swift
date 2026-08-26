@@ -203,7 +203,11 @@ public struct RootView: View {
         // Both halves travel together, exactly as the flow publishes them: the technical comparison the
         // moment the second report exists, and the measurements once **both** files have settled theirs.
         // The surface renders whichever it has.
-        case let .ready(technical, measurements): .ready(technical, measurements: measurements)
+        // The paired drawings travel in the same value and are **deliberately not translated yet**:
+        // presenting them, and standing them in for the first file's own sections, is a later slice's.
+        // Ignoring a payload the flow publishes is a smaller thing than publishing it somewhere a stale
+        // result could reach it.
+        case let .ready(technical, measurements, _): .ready(technical, measurements: measurements)
         case let .failed(message): .failed(message: message)
         }
     }

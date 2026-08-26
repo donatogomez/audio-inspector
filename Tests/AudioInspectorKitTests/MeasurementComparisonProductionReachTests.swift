@@ -197,7 +197,7 @@ struct MeasurementComparisonProductionReachTests {
             let firstBundle = try #require(primary.analyses.settledMeasurements)
             let secondBundle = try #require(compared.analyses.settledMeasurements)
 
-            guard case let .ready(technical, measurements) = flow.comparison else {
+            guard case let .ready(technical, measurements, _) = flow.comparison else {
                 Issue.record("the flow published \(flow.comparison)"); return
             }
             #expect(technical == FileComparison(first: primary.report, second: compared.report))
@@ -264,7 +264,7 @@ struct MeasurementComparisonProductionReachTests {
             let primaryBundle = try #require(primary.analyses.settledMeasurements)
             let comparedBundle = try #require(cOutcome.analyses.settledMeasurements)
             let expected = MeasurementComparison(first: primaryBundle, second: comparedBundle)
-            guard case let .ready(technical, measurements) = flow.comparison else {
+            guard case let .ready(technical, measurements, _) = flow.comparison else {
                 Issue.record("the flow published \(flow.comparison)"); return
             }
             #expect(technical == FileComparison(first: primary.report, second: cOutcome.report))

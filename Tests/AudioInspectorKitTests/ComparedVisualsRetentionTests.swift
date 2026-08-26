@@ -283,7 +283,7 @@ struct ComparedVisualsRetentionTests {
         compared.finish(sending: [.report(secondReport)], outcome)
         await comparing.value
 
-        guard case let .ready(technical, _) = flow.comparison else {
+        guard case let .ready(technical, _, _) = flow.comparison else {
             Issue.record("expected a ready comparison, got \(flow.comparison)"); return
         }
         #expect(technical.second.file.displayName == "b.wav")
