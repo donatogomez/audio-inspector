@@ -24,37 +24,37 @@ import CoreGraphics
 /// before the shared extent has a **remainder**, and a remainder is not silence: `WaveformBucket.silent`
 /// is a *measured* zero, and past a file's last frame nothing was measured. Nothing here can be mistaken
 /// for one, because nothing here carries a sample at all.
-struct PairedWaveformAxis: Equatable {
+public struct PairedWaveformAxis: Equatable {
 
     /// Which of the two files a lane belongs to. Position in the comparison, and nothing more — never
     /// *original* and *copy*, never *source* and *derived*.
-    enum Side: Equatable {
+    public enum Side: Equatable {
         case first
         case second
     }
 
     /// One file's share of the shared axis.
-    struct Lane: Equatable {
+    public struct Lane: Equatable {
         /// What this file's own audio lasts, from the stream its samples were read from.
-        let seconds: Double
+        public let seconds: Double
         /// The share of the shared extent it occupies: `seconds / sharedSeconds`, in `0...1`. The
         /// longer file's is exactly `1`.
-        let fraction: Double
+        public let fraction: Double
 
         /// The share of the axis this file's audio does **not** reach.
         ///
         /// It means *there is no audio here*, and it is not a quiet passage. Nothing is drawn in it —
         /// no bar, no baseline, no substituted bucket — and this value exists so the surface can say so
         /// rather than leave an unexplained gap.
-        var remainderFraction: Double { 1 - fraction }
+        public var remainderFraction: Double { 1 - fraction }
     }
 
     /// The extent both lanes are measured against: the longer of the two files' own extents.
-    let sharedSeconds: Double
+    public let sharedSeconds: Double
     /// The first file's lane, or `nil` when its read reported no stream at all.
-    let first: Lane?
+    public let first: Lane?
     /// The second file's lane, or `nil` for the same reason.
-    let second: Lane?
+    public let second: Lane?
 
     /// Fails when there is no axis to build.
     ///
@@ -66,7 +66,7 @@ struct PairedWaveformAxis: Equatable {
     /// **A side whose read reported no stream gets `nil`, never a lane of zero seconds.** *No extent was
     /// measured* and *this file lasts no time at all* are different statements, and a file that opened
     /// and holds no audio genuinely is the second one.
-    init?(first: PCMStreamDescription?, second: PCMStreamDescription?) {
+    public init?(first: PCMStreamDescription?, second: PCMStreamDescription?) {
         let firstSeconds = first.map(Self.seconds)
         let secondSeconds = second.map(Self.seconds)
         guard let shared = [firstSeconds, secondSeconds].compactMap({ $0 }).max(), shared > 0 else {
@@ -88,7 +88,7 @@ struct PairedWaveformAxis: Equatable {
         Double(stream.frameCount) / stream.sampleRate
     }
 
-    func lane(_ side: Side) -> Lane? {
+    public func lane(_ side: Side) -> Lane? {
         switch side {
         case .first: first
         case .second: second
@@ -100,7 +100,7 @@ struct PairedWaveformAxis: Equatable {
     /// The height is the whole of it — the axis is shared in **time**, not in amplitude — and the width
     /// is that file's own share. Handing this to `WaveformGeometry` is what makes a short file stop
     /// where its audio stops, using the same bucket arithmetic that draws a single file, unchanged.
-    func laneSize(_ side: Side, in size: CGSize) -> CGSize? {
+    public func laneSize(_ side: Side, in size: CGSize) -> CGSize? {
         guard let lane = lane(side) else { return nil }
         return CGSize(width: size.width * CGFloat(lane.fraction), height: size.height)
     }
@@ -111,7 +111,7 @@ struct PairedWaveformAxis: Equatable {
     /// rather than of either file. Scaling a lane to its own peak would make a quiet file look like a
     /// loud one and destroy the only comparison a pair of drawings can honestly support (ADR-0025 §7).
     /// The parameter exists so that rule is asked and answered per lane rather than assumed.
-    func amplitudeRange(for side: Side) -> ClosedRange<Float> {
+    public func amplitudeRange(for side: Side) -> ClosedRange<Float> {
         _ = side
         return WaveformGeometry.drawnRange
     }
