@@ -11,8 +11,12 @@ import SwiftUI
 /// only the transient export phase. No AppKit, no `URL`, no filesystem.
 public struct ReportView: View {
     private let report: InspectionReport
-    private let waveform: WaveformPresentation
-    private let spectrogram: SpectrogramPresentation
+    /// Which drawings this report presents — the first file's own, or two files' on shared axes.
+    ///
+    /// **One value for both**, so a paired waveform can never appear beside a single spectrogram: the
+    /// two sections below read the same answer and cannot disagree about which question the surface is
+    /// asking (ADR-0025 §8).
+    private let visuals: ReportVisuals
     private let signalLevelMetrics: SignalLevelMetricsPresentation
     private let truePeak: TruePeakPresentation
     private let loudness: LoudnessPresentation
@@ -24,8 +28,7 @@ public struct ReportView: View {
     /// caller forget one and ship a report that silently shows nothing where a state belongs.
     public init(
         report: InspectionReport,
-        waveform: WaveformPresentation,
-        spectrogram: SpectrogramPresentation,
+        visuals: ReportVisuals,
         signalLevelMetrics: SignalLevelMetricsPresentation,
         truePeak: TruePeakPresentation,
         loudness: LoudnessPresentation,
@@ -34,8 +37,7 @@ public struct ReportView: View {
         export: @escaping ReportExportAction
     ) {
         self.report = report
-        self.waveform = waveform
-        self.spectrogram = spectrogram
+        self.visuals = visuals
         self.signalLevelMetrics = signalLevelMetrics
         self.truePeak = truePeak
         self.loudness = loudness
@@ -129,7 +131,22 @@ public struct ReportView: View {
     /// interpret.
     private var waveformSection: some View {
         ReportSection(WaveformCopy.title) {
-            WaveformSection(presentation: waveform)
+            // **Exactly one**, whichever mode this is: the paired drawing stands in for the single one
+            // rather than joining it, so the first file's envelope appears once on this surface and not
+            // twice at two different geometries. How many there are is `ReportVisuals`' answer, which a
+            // test can read; a rendering cannot be asserted.
+            ForEach(Array(visuals.waveformSections.enumerated()), id: \.offset) { _, section in
+                switch section {
+                case let .singleWaveform(presentation):
+                    WaveformSection(presentation: presentation)
+                case let .pairedWaveform(presentation):
+                    PairedWaveformSection(presentation: presentation)
+                case .singleSpectrogram, .pairedSpectrogram:
+                    // Not reachable through `waveformSections`, and named rather than defaulted so a
+                    // new kind of section fails to compile here instead of vanishing.
+                    EmptyView()
+                }
+            }
         }
     }
 
@@ -143,7 +160,16 @@ public struct ReportView: View {
     /// a sentence rather than a gap the reader has to interpret.
     private var spectrogramSection: some View {
         ReportSection(SpectrogramCopy.title) {
-            SpectrogramSection(presentation: spectrogram)
+            ForEach(Array(visuals.spectrogramSections.enumerated()), id: \.offset) { _, section in
+                switch section {
+                case let .singleSpectrogram(presentation):
+                    SpectrogramSection(presentation: presentation)
+                case let .pairedSpectrogram(presentation):
+                    PairedSpectrogramSection(presentation: presentation)
+                case .singleWaveform, .pairedWaveform:
+                    EmptyView()
+                }
+            }
         }
     }
 
@@ -547,7 +573,9 @@ extension SignificantBandwidthPresentation {
 
 #Preview {
     ReportView(
-        report: .preview, waveform: .preview, spectrogram: .preview, signalLevelMetrics: .preview,
+        report: .preview,
+        visuals: .single(waveform: .preview, spectrogram: .preview),
+        signalLevelMetrics: .preview,
         truePeak: .preview, loudness: .preview, programmeBandwidth: .preview,
         export: { _, _ in .succeeded }
     )

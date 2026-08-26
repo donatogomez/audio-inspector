@@ -194,7 +194,7 @@ public struct RootView: View {
 
     /// Translates the flow's comparison state into the presentation vocabulary, exactly as the two
     /// visualisations are translated.
-    private static func comparisonPresentation(
+    nonisolated static func comparisonPresentation(
         for state: ImportFlowModel.ComparisonState
     ) -> ComparisonPresentation {
         switch state {
@@ -203,26 +203,95 @@ public struct RootView: View {
         // Both halves travel together, exactly as the flow publishes them: the technical comparison the
         // moment the second report exists, and the measurements once **both** files have settled theirs.
         // The surface renders whichever it has.
-        // The paired drawings travel in the same value and are **deliberately not translated yet**:
-        // presenting them, and standing them in for the first file's own sections, is a later slice's.
-        // Ignoring a payload the flow publishes is a smaller thing than publishing it somewhere a stale
-        // result could reach it.
+        // The paired drawings travel in the same value and are translated by `reportVisuals(for:in:)`,
+        // which reads **this same state** in the same call — so the pictures on screen and the facts
+        // beside them can never come from two different reads of the flow.
         case let .ready(technical, measurements, _): .ready(technical, measurements: measurements)
+        case let .failed(message): .failed(message: message)
+        }
+    }
+
+
+    // MARK: - Which drawings the report presents
+
+    /// The first file's own drawings, or two files' on shared axes — decided **once**, for both.
+    ///
+    /// **Total, with no default.** A new comparison state has to be answered here rather than falling
+    /// through to a single drawing, which is the failure a `default` would hide: a pair quietly
+    /// disappearing because someone added a case elsewhere.
+    ///
+    /// A pair that has not settled is not a pair. `.ready` carries `nil` until **both** files have
+    /// settled both drawings and both reads have reported their descriptions, so *not yet*, cancelled,
+    /// dismissed, superseded and *the second file failed to open* all arrive here as the same answer —
+    /// the first file's own drawings, exactly as they are presented without this capability.
+    nonisolated static func reportVisuals(
+        for presentation: InspectionPresentation, in comparison: ImportFlowModel.ComparisonState
+    ) -> ReportVisuals {
+        let single = ReportVisuals.single(
+            waveform: waveformPresentation(for: presentation.waveform),
+            spectrogram: spectrogramPresentation(for: presentation.spectrogram)
+        )
+        switch comparison {
+        case .none, .loading, .failed: return single
+        case .ready(_, _, .none): return single
+        case let .ready(_, _, .some(paired)): return .paired(pairedVisualsPresentation(for: paired))
+        }
+    }
+
+    /// The flow's settled pair as the surface's own vocabulary.
+    ///
+    /// **The geometry is not recomputed here.** Both axes are built by the types that own those rules,
+    /// from the two `PCMStreamDescription`s the pair already carries — the same descriptions the reads
+    /// reported. No duration, no Nyquist, no amplitude range and no energy range is derived in this
+    /// file, and none is taken from either report's declared properties.
+    nonisolated static func pairedVisualsPresentation(for paired: PairedVisuals) -> PairedVisualsPresentation {
+        PairedVisualsPresentation(
+            waveform: PairedWaveformPresentation(
+                axis: PairedWaveformAxis(first: paired.first.stream, second: paired.second.stream),
+                first: pairedWaveformLane(for: paired.first.waveform),
+                second: pairedWaveformLane(for: paired.second.waveform)
+            ),
+            spectrogram: PairedSpectrogramPresentation(
+                axes: PairedSpectrogramAxes(first: paired.first.stream, second: paired.second.stream),
+                first: pairedSpectrogramLane(for: paired.first.spectrogram),
+                second: pairedSpectrogramLane(for: paired.second.spectrogram)
+            )
+        )
+    }
+
+    /// Total, and the three settled answers stay three: an absence is not a failure, and neither is an
+    /// empty drawing.
+    nonisolated static func pairedWaveformLane(for settled: SettledWaveform) -> PairedWaveformLane {
+        switch settled {
+        case let .available(envelope): .envelope(envelope)
+        case .unavailable: .absent
+        case let .failed(message): .failed(message: message)
+        }
+    }
+
+    /// The same, for the spectral model. A model with **no columns** arrives as a model, not as an
+    /// absence — the distinction `SpectrogramCopyTests` exists to protect survives this layer too.
+    nonisolated static func pairedSpectrogramLane(for settled: SettledSpectrogram) -> PairedSpectrogramLane {
+        switch settled {
+        case let .available(model): .model(model)
+        case .unavailable: .absent
         case let .failed(message): .failed(message: message)
         }
     }
 
     private func reportSurface(_ presentation: InspectionPresentation) -> some View {
         VStack(spacing: 0) {
+            // **One read of the comparison, two answers derived from it.** Reading `flow.comparison`
+            // twice in one body could, in principle, straddle a change; binding it once cannot.
+            let comparison = flow.comparison
             ReportView(
                 report: presentation.report,
-                waveform: Self.waveformPresentation(for: presentation.waveform),
-                spectrogram: Self.spectrogramPresentation(for: presentation.spectrogram),
+                visuals: Self.reportVisuals(for: presentation, in: comparison),
                 signalLevelMetrics: Self.signalLevelMetricsPresentation(for: presentation.signalLevelMetrics),
                 truePeak: Self.truePeakPresentation(for: presentation.truePeak),
                 loudness: Self.loudnessPresentation(for: presentation.loudness),
                 programmeBandwidth: Self.programmeBandwidthPresentation(for: presentation.significantBandwidth),
-                comparison: Self.comparisonPresentation(for: flow.comparison),
+                comparison: Self.comparisonPresentation(for: comparison),
                 export: export
             )
             Divider()
