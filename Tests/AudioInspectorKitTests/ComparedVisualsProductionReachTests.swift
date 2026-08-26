@@ -96,6 +96,50 @@ struct ComparedVisualsProductionReachTests {
         }
     }
 
+    /// **The published pair, over two real files.** Both sides come from the reads that already
+    /// happened, each carrying the description its own decoder reported, and neither file is read twice.
+    @Test("the published pair is built from the two reads that already happened")
+    func thePublishedPairIsBuiltFromTheTwoReads() async throws {
+        try await withTemporaryDirectory { directory in
+            let primaryURL = try writeAudioFixture(spec("pair-primary", rate: 44_100), in: directory)
+            let comparedURL = try writeAudioFixture(spec("pair-compared", rate: 48_000), in: directory)
+            let counts = ProductionReadCounts()
+
+            let flow = ImportFlowModel(action: coordinatorAction(for: primaryURL, counting: counts, into: nil))
+            await flow.selectAndInspect()
+            await flow.compare(using: coordinatorAction(for: comparedURL, counting: counts, into: nil))
+
+            // **One decoder and one read per file, with the pair published.** Building it costs neither.
+            #expect(counts.decodersMade == 2, "the two files were given \(counts.decodersMade) decoders")
+            #expect(counts.decodeCalls == 2, "the two files' samples were read \(counts.decodeCalls) times")
+
+            guard case let .ready(technical, _, visuals) = flow.comparison else {
+                Issue.record("the flow published \(flow.comparison)"); return
+            }
+            guard let pair = visuals else {
+                Issue.record("no pair was published for two real files"); return
+            }
+
+            // Each side's description is the one **that file's** decoder reported, told apart by rate.
+            #expect(counts.reportedStreams.count == 2)
+            #expect(pair.first.stream == counts.reportedStreams.first)
+            #expect(pair.second.stream == counts.reportedStreams.last)
+            #expect(pair.first.stream?.sampleRate == 44_100)
+            #expect(pair.second.stream?.sampleRate == 48_000)
+
+            // The published sides are the values the two inspections produced — reuse, not a lookalike.
+            guard case let .report(presentation) = flow.state else {
+                Issue.record("expected a report on screen, got \(flow.state)"); return
+            }
+            #expect(pair.first == presentation.settledVisuals)
+            #expect(pair.second == flow.comparedVisuals)
+
+            // And the three halves of the comparison describe the same two files.
+            #expect(technical.first.file.displayName == "pair-primary.wav")
+            #expect(technical.second.file.displayName == "pair-compared.wav")
+        }
+    }
+
     /// The first file keeps its own pictures where they always were, and the retained side is the other
     /// one — over real files, not fixtures chosen to look different.
     @Test("the first file's own drawings are untouched by the second file's retention")

@@ -111,27 +111,69 @@ removed, and the removal reverted in full. A control that has never been seen to
 
 ## 3. The pair's lifecycle — atomic publication, staleness, cancellation
 
-- [ ] 3.1 Publish the pair **only when both sides have settled**, in the shape
+- [x] 3.1 Publish the pair **only when both sides have settled**, in the shape
       `publishMeasurementComparisonIfBothSettled` already has, and in **one assignment** carrying both
       sides.
-- [ ] 3.2 Structure the retained per-comparison payload so a visuals bundle **cannot** be paired with
+      That function became `publishWhateverHasSettled`, the single place either half is published, and it
+      assigns `.ready(technical, measurements, visuals)` once. **A side that has not settled is not a side
+      with nothing**, and for the drawings that now includes the read's own description: a file whose
+      pictures are settled but whose stream is not yet known is **not** settled, because a drawing whose
+      extent cannot be stated is not one anything can present. Neither half is ever walked back.
+      **Getting the first file's description there was the work.** It died in
+      `apply(_:restoringOnCancellation:)`, which built an `InspectionPresentation` and dropped
+      `analyses.stream`. `InspectionPresentation` now carries it, taken in **both** branches of that
+      method — it arrives with the settled outcome and with nothing else, because the report is published
+      before a sample is read — and `InspectionPresentation.settledVisuals` became a **property reading
+      its own**, exactly as the compared side's already did. Both sides now travel the same route from a
+      decoder to a settled bundle, and neither can be handed the other's description.
+- [x] 3.2 Structure the retained per-comparison payload so a visuals bundle **cannot** be paired with
       another operation's measurements or technical comparison — one merged value, or sibling fields
       cleared in lockstep. Whichever is chosen, prove the other combination is unrepresentable rather
       than merely untested.
-- [ ] 3.3 **Superseded second file.** B in flight, user chooses C, B lands late: no pair containing B is
+      **One merged value**, and the argument was already written in the type: `ComparisonState.ready`
+      carries the technical and measurement halves in one case *"because they are one answer about one
+      pair of files: two states could drift apart, and a stale guard would have to protect both."* The
+      pair joins that case as a third payload rather than living in a property of its own. There is
+      therefore **no second value for a stale result to land in** — which is what control 3.8 makes
+      visible by creating one.
+      One further invariant is explicit rather than implied: the publisher refuses unless
+      `presentation.report == technical.first`, so a pair can never be built from a primary file the
+      comparison was not made against.
+- [x] 3.3 **Superseded second file.** B in flight, user chooses C, B lands late: no pair containing B is
       ever published. Reuse `MeasurementComparisonAtomicityTests`'s handshake — a scripted action released
       step by step, **no sleep, no polling, no `Task.yield()`** — and give B and C **deliberately
       distinguishable** drawings so *"entirely C"* is observed rather than inferred from empty fields.
-- [ ] 3.4 **Cancelled second inspection** publishes no pair, and no side is shown as absent, failed or
+      B is peak 0.20 at 48 kHz, C is peak 0.30 at 96 kHz, and the first file is peak 0.10 at 44.1 kHz —
+      three values no two of which can be confused. The test asserts the technical half, **both sides of
+      the published pair**, and **the retained source the pair is built from**: the last of those is what
+      catches a defect that corrupts the visual lane while leaving the published value looking right.
+- [x] 3.4 **Cancelled second inspection** publishes no pair, and no side is shown as absent, failed or
       empty because of it.
-- [ ] 3.5 **Dismiss** and **new primary inspection** each clear the pair, and a result already in flight
+      The group 1 collapse returns `nil` for a cancelled artefact, so nothing is retained and
+      `PairedVisuals(first:second:)` yields nothing. The technical comparison is untouched: cancelling
+      the drawings says nothing about it.
+- [x] 3.5 **Dismiss** and **new primary inspection** each clear the pair, and a result already in flight
       cannot land afterwards.
-- [ ] 3.6 **A second file that could not be opened** leaves the comparison's failure exactly as it is
+      Both reassign `comparison` wholesale, so the pair goes with it rather than being walked back, and
+      both bump the comparison operation first so a result in flight is dropped before it can settle.
+- [x] 3.6 **A second file that could not be opened** leaves the comparison's failure exactly as it is
       today and publishes no pair.
-- [ ] 3.7 **Negative control — stale would be caught.** Remove the operation guard and demonstrate that
+      `.preparationFailed` still produces `.failed(message:)` — never a `.ready` — so there is no case a
+      pair could be published into.
+- [x] 3.7 **Negative control — stale would be caught.** Remove the operation guard and demonstrate that
       3.3 fails; revert.
-- [ ] 3.8 **Negative control — two sources would be caught.** Build the pair from two independently read
+      **Seen to fail with 4 issues.** With the guard gone, B's late landing reached `settle` and took
+      everything: the technical half read `b.wav` instead of `c.wav`, the published pair's second side
+      was B's 48 kHz drawing, and so was the retained source. Reverted from a pristine copy, verified by
+      checksum and by grep, suite green again.
+- [x] 3.8 **Negative control — two sources would be caught.** Build the pair from two independently read
       values in a temporary variant and demonstrate that 3.3 fails; revert.
+      The visuals were made to arrive by a second, unguarded path — recorded and published outside the
+      guard the rest of the comparison passes through. **Seen to fail with 3 issues**, and the *signature*
+      is the point: the technical assertion **passed** while the pair's second side became B's 48 kHz
+      drawing. That is exactly the mixture this group exists to prevent — one operation's pictures beside
+      another operation's facts — and it is a different failure from 3.7's, where everything became B's.
+      Reverted from a pristine copy, verified by checksum and by grep, suite green again.
 
 ## 4. Waveform — shared axes, computed as arithmetic and asserted without rendering
 
