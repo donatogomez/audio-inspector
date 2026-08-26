@@ -306,19 +306,67 @@ removed, and the removal reverted in full. A control that has never been seen to
 
 ## 6. Replacement — the paired drawings stand in for the single ones
 
-- [ ] 6.1 With **no settled pair**, the report surface presents the first file's own envelope and spectral
+- [x] 6.1 With **no settled pair**, the report surface presents the first file's own envelope and spectral
       model exactly as it does today. This is the default, and it covers *not yet*, cancelled, dismissed,
       superseded and *second file failed* without a case for each.
-- [ ] 6.2 With a **settled pair**, the paired sections are presented and the two single-file sections are
+      `RootView.reportVisuals(for:in:)`. One rule really does cover all five, because all five reach the
+      composition root as a comparison state carrying **no settled pair** — group 3 already made
+      `.ready`'s third payload `nil` until both sides have settled. Asserted over `.none`, `.loading`,
+      `.failed` and `.ready(_, _, nil)`, and driven through the real flow for *cancelled before it
+      settles* and *a new primary inspection*.
+- [x] 6.2 With a **settled pair**, the paired sections are presented and the two single-file sections are
       not.
-- [ ] 6.3 Assert the first file's envelope appears **exactly once** on the surface, and its spectral model
+      Asserted both ways: the paired sections are present, **and** neither single section appears
+      anywhere in what the surface presents.
+- [x] 6.3 Assert the first file's envelope appears **exactly once** on the surface, and its spectral model
       exactly once — the property the product decision exists for (design §8).
-- [ ] 6.4 Returning to the single drawings reads the values already held: **no file is read and no
+      `ReportVisuals` answers *which sections* as a **collection**, precisely so *how many* is a value a
+      test can read — a rendering cannot be asserted, which is why the surface's answer is a value at
+      all. One waveform section and one spectral section in either mode.
+      **Negative control, seen to fail:** the pair added beneath the first file's own drawing instead of
+      standing in. **4 issues** across both suites — `waveformSections.count → 2`, the paired section no
+      longer first, the two modes disagreeing, and the restoration suite catching it too. Reverted from a
+      pristine copy, verified by checksum and a `MUTATION` grep.
+- [x] 6.4 Returning to the single drawings reads the values already held: **no file is read and no
       artefact is produced again**. Assert with the decode counter.
-- [ ] 6.5 Assert the property rows, the technical comparison and the measurement comparison are all still
+      Two real files through the real coordinator and the real decoder: one decoder and one read each,
+      the pair settles, `dismissComparison()`, and the counters are asserted **unchanged** — still two
+      and two — with the first file's own drawings back and still `.available`. The counters are live in
+      the same test, moving 0 → 1 → 2 before the dismissal.
+      **The path structurally cannot read anything**: what comes back is a pure function of state the
+      flow already holds, and it has no decoder to call. **Negative control, seen to fail:** dismissal
+      made to re-inspect the first file — the suite failed with *"the single drawings did not come
+      back"*, because a re-inspection destroys the held report before it can rebuild it. Reverted, and
+      `ImportFlowModel` verified byte-identical by checksum.
+- [x] 6.5 Assert the property rows, the technical comparison and the measurement comparison are all still
       presented, unchanged, while a pair is on screen.
-- [ ] 6.6 The choice between the two presentations is a **total** mapping with no default case, in the
+      `comparisonPresentation(for:)` returns the **same value** with and without a settled pair, so the
+      visual mode reads the state rather than rewriting it; and the report handed to the surface — its
+      properties, its warnings, its status — is unchanged by building the visuals. Only the two visual
+      sections are replaced; `ReportView` renders `propertiesSection` and `ComparisonSection` exactly as
+      before.
+      **Both derive from one read of the flow's state**, bound once in `reportSurface`, so the pictures
+      and the facts beside them can never come from two different reads.
+- [x] 6.6 The choice between the two presentations is a **total** mapping with no default case, in the
       shape `RootView`'s existing state mappings have.
+      Three total switches and no `default` anywhere: `ComparisonState` → `ReportVisuals` (with
+      `.ready(_, _, .none)` and `.ready(_, _, .some)` as separate patterns rather than an `if let` or a
+      `??` fallback), and the two settled answers → lanes. **Both visual sections read the same
+      `ReportVisuals`**, so a paired waveform beside a single spectrogram is unrepresentable rather than
+      merely avoided — asserted over four states.
+      A new case in any of these enums is a compile error here, not a silent fall back to one file's
+      drawing.
+
+      **Two things this group did that are worth naming.** The paired presentation types and the two
+      geometry types were widened to `public`, because the composition root is the only layer that may
+      see both a settled pair and the geometry that lays it out — the same reason `WaveformPresentation`
+      is public. No behaviour changed. And `comparisonPresentation(for:)` became internal rather than
+      private, aligning it with every other mapping beside it, so what the surface is handed can be
+      asserted rather than reimplemented in a test.
+
+      **Deferred to group 7, deliberately:** the words beside a paired lane, the legend, and the axis
+      labels. The out-of-range strip is drawn in the treatment group 5 fixed; what it *says* is group
+      7's, and the presentation already carries the axes it will need.
 
 ## 7. Copy — absence, failure, out-of-range, and the words that are not allowed
 
