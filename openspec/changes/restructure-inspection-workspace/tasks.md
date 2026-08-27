@@ -40,8 +40,11 @@ calling it legacy.
       starting, becoming ready, being dismissed or superseded leaves it alone; an analysis settling,
       failing or arriving absent leaves it alone; nothing is persisted.
       `WorkspaceNavigationLifecycleTests`, one test per rule, driven against the real `ImportFlowModel`
-      with no SwiftUI, no panel and no sleeps. The rule is also **structurally** unable to see a
-      comparison: no input carries one, asserted over the two files that carry the rule.
+      with no SwiftUI, no panel and no sleeps. ADR-0026's promotion conditions 3, 4 and 5 say *from every
+      section* and *nothing else moves it*, so those three loop over all five rather than proving the
+      rule for one; and *settling* is exercised as all three of its kinds — a value arriving, an absence,
+      and a failure. The rule is also **structurally** unable to see a comparison: no input carries one,
+      asserted over the two files that carry the rule.
 - [x] 2.3 The ten navigation scenarios of `design.md` §4, including the failed-new-primary case §4 leaves
       for this change to pin.
       All ten, plus four the flow makes reachable and §4 does not enumerate: a **dismissed picker**
@@ -59,12 +62,13 @@ calling it legacy.
 - [x] 2.5 **Negative control — a moving section would be caught.** Make an analysis settling change the
       selection temporarily and demonstrate 2.2 fails; revert.
       The guard that makes `observe` idempotent — `guard id != acknowledged` — was removed, so every
-      republication of the same report reset the reader. **Seen to fail with 12 issues across 8 tests**:
-      a settling analysis moved the reader, so did each of comparison *loading*, *ready*, *dismissed*,
-      *failed*, *cancelled* and *superseded*, and so did dismissing the picker. The two tests that did
-      **not** fail are the ones that do not depend on this guard — a globally failed report and a
-      preparation failure — which is what makes the control a defence and not a blanket. Reverted;
-      verified by SHA-256 against the pre-mutation copy and by grep.
+      republication of the same report reset the reader. **Seen to fail with 39 issues across 8 tests**:
+      a settling analysis moved the reader from every section, so did each of comparison *loading*,
+      *ready*, *dismissed*, *failed*, *cancelled* and *superseded* from every section, and so did
+      dismissing the picker. The tests that did **not** fail are the ones that do not depend on this
+      guard — a globally failed report, a preparation failure, a partial report, a re-inspection — which
+      is what makes the control a defence and not a blanket. Reverted; verified by SHA-256 against the
+      pre-mutation copy and by grep.
 - [x] 2.6 **Negative control — persistence would be caught.** Write the selection somewhere that survives
       a launch temporarily and demonstrate 2.2 fails; revert.
       `WorkspaceNavigation` was given a `UserDefaults` round trip — written in `select(_:)`, restored in

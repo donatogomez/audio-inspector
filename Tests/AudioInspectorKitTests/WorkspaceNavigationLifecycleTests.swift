@@ -90,11 +90,31 @@ struct WorkspaceNavigationLifecycleTests {
         )
     }
 
-    /// Every analysis settling, in the order the pipeline publishes them.
+    private var envelope: WaveformEnvelope {
+        WaveformEnvelope(
+            buckets: (0 ..< 4).map { _ in WaveformBucket(minimum: -0.5, maximum: 0.5)! },
+            frameCount: 2_048, channelCount: 2
+        )!
+    }
+
+    private var spectralModel: Spectrogram {
+        Spectrogram(
+            values: Array(repeating: Float(-30), count: 6), columnCount: 3, bandCount: 2,
+            sampleRate: 44_100, frameCount: 2_048, channelCount: 2
+        )!
+    }
+
+    /// Every analysis settling, in the order the pipeline publishes them — and **all three ways one can
+    /// settle**: arriving with a value, arriving absent, and failing. ADR-0026's fifth promotion
+    /// condition names the three, so the fixture carries the three rather than six absences.
     private var everyAnalysisSettling: [InspectionUpdate] {
         [
-            .waveform(.unavailable), .spectrogram(.unavailable), .signalLevelMetrics(.unavailable),
-            .truePeak(.unavailable), .loudness(.unavailable), .significantBandwidth(.unavailable),
+            .waveform(.available(envelope)),
+            .spectrogram(.failed(message: "The spectrogram for this file could not be produced.")),
+            .signalLevelMetrics(.unavailable),
+            .truePeak(.failed(message: "The true peak could not be measured.")),
+            .loudness(.unavailable),
+            .significantBandwidth(.unavailable),
         ]
     }
 
@@ -129,31 +149,38 @@ struct WorkspaceNavigationLifecycleTests {
 
     // MARK: - Scenario 2, and ADR-0026 §5's "nothing else moves it"
 
-    @Test("the reader selects the waveform, and every analysis settling leaves them there")
+    /// ADR-0026's fifth promotion condition, and its wording is the reason for the loop: *nothing else
+    /// moves it* — an analysis settling, failing or arriving absent — **whatever section is selected**.
+    /// Asserting it from one section would prove it for one section.
+    @Test("no analysis settling, failing or arriving absent moves the reader, from any section")
     func settlingAnalysesDoNotMoveTheReader() async {
-        let a = report("a.wav")
-        let action = NarratingAction(
-            [.report(a)] + everyAnalysisSettling, then: .inspected(a, analyses: nothingSettled)
-        )
-        let flow = ImportFlowModel(action: action.run)
-        let reader = Reader(flow)
+        for chosen in WorkspaceSection.allCases {
+            let a = report("a.wav")
+            let action = NarratingAction(
+                [.report(a)] + everyAnalysisSettling, then: .inspected(a, analyses: nothingSettled)
+            )
+            let flow = ImportFlowModel(action: action.run)
+            let reader = Reader(flow)
 
-        // The report first, so the reader has somewhere to choose from.
-        action.afterEachUpdate = {
+            // The report first, so the reader has somewhere to choose from; then every analysis lands
+            // underneath them, one at a time, with the window inspected after each.
+            var chose = false
+            action.afterEachUpdate = {
+                reader.published()
+                if !chose, case .report = flow.state {
+                    reader.select(chosen)
+                    chose = true
+                }
+            }
+            await flow.selectAndInspect()
             reader.published()
-            if reader.navigation.section == .overview, case .report = flow.state { reader.select(.waveform) }
-        }
-        await flow.selectAndInspect()
-        reader.published()
 
-        #expect(reader.section == .waveform)
-        // And the value the shell watches never moved either: a settling analysis republishes the same
-        // report, so there is nothing for the rule to react to in the first place.
-        #expect(PrimaryInspection(flow.state) == PrimaryInspection(.report(
-            InspectionPresentation(report: a, waveform: .unavailable, spectrogram: .unavailable,
-                                   signalLevelMetrics: .unavailable, truePeak: .unavailable,
-                                   loudness: .unavailable, significantBandwidth: .unavailable)
-        )))
+            #expect(chose, "the report never arrived, so nothing was proved")
+            #expect(reader.section == chosen, "an analysis moved the reader out of \(chosen)")
+            // And the value the shell watches never moved either: a settling analysis republishes the
+            // same report, so there is nothing for the rule to react to in the first place.
+            #expect(PrimaryInspection(flow.state) == .report(id: a.file.id, failedGlobally: false))
+        }
     }
 
     /// The rule is **idempotent**: observing the same report a hundred times moves nobody. This is what
@@ -303,93 +330,106 @@ struct WorkspaceNavigationLifecycleTests {
 
     // MARK: - Scenarios 3, 4 and 5 — a comparison moves nobody
 
-    @Test("a comparison loading, settling and being dismissed all leave the reader where they are")
+    /// ADR-0026's third and fourth promotion conditions, and the loops are their wording: a comparison
+    /// starting must not move the reader **from every section**, and neither must one ending — dismissed,
+    /// superseded, or the second file failing.
+    @Test("a comparison loading, settling and being dismissed leaves the reader where they are, from any section")
     func aComparisonNeverMovesTheReader() async {
-        let reader = await windowShowing(report("a.wav"))
-        reader.select(.waveform)
+        for chosen in WorkspaceSection.allCases {
+            let reader = await windowShowing(report("a.wav"))
+            reader.select(chosen)
 
-        let second = ImportFlowComparisonTests.ControllableAction()
-        let running = Task { await reader.flow.compare(using: second.run) }
-        await second.waitUntilStarted()
+            let second = ImportFlowComparisonTests.ControllableAction()
+            let running = Task { await reader.flow.compare(using: second.run) }
+            await second.waitUntilStarted()
 
-        #expect(reader.flow.comparison == .loading)
-        reader.published()
-        #expect(reader.section == .waveform, "a comparison starting moved the reader")
+            #expect(reader.flow.comparison == .loading)
+            reader.published()
+            #expect(reader.section == chosen, "a comparison starting moved the reader out of \(chosen)")
 
-        let b = report("b.wav")
-        second.finish(sending: [.report(b)], .inspected(b, analyses: nothingSettled))
-        await running.value
-        guard case .ready = reader.flow.comparison else {
-            Issue.record("the comparison did not settle")
-            return
+            let b = report("b.wav")
+            second.finish(sending: [.report(b)], .inspected(b, analyses: nothingSettled))
+            await running.value
+            guard case .ready = reader.flow.comparison else {
+                Issue.record("the comparison did not settle")
+                return
+            }
+            reader.published()
+            #expect(reader.section == chosen, "a comparison settling moved the reader out of \(chosen)")
+
+            reader.flow.dismissComparison()
+            #expect(reader.flow.comparison == .none)
+            reader.published()
+            #expect(reader.section == chosen, "dismissing a comparison moved the reader out of \(chosen)")
         }
-        reader.published()
-        #expect(reader.section == .waveform, "a comparison settling moved the reader")
-
-        reader.flow.dismissComparison()
-        #expect(reader.flow.comparison == .none)
-        reader.published()
-        #expect(reader.section == .waveform, "dismissing a comparison moved the reader")
     }
 
-    @Test("a second file that could not be opened leaves the reader where they are")
+    @Test("a second file that could not be opened leaves the reader where they are, from any section")
     func aFailedComparisonDoesNotMoveTheReader() async {
-        let reader = await windowShowing(report("a.wav"))
-        reader.select(.waveform)
+        for chosen in WorkspaceSection.allCases {
+            let reader = await windowShowing(report("a.wav"))
+            reader.select(chosen)
 
-        let second = ImportFlowComparisonTests.ControllableAction()
-        let running = Task { await reader.flow.compare(using: second.run) }
-        await second.waitUntilStarted()
-        second.finish(.preparationFailed)
-        await running.value
-        reader.published()
+            let second = ImportFlowComparisonTests.ControllableAction()
+            let running = Task { await reader.flow.compare(using: second.run) }
+            await second.waitUntilStarted()
+            second.finish(.preparationFailed)
+            await running.value
+            reader.published()
 
-        #expect(reader.flow.comparison == .failed(message: "That file could not be opened for comparison."))
-        #expect(reader.section == .waveform)
+            #expect(
+                reader.flow.comparison == .failed(message: "That file could not be opened for comparison.")
+            )
+            #expect(reader.section == chosen)
+        }
     }
 
-    @Test("dismissing the comparison picker leaves the reader where they are")
+    @Test("dismissing the comparison picker leaves the reader where they are, from any section")
     func aCancelledComparisonDoesNotMoveTheReader() async {
-        let reader = await windowShowing(report("a.wav"))
-        reader.select(.spectrum)
+        for chosen in WorkspaceSection.allCases {
+            let reader = await windowShowing(report("a.wav"))
+            reader.select(chosen)
 
-        let second = ImportFlowComparisonTests.ControllableAction()
-        let running = Task { await reader.flow.compare(using: second.run) }
-        await second.waitUntilStarted()
-        second.finish(.cancelled)
-        await running.value
-        reader.published()
+            let second = ImportFlowComparisonTests.ControllableAction()
+            let running = Task { await reader.flow.compare(using: second.run) }
+            await second.waitUntilStarted()
+            second.finish(.cancelled)
+            await running.value
+            reader.published()
 
-        #expect(reader.flow.comparison == .none)
-        #expect(reader.section == .spectrum)
+            #expect(reader.flow.comparison == .none)
+            #expect(reader.section == chosen)
+        }
     }
 
-    @Test("a comparison superseded by another leaves the reader where they are")
+    @Test("a comparison superseded by another leaves the reader where they are, from any section")
     func aSupersededComparisonDoesNotMoveTheReader() async {
-        let reader = await windowShowing(report("a.wav"))
-        reader.select(.waveform)
+        for chosen in WorkspaceSection.allCases {
+            let reader = await windowShowing(report("a.wav"))
+            reader.select(chosen)
 
-        let first = ImportFlowComparisonTests.ControllableAction()
-        let runningFirst = Task { await reader.flow.compare(using: first.run) }
-        await first.waitUntilStarted()
-        reader.published()
-        #expect(reader.section == .waveform)
+            let first = ImportFlowComparisonTests.ControllableAction()
+            let runningFirst = Task { await reader.flow.compare(using: first.run) }
+            await first.waitUntilStarted()
+            reader.published()
+            #expect(reader.section == chosen)
 
-        let c = report("c.wav")
-        let second = ImportFlowComparisonTests.ControllableAction(delivering: [.report(c)])
-        let runningSecond = Task { await reader.flow.compare(using: second.run) }
-        await second.waitUntilStarted()
+            let c = report("c.wav")
+            let second = ImportFlowComparisonTests.ControllableAction(delivering: [.report(c)])
+            let runningSecond = Task { await reader.flow.compare(using: second.run) }
+            await second.waitUntilStarted()
 
-        // The first operation finishes after being superseded; its result is dropped as stale.
-        first.finish(.inspected(report("b.wav"), analyses: nothingSettled))
-        await runningFirst.value
-        reader.published()
-        #expect(reader.section == .waveform, "a superseded comparison moved the reader")
+            // The first operation finishes after being superseded; its result is dropped as stale.
+            first.finish(.inspected(report("b.wav"), analyses: nothingSettled))
+            await runningFirst.value
+            reader.published()
+            #expect(reader.section == chosen, "a superseded comparison moved the reader out of \(chosen)")
 
-        second.finish(.inspected(c, analyses: nothingSettled))
-        await runningSecond.value
-        reader.published()
-        #expect(reader.section == .waveform)
+            second.finish(.inspected(c, analyses: nothingSettled))
+            await runningSecond.value
+            reader.published()
+            #expect(reader.section == chosen)
+        }
     }
 
     /// ADR-0026 §5's third row and its exception: a comparison ending moves nobody **except** where the
