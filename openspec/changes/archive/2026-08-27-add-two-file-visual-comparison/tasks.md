@@ -843,9 +843,30 @@ each asks two questions with a literal yes or no. Record the result in
       promotion as a cosmetic defect that stands, reported and not fixed.
       **ADR-0016 and ADR-0017 stay `Proposed`** and are not touched: neither is discharged by anything
       here, and the promotion says so in its own words. **ADR-0024 is untouched.**
-- [ ] 11.4 Update `CURRENT.md`, and archive through `openspec archive` **after merge**, without editing
+- [x] 11.4 Update `CURRENT.md`, and archive through `openspec archive` **after merge**, without editing
       the promoted specs by hand.
-      **Half done, and it stays open because the other half must not happen yet.** `CURRENT.md` is
+      **Done, and the second half waited for the merge it names.** **Merged** as PR
+      [#50](https://github.com/donatogomez/audio-inspector/pull/50): a **true two-parent merge commit**,
+      `a62e021`, verified by reading its parents rather than inferred from the merge method — first
+      parent `d27933c`, the previous `main` exactly; second parent `890f8cc`, the branch head exactly.
+      The merge's tree is **identical to the branch head's**, so it introduced nothing of its own.
+      Containment was proved six ways before anything was archived or deleted: the head is an ancestor
+      of `origin/main`, the branch appears under `--merged origin/main`, **0** commits are unique to it,
+      and `git diff 890f8cc origin/main` is empty.
+      **Archived through the CLI, after the merge and never before**, from a `main` fast-forwarded to
+      `a62e021` — not from the feature branch, and with no manual edit of the promoted spec. It created
+      `audio-two-file-visual-presentation` with **11 requirements and 38 scenarios**, exactly the delta's
+      own count, as `2026-08-27-add-two-file-visual-comparison`. The promotion was purely additive —
+      `create`, `+ 11, ~ 0, - 0, → 0` — and the **eight pre-existing capabilities are byte-identical**
+      to what they were before it ran, checked by SHA-256 taken *before* the archive rather than inferred
+      from a diff afterwards.
+      **The archive warned that six tasks were incomplete and archiving proceeded anyway, deliberately**:
+      this one carried the archive itself, and the other five are group 12's named follow-ups. The CLI
+      moves `tasks.md` verbatim rather than reinterpreting a checkbox, so this line is marked here, in
+      the archived copy, exactly as `add-significant-bandwidth-measurement` 10.2 was.
+      **This brings the change to 67/72, which is the intended final count** — group 12's five stay open
+      because they are deferred capabilities, not unfinished work.
+      **The earlier half, recorded when it was true:** `CURRENT.md` is
       refreshed and describes the real state — one thread open and PR-ready, ADR-0025 `Accepted`, the
       cosmetic defect standing, the inherited ADR-0016/ADR-0017 debt untouched, and opening the PR as
       the next step. **`openspec archive` has not been run**, and must not be: the precedent is exact —
