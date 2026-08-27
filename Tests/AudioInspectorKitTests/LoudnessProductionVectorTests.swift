@@ -319,8 +319,8 @@ struct LoudnessProductionVectorTests {
             #expect(abs(measurement.integratedLoudness - published) <= tolerance)
 
             // The extraction the report surface performs, then the real exporter.
-            let exportable = LoudnessProductionHarness.exportableLoudness(
-                RootView.loudnessPresentation(for: try #require(LoudnessState(run.loudness)))
+            let exportable = ExportableMeasurements.value(
+                of: RootView.loudnessPresentation(for: try #require(LoudnessState(run.loudness)))
             )
             let data = try exportData(report(status: .completed), loudness: exportable)
             let json = try JSONDecoder().decode(JSONValue.self, from: data)

@@ -96,14 +96,6 @@ enum LoudnessProductionHarness {
         #expect(metadata.frames == AVAudioFramePosition(vector.totalFrames), "\(vector.name) frames")
     }
 
-    /// The extraction `ReportView.exportableLoudness` performs, reproduced because that computed property
-    /// is private to the view and SwiftUI's own button is not reachable headlessly. Every non-measurement
-    /// state collapses to `nil`, exactly as it does there.
-    static func exportableLoudness(_ presentation: LoudnessPresentation) -> LoudnessMeasurement? {
-        guard case let .measurement(measurement) = presentation else { return nil }
-        return measurement
-    }
-
     /// The safe reference the composition takes. It carries no location by design; the URL reaches the
     /// adapter through `resolveURL`, exactly as it does in the app.
     private static func reference(for url: URL) -> AudioFileReference {

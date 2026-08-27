@@ -317,57 +317,17 @@ public struct ReportView: View {
                 Task {
                     await exportModel.export(
                         report,
-                        measurements: ReportMeasurements(
-                            signalLevelMetrics: exportableSignalLevelMetrics,
-                            truePeak: exportableTruePeak,
-                            loudness: exportableLoudness,
-                            programmeBandwidth: exportableProgrammeBandwidth
+                        measurements: ExportableMeasurements.measurements(
+                            signalLevelMetrics: signalLevelMetrics,
+                            truePeak: truePeak,
+                            loudness: loudness,
+                            programmeBandwidth: programmeBandwidth
                         )
                     )
                 }
             }
             .disabled(exportModel.phase == .exporting)
         }
-    }
-
-    /// The domain measurement to export, or `nil` when there is nothing to report — `loading`,
-    /// `absent` and `failed` all collapse to `nil` here, so the export layer never has to decide what
-    /// a UI-only state would mean on the wire (that decision belongs to this Feature, per ADR-0009).
-    private var exportableSignalLevelMetrics: SignalLevelMetrics? {
-        guard case let .metrics(metrics) = signalLevelMetrics else { return nil }
-        return metrics
-    }
-
-    /// The same rule for the true peak: `loading`, `absent` and `failed` all collapse to `nil`, so the
-    /// export layer never has to decide what a UI-only state would mean on the wire. **The JSON
-    /// describes measurements, not lifecycle**, and a failure message in particular is a fact about this
-    /// run rather than about the file.
-    private var exportableTruePeak: TruePeakMeasurement? {
-        guard case let .measurement(measurement) = truePeak else { return nil }
-        return measurement
-    }
-
-    /// And the same rule again for the integrated loudness. Its `absent` carries more causes than its
-    /// siblings' do — too short, too quiet to clear the gate, an unsupported configuration — and none of
-    /// them survives to the wire: **the JSON describes measurements, not why one does not exist**, so
-    /// every one of them collapses to the key simply not being there.
-    private var exportableLoudness: LoudnessMeasurement? {
-        guard case let .measurement(measurement) = loudness else { return nil }
-        return measurement
-    }
-
-    /// The same rule again for the programme bandwidth, **plus one this measurement needs on its own**:
-    /// a measurement can exist and carry no reading at all — its windows were eligible and no bin met
-    /// the persistence criterion — and that is an absence to anyone reading either surface. The section
-    /// says so in the report's not-computable words, and the document says so by omitting the key, so
-    /// the two never disagree. It is the rule loudness already follows, whose absence likewise has
-    /// several causes and exports none of them: **the JSON describes measurements, not why one does not
-    /// exist.**
-    private var exportableProgrammeBandwidth: SignificantBandwidth? {
-        guard case let .measurement(measurement) = programmeBandwidth, measurement.overall != nil else {
-            return nil
-        }
-        return measurement
     }
 }
 
