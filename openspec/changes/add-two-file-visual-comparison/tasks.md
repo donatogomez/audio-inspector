@@ -681,7 +681,7 @@ unedited afterwards. Neither may be answered with *looks good*, *clear enough* o
 each asks two questions with a literal yes or no. Record the result in
 `docs/manual-validation-mvp.md` as a durable statement, including anything that failed, unsoftened.
 
-- [ ] 10.1 **M1 — different durations.** Inspect a file of about 3:30, compare it against one of about
+- [x] 10.1 **M1 — different durations.** Inspect a file of about 3:30, compare it against one of about
       3:00 (either order), and wait for the paired drawings.
       **Q1.** Does the shorter file's drawing end **before** the right-hand edge of the shared axis, at a
       position consistent with the two durations shown in the property rows above? **yes / no**
@@ -689,7 +689,27 @@ each asks two questions with a literal yes or no. Record the result in
       silence? **yes / no**
       **PASS** = yes to both. **FAIL** = no to either. A remainder that reads as a quiet passage, a flat
       line or an unfinished drawing is a **no** to Q2.
-- [ ] 10.2 **M2 — different Nyquists.** Compare a 44.1 kHz file against a 96 kHz one (either order) and
+      **PASS. A person ran this against the real application and reported both answers; they are
+      recorded exactly as reported.** This session did not see the surface — nothing below came from a
+      test, a headless render or a reading of the source, and no observation is attributed to it.
+      **Fixtures**, generated outside the repository so that duration is the only difference: `first` =
+      `m1-first-210s-44100.wav`, 210.000 s; `second` = `m1-second-180s-44100.wav`, 180.000 s. Both
+      44.1 kHz, mono, 16-bit, from the same generator — the 3:00 file is the first 180 s of the same
+      programme. Identical Nyquist, so the frequency axis takes no part.
+      **Q1 = yes.** The 3:00 file's drawing ends before the right-hand edge of the shared axis, at a
+      position consistent with 180 of 210 seconds.
+      **Q2 = yes.** The remainder reads as that file no longer carrying audio there, and not as measured
+      silence.
+      **What was also on screen** — reported as description, not as a second criterion:
+      `This file carries no audio beyond here.`
+      **A layout defect was observed during this pass and is recorded rather than smoothed over**: in the
+      paired waveform section, text overlaps vertically — around
+      `Amplitude over the whole file, combined across 1 channel.` and `Second file`, and later between
+      `This file carries no audio beyond here.` and the second lane's amplitude line. **Non-blocking for
+      this task**, on the operator's own report that both questions could be answered unambiguously
+      **yes** in spite of it. It is neither a wrong edge nor a wrong reading of the remainder, which is
+      what M1 asks about. Recorded unsoftened in `docs/manual-validation-mvp.md`; **not fixed here.**
+- [x] 10.2 **M2 — different Nyquists.** Compare a 44.1 kHz file against a 96 kHz one (either order) and
       wait for the paired spectral models.
       **Q1.** Does the 44.1 kHz model stop **below** the top of the shared frequency axis? **yes / no**
       **Q2.** Is the region above it distinguishable **by eye** from the floor colour used **inside** the
@@ -697,9 +717,41 @@ each asks two questions with a literal yes or no. Record the result in
       **PASS** = yes to both. **FAIL** = no to either. Q2 is the one this check exists for: if the two
       look the same, the surface is saying *measured and very quiet* where it means *cannot represent
       this range*, which is a defect and not a gap.
-- [ ] 10.3 Process identity, before either check: terminate every running instance, rebuild, and launch
+      **PASS. Reported by the same person, on the same build, in the same session**, and recorded
+      exactly as reported.
+      **Fixtures**, generated so that the sample rate is the only difference: `first` =
+      `m2-first-44100hz-30s.wav`, 44.1 kHz, Nyquist 22 050 Hz; `second` = `m2-second-96000hz-30s.wav`,
+      96 kHz, Nyquist 48 000 Hz. Both 30.000 s, mono, 16-bit, one generator — a sweep that stops at
+      12 kHz, below both Nyquists, so the ramp's own floor colour is present **inside** both drawings as
+      the thing Q2 compares against. Equal duration, so the time axis takes no part.
+      **Q1 = yes.** The 44.1 kHz model stops visibly below the top of the shared 48 kHz axis.
+      **Q2 = yes.** The region above that file's own Nyquist is distinguishable **by eye** from the floor
+      colour used inside the drawing.
+      **What was also on screen** — description, not a second criterion:
+      `This file cannot represent this range.`
+      **Q2 is the property `SpectrogramColourRamp` and `PairedSpectrogramAxes` could only ever assert as
+      values.** 5.4 and 5.6 assert that the treatment is not the ramp's floor colour and that it is the
+      only achromatic thing on the ramp; that two colours differ as values is not that they are
+      distinguishable on a real display to a real person, and that is what was answered here.
+- [x] 10.3 Process identity, before either check: terminate every running instance, rebuild, and launch
       the new binary **by its executable path — never `open`** — confirming a fresh window first. The
       precedent for why is in `docs/manual-validation-mvp.md`.
+      **Done, in that order, before either check.** Every running `AudioInspector` process was
+      terminated and none was left alive; the app was rebuilt from `9f44af09f78f850362af19110a78b4a3d5619d9e`
+      with a clean, **isolated** derived-data path — `/tmp/ai-g10-build`, not the shared Xcode one — with
+      a clean worktree; and the binary was launched **directly by its executable path**,
+      `/tmp/ai-g10-build/Build/Products/Debug/AudioInspector.app/Contents/MacOS/AudioInspector`, never
+      through `open`. One `AudioInspector` process was alive during the pass, and it was that one.
+      **The fresh, empty import window was confirmed by the person before either check** — the
+      confirmation the precedent asks for, and the one part of this task a session cannot make for
+      itself.
+      **The precedent was not merely cited, it was met a second time.** Between preparing the build and
+      the pass, a **different** binary appeared alive — built minutes earlier into the shared Xcode
+      derived-data path and carrying `-NSDocumentRevisionsDebugMode YES`, with a different SHA-256 from
+      the one prepared. Its commit was never established, and it was **not** the instance either check
+      was run against. That is exactly the failure `docs/manual-validation-mvp.md` records from
+      2026-08-11 — *"the build under test was not the build that was actually running"* — and it is why
+      the isolated derived-data path and the confirmed PID are part of this record rather than a detail.
 
 ## 11. Gates and closure
 
