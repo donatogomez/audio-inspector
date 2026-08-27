@@ -537,6 +537,17 @@ removed, and the removal reverted in full. A control that has never been seen to
       **A, B and C are not added together anywhere.** The model is this task's; the raster is 9.4's and
       has a different lifetime; the read's temporary memory is 9.2's.
       `PairedVisualsRetainedCostTests`.
+      **Corrected in group 11: the process reading is recorded and no longer asserted on.** Group 9 put
+      a loose bound on it and saw it hold twice; group 11's final gate run is the third, and it
+      **failed** — 0.037 MiB per pair against the 2.027 this reads when the suite runs alone, because
+      three of the paired ramp's five batches were served from pages other suites had already churned
+      into the process's footprint and the median landed on one of them. The bound was removed rather
+      than widened: a threshold tuned to a quiet machine fails on a busy one and proves nothing on a
+      quiet one, which is the conclusion 9.2's own reading had already reached and this one should have
+      reached with it. **No evidence is lost.** The figure 9.1 asks to be recorded is still measured and
+      still printed, and the claim was never this instrument's: the exact instrument gives
+      2 113 536 B to the byte, deterministically, and *retained once* is covered from the other side by
+      the replacement test and by the `pairHistory` control under 9.3.
 - [x] 9.2 Confirm **no PCM is retained** and no accumulator outlives its read.
       Over the **production route** — the real `SourceInspectionCoordinator`, the real
       `SharedPCMAnalysisGeneration`, the real six accumulators. Only the decoder is a double, and only
@@ -573,6 +584,19 @@ removed, and the removal reverted in full. A control that has never been seen to
       the third equals what it was after the first, to the byte. Dismissing gives back exactly
       2 113 536 B — the second file's drawings and nothing else.
       `PairedVisualsRetainedCostTests`.
+      **Negative control — seen to fail, added in group 11 and recorded here rather than where it was
+      run.** Group 9 closed this task on positive assertions alone, and group 11's audit of ADR-0025
+      found that the record's automated list requires *"each must fail when the property is broken,
+      demonstrated by a negative control"* — with **bounded retention** on that list. The control was
+      therefore run before the record was promoted, not argued away. `ImportFlowModel` was given a
+      `pairHistory: [PairedVisuals]` appended on every publication — the plausible leak, a flow keeping
+      the previous comparison so a reader could go back to it. **4 tests failed, 9 issues**, and they
+      name both halves of the property: *more than one pair retained* —
+      `count(of: "PairedVisuals") → 2` against 1, and `Array<PairedVisuals>` newly reachable — and *the
+      load grows with use* — `4 227 072 B` after the first comparison against `6 340 608 B` after the
+      second, exactly one more file's drawings per comparison made. Reverted from a pristine copy,
+      verified by checksum, by a `MUTATION` grep and by a `pairHistory` grep, with the suite green
+      again.
 - [x] 9.4 Confirm at most **two** spectrogram rasters exist at once — the consequence of group 6's
       replacement, asserted rather than assumed.
       **Not argued from group 6.** The count is read off **every** state the surface can be in: sixteen
@@ -755,19 +779,89 @@ each asks two questions with a literal yes or no. Record the result in
 
 ## 11. Gates and closure
 
-- [ ] 11.1 Four gates green — `./Scripts/check-boundaries.sh`,
+- [x] 11.1 Four gates green — `./Scripts/check-boundaries.sh`,
       `swift build -Xswiftc -warnings-as-errors`, `swift test`,
       `OPENSPEC_TELEMETRY=0 openspec validate --all --strict` — plus the Xcode app build and
       `git diff --check`.
-- [ ] 11.2 Confirm every negative control in groups 2–9 was **seen to fail** and reverted in full, with
+      **All green, on the final tree.** Boundaries respected; the zero-warnings build completes;
+      `swift test` **run twice**, as the closure precedent does — **1628 tests in 181 suites**, no
+      issues either pass; `openspec validate --all --strict` passes 11 of 11; `xcodebuild -scheme
+      AudioInspector -configuration Debug` **BUILD SUCCEEDED**; `git diff --check` clean. The focused
+      suites this change owns were run together as well — 102 tests in 12 suites — covering atomicity,
+      production reach, both geometries, the surface, export isolation, retention, the raster bound,
+      vocabulary and the boundary assertions.
+      **One gate genuinely failed on the way, and the fix is recorded rather than hidden.** The first
+      full run failed on 9.1's *process* footprint reading — the flaky instrument, not the feature. It
+      was demoted from an assertion to a record, with the reason written into the test and into 9.1;
+      the two passes above are the tree after that. **No evidence was lost**: the figure is still
+      measured and printed, and the claim it briefly carried was always the exact instrument's.
+- [x] 11.2 Confirm every negative control in groups 2–9 was **seen to fail** and reverted in full, with
       no residue in the diff.
-- [ ] 11.3 Decide **ADR-0025**'s status from what was actually demonstrated, against its own three
+      **Sixteen controls, every one seen to fail, every one reverted.** Audited against each task's own
+      recorded failure rather than against the fact that a control was written — *"a control that has
+      never been seen to fail is a comment"*.
+      **Group 1 (three, ahead of the range this task names):** `cancelled` collapsed to `unavailable`
+      (2 issues); `failed` collapsed to `unavailable` (2 issues); the stream-description guard removed
+      (2 issues). **Group 2:** a second shared pass — `decodersMade → 4` and `decodeCalls → 4` against
+      2, both counters. **Group 3:** the operation guard removed, so B's late result lands (4 issues,
+      the retained source itself wrong); the pair built from two independently read sources (3 issues,
+      with the signature the control exists for). **Group 4:** one lane re-ranged to its own peak
+      (3 issues); every lane's fraction forced to `1` (13 issues across six tests). **Group 5:** the
+      out-of-range treatment painted the ramp's floor colour (4 issues); `sharedNyquist` set to `min`
+      (14 issues across seven tests). **Group 6:** the pair added beneath the single drawing instead of
+      standing in (4 issues across both suites); dismissal made to re-inspect the first file (the
+      single drawings did not come back). **Group 7:** *"— a lower quality rate."* appended to a string
+      the surface really renders (18 issues, the sweep naming `offences → ["quality"]`). **Group 8:**
+      a real second pass rebuilding the spectral model (8 issues, all counters), plus a voluntary second
+      control swapping the pair's two sides (21 issues across three tests). **Group 9:** a visual made
+      reachable from the export path (5 tests in 4 suites, 12 issues).
+      **One was missing and was run rather than argued away.** ADR-0025's automated list requires a
+      control per condition, and **bounded retention** had none — group 9 closed 9.3 on positive
+      assertions alone. It was run here, before the record was promoted: a `pairHistory: [PairedVisuals]`
+      on the flow, **4 tests failed with 9 issues**, naming both halves of the property. Recorded under
+      9.3, where the property lives.
+      **No residue.** Every revert was verified from a pristine copy by checksum and by grep; the diff
+      against `main` contains no `MUTATION` marker, no `pairHistory`, and none of the mutated shapes.
+- [x] 11.3 Decide **ADR-0025**'s status from what was actually demonstrated, against its own three
       promotion conditions and nothing else. Partial evidence does not promote it, and group 10's two
       checks are not optional.
+      **Decided: `Accepted` (2026-08-27)**, on the three conditions and on nothing else, with a
+      `Promotion` section recording the evidence, the class each piece belongs to, and what it does
+      **not** cover — the shape ADR-0024 established five days earlier and ADR-0023 before it.
+      **1 — reuse, not recomputation: satisfied**, counted through the real decoder over two real files
+      (one decoder and one decode call **per file**, one counter each), with each artefact asserted
+      equal to what that inspection produced at the coordinator's own boundary, and two controls seen to
+      fail. **2 — unmixable across operations, each direction failing when its guard is removed:
+      satisfied**, on one payload with no second value for a stale result to land in, and both guards
+      demonstrated. **3 — the two axis properties observed by a person: satisfied**, M1 and M2 both
+      yes/yes on 2026-08-27, on a build launched by its executable path with a fresh window confirmed by
+      the person; the session that prepared it did not see the surface and nothing stands in for that.
+      **The automated list was audited too, not assumed**, and it is what surfaced the missing bounded
+      retention control that 11.2 then ran. **The layout defect does not contradict any condition** —
+      the ten automated ones are arithmetic, retention, export, colours as values and vocabulary; the
+      two manual ones ask about an edge and a region, and an edge and a colour. It is recorded in the
+      promotion as a cosmetic defect that stands, reported and not fixed.
+      **ADR-0016 and ADR-0017 stay `Proposed`** and are not touched: neither is discharged by anything
+      here, and the promotion says so in its own words. **ADR-0024 is untouched.**
 - [ ] 11.4 Update `CURRENT.md`, and archive through `openspec archive` **after merge**, without editing
       the promoted specs by hand.
-- [ ] 11.5 Record in `add-two-file-technical-comparison` that its group 4 decision — *the second file's
+      **Half done, and it stays open because the other half must not happen yet.** `CURRENT.md` is
+      refreshed and describes the real state — one thread open and PR-ready, ADR-0025 `Accepted`, the
+      cosmetic defect standing, the inherited ADR-0016/ADR-0017 debt untouched, and opening the PR as
+      the next step. **`openspec archive` has not been run**, and must not be: the precedent is exact —
+      `add-two-file-measurement-comparison` promoted its ADR and refreshed `CURRENT.md` on the branch,
+      merged as PR #49, and archived only afterwards, on `main`. This task is marked complete when the
+      archive has actually happened.
+- [x] 11.5 Record in `add-two-file-technical-comparison` that its group 4 decision — *the second file's
       visualisations are discarded* — is superseded by this change, without editing its historical text.
+      **Recorded additively under that change's task 4.6 — 18 insertions, no deletions**, so the
+      decision as it was made stands verbatim and the note sits beneath it. What it says: the decision
+      was right when it was made and its own clause (c) — *"the next slice needs them"* — is what came
+      true; the second file's visualisations are no longer discarded; and **the reversal criterion was
+      not met, the opposite happened** — the slice was implemented rather than abandoned, at no
+      additional read, so the one-to-two seconds that task priced was never spent twice. Clause (a)
+      stands unchanged: no *requested-parts* case was added and none is needed. ADR-0025 §4, not that
+      task, is where the retention rule lives.
 
 ## 12. Deferred, and named so it is not quietly dropped
 
