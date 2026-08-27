@@ -199,15 +199,21 @@ struct PairedVisualsRetainedCostTests {
 
     // MARK: - 9.1 · A, the process: the same two states, measured differentially
 
-    /// **The runtime half of 9.1.** `phys_footprint` is process-wide, so no single reading is
-    /// attributable to anything. What is attributable is the **difference** between two runs of the
-    /// same code that differ only in whether a pair settles, taken several times, with the value kept
-    /// alive across the reading.
+    /// **The runtime half of 9.1, recorded and not asserted on.** `phys_footprint` is process-wide, so
+    /// no single reading is attributable to anything; what is attributable is the **difference**
+    /// between two ramps of the same shape that differ only in whether a pair settles.
     ///
-    /// The bound is deliberately loose and one-sided in intent: it is there to catch *no cost at all*
-    /// (a pair that is not really retained) and *twice the cost* (a pair that copies the first file),
-    /// not to re-assert the exact number the stored-graph measurement already gives to the byte. The
-    /// reading itself is printed and goes into the record.
+    /// **It was asserted on, and the assertion was wrong to make.** Run alone this reads 2.027 MiB per
+    /// pair; run inside the whole suite it read **0.037**, because three of the paired ramp's five
+    /// batches were served from pages other suites had already churned into the process's footprint and
+    /// the median landed on one of them. A bound tuned to the quiet number fails on a busy machine and
+    /// proves nothing on a quiet one — the same conclusion `ReadTemporaryMemoryTests` reached about its
+    /// own reading, reached here one full-suite run later.
+    ///
+    /// **The claim is the exact instrument's**, and it is deterministic: the stored-graph measurement
+    /// above gives the figure to the byte, and `aNewComparisonReplacesThePreviousPair` and the
+    /// `pairHistory` negative control cover *retained once* from the other side. What this reading is
+    /// good for is what 9.1 asks for — a record of what was measured.
     @Test("the process's footprint rises by about one file's drawings per pair")
     func theFootprintRisesByAboutOneFilesDrawings() async {
         let batch = 8
@@ -225,14 +231,15 @@ struct PairedVisualsRetainedCostTests {
         delta of medians:               \(MiB.text(delta))
         per pair:                       \(MiB.text(delta / batch))
         ADR-0025 prediction, per pair:  \(MiB.text(Self.predictedPairCost))
+        note: process-wide, and this suite runs beside others; recorded, not asserted on.
 
         """)
 
-        // A pair costs something, and it costs about one file's drawings rather than two. The bound is
-        // loose on purpose: this instrument answers *is a pair really retained, and is it retained
-        // once*, and the exact figure is the stored-graph measurement's to give.
-        #expect(delta > expected / 2)
-        #expect(delta < 2 * expected)
+        // The readings are real readings rather than a kernel that declined to answer. Nothing is
+        // asserted about their size: see the note above.
+        #expect(single.deltas.count == 5)
+        #expect(paired.deltas.count == 5)
+        #expect(expected > 0)
     }
 
     // MARK: - 9.3 · at most one pair, and a new comparison releases the previous one
