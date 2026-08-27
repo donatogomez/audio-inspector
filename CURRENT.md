@@ -17,8 +17,9 @@
 
 ---
 
-**Focus:** the UX/UI redesign is open on `docs/inspection-workspace-redesign` — architecture decided,
-nothing implemented. What landed most recently is named first; the redesign and its slice order follow.
+**Focus:** the redesign's shell — **R1 — is implemented** on `feat/restructure-inspection-workspace`,
+a branch stacked on the documentation branch. Nothing after R1 is started. What landed most recently is
+named first; the redesign and its slice order follow.
 
 **`add-two-file-visual-comparison` is merged, archived and closed.** PR
 [#50](https://github.com/donatogomez/audio-inspector/pull/50) landed on `main` as a two-parent merge
@@ -35,23 +36,28 @@ floor. There is no visual outcome: nothing says the two are the same, different,
 [#51](https://github.com/donatogomez/audio-inspector/pull/51) merged as `58a9b18`: the rule that turns
 four presentation states into `ReportMeasurements`' four optionals moved out of `ReportView` into
 `ExportableMeasurements`. **Nothing observable changed** — same UI, same JSON, same `schemaVersion` 1 —
-and that is the point: it was a preparation, deliberately with no OpenSpec change and no ADR. Three
-tests and a production harness used to reproduce that rule by hand because it was private to the view,
-so a divergence would have been mirrored on both sides instead of caught; they now call the seam, and a
-negative control demonstrates the divergence failing. Nothing normalised: programme bandwidth keeps the
-extra clause its siblings do not have.
+and that is the point: it was a preparation, deliberately with no OpenSpec change and no ADR.
 
-**The UX/UI redesign is open, and its architecture is decided.** The branch is
-`docs/inspection-workspace-redesign`; **ADR-0026 is `Proposed`** and the umbrella change is
-`restructure-inspection-workspace`. **No production exists yet** — the change carries the architecture,
-the slice map, the contract matrix and the navigation delta, and its own shell work is 0/8.
+**R1 — the shell — is implemented, and it is only the shell.** The umbrella change
+`restructure-inspection-workspace` is at **11/29**; its §2 is closed, §3 onward untouched. What exists
+is `WorkspaceSection` (five cases), `WorkspaceNavigation` (the selection and the one rule that moves
+it), `WorkspaceCopy` (the shell's words), and a segmented control in `RootView`. The selection lives in
+the composition root's own `@State`: no domain value, no field of `ImportFlowModel` or
+`ComparisonState`, no persistence, and a source assertion over `Sources/` and `App/` refuses any target
+below it naming it. It moves in exactly one place — a single `.onChange` on the whole window — and only
+when a **new primary report that did not fail globally** arrives. A comparison starting, settling, being
+dismissed, superseded, cancelled or failing moves nobody; nor does an analysis settling, a `.working`
+state, a dismissed picker, or a globally failed report. Three negative controls were seen to fail —
+12 issues for a section that moves on its own, 4 for persistence, 4 for a `"3 differences"` count on the
+shell's comparison surface — and all three were reverted and verified by checksum.
 
-One scrolling page becomes **Overview · Measurements · Waveform · Spectrum · Details**, the same five
-whether or not a comparison is settled; a comparison is a **mode** of those sections rather than more
-page underneath them. The selected section is presentation state the composition root owns: no domain
-value, no flow field, no persistence, and it moves only when a new primary file arrives — not when a
-comparison starts, ends, or an analysis settles. *Spectrum* is a navigation label and renames no
-artefact.
+**What R1 deliberately does not do.** No section has its own content yet. Selecting one changes the
+control's state and nothing else: all five still show the existing report page underneath, exactly as it
+was. There is no Inspection Overview, no Comparison Overview, no comparison mode, no Details or
+Measurements rework, no waveform or spectrum workspace, no toolbar, and no responsive pass. The
+paired-waveform overlap defect below is untouched. Those are R2–R9, each its own change and its own PR.
+**ADR-0026 is still `Proposed`** — R1 satisfies seven of its eight promotion conditions, and the eighth
+is a vocabulary sweep over a Comparison Overview that does not exist yet.
 
 **The decision that was blocking it is settled, against the capability rather than by preference.** The
 Comparison Overview carries the two file identities, each side's own facts, the existing factual framing
@@ -67,11 +73,11 @@ among the marks of a native macOS app. ADR-0026 §12 declines it — a sidebar n
 there is none — and says so rather than diverging quietly. `docs/vision.md` is not edited; if
 persistence or batch ever creates a collection, that is the decision to reopen.
 
-**The order.** R1 is the umbrella itself (the shell). Then R2 Empty · R3 Details · R4 Measurements ·
-R5 Waveform workspace · R6 Spectrum workspace · R7 Inspection Overview · R8 Comparison mode · R9
-responsive, accessibility and the human pass — each its own change and its own small PR. R0 is merged
-and outside the sequence. Manual validation sits on R9, not on the ADR: ADR-0026's subject is structure,
-and every claim it makes is a value a test can read.
+**The order.** R1 is the umbrella itself (the shell), and it is done. Next is R2 Empty · R3 Details ·
+R4 Measurements · R5 Waveform workspace · R6 Spectrum workspace · R7 Inspection Overview · R8 Comparison
+mode · R9 responsive, accessibility and the human pass — each its own change and its own small PR. R0 is
+merged and outside the sequence. Manual validation sits on R9, not on the ADR: ADR-0026's subject is
+structure, and every claim it makes is a value a test can read.
 
 **One cosmetic defect stands, reported and not fixed.** In the paired waveform section, text overlaps
 vertically — the amplitude line against the second file's attribution, and the *no audio beyond here*
