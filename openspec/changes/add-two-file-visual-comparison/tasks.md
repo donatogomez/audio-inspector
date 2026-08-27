@@ -506,24 +506,173 @@ removed, and the removal reverted in full. A control that has never been seen to
 
 ## 9. Cost, boundaries and the export
 
-- [ ] 9.1 Measure retained memory with and without a pair. Expected: **≈ 2.02 MiB more** while a pair is
+- [x] 9.1 Measure retained memory with and without a pair. Expected: **≈ 2.02 MiB more** while a pair is
       held (2 MiB model + 16 KiB envelope). Record what was measured rather than what was predicted, and
       state the machine and configuration.
-- [ ] 9.2 Confirm **no PCM is retained** and no accumulator outlives its read.
-- [ ] 9.3 Confirm at most **one** pair is retained, and that a new comparison releases the previous one.
-- [ ] 9.4 Confirm at most **two** spectrogram rasters exist at once — the consequence of group 6's
+      **Measured, on two instruments, because neither is sufficient alone** (`RetainedCostSupport.swift`
+      names the blind spots of each): a walk of the payload buffers the flow really keeps alive,
+      deduplicated **by storage address**, which is exact and blind to closure captures; and the
+      process's own `phys_footprint`, which sees everything and is process-wide and noisy.
+      **Machine and configuration** — Apple M1 Pro, arm64, 32 GiB, macOS 26.3 (25D125), Swift 6.3.3,
+      `swift test` (Debug) and `swift test -c release -Xswiftc -enable-testing` (Release). Fixtures are
+      production-sized and take their size from `SpectrogramGridMapping` and `WaveformBucketMapping`
+      rather than from a literal, so a cap that moves moves the measurement with it. Two states: **S**,
+      one file inspected with its own drawings settled and no comparison; **P**, the same plus a settled
+      pair.
+      **The exact instrument, identical in Debug and Release:** S = 2 113 536 B, P = 4 227 072 B,
+      **delta = 2 113 536 B = 2.016 MiB** — the prediction met to the byte, and the whole of it one more
+      file's drawings.
+      **The process instrument** cannot be read one scenario at a time: measured that way it reports
+      **zero**, because a 2 MiB buffer is a large allocation, the allocator caches freed large regions,
+      and every run after the first is served from pages already in the footprint. It is therefore a
+      **ramp** — five batches of eight, none ever released, warm-up kept rather than freed. Per pair:
+      **2.029 MiB** (Debug, this suite alone), **1.805 MiB** (Debug, whole suite in parallel),
+      **1.801 MiB** (Release). That spread *is* the variability, and it is reported rather than
+      averaged away; the assertion is deliberately loose — it catches *no cost at all* and *twice the
+      cost*, and leaves the exact figure to the exact instrument.
+      **Copy-on-write is measured, not named.** With a pair on screen a `Spectrogram` is reachable
+      **four** times — the first file's own, the retained compared side, and the pair's two sides — from
+      **two** distinct buffers. A physical copy of the first file's model would have doubled the delta,
+      and did not.
+      **A, B and C are not added together anywhere.** The model is this task's; the raster is 9.4's and
+      has a different lifetime; the read's temporary memory is 9.2's.
+      `PairedVisualsRetainedCostTests`.
+- [x] 9.2 Confirm **no PCM is retained** and no accumulator outlives its read.
+      Over the **production route** — the real `SourceInspectionCoordinator`, the real
+      `SharedPCMAnalysisGeneration`, the real six accumulators. Only the decoder is a double, and only
+      so a large stream can exist without a large file: it **generates** each chunk and retains none,
+      which the scripted fake, holding an array of chunks, could not do without becoming the thing being
+      measured.
+      **Structurally**, the finished bundle is walked and the types a retained read would appear as are
+      asked for **by name**: no `PCMChunk`, no `Array<Array<Float>>`, and none of the six accumulators,
+      the generation or the decoder. The walk is asserted to have reached the drawings, so the absences
+      are absences rather than a walk that stopped early.
+      **The decisive measurement is a ratio, not a threshold.** Two streams, 15 s and 30 s: twice the
+      samples — 5 275 648 B against 10 551 296 B — and **the same retention to the byte**, 2 113 536 B.
+      Anything held in proportion to the input would show as a difference, and there is none; what is
+      kept is a function of `SpectrogramGridMapping`'s caps and of nothing else.
+      **The footprint reading is recorded, not asserted on**, and that is a decision. A quiet run reads
+      a 2.1 MiB rise at the last chunk of a 10.06 MiB read; the same window read 6.5 MiB under the full
+      suite and 146 MiB in Release beside the 9.1 ramp — other suites' allocations, indistinguishable
+      from this one's. A threshold tuned to the quiet number would fail on a busy machine and prove
+      nothing on a quiet one.
+      **One thing worth reading rather than assuming:** the peak is **not** at the last chunk. The
+      spectral model is built by `finish()`, after the samples stop, so the footprint is higher when the
+      inspection returns than it was mid-read. That is the drawing being made, not the read being held —
+      and the first draft of this task asserted the opposite and was wrong.
+      `ReadTemporaryMemoryTests`.
+- [x] 9.3 Confirm at most **one** pair is retained, and that a new comparison releases the previous one.
+      **One field, one pair**: `PairedVisuals` is reached exactly once from the flow, and the shapes a
+      history would take — `Array<PairedVisuals>`, `Dictionary<Int, PairedVisuals>`, `Array<FileVisuals>`
+      — are asserted absent rather than assumed never written.
+      **B is gone when C arrives**, asserted on values that discriminate: B's model at 96 kHz, C's at
+      48 kHz, and the pair on screen carrying C's beside a technical comparison naming `c.wav`. After
+      the replacement the graph still holds one pair and four `Spectrogram` values, so B is not
+      reachable by any stored path.
+      **The state does not grow with use**: three comparisons in a row, and the retained payload after
+      the third equals what it was after the first, to the byte. Dismissing gives back exactly
+      2 113 536 B — the second file's drawings and nothing else.
+      `PairedVisualsRetainedCostTests`.
+- [x] 9.4 Confirm at most **two** spectrogram rasters exist at once — the consequence of group 6's
       replacement, asserted rather than assumed.
-- [ ] 9.5 **The export is byte-identical** with a pairing on screen and without one, for the same report.
+      **Not argued from group 6.** The count is read off **every** state the surface can be in: sixteen
+      combinations of paired lanes — the three settled answers plus the empty model that is an answer
+      and not an absence — and five single-file states. The maximum observed is **2**, and 0 and 1 both
+      occur, so `<= 2` is a maximum rather than a statement about a surface that never draws.
+      **Counted as rasters, not as lanes**: a lane is counted only when `SpectrogramRaster.buffer(for:)`
+      really produces one, which it declines for a model with no cells.
+      **The size, measured on the buffer itself**: 1024 × 512 × 4 = **2 097 152 B** per raster,
+      4 194 304 B for the maximum of two — identical in Debug and Release.
+      **The level this is guaranteed at is stated rather than implied.** `ReportVisuals` is the whole of
+      the app's answer to *which drawings are on screen*, and the bound is a bound on **what this
+      architecture asks to be drawn**. It is not a claim about SwiftUI's internals: a framework may hold
+      a previous frame's image while it diffs, and nothing here can see that or promises otherwise.
+      `PairedSpectrogramRasterCostTests`.
+- [x] 9.5 **The export is byte-identical** with a pairing on screen and without one, for the same report.
       **Negative control:** make a visual reachable from the export path temporarily and demonstrate the
       suite fails; revert.
-- [ ] 9.6 `./Scripts/check-boundaries.sh` green; no AVFoundation, no Accelerate and no `URL` in
+      **Through the real path, not the encoder.** The same `JSONReportExporter` the composition root
+      builds, inside the real `ReportExportCoordinator`, writing real bytes to a real file and comparing
+      what is read back — because the interesting failure is not *the encoder invented a key* but
+      *something on the path handed the encoder more than it should have*. The only substitution is the
+      destination: an `NSSavePanel` cannot be driven from a test. The clock and the generator are
+      injected fixed, as every other export test does. The pair is asserted **settled** before the
+      second export, so the claim is about a pair rather than about its absence. A positive control is
+      kept permanently: a report that genuinely differs produces different bytes through the same path.
+      **The document is pinned too**, because byte identity alone would not catch a leak that happened
+      to appear in both exports: the top level is exactly the seven v1 keys, and thirty-one key names a
+      drawing could arrive under are asserted absent — over **keys**, never values, since a file may
+      legitimately be named `spectrogram.wav`.
+      **The control was run and did fail.** The mutation was end-to-end and real: `ReportEnvelopeDTO`
+      gained a `spectrogramColumnCount`, `InspectionReportMapper` gained a `FileVisuals` parameter and
+      populated it, `ReportExporting`/`JSONReportExporter`/`ReportExportCoordinator` carried it, and
+      `AppContainer` wired the **retained pair's second side** into the production export action. The
+      field was made non-optional deliberately — a leaked field that is merely omitted when `nil` is a
+      control that cannot fail.
+      **Five tests in four suites failed, twelve issues**: this task's own top-level key assertion;
+      `ExportComparisonIsolationTests` — *"the document carries exactly one inspected file"*, whose key
+      set gained `spectrogramColumnCount`; `SpectrogramReportIsolationTests` — *"the exported JSON is
+      byte-identical with and without a spectrogram"*, on a forbidden key; `JSONReportExportContractTests
+      .partialInspectionMatchesTheCanonicalExample`, on the canonical document; and 9.6's own
+      *"no export source names a visual type"*.
+      **A first attempt at the control was rejected** rather than kept: changing the port's requirement
+      outright broke the test doubles and the suite failed to **build**, which is a weaker result than a
+      suite that builds and fails on its assertions. The mutation was reshaped so every existing
+      conformance still compiled.
+      **Reverted in full**, verified three ways: `git status` clean but for the new test files, a
+      `MUTATION` grep returning zero, and SHA-256 checksums of all seven touched sources plus
+      `docs/json-schema-v1.md` identical to the pre-mutation checkpoint.
+      `PairedVisualsExportIsolationTests`.
+- [x] 9.6 `./Scripts/check-boundaries.sh` green; no AVFoundation, no Accelerate and no `URL` in
       `FeatureImport` or `FeatureAnalysis`; no framework type in any port.
-- [ ] 9.7 **A missing drawing never damages a report.** With either file's artefact absent or failed,
+      The script is green and stays the gate. It is **not** what closes this task: 9.6 enumerates
+      specific restrictions, and a task that names a property is closed by asserting **that** property —
+      the lesson of `add-static-spectrogram-visualization` 10.4, which ADR-0025 records. So each is read
+      off the sources by name, and a failure says which one broke: no `AVFoundation`/`AVFAudio`/
+      `AudioToolbox`/`CoreAudio` and no `Accelerate` import in either feature; no `URL` token in either
+      feature's code, comments excluded exactly as the script excludes them; neither feature importing a
+      concrete module, nor each other. The **three ports** are read line by line against nineteen
+      framework type names. A fourth check was added for 9.5's structural half: **no export source names
+      a visual type** — the assertion the negative control tripped first.
+      `ArchitectureBoundaryTests`.
+- [x] 9.7 **A missing drawing never damages a report.** With either file's artefact absent or failed,
       both reports keep the same properties, warnings and global status they would have otherwise, and no
       inspection warning is emitted for the drawing.
-- [ ] 9.8 Confirm the diff touches none of: `WaveformEnvelope`, `Spectrogram`, `PCMStreamDescription`,
+      **Thirty-six cases against one baseline.** Six states per side — available, waveform absent,
+      waveform failed, model absent, model failed, and the model with **no columns** that is an answer
+      rather than an absence — applied to the first file, the second, and both. Each is compared with
+      the same two files' all-available run: properties, warnings and status for **both** reports, plus
+      the technical and measurement comparisons. The baseline report carries two warnings and a
+      `partial` status, so *unchanged* is asserted over a report that has something to lose.
+      **The two reports are built once and reused**, and that is not a convenience:
+      `AudioFileReference` carries an ephemeral `id` that is new on every construction, and a helper
+      that rebuilt them made every `FileComparison` comparison fail on an identifier that is
+      deliberately not part of what a report says. That was found by running it.
+      **No warning names a drawing**, asserted twice: the warning set is the inspection's own and no
+      more, and no code, field or message contains *waveform*, *envelope*, *spectrogram*, *spectral*,
+      *drawing*, *visual* or *raster* — so a future warning code about a waveform would fail this even
+      if the count stayed the same.
+      **And the absence is represented rather than hidden**, because an intact report bought by quietly
+      dropping the pair would be worth nothing: the pair still settles, the missing lane says which of
+      the two things happened to it, the artefacts that did arrive are untouched, and a pair whose
+      spectral models **both** failed stays in paired mode instead of falling back to a single drawing.
+      `VisualAbsenceReportIsolationTests`.
+- [x] 9.8 Confirm the diff touches none of: `WaveformEnvelope`, `Spectrogram`, `PCMStreamDescription`,
       `ReportMeasurements`, `MeasurementComparison`, `FileComparison`, `InspectionReport`,
       `SpectrogramColourRamp`, the property reader, the exporter, `schemaVersion` 1.
+      Confirmed against the **whole change** — `d27933c` (the merge base) to the working tree, not this
+      group's own diff — because that is what the task protects and what the archived precedent
+      (`add-drag-and-drop-file-import` 10.2) checked. Fifteen paths, each independently `0` files
+      changed: the seven domain types above, `SpectrogramColourRamp`, `AVFoundationAudioFilePropertyReader`,
+      the four export sources (`JSONReportExporter`, `InspectionReportMapper`, `ReportJSONDTO`,
+      `ReportExporting`), `ReportExportCoordinator` and `docs/json-schema-v1.md`.
+      `InspectionReportMapper.schemaVersion` is still `1`, and the export layer is asserted to name none
+      of the visual types (9.6) rather than merely to be unmodified.
+
+      **No production changed.** Group 9 is seven test files and this record; the export mutation was a
+      negative control and is gone. What the group found was in its own instruments, not in groups 1–8:
+      a footprint read one scenario at a time reports zero, a peak assumed at the last chunk is not
+      where the peak is, and a report rebuilt per case is not the same report.
 
 ## 10. Manual validation — the two properties ADR-0025's promotion turns on
 
