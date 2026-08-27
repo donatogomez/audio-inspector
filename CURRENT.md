@@ -17,9 +17,10 @@
 
 ---
 
-**Focus:** the redesign's shell — **R1 — is merged**, and the umbrella it belongs to is still open. The
-next slice is **R2 `restructure-empty-state`**, and it has not been started: no change, no branch, no
-code. What landed most recently is named first; the redesign and its slice order follow.
+**Focus:** **R2 — `restructure-empty-state` — is specified and designed, and not implemented.** The
+branch is `feat/restructure-empty-state`; `Sources/` and `Tests/` are untouched, and the next step is
+writing it. R1 is merged and the umbrella that sequences both is still open. What landed most recently is
+named first; the redesign and its slice order follow.
 
 **`add-two-file-visual-comparison` is merged, archived and closed.** PR
 [#50](https://github.com/donatogomez/audio-inspector/pull/50) landed on `main` as a two-parent merge
@@ -55,6 +56,24 @@ state, a dismissed picker, or a globally failed report. Three negative controls 
 a section that moves on its own (**39 issues across 8 tests**, once the lifetime tests were widened to
 assert from *every* section), persistence (4), and a `"3 differences"` count on the shell's comparison
 surface (4) — and all three were reverted and verified by checksum.
+
+**R2 is open, and it is documentation only so far.** The change is
+`openspec/changes/restructure-empty-state` at **0/43**, adding five requirements and sixteen scenarios to
+`audio-file-inspection` about the surface *before* a report — the starting screen, the running state and
+the recoverable failure, as three states of **one** shell rather than three screens. **No ADR**:
+ADR-0026 §1 and §12 already decide that there is one subject, no collection and no sidebar, and layout is
+not an ADR's business.
+
+Four findings came out of reading production, and each is a fact about the code rather than a preference.
+One sentence carries three claims at once, so the **read-only promise** — *"The file is only read, never
+modified, moved or copied."* — is the tail of a sentence about dragging, and **no test or requirement
+protects it**. **`Try again` names something the app cannot do**: nothing about a failed selection is
+retained (ADR-0010, ADR-0013), so the button opens the panel exactly as the idle one does. The running
+state shows a bare spinner and says nothing. And **`.working` begins before a file has been chosen**,
+because `selectAndInspect()` sets it and *then* awaits the panel — which is why the running state may
+name no file and no phase, a limitation recorded rather than papered over. There is **no quantitative
+progress anywhere in `Sources/`**, so no percentage is invented, and **no cancellation exists**, so no
+`Cancel` is offered.
 
 **What R1 deliberately does not do.** No section has its own content yet. Selecting one changes the
 control's state and nothing else: all five still show the existing report page underneath, exactly as it
