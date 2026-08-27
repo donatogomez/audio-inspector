@@ -305,6 +305,19 @@ public struct InspectionPresentation: Sendable, Equatable {
     public var loudness: LoudnessState
     /// Shown as its own section, and asserted by the flow tests to arrive here before it can be.
     public var significantBandwidth: SignificantBandwidthState
+    /// The stream this file's samples were read from, once the read has finished — `nil` before that,
+    /// and `nil` for a file that exposed no usable frame count.
+    ///
+    /// **It arrives with the settled outcome, not with the report**, because that is when it exists: the
+    /// report is published before the first sample is read. It is what `AudioDecoding` reported, carried
+    /// here unchanged from `InspectionAnalyses`, and it is **never** derived from `report.properties` —
+    /// those are what the file's header declares, and this is what was actually decoded.
+    ///
+    /// It exists so this file's drawings can state their own extent. `WaveformEnvelope` carries a frame
+    /// count and no sample rate, so an envelope alone cannot say how long a file is; taking both
+    /// drawings' extents from one description is what stops a waveform lane and a spectrogram lane
+    /// disagreeing about the same file.
+    public var stream: PCMStreamDescription?
 
     public init(
         report: InspectionReport,
@@ -313,7 +326,8 @@ public struct InspectionPresentation: Sendable, Equatable {
         signalLevelMetrics: SignalLevelMetricsState = .loading,
         truePeak: TruePeakState = .loading,
         loudness: LoudnessState = .loading,
-        significantBandwidth: SignificantBandwidthState = .loading
+        significantBandwidth: SignificantBandwidthState = .loading,
+        stream: PCMStreamDescription? = nil
     ) {
         self.report = report
         self.waveform = waveform
@@ -322,5 +336,6 @@ public struct InspectionPresentation: Sendable, Equatable {
         self.truePeak = truePeak
         self.loudness = loudness
         self.significantBandwidth = significantBandwidth
+        self.stream = stream
     }
 }

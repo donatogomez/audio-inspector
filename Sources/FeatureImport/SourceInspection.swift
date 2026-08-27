@@ -25,13 +25,20 @@ public enum SourceInspectionOutcome: Sendable, Equatable {
     case preparationFailed
 }
 
-/// Everything an inspection derived **from the file's samples**, gathered so that adding one more does
-/// not lengthen a signature.
+/// Everything an inspection derived **from the file's samples**, and the stream they were read from,
+/// gathered so that adding one more does not lengthen a signature.
 ///
 /// Only sample-derived results belong here. `InspectionReport` does not: it is read from the file's
 /// metadata, it exists before the first chunk, and folding it in would suggest it waits for the audio.
 /// Presentation state does not either: `InspectionPresentation` holds `…State` values that move from
 /// `.loading` as results arrive, where these are the settled outcomes.
+///
+/// **`stream` is the one member that is not a result**, and it is here rather than beside this value
+/// because it is what makes an artefact readable: an envelope carries a frame count and no sample rate,
+/// so it cannot state its own duration, and a description that travelled separately could be paired
+/// with a different read's. Inside, that pairing is unrepresentable. It is what the decoder reported,
+/// never rebuilt from the report's declared properties — those are what the header claims, and this is
+/// what was decoded.
 ///
 /// Each analysis still settles **on its own** — that was the reason five separate payloads were
 /// defensible for as long as they were, and grouping them changes nothing about it. A failure in one is
@@ -52,6 +59,16 @@ public struct InspectionAnalyses: Sendable, Equatable {
     /// **No default.** A container exists so a signature stops growing, not so a field can be
     /// forgotten: omitting this is a compile error, which is the strongest form of "the tests fail".
     public var significantBandwidth: SignificantBandwidthOutcome
+    /// The stream the six results above were produced from, or `nil` when the read never had one —
+    /// which `AudioDecoding` reports exactly when the file exposed no usable total frame count, and
+    /// which leaves every result absent anyway.
+    ///
+    /// **It carries a default, and the six results deliberately do not.** The rule above exists so an
+    /// *analysis* cannot be forgotten, and this is not one: production builds this value in a single
+    /// place, and a caller that omits it does not get a quietly wrong axis — it gets no visual bundle at
+    /// all, because `FileVisuals` refuses an artefact whose stream is unknown. The failure is loud and
+    /// the tests that would catch it are the ones that read the bundle.
+    public var stream: PCMStreamDescription?
 
     public init(
         waveform: WaveformOutcome,
@@ -59,7 +76,8 @@ public struct InspectionAnalyses: Sendable, Equatable {
         signalLevelMetrics: SignalLevelMetricsOutcome,
         truePeak: TruePeakOutcome,
         loudness: LoudnessOutcome,
-        significantBandwidth: SignificantBandwidthOutcome
+        significantBandwidth: SignificantBandwidthOutcome,
+        stream: PCMStreamDescription? = nil
     ) {
         self.waveform = waveform
         self.spectrogram = spectrogram
@@ -67,6 +85,7 @@ public struct InspectionAnalyses: Sendable, Equatable {
         self.truePeak = truePeak
         self.loudness = loudness
         self.significantBandwidth = significantBandwidth
+        self.stream = stream
     }
 }
 

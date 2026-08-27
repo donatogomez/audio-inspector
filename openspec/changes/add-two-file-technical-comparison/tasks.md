@@ -138,6 +138,24 @@ spectrogram, the waveform and the `schemaVersion` 1 exporter are not touched.**
       **Reversal criterion:** revisit if a comparison is ever performed over many files, or if the
       visual slice is abandoned — at which point the honest fix is a *requested-parts* concept in the
       outcome, not a silent `.unavailable`.
+      **Superseded by `add-two-file-visual-comparison`, and recorded rather than rewritten.** The
+      decision above is historical and is left exactly as it was made: at the time it was made it was
+      correct, and clause (c) — *"the next slice needs them"* — is precisely what came true. That slice
+      shipped, and **the second file's visualisations are no longer discarded**: they are collapsed to a
+      settled container beside the measurements this task already kept, paired with the first file's
+      own, and drawn on shared axes. The line this task named as the point of loss —
+      `ImportFlowModel.settle(…)`, where `analyses.settledMeasurements` was kept and the rest went out
+      of scope — now keeps both.
+      **The reversal criterion was not met; the opposite happened.** It said *"revisit if… the visual
+      slice is abandoned"*, and the slice was implemented instead, at **no additional read**: one
+      decoder and one decode call per file, counted through the real decoder with the pair retained. So
+      the cost this task priced at *"roughly one to two seconds of work per comparison"* was never spent
+      twice — the work was already being done, and what changed is that its result is now used.
+      **What is not superseded:** (a) stands unchanged. There is still no case meaning *not asked for*,
+      no report-only mode was added, and none is needed — the honest fix this task named was never
+      required, because the parts it would have skipped turned out to be the parts the next slice
+      wanted. **ADR-0025 §4** records the lifetime this places on them; that record, not this task, is
+      where the retention rule lives.
 
 ## 5. Presentation
 

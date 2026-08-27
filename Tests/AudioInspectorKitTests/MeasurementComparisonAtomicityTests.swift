@@ -132,7 +132,7 @@ struct MeasurementComparisonAtomicityTests {
         let comparingB = Task { await flow.compare(using: b.run) }
         await b.waitUntilStarted()
         // B's report has landed: the technical comparison exists and carries no measurements yet.
-        guard case let .ready(technicalB, measurementsB) = flow.comparison else {
+        guard case let .ready(technicalB, measurementsB, _) = flow.comparison else {
             Issue.record("B's technical comparison was not published"); return
         }
         #expect(technicalB.second.file.displayName == "b.wav")
@@ -152,7 +152,7 @@ struct MeasurementComparisonAtomicityTests {
         b.release()
         await comparingB.value
 
-        guard case let .ready(technical, published) = flow.comparison else {
+        guard case let .ready(technical, published, _) = flow.comparison else {
             Issue.record("the comparison stopped being ready"); return
         }
         #expect(technical == FileComparison(first: primary, second: c.report),
@@ -201,7 +201,7 @@ struct MeasurementComparisonAtomicityTests {
         await comparing.value
 
         // B has settled and the primary has not: technical yes, measurements no.
-        guard case let .ready(_, beforePrimary) = flow.comparison else {
+        guard case let .ready(_, beforePrimary, _) = flow.comparison else {
             Issue.record("no technical comparison"); return
         }
         #expect(beforePrimary == nil, "the pair was published while the primary was still measuring")
@@ -209,7 +209,7 @@ struct MeasurementComparisonAtomicityTests {
         // The primary settles; the pair appears without the technical half being rebuilt.
         primaryAction.release()
         await running.value
-        guard case let .ready(technical, after) = flow.comparison else {
+        guard case let .ready(technical, after, _) = flow.comparison else {
             Issue.record("the comparison stopped being ready"); return
         }
         #expect(technical.second.file.displayName == "b.wav")
@@ -265,7 +265,7 @@ struct MeasurementComparisonAtomicityTests {
         await b.waitUntilStarted()
         b.release()
         await comparingB.value
-        guard case let .ready(_, notYet) = flow.comparison else { Issue.record("no comparison"); return }
+        guard case let .ready(_, notYet, _) = flow.comparison else { Issue.record("no comparison"); return }
         #expect(notYet == nil, "the pair was published while the primary was still measuring")
 
         // A replacement the user dismisses: B's comparison comes back.
@@ -275,7 +275,7 @@ struct MeasurementComparisonAtomicityTests {
         // with the comparison.
         primaryAction.release()
         await running.value
-        guard case let .ready(technical, published) = flow.comparison else {
+        guard case let .ready(technical, published, _) = flow.comparison else {
             Issue.record("the comparison stopped being ready"); return
         }
         #expect(technical.second.file.displayName == "b.wav")
@@ -302,7 +302,7 @@ struct MeasurementComparisonAtomicityTests {
         b.release()
         await comparing.value
 
-        guard case let .ready(technical, published) = flow.comparison else {
+        guard case let .ready(technical, published, _) = flow.comparison else {
             Issue.record("a measurement failure failed the whole comparison"); return
         }
         #expect(technical == FileComparison(first: primary, second: b.report))
@@ -333,7 +333,7 @@ struct MeasurementComparisonAtomicityTests {
         b.release()
         await comparing.value
 
-        guard case let .ready(technical, published) = flow.comparison else {
+        guard case let .ready(technical, published, _) = flow.comparison else {
             Issue.record("the technical comparison was lost"); return
         }
         #expect(technical == FileComparison(first: primary, second: b.report))

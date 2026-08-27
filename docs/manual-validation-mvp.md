@@ -1250,3 +1250,88 @@ Programme bandwidth 16.1 kHz / 23 Hz on both sides, `Indistinguishable at these 
   sub-section can render.
 - **One machine, one appearance, one window size**, and it is a one-off observation rather than a
   regression test.
+
+## The paired drawings — M1 and M2, both passed on a confirmed-fresh instance (2026-08-27)
+
+Change `add-two-file-visual-comparison`, group 10. **A person ran both checks against the real
+application and reported the answers; they are recorded exactly as reported.** ADR-0025's third
+promotion condition is these two properties and nothing else, and neither can be answered by a test:
+one asks where an edge falls on a real display, the other whether two colours are told apart by a real
+eye.
+
+**The observation is the operator's own.** This session prepared the build and the fixtures and then
+stopped; it did not see the surface. Nothing below was produced by a test, a headless render, a
+screenshot or a reading of the source, and nothing was inferred on the operator's behalf.
+
+**The build, and why its identity is part of the record.** Every running `AudioInspector` process was
+terminated, none was left alive, and the app was rebuilt from `9f44af0` with a clean worktree into an
+**isolated** derived-data path rather than the shared Xcode one. The binary was launched **directly by
+its executable path**, never through `open`. The operator confirmed a fresh, empty import window before
+either check. Between preparing that build and the pass, a **different** `AudioInspector` binary was
+found alive — built into the shared Xcode derived-data path minutes earlier, carrying
+`-NSDocumentRevisionsDebugMode YES`, with a different SHA-256 and a commit that was never established.
+It was not the instance either check ran against. The 2026-08-11 entry above is why that was checked
+rather than assumed.
+
+**The fixtures** were generated outside the repository, each pair varying exactly one thing.
+
+### M1 — different durations. **PASS.**
+
+`m1-first-210s-44100.wav` (210.000 s) compared against `m1-second-180s-44100.wav` (180.000 s). Both
+44.1 kHz, mono, 16-bit, from one generator — the shorter file is the first 180 s of the same programme,
+so the two share a Nyquist and the frequency axis takes no part.
+
+- **Q1 — does the shorter file's drawing end before the right-hand edge of the shared axis, at a
+  position consistent with the two durations shown in the rows above? — yes.** Consistent with 180 of
+  210 seconds.
+- **Q2 — does the remainder of that lane read as "this file has no audio here" rather than as
+  silence? — yes.** It reads as that file no longer carrying audio there, not as measured silence.
+
+The surface also showed `This file carries no audio beyond here.` That is description; the answers
+above are the evidence.
+
+### M2 — different Nyquists. **PASS.**
+
+`m2-first-44100hz-30s.wav` (Nyquist 22 050 Hz) compared against `m2-second-96000hz-30s.wav` (Nyquist
+48 000 Hz). Both 30.000 s, mono, 16-bit, one generator — a sweep stopping at 12 kHz, below both
+Nyquists, so the ramp's own floor colour is present **inside** both drawings as the thing Q2 compares
+against. Equal duration, so the time axis takes no part.
+
+- **Q1 — does the 44.1 kHz model stop below the top of the shared frequency axis? — yes.**
+- **Q2 — is the region above it distinguishable by eye from the floor colour used inside the
+  drawing? — yes.**
+
+The surface also showed `This file cannot represent this range.` Again: description, not evidence.
+
+Q2 is the whole reason this check exists. That the out-of-range treatment differs from the floor **as a
+value**, and is the only achromatic thing on the ramp, is asserted by `PairedSpectrogramAxesTests` and
+`SpectrogramColourRamp`'s own suite. Two colours differing as values is not two colours being told
+apart on a display by a person, and that is what was answered here.
+
+### A layout defect was observed, and is recorded unsoftened
+
+In the **paired waveform** section, text overlaps vertically: around
+`Amplitude over the whole file, combined across 1 channel.` and `Second file`, and later between
+`This file carries no audio beyond here.` and the second lane's amplitude line.
+
+**Classified as a real, non-blocking visual defect.** Non-blocking on the operator's own report that all
+four questions could be answered unambiguously **yes** in spite of it — and on the criteria themselves:
+M1 asks about one edge and one region, M2 about one edge and one colour, and an overlapping label is
+none of those. It is not a wrong edge, a wrong axis, a lane drawn twice, or a remainder reading as
+silence, each of which would have been blocking. **It was not fixed in the session that recorded it**,
+deliberately: that session's scope was closing group 10, and a layout change to a surface a person has
+just validated is a change that needs its own pass.
+
+### What this pass does not cover
+
+- **Only M1 and M2.** Group 10 names two properties and only two, and neither was widened. No third
+  question was asked and no answer was extrapolated to one.
+- **Light, dark and window resizing were not reported**, and neither was a second window size. This is a
+  one-off observation on one machine, one appearance and one window size — not a regression test.
+- **No VoiceOver or Accessibility Inspector observation.** Task 7.7 was scoped to the structural half —
+  one element per drawing, factual labels, asserted by the suite — and this pass inherits the traversal
+  gap already recorded against ADR-0015, ADR-0016 and ADR-0017 rather than closing or worsening it.
+- **ADR-0016's own pending manual validation is untouched.** It belongs to a different change and a
+  different lifecycle, and nothing here stands in for it.
+- **The layout defect's extent was not characterised** — which lengths, which lanes, which window sizes
+  reproduce it. What is recorded is what was reported.

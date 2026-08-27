@@ -17,38 +17,35 @@
 
 ---
 
-**No thread is open.** `add-two-file-measurement-comparison` is merged, archived and closed:
-PR [#49](https://github.com/donatogomez/audio-inspector/pull/49) landed on `main` as merge commit
-`63e8f2a` on 2026-08-22, **ADR-0024 is `Accepted` (2026-08-22)**, and the change is archived at
-`openspec/changes/archive/2026-08-22-add-two-file-measurement-comparison/`, which created the
-`audio-two-file-comparison` capability with five requirements.
+**One thread is open: `add-two-file-visual-comparison`, ready for a PR and not yet opened.** Two files'
+waveforms and spectrograms now sit side by side on shared axes, reusing what the second file's single
+read already produced — nothing is computed, nothing is read twice, and the paired drawings stand in for
+the single ones rather than joining them.
 
-Two files' measurements now compare beneath the technical rows — signal levels, true peak, integrated
-loudness and programme bandwidth — reusing what the second file's single shared read already measured.
-Only loudness carries a difference, in LU. Bandwidth speaks about the grid rather than the files. An
-absence is words, never a zero, and the side that measured keeps its figure.
+**ADR-0025 is `Accepted` (2026-08-27)**, promoted on its own three conditions: reuse counted through the
+real decoder, unmixability with each direction failing when its guard is removed, and the two axis
+properties **the maintainer observed in person** on a build launched by its executable path with a fresh
+window confirmed. What the promotion does not cover is written into the record rather than left implicit.
 
-**Named follow-ups, deferred by decision and not started** — group 7 of the archived change:
+**The next step is to open the PR**, then merge, then archive through the CLI — in that order and never
+before the merge. That is the only part of the change's last group still outstanding.
 
-- **comparison export** — `schemaVersion` 1 describes one file; a comparison document is a kind of its
-  own (ADR-0017 §9);
-- **visual comparison** — waveforms and spectrograms side by side (`add-two-file-visual-comparison`);
-- **evidence comparison** — alignment, gain matching, residual, correlation, spectral difference; every
-  step is a heuristic with a threshold;
-- **Findings** — same master, remaster, transcode, upsample, lossy source, dynamics, quality,
-  provenance. This feature is a **producer of facts** for that capability, never a small version of it.
+**One cosmetic defect stands, reported and deliberately not fixed**: in the paired waveform section,
+text overlaps vertically — the amplitude line against the second file's attribution, and the
+*no audio beyond here* sentence against the second lane's amplitude line. It was seen during the manual
+pass and answered none of the four questions differently, so it was left alone rather than turned into
+production work inside a validation pass. **Fixing it is its own thread**, and it wants its own look at
+the surface afterwards.
 
-**Inherited debt, untouched by any of this.** `add-two-file-technical-comparison` is still open at 52/58
-and **ADR-0017 is still `Proposed`** — its own manual condition is unmet and it carries the VoiceOver
-traversal gap it shares with ADR-0015. The measurement sub-section lives in the same scrolling area and
-inherits that gap rather than fixing or worsening it.
+**Inherited debt, untouched by any of this.** `add-two-file-technical-comparison` is still open and
+**ADR-0017 is still `Proposed`** — its own manual condition is unmet, and it carries the VoiceOver
+traversal gap it shares with ADR-0015 and ADR-0016. The paired drawings live in the same scrolling area
+and inherit that gap rather than fixing or worsening it. **ADR-0016 is still `Proposed`** too: its
+format matrix and its own manual validation belong to a different change, and nothing here discharges
+them.
 
-**One cosmetic finding stands, reported and non-blocking**: the channel-mismatch note repeats verbatim
-in three blocks. The maintainer saw it during the manual pass and classified it as redundant but not a
-defect.
-
-**Also open, and not advanced here**: `add-static-spectrogram-visualization` (73/89, manual validation
-battery deferred by product decision).
+**Also open, and not advanced here**: `add-static-spectrogram-visualization` (manual validation battery
+deferred by product decision).
 
 ---
-_Last touched: 2026-08-22. Overwrite freely; empty is fine._
+_Last touched: 2026-08-27. Overwrite freely; empty is fine._

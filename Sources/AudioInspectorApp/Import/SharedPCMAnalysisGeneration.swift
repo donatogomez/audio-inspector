@@ -30,6 +30,16 @@ struct SharedPCMAnalysisOutcome {
     let truePeak: TruePeakOutcome
     let loudness: LoudnessOutcome
     let significantBandwidth: SignificantBandwidthOutcome
+    /// The stream every outcome above was produced from, or `nil` when the read never had one.
+    ///
+    /// **Not an analysis, and not derived from the samples** — it is what the decoder reported the
+    /// stream to be, and it is here because it is the only place where it is still indubitably the
+    /// description of *this* read. `nil` is a real answer: `AudioDecoding` reports none exactly when the
+    /// file exposed no usable frame count, and then every outcome above is `.unavailable` anyway.
+    ///
+    /// **No default.** The rule the analyses themselves follow, for the same reason: every return path
+    /// of `run` names it, and forgetting one is a compile error.
+    let stream: PCMStreamDescription?
 }
 
 /// Reads a file's PCM **once** and folds every chunk into several analyses, each of which keeps its own
@@ -141,7 +151,7 @@ struct SharedPCMAnalysisGeneration {
                 return SharedPCMAnalysisOutcome(
                     waveform: .cancelled, spectrogram: .cancelled,
                     signalLevelMetrics: .cancelled, truePeak: .cancelled, loudness: .cancelled,
-                    significantBandwidth: .cancelled
+                    significantBandwidth: .cancelled, stream: nil
                 )
             }
             guard let stream else {
@@ -152,7 +162,7 @@ struct SharedPCMAnalysisGeneration {
                 return SharedPCMAnalysisOutcome(
                     waveform: .unavailable, spectrogram: .unavailable,
                     signalLevelMetrics: .unavailable, truePeak: .unavailable, loudness: .unavailable,
-                    significantBandwidth: .unavailable
+                    significantBandwidth: .unavailable, stream: nil
                 )
             }
             return consumers.finish(stream: stream)
@@ -164,7 +174,7 @@ struct SharedPCMAnalysisGeneration {
                 return SharedPCMAnalysisOutcome(
                     waveform: .cancelled, spectrogram: .cancelled,
                     signalLevelMetrics: .cancelled, truePeak: .cancelled, loudness: .cancelled,
-                    significantBandwidth: .cancelled
+                    significantBandwidth: .cancelled, stream: nil
                 )
             }
             // Human, neutral, and carrying no path, no framework text and no stable code — those stay
@@ -177,7 +187,8 @@ struct SharedPCMAnalysisGeneration {
                 signalLevelMetrics: .failed(message: "The signal level metrics for this file could not be produced."),
                 truePeak: .failed(message: "The true peak for this file could not be measured."),
                 loudness: .failed(message: "The integrated loudness for this file could not be measured."),
-                significantBandwidth: .failed(message: "The programme bandwidth for this file could not be measured.")
+                significantBandwidth: .failed(message: "The programme bandwidth for this file could not be measured."),
+                stream: nil
             )
         }
     }
@@ -397,7 +408,10 @@ private extension SharedPCMAnalysisGeneration {
                 signalLevelMetrics: finishSignalLevelMetrics(stream: stream),
                 truePeak: finishTruePeak(stream: stream),
                 loudness: finishLoudness(stream: stream),
-                significantBandwidth: finishSignificantBandwidth(stream: stream)
+                significantBandwidth: finishSignificantBandwidth(stream: stream),
+                // The same description every consumer above was finished against, so nothing downstream
+                // can pair an artefact with a stream it did not come from.
+                stream: stream
             )
         }
 

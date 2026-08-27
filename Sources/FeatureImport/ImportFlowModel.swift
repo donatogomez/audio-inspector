@@ -50,7 +50,16 @@ public final class ImportFlowModel {
         /// PCM read; a measurement comparison cannot exist until *both* sides have finished measuring.
         /// One case with an optional rather than two states, because they are one answer about one pair
         /// of files: two states could drift apart, and a stale guard would have to protect both.
-        case ready(FileComparison, MeasurementComparison?)
+        ///
+        /// **The third payload is the pair of drawings, and it is here for that same reason.** A visual
+        /// pair published beside this state — in a property of its own — would be a second lane a stale
+        /// guard would have to protect separately, and the failure it would allow is exactly the one
+        /// this case exists to prevent: one operation's pictures beside another operation's facts. All
+        /// three travel in one value, assigned in one statement, under one operation number.
+        ///
+        /// It is `nil` until **both** files have settled their drawings **and** the read each came from
+        /// has reported its description. A technical comparison never waits for it.
+        case ready(FileComparison, MeasurementComparison?, PairedVisuals?)
         /// The second file could not be opened for inspection at all.
         case failed(message: String)
     }
@@ -96,6 +105,21 @@ public final class ImportFlowModel {
     /// reading `comparison`, so a bundle can never be paired with another operation's technical
     /// comparison.
     private var comparedMeasurements: ReportMeasurements?
+
+    /// The compared file's settled pictures, retained for exactly as long as, and by exactly the same
+    /// events as, `comparedMeasurements` above.
+    ///
+    /// **The read that produced them already happened.** Its envelope and its spectral model were
+    /// computed by the same single shared pass that produced the measurements beside them, and until now
+    /// they were dropped one line later because `ReportMeasurements` has no field either could occupy.
+    /// Keeping them costs no read, no decode and no transform (ADR-0025 §1, §11).
+    ///
+    /// **Nothing in production reads it yet.** Pairing it with the primary file's own pictures,
+    /// publishing that pair, and proving it can never mix two operations are group 3's; this group only
+    /// stops the loss. The getter is internal rather than private for one reason — a value nothing reads
+    /// cannot be observed indirectly, and retention that is not observed is retention that is asserted.
+    /// The setter stays private: nothing outside this model decides what is retained.
+    private(set) var comparedVisuals: FileVisuals?
 
     public init(action: @escaping SourceInspectionAction) {
         self.action = action
@@ -145,7 +169,9 @@ public final class ImportFlowModel {
 
         let previous = comparison
         let previousMeasurements = comparedMeasurements
+        let previousVisuals = comparedVisuals
         comparedMeasurements = nil
+        comparedVisuals = nil
         comparison = .loading
 
         let task = Task { [weak self] in
@@ -156,12 +182,13 @@ public final class ImportFlowModel {
                 // is deliberately *not* assembled from these progressive updates, because it must be
                 // atomic — see `settle`.
                 guard case let .report(report) = update else { return }
-                self.comparison = .ready(FileComparison(first: primary, second: report), nil)
+                self.comparison = .ready(FileComparison(first: primary, second: report), nil, nil)
             }
             guard let self, operation == self.currentComparisonOperation else { return } // superseded
             self.settle(
                 outcome, against: primary,
-                restoringOnCancellation: previous, andMeasurements: previousMeasurements
+                restoringOnCancellation: previous,
+                andMeasurements: previousMeasurements, andVisuals: previousVisuals
             )
         }
         comparisonTask = task
@@ -173,6 +200,7 @@ public final class ImportFlowModel {
         comparisonTask?.cancel()
         currentComparisonOperation += 1 // so a result already in flight cannot land afterwards
         comparedMeasurements = nil
+        comparedVisuals = nil
         comparison = .none
     }
 
@@ -181,7 +209,8 @@ public final class ImportFlowModel {
         _ outcome: SourceInspectionOutcome,
         against primary: InspectionReport,
         restoringOnCancellation previous: ComparisonState,
-        andMeasurements previousMeasurements: ReportMeasurements?
+        andMeasurements previousMeasurements: ReportMeasurements?,
+        andVisuals previousVisuals: FileVisuals?
     ) {
         switch outcome {
         case let .inspected(report, analyses):
@@ -191,39 +220,68 @@ public final class ImportFlowModel {
             // **The measurements are taken here and nowhere else.** They are assembled from the settled
             // outcome rather than from the progressive updates, so the four are published together or
             // not at all: a comparison holding this file's loudness beside another file's true peak is
-            // not a thing this flow can produce. The visualisations are still discarded, because
-            // `ReportMeasurements` has no field either could occupy.
+            // not a thing this flow can produce.
+            //
+            // **The visualisations are taken here too, and from the same bundle.** They stopped being
+            // discarded when a container that can hold them arrived: `FileVisuals` carries what became
+            // of each drawing together with the stream description that read produced, so an artefact
+            // can never be paired with another read's axis. Cancellation is not a settled answer, so a
+            // cancelled inspection leaves this `nil` rather than an absence — the file is not blamed for
+            // an operation the user replaced.
             comparedMeasurements = analyses.settledMeasurements
-            comparison = .ready(FileComparison(first: primary, second: report), nil)
-            publishMeasurementComparisonIfBothSettled()
+            comparedVisuals = analyses.settledVisuals
+            comparison = .ready(FileComparison(first: primary, second: report), nil, nil)
+            publishWhateverHasSettled()
         case .cancelled:
             // Neutral: dismissing the picker is not a statement about either file. The comparison that
             // was on screen returns **with** the bundle it was built from, so a later settling of the
             // primary file refreshes that one rather than a superseded file's.
             comparison = previous
             comparedMeasurements = previousMeasurements
+            comparedVisuals = previousVisuals
         case .preparationFailed:
             comparison = .failed(message: "That file could not be opened for comparison.")
         }
     }
 
-    /// Publishes the measurement comparison **only when both files have finished measuring**.
+    /// Publishes whichever halves of the comparison have settled, **in one assignment**.
     ///
-    /// Called from two places, and it has to be: the compared file can settle first, and so can the
-    /// primary one. Whichever finishes last is the one that publishes, and until then the technical
-    /// comparison stands alone rather than being held back for it.
+    /// Called from several places, and it has to be: either file can settle first. Whichever finishes
+    /// last is the one that publishes, and until then the technical comparison stands alone rather than
+    /// being held back for either of the others.
     ///
-    /// **A primary file still measuring is not a primary file with no measurements.** Publishing then
-    /// would report its loudness as missing when it is a second away — a statement about this run
-    /// dressed up as a fact about the file — which is why `settledMeasurements` returns `nil` for
-    /// *unfinished* and this waits for it.
-    private func publishMeasurementComparisonIfBothSettled() {
-        guard case let .ready(technical, _) = comparison,
-              let second = comparedMeasurements,
-              case let .report(presentation) = state,
-              let first = presentation.settledMeasurements
+    /// **A file still working is not a file with nothing.** A primary still measuring would report its
+    /// loudness as missing when it is a second away — a statement about this run dressed up as a fact
+    /// about the file — which is why both collapses return `nil` for *unfinished* and this waits for
+    /// them. The same is true of the drawings, with one addition: a file whose drawings have settled but
+    /// whose read has not yet reported its stream description is **not** settled either, because a
+    /// drawing whose extent cannot be stated is not one anything can present.
+    ///
+    /// **Neither half is ever walked back.** A settled answer stays settled for as long as this
+    /// comparison does; the only thing that removes one is the whole state being replaced, which the
+    /// three events that end a comparison already do.
+    ///
+    /// This is the single place either half is published, and it publishes them **into the state that
+    /// already holds the technical comparison**. That is what makes a mixture unrepresentable rather
+    /// than merely unobserved: there is no second value for a stale result to land in.
+    private func publishWhateverHasSettled() {
+        guard case let .ready(technical, publishedMeasurements, publishedVisuals) = comparison,
+              case let .report(presentation) = state
         else { return }
-        comparison = .ready(technical, MeasurementComparison(first: first, second: second))
+
+        // The pair is *this* comparison's, or it is nothing: the technical half names the two reports,
+        // and the primary side is read from the presentation those reports were compared against. A
+        // primary file that has since been replaced took the whole comparison with it.
+        guard presentation.report == technical.first else { return }
+
+        let measurements = presentation.settledMeasurements.flatMap { first in
+            comparedMeasurements.map { MeasurementComparison(first: first, second: $0) }
+        } ?? publishedMeasurements
+
+        let visuals = PairedVisuals(first: presentation.settledVisuals, second: comparedVisuals)
+            ?? publishedVisuals
+
+        comparison = .ready(technical, measurements, visuals)
     }
 
     /// Records that a drop could not be turned into an inspection. `state` is deliberately untouched.
@@ -262,6 +320,7 @@ public final class ImportFlowModel {
         comparisonTask?.cancel()
         currentComparisonOperation += 1
         comparedMeasurements = nil
+        comparedVisuals = nil
         comparison = .none
 
         dropRejection = nil // an accepted operation supersedes any pending refusal
@@ -309,25 +368,25 @@ public final class ImportFlowModel {
             guard let settled = SignalLevelMetricsState(outcome) else { return }
             presentation.signalLevelMetrics = settled
             state = .report(presentation)
-            publishMeasurementComparisonIfBothSettled()
+            publishWhateverHasSettled()
         case let .truePeak(outcome):
             guard case var .report(presentation) = state else { return }
             guard let settled = TruePeakState(outcome) else { return }
             presentation.truePeak = settled
             state = .report(presentation)
-            publishMeasurementComparisonIfBothSettled()
+            publishWhateverHasSettled()
         case let .significantBandwidth(outcome):
             guard case var .report(presentation) = state else { return }
             guard let settled = SignificantBandwidthState(outcome) else { return }
             presentation.significantBandwidth = settled
             state = .report(presentation)
-            publishMeasurementComparisonIfBothSettled()
+            publishWhateverHasSettled()
         case let .loudness(outcome):
             guard case var .report(presentation) = state else { return }
             guard let settled = LoudnessState(outcome) else { return }
             presentation.loudness = settled
             state = .report(presentation)
-            publishMeasurementComparisonIfBothSettled()
+            publishWhateverHasSettled()
         }
     }
 
@@ -348,7 +407,11 @@ public final class ImportFlowModel {
                 signalLevelMetrics: SignalLevelMetricsState(analyses.signalLevelMetrics) ?? .unavailable,
                 truePeak: TruePeakState(analyses.truePeak) ?? .unavailable,
                 loudness: LoudnessState(analyses.loudness) ?? .unavailable,
-                significantBandwidth: SignificantBandwidthState(analyses.significantBandwidth) ?? .unavailable
+                significantBandwidth: SignificantBandwidthState(analyses.significantBandwidth) ?? .unavailable,
+                // **This is the moment the primary file's read describes itself**, and the only one: no
+                // progressive update carries a stream description, because the report is published
+                // before a sample is read. Carried through unchanged from the bundle the read produced.
+                stream: analyses.stream
             )
             // A settled visualisation already shown must not be walked back to a fallback.
             if case let .report(current) = state, current.report == report {
@@ -361,14 +424,17 @@ public final class ImportFlowModel {
                     truePeak: current.truePeak == .loading ? presentation.truePeak : current.truePeak,
                     loudness: current.loudness == .loading ? presentation.loudness : current.loudness,
                     significantBandwidth: current.significantBandwidth == .loading
-                        ? presentation.significantBandwidth : current.significantBandwidth
+                        ? presentation.significantBandwidth : current.significantBandwidth,
+                    // Not conditional: a settled drawing already on screen is preserved above, but the
+                    // description of the read that produced it arrives only here, so it is always taken.
+                    stream: analyses.stream
                 ))
             } else {
                 state = .report(presentation)
             }
             // The backstop fills whatever was still `loading`, so this is the last moment the primary
             // file can become settled — and therefore the last chance to publish the pair.
-            publishMeasurementComparisonIfBothSettled()
+            publishWhateverHasSettled()
         case .cancelled:
             state = previous // neutral: back to exactly where the user was
         case .preparationFailed:

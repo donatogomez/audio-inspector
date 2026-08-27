@@ -203,7 +203,7 @@ struct ComparisonMeasurementsReachTheComparisonTests {
             })
 
             let second = try #require(capture.secondReport)
-            guard case let .ready(technical, _) = flow.comparison else {
+            guard case let .ready(technical, _, _) = flow.comparison else {
                 Issue.record("no comparison was produced"); return
             }
             #expect(
