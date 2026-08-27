@@ -34,3 +34,4 @@ disguise. Copy `0000-adr-template.md` for new ones.
 | [0023](0023-significant-bandwidth-as-a-measured-fact.md) | Significant bandwidth as a measured fact, independent of the spectrogram | Accepted |
 | [0024](0024-two-file-measurement-comparison.md) | Comparing measurements between two files — facts only, and only one difference | Accepted |
 | [0025](0025-two-file-paired-visuals.md) | Two files' waveforms and spectrograms side by side — a paired presentation, not a visual comparison | Accepted |
+| [0026](0026-inspection-workspace-information-architecture.md) | The inspection workspace — one file, five sections, and a comparison that is a mode | Proposed (pending the navigation contract against production) |
