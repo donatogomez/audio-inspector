@@ -342,8 +342,8 @@ struct EndToEndFlowTests {
     /// explicitly or constructs a `SignalLevelMetrics` fixture by hand and hands it straight to the
     /// exporter. None of them walk the actual production sequence: a real file, decoded for real by the
     /// real `SignalLevelMetricsGeneration`, settling into `InspectionPresentation.signalLevelMetrics`,
-    /// extracted from it exactly the way `ReportView.exportableSignalLevelMetrics` does (`.available`
-    /// unwrapped, everything else `nil`), and only then exported. A manual validation pass found that
+    /// extracted from it through the production seam `ExportableMeasurements` (`.available` unwrapped,
+    /// everything else `nil`), and only then exported. A manual validation pass found that
     /// gap by hand; this closes it permanently.
     @Test func theRealSignalLevelMetricsPathReachesTheExportedDocument() async throws {
         try await withTemporaryDirectory { directory in
@@ -369,15 +369,6 @@ struct EndToEndFlowTests {
             #expect(metrics.channels.count == 1)
             #expect(metrics.overallPeakSample != nil)
 
-            // The exact extraction `ReportView.exportableSignalLevelMetrics` performs — `.available`
-            // unwrapped to the domain value, everything else collapsed to `nil` — reproduced here since
-            // that computed property is private to the view and SwiftUI's own `Button`/`.toolbar` are
-            // not reachable from a headless test.
-            func exportableSignalLevelMetrics(_ state: SignalLevelMetricsPresentation) -> SignalLevelMetrics? {
-                guard case let .metrics(metrics) = state else { return nil }
-                return metrics
-            }
-
             let destination = directory.appendingPathComponent("out.json")
             let exportCoordinator = ReportExportCoordinator(
                 exporter: JSONReportExporter(generator: fixedGenerator, now: { fixedNow }),
@@ -390,8 +381,11 @@ struct EndToEndFlowTests {
             // The composition root's own translation, `RootView.signalLevelMetricsPresentation(for:)`,
             // then the same extraction the button performs — the two seams between the flow's state and
             // what actually gets exported.
-            let toExport = exportableSignalLevelMetrics(
-                RootView.signalLevelMetricsPresentation(for: presentation.signalLevelMetrics)
+            // **The production seam itself**, not a copy of it: the collapse the export button performs
+            // lives in `ExportableMeasurements`, so this walks the real path rather than one that
+            // happens to agree with it.
+            let toExport = ExportableMeasurements.value(
+                of: RootView.signalLevelMetricsPresentation(for: presentation.signalLevelMetrics)
             )
             await exportModel.export(presentation.report, measurements: ReportMeasurements(signalLevelMetrics: toExport, truePeak: nil, loudness: nil, programmeBandwidth: nil))
             #expect(exportModel.phase == .succeeded)
@@ -428,14 +422,6 @@ struct EndToEndFlowTests {
             #expect(measured.channels.count == 1)
             let measuredOverall = try #require(measured.overallTruePeak)
 
-            /// The extraction `ReportView.exportableTruePeak` performs, reproduced here because that
-            /// computed property is private to the view and SwiftUI's own button is not reachable
-            /// headlessly.
-            func exportableTruePeak(_ state: TruePeakPresentation) -> TruePeakMeasurement? {
-                guard case let .measurement(measurement) = state else { return nil }
-                return measurement
-            }
-
             let destination = directory.appendingPathComponent("out-true-peak.json")
             let exportCoordinator = ReportExportCoordinator(
                 exporter: JSONReportExporter(generator: fixedGenerator, now: { fixedNow }),
@@ -445,7 +431,9 @@ struct EndToEndFlowTests {
                 await exportCoordinator.export(report, measurements: measurements)
             })
 
-            let toExport = exportableTruePeak(RootView.truePeakPresentation(for: presentation.truePeak))
+            let toExport = ExportableMeasurements.value(
+                of: RootView.truePeakPresentation(for: presentation.truePeak)
+            )
             await exportModel.export(presentation.report, measurements: ReportMeasurements(signalLevelMetrics: nil, truePeak: toExport, loudness: nil, programmeBandwidth: nil))
             #expect(exportModel.phase == .succeeded)
 
@@ -510,14 +498,6 @@ struct EndToEndFlowTests {
             #expect(measured.method.weighting == expectedWeighting)
             #expect(measured.method.algorithm == .integratedBS1770v1)
 
-            /// The extraction `ReportView.exportableLoudness` performs, reproduced here because that
-            /// computed property is private to the view and SwiftUI's own button is not reachable
-            /// headlessly.
-            func exportableLoudness(_ state: LoudnessPresentation) -> LoudnessMeasurement? {
-                guard case let .measurement(measurement) = state else { return nil }
-                return measurement
-            }
-
             let destination = directory.appendingPathComponent("out-loudness.json")
             let exportCoordinator = ReportExportCoordinator(
                 exporter: JSONReportExporter(generator: fixedGenerator, now: { fixedNow }),
@@ -527,7 +507,9 @@ struct EndToEndFlowTests {
                 await exportCoordinator.export(report, measurements: measurements)
             })
 
-            let toExport = exportableLoudness(RootView.loudnessPresentation(for: presentation.loudness))
+            let toExport = ExportableMeasurements.value(
+                of: RootView.loudnessPresentation(for: presentation.loudness)
+            )
             await exportModel.export(
                 presentation.report,
                 measurements: ReportMeasurements(signalLevelMetrics: nil, truePeak: nil, loudness: toExport, programmeBandwidth: nil)
