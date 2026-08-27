@@ -12,6 +12,10 @@ import SwiftUI
 public struct RootView: View {
     @State private var flow: ImportFlowModel
     @State private var isDropTargeted = false
+    /// **Where the reader is, owned here and nowhere else** (ADR-0026 §4). It is a plain value in the
+    /// composition root's own state: no feature module, no domain type and nothing persisted names it,
+    /// and no operation produces it.
+    @State private var navigation = WorkspaceNavigation()
     private let inspectDroppedSource: @MainActor (URL) -> SourceInspectionAction
     private let export: ReportExportAction
 
@@ -43,6 +47,15 @@ public struct RootView: View {
         }
         .overlay {
             DropFeedbackOverlay(isTargeted: isDropTargeted, rejection: flow.dropRejection)
+        }
+        // **The only thing that moves the reader, and the only place it is watched.** It sits on the
+        // whole window rather than inside the report branch, so it survives every state the flow passes
+        // through; a second call site elsewhere would be a second way to navigate, and
+        // `WorkspaceOwnershipTests` refuses one. `PrimaryInspection` is a two-field projection so this
+        // compares a `UUID`, not two whole inspections — and `observe` answers the same whether it is
+        // called once per change or on every render.
+        .onChange(of: PrimaryInspection(flow.state)) { _, primary in
+            navigation.observe(primary)
         }
     }
 
@@ -174,21 +187,21 @@ public struct RootView: View {
     private var comparisonControls: some View {
         switch flow.comparison {
         case .none:
-            Button("Compare with another file…") {
+            Button(WorkspaceCopy.startComparison) {
                 Task { await flow.selectAndCompare() }
             }
         case .loading:
             // Disabled rather than hidden: a control that vanishes reads as a bug, and the section
             // itself already says in words what is happening.
-            Button("Compare with another file…") {}
+            Button(WorkspaceCopy.startComparison) {}
                 .disabled(true)
         case .ready, .failed:
             // A comparison on screen can be replaced by another file, or closed. Closing touches
             // nothing about the report.
-            Button("Compare with another file…") {
+            Button(WorkspaceCopy.startComparison) {
                 Task { await flow.selectAndCompare() }
             }
-            Button("Close comparison") { flow.dismissComparison() }
+            Button(WorkspaceCopy.closeComparison) { flow.dismissComparison() }
         }
     }
 
@@ -279,8 +292,42 @@ public struct RootView: View {
         }
     }
 
+    /// **The five sections, and the one the reader is in.**
+    ///
+    /// A segmented control rather than a sidebar: a sidebar navigates a collection and this window has
+    /// one file (ADR-0026 §12). It is the native answer for a single-subject window, and it is the whole
+    /// of R1's visible change.
+    ///
+    /// The five are read from `WorkspaceSection.allCases`, so nothing here can offer four of them — an
+    /// absent waveform or a failed spectral model narrows this list by no expression. Their words come
+    /// from `WorkspaceCopy`, never from an icon: every section is reachable by reading it, and a
+    /// segmented control announces its own selection and takes the keyboard by the native path.
+    ///
+    /// **Narrow windows are R9's**, and this is what R1 owes them: a control that compresses its labels
+    /// keeps all five sections and renames none, so a narrower window changes the layout and never the
+    /// section a reader is in.
+    private var sectionNavigation: some View {
+        Picker(
+            WorkspaceCopy.sectionNavigation,
+            // The reader is the only thing that selects a section directly, so the binding writes
+            // through `select(_:)` rather than to the property.
+            selection: Binding(get: { navigation.section }, set: { navigation.select($0) })
+        ) {
+            ForEach(WorkspaceSection.allCases, id: \.self) { section in
+                Text(WorkspaceCopy.label(for: section)).tag(section)
+            }
+        }
+        .pickerStyle(.segmented)
+        .labelsHidden()
+        .accessibilityLabel(WorkspaceCopy.sectionNavigation)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+    }
+
     private func reportSurface(_ presentation: InspectionPresentation) -> some View {
         VStack(spacing: 0) {
+            sectionNavigation
+            Divider()
             // **One read of the comparison, two answers derived from it.** Reading `flow.comparison`
             // twice in one body could, in principle, straddle a change; binding it once cannot.
             let comparison = flow.comparison
@@ -298,7 +345,7 @@ public struct RootView: View {
             HStack(spacing: 12) {
                 Spacer()
                 comparisonControls
-                Button("Choose another file…") {
+                Button(WorkspaceCopy.chooseAnotherFile) {
                     Task { await flow.selectAndInspect() }
                 }
             }
