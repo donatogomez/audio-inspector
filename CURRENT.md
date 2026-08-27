@@ -17,51 +17,60 @@
 
 ---
 
-**No thread is open.** `add-two-file-visual-comparison` is merged, archived and closed: PR
-[#50](https://github.com/donatogomez/audio-inspector/pull/50) landed on `main` as a **two-parent merge
-commit** `a62e021` on 2026-08-27 — first parent the previous `main` `d27933c`, second parent the branch
-head `890f8cc` — **ADR-0025 is `Accepted` (2026-08-27)**, and the change is archived at
+**Focus:** nothing is in flight. What landed most recently is named below, and the candidate next
+thread — with the one decision it is waiting on — is at the end.
+
+**`add-two-file-visual-comparison` is merged, archived and closed.** PR
+[#50](https://github.com/donatogomez/audio-inspector/pull/50) landed on `main` as a two-parent merge
+commit `a62e021` on 2026-08-27, **ADR-0025 is `Accepted` (2026-08-27)**, and the change is archived at
 `openspec/changes/archive/2026-08-27-add-two-file-visual-comparison/`, which created the
-`audio-two-file-visual-presentation` capability with 11 requirements and 38 scenarios. The eight
-pre-existing capabilities are byte-identical.
+`audio-two-file-visual-presentation` capability with 11 requirements and 38 scenarios. Two files'
+waveforms and spectrograms now sit side by side on shared axes — time by real duration, frequency by
+Nyquist — reusing what the second file's single read already produced. The paired drawings **stand in
+for** the single ones rather than joining them. Past a file's own audio and above its own Nyquist are
+two different facts with two different sentences, and neither is drawn as silence or as the ramp's
+floor. There is no visual outcome: nothing says the two are the same, different, similar or matching.
 
-Two files' waveforms and spectrograms now sit side by side on shared axes — time by real duration,
-frequency by Nyquist — reusing what the second file's single read already produced. Nothing is computed
-and nothing is read twice. The paired drawings **stand in for** the single ones rather than joining them,
-so each file appears once. Past a file's own audio and above its own Nyquist are two different facts
-with two different sentences, and neither is drawn as silence or as the ramp's floor. There is no visual
-outcome: nothing says the two are the same, different, similar or matching.
+**The export payload no longer lives in a view.** PR
+[#51](https://github.com/donatogomez/audio-inspector/pull/51) merged as `58a9b18`: the rule that turns
+four presentation states into `ReportMeasurements`' four optionals moved out of `ReportView` into
+`ExportableMeasurements`. **Nothing observable changed** — same UI, same JSON, same `schemaVersion` 1 —
+and that is the point: it was a preparation, deliberately with no OpenSpec change and no ADR. Three
+tests and a production harness used to reproduce that rule by hand because it was private to the view,
+so a divergence would have been mirrored on both sides instead of caught; they now call the seam, and a
+negative control demonstrates the divergence failing. Nothing normalised: programme bandwidth keeps the
+extra clause its siblings do not have.
 
-Post-merge baseline on `main`: boundaries, the zero-warnings build, `xcodebuild`, **`swift test` twice
-at 1628 tests in 181 suites**, `openspec validate --all --strict` 11/11 and `git diff --check`, all
-green.
+**Next thread (candidate, and one decision short of ready): a UX/UI redesign.** The direction is
+decided at product level — an individual file is the primary action, comparison is contextual and
+temporary, no history and no sidebar, and the surface becomes `Overview · Measurements · Waveform ·
+Spectrum · Details` instead of one long scrolling page. **Nothing of it exists yet**: no branch, no
+OpenSpec change, no ADR. Two ADRs are expected before code — section navigation as presentation state,
+and comparison as a mode.
 
-**Named follow-ups, deferred by decision and not started** — group 12 of the archived change:
-
-- **evidence comparison** — alignment, gain matching, residual, correlation, spectral difference; every
-  step a heuristic with a threshold. What it will need is retained; nothing authorises it;
-- **Findings** — same master, remaster, transcode, upsample, lossy source, quality, provenance. This
-  feature is a **producer of pictures for a reader**, never a small version of that capability;
-- **comparison export** — `schemaVersion` 1 describes one file; a paired document is a kind of its own;
-- **synchronised inspection** — cursors, zoom, scrubbing, linked scrolling; a synchronised cursor needs
-  an alignment decision that belongs to evidence comparison;
-- **more than two files** — everything is stated for a pair, and a third would reopen the lifetime
-  decision and the memory figures first.
+**The decision it is waiting on.** The approved Comparison Overview sketch includes a
+`5 same · 3 different · 2 not comparable` summary, and that is **refused by an accepted requirement**:
+`audio-two-file-comparison` forbids *"a count of differences or any other aggregate over the
+comparison"*, pinned in the domain and in three suites. Either a filtered *properties that differ* list
+with no count and no editorial ordering is accepted instead, or the comparison overview carries only
+the two file identities and a link to the full table. Until that is settled, any spec written for the
+redesign would contradict a capability already promoted.
 
 **One cosmetic defect stands, reported and not fixed.** In the paired waveform section, text overlaps
 vertically — the amplitude line against the second file's attribution, and the *no audio beyond here*
-sentence against the second lane's amplitude line. The maintainer saw it during the manual pass,
-answered all four questions unambiguously in spite of it, and it contradicts no promotion condition.
-**Fixing it is its own thread**, and it wants its own look at the surface afterwards.
+sentence against the second lane's amplitude line. It was seen during ADR-0025's manual pass, answered
+none of the four questions differently, and contradicts no promotion condition. Its cause is known: a
+whole `WaveformSection` — drawing plus two lines of copy — is placed inside a 96 pt frame that only the
+drawing fills. The waveform workspace slice is where it belongs.
 
-**Inherited debt, untouched by any of this.** `add-two-file-technical-comparison` is still open and
-**ADR-0017 is still `Proposed`** — its own manual condition is unmet. **ADR-0016 is still `Proposed`**:
-its format matrix and its own manual validation belong to a different change. The paired drawings live
-in the same scrolling area every other analysis lives in and **inherit** the VoiceOver traversal gap
-those two share with ADR-0015, rather than fixing or worsening it.
+**Inherited debt, untouched.** `add-two-file-technical-comparison` is still open and **ADR-0017 is
+still `Proposed`**; **ADR-0016 is still `Proposed`**; the VoiceOver traversal gap they share with
+ADR-0015 is inherited rather than fixed or worsened. `add-static-spectrogram-visualization` is also
+open, its manual validation battery deferred by product decision.
 
-**Also open, and not advanced here**: `add-static-spectrogram-visualization` (manual validation battery
-deferred by product decision).
+**Minor follow-up, not a thread:** `SettledMeasurements` describes itself as applying *"the same rule
+the export path already applies"*, and it does not — the two differ on `loading` and on the bandwidth
+clause. Worth correcting the next time something legitimate opens that file.
 
 ---
 _Last touched: 2026-08-27. Overwrite freely; empty is fine._
