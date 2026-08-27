@@ -17,9 +17,9 @@
 
 ---
 
-**Focus:** the redesign's shell — **R1 — is implemented** on `feat/restructure-inspection-workspace`,
-a branch stacked on the documentation branch. Nothing after R1 is started. What landed most recently is
-named first; the redesign and its slice order follow.
+**Focus:** the redesign's shell — **R1 — is merged**, and the umbrella it belongs to is still open. The
+next slice is **R2 `restructure-empty-state`**, and it has not been started: no change, no branch, no
+code. What landed most recently is named first; the redesign and its slice order follow.
 
 **`add-two-file-visual-comparison` is merged, archived and closed.** PR
 [#50](https://github.com/donatogomez/audio-inspector/pull/50) landed on `main` as a two-parent merge
@@ -38,8 +38,12 @@ four presentation states into `ReportMeasurements`' four optionals moved out of 
 `ExportableMeasurements`. **Nothing observable changed** — same UI, same JSON, same `schemaVersion` 1 —
 and that is the point: it was a preparation, deliberately with no OpenSpec change and no ADR.
 
-**R1 — the shell — is implemented, and it is only the shell.** The umbrella change
-`restructure-inspection-workspace` is at **11/29**; its §2 is closed, §3 onward untouched. What exists
+**R1 — the shell — is merged, and it is only the shell.** PR
+[#52](https://github.com/donatogomez/audio-inspector/pull/52) landed on `main` as a two-parent merge
+commit `9a5f006` on 2026-08-27, carrying ADR-0026, the umbrella change and the shell together — the
+shape #45, #48 and #50 all used. **The umbrella is not archived**: it is at **11/29** and stays open
+until its last slice lands, because it is the record the eight remaining slices are sequenced by. Its §1
+and §2 are closed, §3 onward untouched. What exists
 is `WorkspaceSection` (five cases), `WorkspaceNavigation` (the selection and the one rule that moves
 it), `WorkspaceCopy` (the shell's words), and a segmented control in `RootView`. The selection lives in
 the composition root's own `@State`: no domain value, no field of `ImportFlowModel` or
@@ -48,8 +52,9 @@ below it naming it. It moves in exactly one place — a single `.onChange` on th
 when a **new primary report that did not fail globally** arrives. A comparison starting, settling, being
 dismissed, superseded, cancelled or failing moves nobody; nor does an analysis settling, a `.working`
 state, a dismissed picker, or a globally failed report. Three negative controls were seen to fail —
-12 issues for a section that moves on its own, 4 for persistence, 4 for a `"3 differences"` count on the
-shell's comparison surface — and all three were reverted and verified by checksum.
+a section that moves on its own (**39 issues across 8 tests**, once the lifetime tests were widened to
+assert from *every* section), persistence (4), and a `"3 differences"` count on the shell's comparison
+surface (4) — and all three were reverted and verified by checksum.
 
 **What R1 deliberately does not do.** No section has its own content yet. Selecting one changes the
 control's state and nothing else: all five still show the existing report page underneath, exactly as it
@@ -73,9 +78,10 @@ among the marks of a native macOS app. ADR-0026 §12 declines it — a sidebar n
 there is none — and says so rather than diverging quietly. `docs/vision.md` is not edited; if
 persistence or batch ever creates a collection, that is the decision to reopen.
 
-**The order.** R1 is the umbrella itself (the shell), and it is done. Next is R2 Empty · R3 Details ·
-R4 Measurements · R5 Waveform workspace · R6 Spectrum workspace · R7 Inspection Overview · R8 Comparison
-mode · R9 responsive, accessibility and the human pass — each its own change and its own small PR. R0 is
+**The order.** R1 is the umbrella's own work (the shell), and it is merged. **Next is R2
+`restructure-empty-state`, not yet opened** · then R3 Details · R4 Measurements · R5 Waveform workspace ·
+R6 Spectrum workspace · R7 Inspection Overview · R8 Comparison mode · R9 responsive, accessibility and
+the human pass — each its own change and its own small PR. R0 is
 merged and outside the sequence. Manual validation sits on R9, not on the ADR: ADR-0026's subject is
 structure, and every claim it makes is a value a test can read.
 
