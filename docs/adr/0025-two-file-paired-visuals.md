@@ -1,11 +1,12 @@
 # ADR-0025: Two files' waveforms and spectrograms, side by side — a paired presentation, not a visual comparison
 
-- **Status**: **Proposed.** It stays Proposed until three things are true against production code: the
-  compared file's envelope and spectral model are **reused** from the read it already performs — one
-  decoder and one decode call per file, counted at the boundary that opens it — and never recomputed;
-  the pair is demonstrated to be **unmixable across operations**, each direction failing when its guard
-  is removed; and the two axis properties a test cannot answer are **observed by a person** (see
-  **Promotion conditions**). Partial evidence does not promote it.
+- **Status**: **Accepted** (2026-08-27). Promoted on the three conditions this record set for itself
+  and on nothing else: the compared file's envelope and spectral model are **reused** from the read it
+  already performs — one decoder and one decode call per file, counted at the boundary that opens it —
+  and never recomputed; the pair is demonstrated to be **unmixable across operations**, each direction
+  failing when its guard is removed; and the two axis properties a test cannot answer were **observed by
+  a person**. The evidence, what class each piece of it belongs to, and what it does **not** cover, is
+  in **Promotion** below.
 - **Date**: 2026-08-25
 - **Deciders**: Project maintainer
 - **Related**: **ADR-0024** (measurement comparison — this record reuses its atomicity and its
@@ -419,6 +420,90 @@ against a stronger one.
 
 Neither is *"looks good"*. M1 asks about one edge and one region; M2 asks about one edge and one colour
 distinction. A person who cannot answer them as written has found a defect, not a gap.
+
+## Promotion — what was demonstrated, and what it does not cover
+
+Recorded when this moved from `Proposed` to `Accepted`, on `add-two-file-visual-comparison`'s groups 1
+to 10. Three conditions, each read literally rather than by summary, and each labelled with the kind of
+evidence that settled it.
+
+**1. Reuse, not recomputation — automated.** The compared file was already producing an envelope and a
+spectral model on the single read that produced its measurements, and dropping them one line later.
+What promotes this is not that claim but its inversion, counted through the real decoder:
+`PairedVisualsProductionReachTests` drives the real coordinator over two real files that differ in rate,
+length and level, and counts **one decoder and one decode call per file** — one counter per file, never
+a total two files could share unevenly — with the pair settled and all four drawings available. Each
+side's envelope, spectral model and stream description in the pair are asserted **equal to the values
+captured at the coordinator's own boundary**, never to an artefact the test rebuilt, and the two
+fixtures are first asserted to differ from each other so the comparison discriminates. Two negative
+controls bite: a second shared pass over the same file (`decodersMade → 2` and `decodeCalls → 2` per
+file against the expected 1, **8 issues**), and the two sides of the pair swapped where the flow
+assembles it (**21 issues across three tests**, including the shorter file's share of the time axis
+flipping from `0.5` to `1.0`). **The compute cost of this change is zero**; what it adds is retention,
+measured at **2 113 536 B** — the prediction in *Negative / costs* met to the byte.
+
+**2. Unmixable across operations, each direction failing when its guard is removed — automated.** The
+three payloads travel in one `case ready(FileComparison, MeasurementComparison?, PairedVisuals?)`,
+assigned in one statement, so there is **no second value a stale result could land in**. A superseded
+second file, a dismissed comparison, a new primary inspection and a second file that could not be
+opened each leave no pair assembled from two operations, and the intermediate state is pinned
+separately: the previous pair is gone *while* the replacement works, not merely once it finishes. Two
+negative controls bite: the operation guard removed, so B's late result lands (**4 issues**, the
+retained source itself wrong), and the pair built from two independently read sources (**3 issues**,
+with the signature the control exists for). `PairedVisualsAtomicityTests`.
+
+**3. The two axis properties, observed by a person — manual, and the observation is the operator's
+own.** On 2026-08-27 a person ran M1 and M2 against the real application and reported the four answers,
+which `docs/manual-validation-mvp.md` records verbatim. **The session that prepared the build did not
+see the surface**: no test, headless render, screenshot or reading of the source stands in for this
+condition, and nothing was inferred on the operator's behalf. Process identity was established first
+and is part of the record — every running instance terminated, a rebuild from the branch head into an
+**isolated** derived-data path, the binary launched **by its executable path and never through `open`**,
+and a fresh empty window confirmed by the person before either check. A different binary found alive
+between preparation and the pass, from the shared Xcode derived-data path with a commit never
+established, was **not** the instance either check ran against.
+
+What was seen. **M1**, two files of 210.000 s and 180.000 s at one rate from one generator: the shorter
+file's drawing ends **before** the right-hand edge of the shared axis at a position consistent with 180
+of 210 seconds, and the remainder reads as **that file no longer carrying audio there** rather than as
+silence. **M2**, two files of 30.000 s at 44.1 kHz and 96 kHz from one generator whose sweep stops below
+both Nyquists: the 44.1 kHz model stops **below** the top of the shared 48 kHz axis, and the region
+above it is distinguishable **by eye** from the floor colour used inside the drawing. That second answer
+is the whole reason the check exists — that the out-of-range treatment differs from the floor *as a
+value*, and is the only achromatic thing on the ramp, is asserted by the suite, and two colours
+differing as values is not two colours being told apart on a display by a person.
+
+### What this promotion does not cover, and is not claimed to
+
+- **It presents pictures, and no more.** Nothing here says whether two files hold the same master,
+  whether one is a remaster, a transcode, an upsample or a lossy source, which has more dynamic range or
+  which is worth keeping — and no field exists in which such a conclusion could be written. Those are
+  the Findings capability's, and evidence comparison remains unblocked and undesigned.
+- **One cosmetic defect stands, reported and not fixed.** In the paired waveform section, text overlaps
+  vertically — around `Amplitude over the whole file, combined across 1 channel.` and `Second file`, and
+  between `This file carries no audio beyond here.` and the second lane's amplitude line. The operator
+  classified it as non-blocking and answered all four questions unambiguously in spite of it: M1 asks
+  about one edge and one region, M2 about one edge and one colour, and an overlapping label is none of
+  those. It was left alone rather than turned into production work inside a validation pass.
+- **The manual pass is one observation, not a regression test**, on one machine, one appearance and one
+  window size. Light, dark and resizing were **not** reported. Only M1 and M2 were asked; no third
+  question was put and no answer was extrapolated to one.
+- **No VoiceOver coverage, and the traversal gap is unchanged.** Task 7.7 was scoped to the structural
+  half — one element per drawing, factual labels, asserted by the suite — and this inherits the gap
+  recorded against ADR-0015, ADR-0016 and ADR-0017 rather than fixing or worsening it.
+- **ADR-0016 and ADR-0017 are not promoted by this record and are not touched by it.** ADR-0016's own
+  manual validation belongs to a different change and a different lifecycle; ADR-0017's condition is
+  about the technical comparison's surface, and nothing here discharges either.
+- **`bounded retention`'s negative control was run late**, in group 11 rather than group 9, when this
+  record's own automated standard — *"each must fail when the property is broken"* — was audited against
+  the tasks that closed. It was run before promotion rather than argued away: a `[PairedVisuals]`
+  history added to the flow failed **4 tests with 9 issues**, naming both halves of the property, and
+  was reverted in full. Recorded here because a condition discharged after its group is a fact about
+  this record's evidence, not a detail of one task.
+- **The export was not read by hand and has nothing new in it.** `schemaVersion` 1 describes one file;
+  a paired document is a kind of its own and is deferred by §11 and ADR-0017 §9. What was demonstrated
+  is the negative: bytes identical with a settled pair on screen and without one, through the real
+  coordinator, with the leak control failing five tests across four suites.
 
 ## Follow-ups
 
