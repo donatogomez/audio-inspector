@@ -17,8 +17,8 @@
 
 ---
 
-**Focus:** nothing is in flight. What landed most recently is named below, and the candidate next
-thread — with the one decision it is waiting on — is at the end.
+**Focus:** the UX/UI redesign is open on `docs/inspection-workspace-redesign` — architecture decided,
+nothing implemented. What landed most recently is named first; the redesign and its slice order follow.
 
 **`add-two-file-visual-comparison` is merged, archived and closed.** PR
 [#50](https://github.com/donatogomez/audio-inspector/pull/50) landed on `main` as a two-parent merge
@@ -41,20 +41,37 @@ so a divergence would have been mirrored on both sides instead of caught; they n
 negative control demonstrates the divergence failing. Nothing normalised: programme bandwidth keeps the
 extra clause its siblings do not have.
 
-**Next thread (candidate, and one decision short of ready): a UX/UI redesign.** The direction is
-decided at product level — an individual file is the primary action, comparison is contextual and
-temporary, no history and no sidebar, and the surface becomes `Overview · Measurements · Waveform ·
-Spectrum · Details` instead of one long scrolling page. **Nothing of it exists yet**: no branch, no
-OpenSpec change, no ADR. Two ADRs are expected before code — section navigation as presentation state,
-and comparison as a mode.
+**The UX/UI redesign is open, and its architecture is decided.** The branch is
+`docs/inspection-workspace-redesign`; **ADR-0026 is `Proposed`** and the umbrella change is
+`restructure-inspection-workspace`. **No production exists yet** — the change carries the architecture,
+the slice map, the contract matrix and the navigation delta, and its own shell work is 0/8.
 
-**The decision it is waiting on.** The approved Comparison Overview sketch includes a
-`5 same · 3 different · 2 not comparable` summary, and that is **refused by an accepted requirement**:
-`audio-two-file-comparison` forbids *"a count of differences or any other aggregate over the
-comparison"*, pinned in the domain and in three suites. Either a filtered *properties that differ* list
-with no count and no editorial ordering is accepted instead, or the comparison overview carries only
-the two file identities and a link to the full table. Until that is settled, any spec written for the
-redesign would contradict a capability already promoted.
+One scrolling page becomes **Overview · Measurements · Waveform · Spectrum · Details**, the same five
+whether or not a comparison is settled; a comparison is a **mode** of those sections rather than more
+page underneath them. The selected section is presentation state the composition root owns: no domain
+value, no flow field, no persistence, and it moves only when a new primary file arrives — not when a
+comparison starts, ends, or an analysis settles. *Spectrum* is a navigation label and renames no
+artefact.
+
+**The decision that was blocking it is settled, against the capability rather than by preference.** The
+Comparison Overview carries the two file identities, each side's own facts, the existing factual framing
+and a way through to the full comparison — and nothing else. The `5 same · 3 different · 2 not
+comparable` block is refused because `audio-two-file-comparison` forbids aggregates. **The filtered
+*properties that differ* list is refused too, and on a narrower ground than it looks**: it survives while
+it has rows and fails on its empty state, where the absence of rows is itself the phrase *"the two files
+match"* that capability's own scenario refuses. ADR-0026 §8 writes that out; the older requirement is
+specialised, not weakened.
+
+**One thing the ADR disagrees with, on the record.** `docs/vision.md` §7 names `NavigationSplitView`
+among the marks of a native macOS app. ADR-0026 §12 declines it — a sidebar navigates a collection and
+there is none — and says so rather than diverging quietly. `docs/vision.md` is not edited; if
+persistence or batch ever creates a collection, that is the decision to reopen.
+
+**The order.** R1 is the umbrella itself (the shell). Then R2 Empty · R3 Details · R4 Measurements ·
+R5 Waveform workspace · R6 Spectrum workspace · R7 Inspection Overview · R8 Comparison mode · R9
+responsive, accessibility and the human pass — each its own change and its own small PR. R0 is merged
+and outside the sequence. Manual validation sits on R9, not on the ADR: ADR-0026's subject is structure,
+and every claim it makes is a value a test can read.
 
 **One cosmetic defect stands, reported and not fixed.** In the paired waveform section, text overlaps
 vertically — the amplitude line against the second file's attribution, and the *no audio beyond here*
