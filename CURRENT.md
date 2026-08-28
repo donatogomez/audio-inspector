@@ -23,7 +23,20 @@ commit `c78c309` on 2026-08-28; the change is archived at
 `openspec/changes/archive/2026-08-28-restructure-waveform-workspace/` at **20/24** — the four open tasks
 are the deferred ones, named so they are not quietly dropped. R1 through R4 are merged before it, and the
 umbrella that sequences the redesign is open at **15/29**. **ADR-0025 stays `Accepted` and ADR-0026 stays
-`Proposed`.** **The next slice is R6 `restructure-spectrum-workspace`**, and it is not started.
+`Proposed`.**
+
+**R6 — `restructure-spectrum-workspace` — is implemented** on `feat/restructure-spectrum-workspace` and
+awaits a PR. Selecting **Spectrum** now shows a workspace: the drawing takes the height the section can
+give it, with its frequency axis, its time axis and its legend — and for a pair, two lanes above the
+shared-extent sentences and **one legend describing both**, which the pairing never had. Only Overview
+still shows the transitional report page.
+
+**The bound on that height is the data, not taste.** A model carries at most 512 bands and is drawn with
+interpolation off, so past one pixel per band a taller image is upscaled rather than more detailed.
+Nothing is re-coloured: no normalisation, no auto-range, no per-file scale — the one comparison two
+spectrograms can honestly support is the one an absolute scale makes possible. Above a file's own
+Nyquist keeps its achromatic treatment and its sentence, so it still cannot be mistaken for the ramp's
+floor, and a render of 44.1 kHz beside 96 kHz confirmed that by eye.
 
 **Waveform is a workspace.** The drawing takes the height the section can give it instead of a 96 pt
 strip, above the line naming it — and, for a pair, two lanes above the one line naming the shared
@@ -138,7 +151,7 @@ there is none — and says so rather than diverging quietly. `docs/vision.md` is
 persistence or batch ever creates a collection, that is the decision to reopen.
 
 **The order.** R1 is the umbrella's own work (the shell), and it is merged. R2 through R5 followed.
-**Next is R6 `restructure-spectrum-workspace`, not yet opened** · then R7 Inspection Overview · R8
+**Next is R7 `add-inspection-overview`, not yet opened** · then R8
 Comparison mode · R9 responsive, accessibility and the human pass — each its own change and its own
 small PR. R0 is merged
 and outside the sequence. Manual validation sits on R9, not on the ADR: ADR-0026's subject is
