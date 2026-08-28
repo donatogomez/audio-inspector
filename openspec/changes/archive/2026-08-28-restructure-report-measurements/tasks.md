@@ -61,14 +61,45 @@ slices' habit of forty micro-groups bought nothing but bookkeeping.
 
 ## 6. Gates
 
-- [ ] 6.1 Boundaries, warnings-as-errors, the full suite twice, the Xcode build, OpenSpec strict, and
+- [x] 6.1 Boundaries, warnings-as-errors, the full suite twice, the Xcode build, OpenSpec strict, and
       `git diff --check` — plus a style comparison of the touched files against `main`.
+      Green before the PR and green again on `main` after the merge: boundaries, a zero-warning build,
+      **1790 tests in 196 suites, twice**, the Xcode build, `openspec validate --all --strict` and
+      `git diff --check`. The style comparison found **zero new violation classes** against `main` on the
+      new and touched files: `RootView.swift` carries the same three pre-existing warning kinds in the
+      same number, and two first-draft regressions were corrected rather than accepted — an
+      error-severity `type_body_length` (removed by splitting the refusals into their own suite) and a
+      `trailingCommas` divergence (the repository follows swiftformat on that rule, which the first draft
+      did not).
 
 ## 7. Closure — after merge
 
-- [ ] 7.1 Merged on its own small PR, `main` green.
-- [ ] 7.2 `CURRENT.md` refreshed and `restructure-inspection-workspace` §3.3 marked — after merge.
-- [ ] 7.3 Archive through `openspec archive` **after merge**.
+- [x] 7.1 Merged on its own small PR, `main` green.
+      PR [#55](https://github.com/donatogomez/audio-inspector/pull/55), merged 2026-08-28 as the
+      **two-parent merge commit `d5e07ad`** — 6 commits, 13 files, +1904/−8, CI green in 5m42s.
+      Integration proved six ways rather than taken from the label: the PR reports `MERGED` with a
+      non-null `mergedAt`; the commit has exactly two parents, `cceffb6` and `13915bb`; the second parent
+      **is** the feature head; the merge's tree is byte-identical to the feature head's (`3e5a7440…`), so
+      the merge resolved nothing and added nothing of its own; `origin/main` **is** the merge commit; and
+      the feature has **0** commits outside it. `main` green after, with the baseline recorded in 6.1.
+- [x] 7.2 `CURRENT.md` refreshed and `restructure-inspection-workspace` §3.3 marked — after merge.
+      Both done after the merge, in that order. The umbrella's §3.3 records what landed and what it did
+      not cost, and its counter moves **13/29 → 14/29**; §3.4–§3.8 — R5 through R9 — are untouched,
+      asserted. `CURRENT.md` names the PR, the merge commit, the archive path, the final task count with
+      its deferrals, the umbrella count, the ADR's state and the next slice, and claims no validation that
+      was not performed — in particular it does not claim the visual review this slice did not have.
+- [x] 7.3 Archive through `openspec archive` **after merge**.
+      Archived as `openspec/changes/archive/2026-08-28-restructure-report-measurements/`, after the merge,
+      after `main` was fast-forwarded to it, and after the post-merge baseline was green.
+      **The canonical capability was audited rather than assumed.** `audio-file-inspection` went from
+      **17 requirements / 62 scenarios to 22 / 79** — exactly this change's delta of five requirements and
+      seventeen scenarios, no more — and the update is purely additive: **170 lines added, 0 removed**, in
+      two appending hunks at the tail, so all seventeen existing requirements and every preceding line
+      survive byte-identical, and there is no duplicate heading. The **other eight capabilities are
+      byte-identical**, compared by SHA-1 before and after — including the four that govern the
+      measurements themselves (`audio-signal-level-metrics`, which owns both the signal levels and the
+      true peak, `audio-loudness-measurement`, `audio-significant-bandwidth` and
+      `audio-two-file-comparison`), which this slice inherits entire and modifies nowhere.
 
 ## 8. Deferred, and named so it is not quietly dropped
 

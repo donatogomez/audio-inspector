@@ -119,7 +119,24 @@ Each is a separate change, created when its turn comes. None is started here.
       one visible owner — and the comparison, the export, `schemaVersion` 1 and the one PCM read are
       untouched. No aggregate, no quality verdict, no provenance inference and no path. R1's navigation
       and R2's pre-inspection surface are unchanged, asserted.
-- [ ] 3.3 **R4** `restructure-report-measurements`.
+- [x] 3.3 **R4** `restructure-report-measurements` — **merged.** PR
+      [#55](https://github.com/donatogomez/audio-inspector/pull/55) landed on `main` as the two-parent
+      merge commit `d5e07ad` on 2026-08-28. **Measurements is the second of the five sections whose
+      content is its own**: the signal levels, the true peak, the integrated loudness and the programme
+      bandwidth now sit in one reading surface — two named groups, *Level* and *Frequency*, one label
+      column, and each method sentence behind a disclosure that never removes it. The grouping is the
+      report's own distinction rather than an invention: `ReportView` already ordered these four by it.
+      **It arranges measurements and takes none**: every value, unit, per-channel breakdown, absence,
+      failure sentence and resolution is the one the four copy owners already produce, and nothing is
+      read, decoded, measured, formatted or rounded to draw it. Only a method line is collapsed
+      (ADR-0026 §11); every fact — including the programme bandwidth's *Analysis resolution* — stays
+      visible.
+      **Nothing the redesign inherited was spent**: no comparison reaches the section in any comparison
+      state, so the comparison stays whole and unchanged on the transitional report page until R8 — the
+      precedent R3 set for Details. The export, `schemaVersion` 1 and the one PCM read are untouched;
+      `AudioInspectorDomain`, `AudioInspectorAnalysis`, `AudioInspectorMedia` and `FeatureImport` have
+      zero files changed. No threshold, no target, no aggregate, no quality verdict and no provenance
+      inference. R1's navigation, R2's pre-inspection surface and R3's Details are unchanged, asserted.
 - [ ] 3.4 **R5** `restructure-waveform-workspace` — and the paired-waveform text overlap closes here.
 - [ ] 3.5 **R6** `restructure-spectrum-workspace`.
 - [ ] 3.6 **R7** `add-inspection-overview` — ADR-0026 §6 exactly, including §7's three conditions on the
