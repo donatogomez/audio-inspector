@@ -17,15 +17,15 @@
 
 ---
 
-**Focus:** **R3 — `restructure-report-details` — is merged, archived and closed.** PR
-[#54](https://github.com/donatogomez/audio-inspector/pull/54) landed on `main` as the two-parent merge
-commit `8d5d01f` on 2026-08-28; the change is archived at
-`openspec/changes/archive/2026-08-28-restructure-report-details/` at **25/28** — the three open tasks are
-the deferred ones, named so they are not quietly dropped. R1 and R2 are merged before it, and the umbrella
-that sequences the redesign is open at **13/29**. **ADR-0026 stays `Proposed`.**
+**Focus:** **R4 — `restructure-report-measurements` — is merged, archived and closed.** PR
+[#55](https://github.com/donatogomez/audio-inspector/pull/55) landed on `main` as the two-parent merge
+commit `d5e07ad` on 2026-08-28; the change is archived at
+`openspec/changes/archive/2026-08-28-restructure-report-measurements/` at **18/21** — the three open tasks
+are the deferred ones, named so they are not quietly dropped. R1, R2 and R3 are merged before it, and the
+umbrella that sequences the redesign is open at **14/29**. **ADR-0026 stays `Proposed`.** **The next slice
+is R5 `restructure-waveform-workspace`**, and it is not started.
 
-**R4 — `restructure-report-measurements` — is implemented** on
-`feat/restructure-report-measurements` and awaits a PR. Selecting **Measurements** now shows the four
+**Measurements is the second section with content of its own.** Selecting it shows the four
 figures the inspection derives from the samples — the signal levels, the true peak, the integrated
 loudness and the programme bandwidth — as one reading surface: two named groups, *Level* and
 *Frequency*, one label column, and each method sentence behind a disclosure that never removes it.
@@ -123,11 +123,11 @@ among the marks of a native macOS app. ADR-0026 §12 declines it — a sidebar n
 there is none — and says so rather than diverging quietly. `docs/vision.md` is not edited; if
 persistence or batch ever creates a collection, that is the decision to reopen.
 
-**The order.** R1 is the umbrella's own work (the shell), and it is merged. R2 and R3 followed.
-**Next is R4 `restructure-report-measurements`, not yet opened** · then R5 Waveform workspace ·
-R6 Spectrum workspace · R7 Inspection Overview · R8 Comparison mode · R9 responsive, accessibility and
-the human pass — each its own change and its own small PR. R0 is
-merged and outside the sequence. Manual validation sits on R9, not on the ADR: ADR-0026's subject is
+**The order.** R1 is the umbrella's own work (the shell), and it is merged. R2, R3 and R4 followed.
+**Next is R5 `restructure-waveform-workspace`, not yet opened** — the paired-waveform text overlap
+closes there · then R6 Spectrum workspace · R7 Inspection Overview · R8 Comparison mode · R9
+responsive, accessibility and the human pass — each its own change and its own small PR. R0 is merged
+and outside the sequence. Manual validation sits on R9, not on the ADR: ADR-0026's subject is
 structure, and every claim it makes is a value a test can read.
 
 **One cosmetic defect stands, reported and not fixed.** In the paired waveform section, text overlaps
