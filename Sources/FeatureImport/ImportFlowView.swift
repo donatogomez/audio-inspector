@@ -70,6 +70,12 @@ public struct ImportFlowView: View {
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
+            // **Return begins an inspection.** The one action is the window's default, so everything this
+            // surface offers can be reached and invoked from the keyboard alone — dragging is an
+            // alternative, never the only way in. While an inspection is running the action is
+            // unavailable, so the shortcut is too; and an open panel is key, so Return goes there rather
+            // than here.
+            .keyboardShortcut(.defaultAction)
             .disabled(presentation.isInspecting)
 
             Text(ImportFlowCopy.dragAlternative)
@@ -140,6 +146,12 @@ public struct ImportFlowView: View {
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }
+            // One element, so an assistive reader hears *that* work is under way and *what* it is in a
+            // single announcement rather than as an indicator and a sentence to be joined up. Nothing is
+            // announced unprompted: the state begins while the open panel is key, and interrupting a
+            // person mid-selection to say an inspection has started would be worse than silence. The
+            // traversal audit is R9's.
+            .accessibilityElement(children: .combine)
         case let .failed(message):
             // **The flow's own sentence, and a mark that is not a colour.** The message is the associated
             // value, carried through untouched: no prefix, no summary, no constant of this surface's
