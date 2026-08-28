@@ -38,6 +38,13 @@ public struct ReportWaveformView: View {
 
     public var body: some View {
         VStack(alignment: .leading, spacing: 16) {
+            // **The free space is shared, not pooled below.** The plot sizings are capped because an
+            // envelope's vertical information is bounded by the amplitude scale rather than by pixels —
+            // so on a tall window there is room left over, and a workspace that jammed its content to
+            // the top with a void beneath would read as truncated rather than as composed. Two
+            // zero-minimum spacers centre what is there and collapse to nothing when there is no room to
+            // give, so a small window still lays out from the top.
+            Spacer(minLength: 0)
             // **Exactly one**, whichever mode this is — `ReportVisuals`' own guarantee, kept as a
             // collection so *how many* stays something a test can read rather than a property of a
             // rendering nobody can assert.
@@ -56,7 +63,7 @@ public struct ReportWaveformView: View {
             }
             Spacer(minLength: 0)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
         .padding(24)
     }
 }
