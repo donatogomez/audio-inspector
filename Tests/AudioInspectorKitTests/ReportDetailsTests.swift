@@ -194,6 +194,24 @@ struct ReportDetailsTests {
         }
         // The source keeps the sentence it already had.
         #expect(source.contains { $0.contains("\"User-selected local file (location omitted)\"") })
+
+        // **And no literal on this surface is a location either.** Refusing the symbols alone was not
+        // enough: a path written out by hand reaches the reader without any of them, which is what the
+        // control demonstrated. Every string the section can render is swept, and a path separator is
+        // refused outright — no sentence here has ever needed one, and a file name cannot contain one.
+        var literals: [String] = []
+        for line in source {
+            literals += line.matches(of: /"[^"]*"/).map { String($0.output).trimmingCharacters(in: ["\""]) }
+        }
+        #expect(literals.count > 8, "the sweep covered \(literals.count) strings")
+        for literal in literals {
+            for shape in ["/", "~", "file:", "Users", "Volumes", "\\\\"] {
+                #expect(
+                    !literal.contains(shape),
+                    "\"\(literal)\" looks like a location, and this surface may not carry one"
+                )
+            }
+        }
     }
 
     // MARK: - 2.5 — notes as they are
