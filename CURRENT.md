@@ -17,20 +17,21 @@
 
 ---
 
-**Focus:** **R4 — `restructure-report-measurements` — is merged, archived and closed.** PR
-[#55](https://github.com/donatogomez/audio-inspector/pull/55) landed on `main` as the two-parent merge
-commit `d5e07ad` on 2026-08-28; the change is archived at
-`openspec/changes/archive/2026-08-28-restructure-report-measurements/` at **18/21** — the three open tasks
-are the deferred ones, named so they are not quietly dropped. R1, R2 and R3 are merged before it, and the
-umbrella that sequences the redesign is open at **14/29**. **ADR-0026 stays `Proposed`.**
+**Focus:** **R5 — `restructure-waveform-workspace` — is merged, archived and closed.** PR
+[#56](https://github.com/donatogomez/audio-inspector/pull/56) landed on `main` as the two-parent merge
+commit `c78c309` on 2026-08-28; the change is archived at
+`openspec/changes/archive/2026-08-28-restructure-waveform-workspace/` at **20/24** — the four open tasks
+are the deferred ones, named so they are not quietly dropped. R1 through R4 are merged before it, and the
+umbrella that sequences the redesign is open at **15/29**. **ADR-0025 stays `Accepted` and ADR-0026 stays
+`Proposed`.** **The next slice is R6 `restructure-spectrum-workspace`**, and it is not started.
 
-**R5 — `restructure-waveform-workspace` — is implemented** on `feat/restructure-waveform-workspace` and
-awaits a PR. Selecting **Waveform** now shows a workspace: the drawing takes the height the section can
-give it instead of a 96 pt strip, above the line naming it — and, for a pair, two lanes above the one
-line naming the shared extent. Nothing is read, decoded, measured or recomputed to draw it, and room
+**Waveform is a workspace.** The drawing takes the height the section can give it instead of a 96 pt
+strip, above the line naming it — and, for a pair, two lanes above the one line naming the shared
+extent. Nothing is read, decoded, measured or recomputed to draw it, and room
 buys no powers: the drawing is still still.
 
-**The paired waveform's text overlap is closed, structurally.** Its cause was proven rather than
+**The paired waveform's text overlap is closed, structurally** — the one cosmetic defect carried since
+ADR-0025's manual pass, and R5 is where the umbrella assigned it. Its cause was proven rather than
 guessed: the lane put a composite of drawing-plus-prose inside a `GeometryReader` frozen at the
 drawing's own height, and a `GeometryReader` does not clip. The correct shape was already twenty lines
 below in the same file — the spectral lane puts a drawing, and only a drawing, in its measured area — so
@@ -136,19 +137,12 @@ among the marks of a native macOS app. ADR-0026 §12 declines it — a sidebar n
 there is none — and says so rather than diverging quietly. `docs/vision.md` is not edited; if
 persistence or batch ever creates a collection, that is the decision to reopen.
 
-**The order.** R1 is the umbrella's own work (the shell), and it is merged. R2, R3 and R4 followed.
-**Next is R5 `restructure-waveform-workspace`, not yet opened** — the paired-waveform text overlap
-closes there · then R6 Spectrum workspace · R7 Inspection Overview · R8 Comparison mode · R9
-responsive, accessibility and the human pass — each its own change and its own small PR. R0 is merged
+**The order.** R1 is the umbrella's own work (the shell), and it is merged. R2 through R5 followed.
+**Next is R6 `restructure-spectrum-workspace`, not yet opened** · then R7 Inspection Overview · R8
+Comparison mode · R9 responsive, accessibility and the human pass — each its own change and its own
+small PR. R0 is merged
 and outside the sequence. Manual validation sits on R9, not on the ADR: ADR-0026's subject is
 structure, and every claim it makes is a value a test can read.
-
-**One cosmetic defect stands, reported and not fixed.** In the paired waveform section, text overlaps
-vertically — the amplitude line against the second file's attribution, and the *no audio beyond here*
-sentence against the second lane's amplitude line. It was seen during ADR-0025's manual pass, answered
-none of the four questions differently, and contradicts no promotion condition. Its cause is known: a
-whole `WaveformSection` — drawing plus two lines of copy — is placed inside a 96 pt frame that only the
-drawing fills. The waveform workspace slice is where it belongs.
 
 **Inherited debt, untouched.** `add-two-file-technical-comparison` is still open and **ADR-0017 is
 still `Proposed`**; **ADR-0016 is still `Proposed`**; the VoiceOver traversal gap they share with
