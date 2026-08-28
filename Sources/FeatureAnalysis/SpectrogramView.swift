@@ -240,7 +240,12 @@ struct SpectrumPlotSizing: Equatable {
     static let workspaceSingle = SpectrumPlotSizing(minimum: 220, maximum: bandCount)
 
     /// One lane of a pair, which has to fit twice over with two sets of prose, two shared-extent
-    /// sentences and the legend. The maximum is half the band count, so two lanes together never exceed
-    /// one full-resolution image's worth of height.
-    static let workspaceLane = SpectrumPlotSizing(minimum: 90, maximum: bandCount / 2)
+    /// sentences and the legend.
+    ///
+    /// **80, and the number is what the budget leaves rather than a preference.** At the window's
+    /// smallest supported size the worst real case is one lane carrying an out-of-range sentence and one
+    /// not — two cannot, because the higher Nyquist always occupies the whole shared axis — which spends
+    /// 328 of the 334 pt available (`design.md` §4). The maximum is half the band count, so two lanes
+    /// together never exceed one full-resolution image's worth of height.
+    static let workspaceLane = SpectrumPlotSizing(minimum: 80, maximum: bandCount / 2)
 }
