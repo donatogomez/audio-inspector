@@ -331,11 +331,11 @@ public struct RootView: View {
             // **One read of the comparison, two answers derived from it.** Reading `flow.comparison`
             // twice in one body could, in principle, straddle a change; binding it once cannot.
             let comparison = flow.comparison
-            // **Details is a section now.** R1 gave the workspace five sections and the selection that
-            // moves between them; this is the first one whose content exists, so it is the first the
-            // root routes to a surface of its own. The other four still show the report page that has
-            // stood in for them since R1 — they are **alternatives**, never both at once, so the blocks
-            // Details presents have exactly one visible owner at any moment.
+            // **Details and Measurements are sections now.** R1 gave the workspace five sections and
+            // the selection that moves between them; R3 filled the first and R4 the second. The other
+            // three still show the report page that has stood in for them since R1 — every branch is an
+            // **alternative**, never two at once, so the blocks these sections present have exactly one
+            // visible owner at any moment.
             //
             // The root chooses because it is the only place that can: `WorkspaceSection` lives here and
             // `FeatureAnalysis` cannot see it. Nothing about R1's lifecycle changes — no stack, no split
@@ -343,7 +343,19 @@ public struct RootView: View {
             switch navigation.section {
             case .details:
                 ReportDetailsView(report: presentation.report)
-            case .overview, .measurements, .waveform, .spectrum:
+            case .measurements:
+                // **The four sample-derived measurements, and nothing else.** The presentations are the
+                // ones the legacy page is handed in the same body — built by the same four mappings, from
+                // the same inspection — so a figure cannot differ between the two surfaces. No comparison
+                // reaches here: it is one whole surface and R8 owns it, exactly as R3 left the technical
+                // comparison out of Details.
+                ReportMeasurementsView(
+                    signalLevelMetrics: Self.signalLevelMetricsPresentation(for: presentation.signalLevelMetrics),
+                    truePeak: Self.truePeakPresentation(for: presentation.truePeak),
+                    loudness: Self.loudnessPresentation(for: presentation.loudness),
+                    programmeBandwidth: Self.programmeBandwidthPresentation(for: presentation.significantBandwidth)
+                )
+            case .overview, .waveform, .spectrum:
                 legacyReportSurface(presentation, comparison: comparison)
             }
             Divider()
