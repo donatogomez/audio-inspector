@@ -62,8 +62,8 @@ public struct ReportDetailsView: View {
     /// nothing here picks, reorders or omits a property.
     private var technicalSection: some View {
         ReportSection("Technical") {
-            ForEach(Array(ReportPropertyFormatter.groups(for: report.properties).enumerated()),
-                    id: \.element.id) { index, group in
+            let groups = ReportPropertyFormatter.groups(for: report.properties)
+            ForEach(Array(groups.enumerated()), id: \.element.id) { index, group in
                 if index > 0 {
                     Divider().padding(.vertical, 2)
                 }
@@ -150,12 +150,13 @@ public struct ReportDetailsView: View {
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(.secondary)
                 .accessibilityAddTraits(.isHeader)
-            Text(ReportPropertyFormatter.outcome(
+            let outcome = ReportPropertyFormatter.outcome(
                 for: report.status,
                 properties: ReportPropertyFormatter.displays(for: report.properties)
-            ).text)
-            .font(.callout)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            )
+            Text(outcome.text)
+                .font(.callout)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 }
