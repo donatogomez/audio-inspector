@@ -30,7 +30,7 @@ struct ReportMeasurementsVocabularyTests {
         try #require(SignalLevelMetrics(
             channels: [
                 try channel(peak: 0.708, rms: 0.3, dcOffset: 0.002, clipped: 3),
-                try channel(peak: 0.5, rms: 0.2, dcOffset: -0.001, clipped: 0)
+                try channel(peak: 0.5, rms: 0.2, dcOffset: -0.001, clipped: 0),
             ],
             overallPeakSample: 0.708, overallRMS: 0.25,
             overallDCOffset: 0.0005, overallClippedSampleCount: 3
@@ -167,7 +167,7 @@ struct ReportMeasurementsVocabularyTests {
                 truePeak: .loading,
                 loudness: .failed(message: failure),
                 programmeBandwidth: .absent
-            )
+            ),
         ]
     }
 
@@ -227,7 +227,7 @@ struct ReportMeasurementsVocabularyTests {
             "broadcast", "spotify", "apple music", "youtube", "ebu r 128", "r128", "lufs target",
             "master", "remaster", "transcode", "upsampl", "downsampl", "lossy", "bitrate of",
             "sounds", "audible", "perceiv", "prefer", "ideal", "optimal", "correct level",
-            "matches", "identical to", "differences", "all match", "similarity", "confidence"
+            "matches", "identical to", "differences", "all match", "similarity", "confidence",
         ]
         for groups in try everyStateCombination() {
             for string in everyString(groups) {

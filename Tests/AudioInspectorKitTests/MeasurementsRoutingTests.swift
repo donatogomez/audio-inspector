@@ -55,7 +55,7 @@ struct MeasurementsRoutingTests {
             "signalLevelMetricsPresentation(for: presentation.signalLevelMetrics)",
             "truePeakPresentation(for: presentation.truePeak)",
             "loudnessPresentation(for: presentation.loudness)",
-            "programmeBandwidthPresentation(for: presentation.significantBandwidth)"
+            "programmeBandwidthPresentation(for: presentation.significantBandwidth)",
         ] {
             #expect(routing.contains { $0.contains(mapping) }, "the section does not receive \(mapping)")
         }

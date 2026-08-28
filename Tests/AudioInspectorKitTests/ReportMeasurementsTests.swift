@@ -32,7 +32,7 @@ struct ReportMeasurementsTests {
         try #require(SignalLevelMetrics(
             channels: [
                 try channel(peak: 0.708, rms: 0.3, dcOffset: 0.002, clipped: 3),
-                try channel(peak: 0.5, rms: 0.2, dcOffset: -0.001, clipped: 0)
+                try channel(peak: 0.5, rms: 0.2, dcOffset: -0.001, clipped: 0),
             ],
             overallPeakSample: 0.708, overallRMS: 0.25,
             overallDCOffset: 0.0005, overallClippedSampleCount: 3
@@ -169,7 +169,7 @@ struct ReportMeasurementsTests {
                 truePeak: .loading,
                 loudness: .failed(message: failure),
                 programmeBandwidth: .absent
-            )
+            ),
         ]
     }
 
@@ -182,7 +182,7 @@ struct ReportMeasurementsTests {
             SignalLevelMetricsCopy.title,
             TruePeakCopy.title,
             LoudnessCopy.title,
-            ProgrammeBandwidthCopy.title
+            ProgrammeBandwidthCopy.title,
         ])
         #expect(Set(titles).count == titles.count, "a measurement appears more than once")
     }
@@ -206,7 +206,7 @@ struct ReportMeasurementsTests {
             #expect(groups.map(\.name) == [MeasurementsCopy.levelGroup, MeasurementsCopy.frequencyGroup])
             #expect(flat(groups).map(\.title) == [
                 SignalLevelMetricsCopy.title, TruePeakCopy.title,
-                LoudnessCopy.title, ProgrammeBandwidthCopy.title
+                LoudnessCopy.title, ProgrammeBandwidthCopy.title,
             ])
         }
     }

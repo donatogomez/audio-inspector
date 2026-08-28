@@ -38,13 +38,13 @@ enum MeasurementsDisplay {
                 measurements: [
                     display(for: signalLevelMetrics),
                     display(for: truePeak),
-                    display(for: loudness)
+                    display(for: loudness),
                 ]
             ),
             MeasurementGroupDisplay(
                 name: MeasurementsCopy.frequencyGroup,
                 measurements: [display(for: programmeBandwidth)]
-            )
+            ),
         ]
     }
 
@@ -107,7 +107,7 @@ enum MeasurementsDisplay {
                 MeasurementFactRow(
                     name: row.name, value: row.value, detail: nil,
                     accessibilityLabel: row.accessibilityLabel
-                )
+                ),
             ]
             method = MeasurementMethodDisplay(
                 text: LoudnessCopy.method(for: measurement),
