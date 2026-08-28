@@ -67,14 +67,51 @@ Large tasks. This slice is one coherent unit of work and closes in one pass.
 
 ## 7. Gates
 
-- [ ] 7.1 Boundaries, warnings-as-errors, the full suite twice, the Xcode build, OpenSpec strict, and
+- [x] 7.1 Boundaries, warnings-as-errors, the full suite twice, the Xcode build, OpenSpec strict, and
       `git diff --check` — plus a style comparison of the touched files against `main`.
+      Green before the PR and green again on `main` after the merge: boundaries, a zero-warning build,
+      **1816 tests in 198 suites, twice**, the Xcode build, `openspec validate --all --strict` and
+      `git diff --check`. The style comparison found **no regression**: the new production file carries
+      zero swiftformat and zero swiftlint violations; the three pre-existing files this slice touches
+      carry the **same** violation counts as on `main`; the new test files introduce no violation class
+      absent from `main/Tests`, and the `type_body_length` and `file_length` totals are unchanged. One
+      blank line this slice did introduce was corrected rather than accepted.
 
 ## 8. Closure — after merge
 
-- [ ] 8.1 Merged on its own small PR, `main` green.
-- [ ] 8.2 `CURRENT.md` refreshed and `restructure-inspection-workspace` §3.4 marked — after merge.
-- [ ] 8.3 Archive through `openspec archive` **after merge**.
+- [x] 8.1 Merged on its own small PR, `main` green.
+      PR [#56](https://github.com/donatogomez/audio-inspector/pull/56), merged 2026-08-28 as the
+      **two-parent merge commit `c78c309`** — 5 commits, 14 files, +1258/−20, CI green in 6m38s.
+      Integration proved six ways rather than taken from the label: the PR reports `MERGED` with a
+      non-null `mergedAt`; the commit has exactly two parents, `09bcf60` and `37341bf`; the second parent
+      **is** the feature head; the merge's tree is byte-identical to the feature head's (`7aa7d20e…`), so
+      the merge resolved nothing and added nothing of its own; `origin/main` **is** the merge commit; and
+      the feature has **0** commits outside it. `main` green after, with the baseline recorded in 7.1.
+- [x] 8.2 `CURRENT.md` refreshed and `restructure-inspection-workspace` §3.4 marked — after merge.
+      Both done after the merge, in that order. §3.4 is the umbrella task that names this slice **and**
+      the overlap, and it now records what landed and what it did not cost; the counter moves
+      **14/29 → 15/29**, and §3.5–§3.8 — R6 through R9 — are untouched, asserted. `CURRENT.md` names the
+      PR, the merge commit, the archive path, the final task count with its deferrals, the umbrella
+      count, both ADR states and the next slice. It also retires the standing defect note: the paired
+      waveform's text overlap is no longer carried as debt, because it is closed.
+- [x] 8.3 Archive through `openspec archive` **after merge**.
+      Archived as `openspec/changes/archive/2026-08-28-restructure-waveform-workspace/`, after the merge,
+      after `main` was fast-forwarded to it, and after the post-merge baseline was green.
+      **Both canonical deltas were computed from the state rather than taken from a figure.**
+      `audio-file-inspection` went from **22 requirements / 79 scenarios to 25 / 89** (+3 / +10) and
+      `audio-two-file-visual-presentation` from **11 / 38 to 12 / 41** (+1 / +3) — each exactly its own
+      archived delta spec, checked against it. Both updates are purely additive: 92 and 31 lines added,
+      **0 removed**, so every existing requirement survives byte-identical and there is no duplicate
+      heading. **`waveform-visualization` is byte-identical**, as this slice's design said it must be —
+      it was deliberately not a delta owner, because its refusal of playback, zoom, scrubbing, selection
+      and a cursor is unconditional and already binds a bigger drawing. The **other seven capabilities
+      are byte-identical** too, compared by SHA-1 before and after.
+
+      **A correction on the record.** The pre-merge report projected *"+4 req / +13 scen → 26/92 and
+      12/41"*. The `+4 / +13` was the total across **both** capabilities, and applying it to
+      `audio-file-inspection` alone double-counted the second capability's delta. The real figures are
+      the ones above: **25 / 89** and **12 / 41**. The `12/41` in that report was right; the `26/92` was
+      not, and no such state ever existed.
 
 ## 9. Deferred, and named so it is not quietly dropped
 

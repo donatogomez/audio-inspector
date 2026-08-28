@@ -137,7 +137,27 @@ Each is a separate change, created when its turn comes. None is started here.
       `AudioInspectorDomain`, `AudioInspectorAnalysis`, `AudioInspectorMedia` and `FeatureImport` have
       zero files changed. No threshold, no target, no aggregate, no quality verdict and no provenance
       inference. R1's navigation, R2's pre-inspection surface and R3's Details are unchanged, asserted.
-- [ ] 3.4 **R5** `restructure-waveform-workspace` — and the paired-waveform text overlap closes here.
+- [x] 3.4 **R5** `restructure-waveform-workspace` — **merged, and the paired-waveform text overlap
+      closed here.** PR [#56](https://github.com/donatogomez/audio-inspector/pull/56) landed on `main`
+      as the two-parent merge commit `c78c309` on 2026-08-28. **Waveform is the first section whose
+      content is a drawing**, so the first that needed room rather than order: it takes the height the
+      section can offer instead of the 96 pt strip it had, and how much height is a value budgeted from
+      the window's own 720 × 480 minimum rather than a literal in a view. ADR-0026 §9's other half
+      holds — **room bought no powers**: no playback, playhead, zoom, pan, scrubbing, cursor, selection,
+      transport, hover readout, alignment, overlay, difference drawing, correlation, similarity,
+      normalisation or export, and the drawing still takes no hit.
+      **The overlap's cause was proven, not guessed.** The lane put a composite of drawing-plus-prose
+      inside a `GeometryReader` frozen at the drawing's own height, and a `GeometryReader` does not
+      clip. The correct shape already sat twenty lines below in the same file — the spectral lane puts a
+      drawing, and only a drawing, in its measured area — so the waveform lane converged on it rather
+      than inventing a fix, and a structural test now refuses the old shape. A magic height, an offset,
+      a truncation and a smaller font were each refused as fixes that expire.
+      **Nothing the redesign inherited was spent**: `WaveformGeometry`, `PairedWaveformAxis`,
+      `WaveformEnvelope` and every copy owner have zero files changed; a shorter file still ends at its
+      own extent and its remainder is still stated in words rather than drawn as silence; no comparison
+      surface was built, so the comparison stays whole until R8. The export, `schemaVersion` 1 and the
+      one PCM read are untouched, and `AudioInspectorDomain`, `AudioInspectorAnalysis`,
+      `AudioInspectorMedia` and `FeatureImport` have zero files changed. R1–R4 are unchanged, asserted.
 - [ ] 3.5 **R6** `restructure-spectrum-workspace`.
 - [ ] 3.6 **R7** `add-inspection-overview` — ADR-0026 §6 exactly, including §7's three conditions on the
       warning count.
