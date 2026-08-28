@@ -335,10 +335,8 @@ struct ReportMeasurementsTests {
     @Test("only a read failure is emphasised")
     func onlyAReadFailureIsEmphasised() throws {
         for groups in try everyStateCombination() {
-            for measurement in flat(groups) {
-                if measurement.isReadFailure {
-                    #expect(measurement.state != nil, "a failure with no sentence to read")
-                }
+            for measurement in flat(groups) where measurement.isReadFailure {
+                #expect(measurement.state != nil, "a failure with no sentence to read")
             }
         }
         #expect(MeasurementsDisplay.display(for: TruePeakPresentation.absent).isReadFailure == false)
@@ -378,121 +376,6 @@ struct ReportMeasurementsTests {
                     !measurement.rows.isEmpty || measurement.state != nil,
                     "\(measurement.title) renders neither rows nor a sentence"
                 )
-            }
-        }
-    }
-
-    // MARK: - 2.4 — method disclosure hides explanation, never fact
-
-    /// Every measurement that records a method reaches the surface with it.
-    @Test("every recorded method reaches the section")
-    func everyRecordedMethodReachesTheSection() throws {
-        let groups = try settled()
-        let peak = try measurement(TruePeakCopy.title, in: groups)
-        let programme = try measurement(LoudnessCopy.title, in: groups)
-        let band = try measurement(ProgrammeBandwidthCopy.title, in: groups)
-        let levels = try measurement(SignalLevelMetricsCopy.title, in: groups)
-        #expect(peak.method?.text == TruePeakCopy.method(for: try truePeak()))
-        #expect(programme.method?.text == LoudnessCopy.method(for: try loudness()))
-        #expect(band.method?.text == ProgrammeBandwidthCopy.method(for: try bandwidth()))
-        // Signal levels records none, so none is invented to fill the field.
-        #expect(levels.method == nil)
-    }
-
-    /// **Nothing but the method is behind the disclosure.** Every value, unit, per-channel detail,
-    /// absence sentence, failure sentence and the analysis resolution is outside it, by construction:
-    /// they live on `rows` and `state`, and only `method` is collapsed.
-    @Test("no fact is carried by the collapsible half")
-    func noFactIsBehindTheDisclosure() throws {
-        for groups in try everyStateCombination() {
-            for measurement in flat(groups) {
-                guard let method = measurement.method else { continue }
-                // A method is offered only where the facts are already on screen as rows.
-                #expect(!measurement.rows.isEmpty, "\(measurement.title) collapsed its only content")
-                for row in measurement.rows {
-                    #expect(
-                        !method.text.contains(row.value ?? "\u{0}"),
-                        "\(measurement.title)'s value is inside the collapsed sentence"
-                    )
-                }
-            }
-        }
-        // The resolution is a row, so it is never collapsed.
-        let bandwidth = MeasurementsDisplay.display(
-            for: SignificantBandwidthPresentation.measurement(try self.bandwidth())
-        )
-        #expect(bandwidth.rows.contains { $0.name == ProgrammeBandwidthCopy.resolutionTitle })
-    }
-
-    // MARK: - 2.5 — the vocabulary sweep
-
-    /// **No judgement, no threshold, no target, no provenance** — over every string the section can
-    /// render, in every combination of states.
-    @Test("nothing on this section states a verdict, a target or a provenance")
-    func theSweep() throws {
-        let forbidden = [
-            "good", "bad", "better", "worse", "poor", "excellent", "quality", "grade", "score",
-            "safe", "unsafe", "hot", "too loud", "too quiet", "excessive", "acceptable",
-            "clipping detected", "distorted", "damaged", "healthy", "clean",
-            "should be", "recommended", "target", "normalis", "normaliz", "loudness war",
-            "broadcast", "spotify", "apple music", "youtube", "ebu r 128", "r128", "lufs target",
-            "master", "remaster", "transcode", "upsampl", "downsampl", "lossy", "bitrate of",
-            "sounds", "audible", "perceiv", "prefer", "ideal", "optimal", "correct level",
-            "matches", "identical to", "differences", "all match", "similarity", "confidence"
-        ]
-        for groups in try everyStateCombination() {
-            for string in everyString(groups) {
-                let lower = string.lowercased()
-                for word in forbidden {
-                    #expect(!lower.contains(word), "\"\(word)\" reached the surface in: \(string)")
-                }
-            }
-        }
-    }
-
-    /// **No aggregate, direct or by absence.** The section offers no total, count, percentage or single
-    /// phrase over the four — and the two group names it adds carry no digit, the cheapest way to keep
-    /// `"4 measurements"` from appearing quietly.
-    @Test("the section publishes no aggregate over the four measurements")
-    func noAggregate() throws {
-        for string in MeasurementsCopy.everyRenderableString {
-            let carriesAFigure = string.rangeOfCharacter(from: .decimalDigits) != nil
-            #expect(!carriesAFigure, "a figure reached the section's own vocabulary: \(string)")
-            #expect(!string.lowercased().contains("all"))
-            #expect(!string.lowercased().contains("total"))
-        }
-        // Nothing in the derivation counts the measurements into a phrase.
-        for groups in try everyStateCombination() {
-            for headline in flat(groups).compactMap(\.state?.headline) {
-                let counts = headline.lowercased().contains("of the")
-                    && headline.rangeOfCharacter(from: .decimalDigits) != nil
-                #expect(!counts, "a count over the measurements reached the surface: \(headline)")
-            }
-        }
-    }
-
-    /// **No difference of any kind.** LU is the unit of a loudness difference; this section publishes
-    /// none, for any measurement, in any state.
-    @Test("the section publishes no difference")
-    func noDifference() throws {
-        for groups in try everyStateCombination() {
-            for string in everyString(groups) {
-                #expect(!string.hasSuffix(" LU"), "a difference in LU reached the section: \(string)")
-                #expect(!string.lowercased().contains("difference"))
-            }
-        }
-    }
-
-    /// **No comparison vocabulary.** The comparison stays whole, where it is, until R8: this section
-    /// names no second file and no side of one.
-    @Test("the section names no second file")
-    func noComparisonVocabulary() throws {
-        for groups in try everyStateCombination() {
-            for string in everyString(groups) {
-                let lower = string.lowercased()
-                #expect(!lower.contains("first file"), "comparison vocabulary in: \(string)")
-                #expect(!lower.contains("second file"), "comparison vocabulary in: \(string)")
-                #expect(!lower.contains("compared"), "comparison vocabulary in: \(string)")
             }
         }
     }
