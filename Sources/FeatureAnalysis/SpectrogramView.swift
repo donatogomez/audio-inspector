@@ -8,12 +8,15 @@ import SwiftUI
 /// decision — and it never reads a conclusion out of the shape it draws.
 struct SpectrogramSection: View {
     let presentation: SpectrogramPresentation
+    /// How tall the cells are drawn. The report page keeps the strip it has always had; the spectrum
+    /// workspace hands in a flexible one.
+    var sizing: SpectrumPlotSizing = .reportPage
 
     var body: some View {
         let text = SpectrogramCopy.text(for: presentation)
         return VStack(alignment: .leading, spacing: 8) {
             if case let .model(model) = presentation, model.columnCount > 0 {
-                SpectrogramPlot(model: model)
+                SpectrogramPlot(model: model, sizing: sizing)
                 SpectrogramLegend()
             }
             if let headline = text.headline {
@@ -44,8 +47,11 @@ struct SpectrogramSection: View {
 }
 
 /// The drawing and its two axes.
-private struct SpectrogramPlot: View {
+struct SpectrogramPlot: View {
     let model: Spectrogram
+    /// How much vertical space the cells take. Defaults to the strip the report page has always given
+    /// them, so every existing caller is unchanged.
+    var sizing: SpectrumPlotSizing = .reportPage
 
     /// The model's cells, rasterised once. Held in state rather than recomputed in `body`, because
     /// `body` runs on every layout pass and the cells do not change when the window does.
@@ -54,9 +60,8 @@ private struct SpectrogramPlot: View {
     /// Room for the frequency labels on the left and the time labels underneath. Fixed rather than
     /// measured: the axis must not shrink until a mark is unreadable, and a wider window should show
     /// the same marks further apart rather than different ones.
-    private static let frequencyGutter: CGFloat = 56
-    private static let timeGutter: CGFloat = 18
-    private static let plotHeight: CGFloat = 220
+    static let frequencyGutter: CGFloat = 56
+    static let timeGutter: CGFloat = 18
 
     var body: some View {
         HStack(alignment: .top, spacing: 4) {
@@ -66,7 +71,7 @@ private struct SpectrogramPlot: View {
                 timeAxis
             }
         }
-        .frame(height: Self.plotHeight + Self.timeGutter)
+        .frame(minHeight: sizing.minimum + Self.timeGutter, maxHeight: sizing.maximum + Self.timeGutter)
         // **The raster is a function of the model, never of the size.** `SpectrogramRaster.buffer(for:)`
         // takes no dimensions at all, so a resize *cannot* rebuild it — and this only re-runs when the
         // model itself changes, which happens once per inspection.
@@ -102,7 +107,7 @@ private struct SpectrogramPlot: View {
                 Color.clear
             }
         }
-        .frame(height: Self.plotHeight)
+        .frame(minHeight: sizing.minimum, maxHeight: sizing.maximum)
         .frame(maxWidth: .infinity)
         // Not interactive by design: no zoom, no scrubbing, no cursor, no selection, no tooltip.
         // Pointer and scroll activity leave the drawing and its data untouched.
@@ -138,7 +143,8 @@ private struct SpectrogramPlot: View {
                 }
             }
         }
-        .frame(width: Self.frequencyGutter, height: Self.plotHeight)
+        .frame(width: Self.frequencyGutter)
+        .frame(minHeight: sizing.minimum, maxHeight: sizing.maximum)
         .accessibilityHidden(true)
     }
 
@@ -170,7 +176,7 @@ private struct SpectrogramPlot: View {
 /// **A gradient without numbers states nothing**, so the range is printed rather than implied. The
 /// swatches are the same ramp the cells use, sampled evenly, so the legend cannot drift from the
 /// drawing it explains.
-private struct SpectrogramLegend: View {
+struct SpectrogramLegend: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             HStack(spacing: 0) {
@@ -193,4 +199,48 @@ private struct SpectrogramLegend: View {
         }
         .accessibilityHidden(true)
     }
+}
+
+/// How much height a spectral drawing's cells are given.
+///
+/// It exists for `WaveformPlotSizing`'s reason — a height should be a **value with a reason** rather
+/// than a literal inside a view — and it is a separate type because the two drawings are bounded by
+/// different things.
+///
+/// **The maximum is the model, not taste.** A `Spectrogram` carries at most
+/// `SpectrogramGridMapping.defaultMaximumBandCount` bands, and the raster is drawn with
+/// `interpolation(.none)` and `antialiased(false)` on purpose: past one pixel per band a taller image is
+/// upscaled rather than more detailed, and upscaling adds blocks, not information. So the bound is a
+/// property of the data.
+///
+/// The minima are budgeted from the window's own 720 × 480 minimum — the navigation, the dividers, the
+/// action bar and the padding leave about 334 pt for content — against the axes, the legend and the
+/// prose each case actually carries (`design.md` §4).
+struct SpectrumPlotSizing: Equatable {
+    let minimum: CGFloat
+    let maximum: CGFloat
+
+    /// A fixed strip: the two bounds are the same, so the drawing neither grows nor shrinks.
+    static func fixed(_ height: CGFloat) -> SpectrumPlotSizing {
+        SpectrumPlotSizing(minimum: height, maximum: height)
+    }
+
+    /// The height a spectral drawing is bounded by: one pixel per band, and no more.
+    static let bandCount = CGFloat(SpectrogramGridMapping.defaultMaximumBandCount)
+
+    /// What the report page has drawn a single file's cells into. Unchanged by this slice, so the
+    /// transitional page looks exactly as it did.
+    static let reportPage = SpectrumPlotSizing.fixed(220)
+
+    /// What the report page has drawn a paired lane into. Also unchanged.
+    static let reportPageLane = SpectrumPlotSizing.fixed(140)
+
+    /// One file, filling the workspace. The minimum is exactly what the report page already gives it,
+    /// so nothing is lost at the smallest window; the maximum is the band count.
+    static let workspaceSingle = SpectrumPlotSizing(minimum: 220, maximum: bandCount)
+
+    /// One lane of a pair, which has to fit twice over with two sets of prose, two shared-extent
+    /// sentences and the legend. The maximum is half the band count, so two lanes together never exceed
+    /// one full-resolution image's worth of height.
+    static let workspaceLane = SpectrumPlotSizing(minimum: 90, maximum: bandCount / 2)
 }

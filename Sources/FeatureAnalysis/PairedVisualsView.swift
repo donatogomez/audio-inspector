@@ -114,6 +114,9 @@ struct PairedWaveformSection: View {
 /// the distinction from the ramp's floor never rests on colour alone.
 struct PairedSpectrogramSection: View {
     let presentation: PairedSpectrogramPresentation
+    /// How tall each lane's grid is. The report page keeps the strip it has always had; the spectrum
+    /// workspace hands in a flexible one.
+    var sizing: SpectrumPlotSizing = .reportPageLane
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -127,8 +130,27 @@ struct PairedSpectrogramSection: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+            // **One legend, describing both lanes.** `audio-two-file-visual-presentation` requires that
+            // two models be drawn "with the same ramp and the same floor, and one legend describes
+            // both" — and this surface drew the ramp and explained it nowhere. It is the single-file
+            // section's own legend, unchanged: a second set of numbers could drift from the first, and
+            // a gradient without numbers states nothing.
+            if hasDrawnLane {
+                SpectrogramLegend()
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// Whether either lane actually draws cells. A legend explains a colour scale, so it belongs where
+    /// colours are on screen — and a pair whose two lanes are both absent or failed shows none.
+    private var hasDrawnLane: Bool {
+        [presentation.first, presentation.second].contains { lane in
+            switch lane {
+            case let .model(model): model.columnCount > 0
+            case .absent, .failed: false
+            }
+        }
     }
 
     private func lane(
@@ -143,7 +165,7 @@ struct PairedSpectrogramSection: View {
                 plot(lane, geometry: geometry, in: proxy.size)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .frame(height: 140)
+            .frame(minHeight: sizing.minimum, maxHeight: sizing.maximum)
             if let headline = text.headline {
                 Text(headline).font(.callout).foregroundStyle(.secondary)
             }

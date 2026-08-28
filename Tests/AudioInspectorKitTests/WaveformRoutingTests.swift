@@ -53,10 +53,12 @@ struct WaveformRoutingTests {
         let routing = try routing()
         let handOff = "ReportWaveformView(visuals: Self.reportVisuals(for: presentation, in: comparison))"
         #expect(routing.contains { $0.contains(handOff) })
-        // The same call the transitional page uses, so there is exactly one rule.
+        // The same call every visual surface uses, so there is exactly one rule about which drawings
+        // are shown. R6 added the spectrum workspace as the third caller; a fourth would mean a surface
+        // deciding for itself.
         let code = try code()
-        #expect(code.filter { $0.contains("Self.reportVisuals(for:") }.count == 2,
-                "the visuals are derived from more places than the workspace and the page")
+        #expect(code.filter { $0.contains("Self.reportVisuals(for:") }.count == 3,
+                "the visuals are derived from more places than the two workspaces and the page")
     }
 
     /// **Total, with no default**, so a section added later has to be routed rather than silently
@@ -90,13 +92,17 @@ struct WaveformRoutingTests {
         #expect(calls.filter { $0.contains("ReportView(") }.count == 1)
     }
 
-    /// Overview and Spectrum keep the transitional page — Spectrum until R6 builds its own.
-    @Test("overview and spectrum still show the transitional page")
-    func overviewAndSpectrumStillShowTheTransitionalPage() throws {
+    /// Overview keeps the transitional page, until R7 builds its own. **Waveform does not, and neither
+    /// does Spectrum since R6** — the branch that stands in for unfinished sections must not reclaim a
+    /// section that has its own surface.
+    @Test("only overview still shows the transitional page")
+    func onlyOverviewStillShowsTheTransitionalPage() throws {
         let routing = try routing()
         let legacy = try #require(routing.firstIndex { $0.contains("case .overview") })
-        #expect(routing[legacy].contains(".spectrum"))
-        #expect(!routing[legacy].contains(".waveform"), "waveform still falls into the transitional branch")
+        #expect(!routing[legacy].contains(".waveform"), "waveform falls into the transitional branch")
+        #expect(!routing[legacy].contains(".spectrum"), "spectrum falls into the transitional branch")
+        #expect(!routing[legacy].contains(".details"))
+        #expect(!routing[legacy].contains(".measurements"))
     }
 
     /// R3 and R4 are untouched: their sections still route to their own surfaces.

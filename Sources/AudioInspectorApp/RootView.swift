@@ -331,11 +331,11 @@ public struct RootView: View {
             // **One read of the comparison, two answers derived from it.** Reading `flow.comparison`
             // twice in one body could, in principle, straddle a change; binding it once cannot.
             let comparison = flow.comparison
-            // **Three sections are real now.** R1 gave the workspace five sections and the selection
-            // that moves between them; R3 filled Details, R4 filled Measurements and R5 gives Waveform
-            // a workspace. Overview and Spectrum still show the report page that has stood in for them
-            // since R1 — every branch is an **alternative**, never two at once, so the blocks and the
-            // drawings these sections present have exactly one visible owner at any moment.
+            // **Four sections are real now.** R1 gave the workspace five sections and the selection
+            // that moves between them; R3 filled Details, R4 Measurements, R5 Waveform and R6 Spectrum.
+            // Only Overview still shows the report page that has stood in for them since R1, until R7 —
+            // every branch is an **alternative**, never two at once, so the blocks and the drawings
+            // these sections present have exactly one visible owner at any moment.
             //
             // The root chooses because it is the only place that can: `WorkspaceSection` lives here and
             // `FeatureAnalysis` cannot see it. Nothing about R1's lifecycle changes — no stack, no split
@@ -361,7 +361,13 @@ public struct RootView: View {
                 // comparison — so the two cannot disagree about whether this is one file or two, and the
                 // pair still stands in place of the single drawing rather than beside it.
                 ReportWaveformView(visuals: Self.reportVisuals(for: presentation, in: comparison))
-            case .overview, .spectrum:
+            case .spectrum:
+                // **The spectral drawing, given the section's height.** Handed the same `ReportVisuals`
+                // the transitional page is handed — the same call, the same one read of the comparison —
+                // so the two cannot disagree about whether this is one file or two, and a settled
+                // pairing still stands in place of the single drawing rather than beside it.
+                ReportSpectrumView(visuals: Self.reportVisuals(for: presentation, in: comparison))
+            case .overview:
                 legacyReportSurface(presentation, comparison: comparison)
             }
             Divider()
