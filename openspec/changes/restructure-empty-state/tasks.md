@@ -14,19 +14,46 @@ than discovered.
 
 ## 1. The words, before the layout
 
-- [ ] 1.1 A copy type for this surface, in `FeatureImport`, holding **every string it can render** — the
+- [x] 1.1 A copy type for this surface, in `FeatureImport`, holding **every string it can render** — the
       purpose, the action labels, the drag-and-drop line, the read-only statement and the running status
       — in the shape `WorkspaceCopy` and `PairedVisualsCopy` already use, so the surface can be swept as
       values rather than by reading a view.
-- [ ] 1.2 The read-only statement is carried **verbatim**: *"The file is only read, never modified, moved
+      `ImportFlowCopy` — a caseless `enum` of `static let`s, `internal`, the shape every copy owner in
+      the repository already uses. Six sentences and an `everyRenderableString` the sweeps read, with a
+      test proving each declared value is in that list: a value that is not swept is not protected.
+      **`chooseAnotherFile` is written out rather than shared with `WorkspaceCopy`, and that is the
+      boundary's doing, not a preference**: `FeatureImport` depends on `AudioInspectorDomain` alone and
+      cannot see `AudioInspectorApp` (ADR-0005, enforced by `Scripts/check-boundaries.sh`). Sharing six
+      words would mean lifting a presentation string into the domain.
+      **Declared, not yet read.** `ImportFlowView` still renders its own literals; group 3 moves the
+      rendering onto these values. The shape `ImportFlowModel.comparedVisuals` used when its container
+      arrived before its consumer, and the copy type says so in its own words.
+- [x] 1.2 The read-only statement is carried **verbatim**: *"The file is only read, never modified, moved
       or copied."* A test pins the exact sentence, so rewriting it is a decision rather than an edit.
-- [ ] 1.3 The flow's own failure sentence is **presented, never restated**: no copy value duplicates
+      Pinned as the **whole sentence**, deliberately not by substring, plus a source assertion that it
+      lives in presentation and in no layer below: not the domain, not the flow that owns states rather
+      than sentences about them, not the composition root and not the export.
+      **Early evidence, and the victim now exists.** Task 8.3's control was run against it twice.
+      *Weakened* to `"The file is only read."` — the form a `contains("read")` check would have waved
+      through — **1 issue**, naming the missing half. *Deleted* to `""` — **4 issues across 3 tests**:
+      the verbatim pin, the non-empty vocabulary check, and both halves of the ownership assertion.
+      Reverted, verified by SHA-256 and by grep. **8.3 stays open**: its full form needs the surface to
+      render the sentence, which group 3 builds.
+- [x] 1.3 The flow's own failure sentence is **presented, never restated**: no copy value duplicates
       *"That file could not be opened for inspection."*, asserted over this module's sources.
-- [ ] 1.4 The three `DropRejection` sentences and the overlay's *"Drop one audio file"* are **not**
+      One home, asserted over all of `Sources/`: the sentence occurs exactly once, in `ImportFlowModel`,
+      and no value of the copy owner contains it.
+- [x] 1.4 The three `DropRejection` sentences and the overlay's *"Drop one audio file"* are **not**
       redeclared here — they keep their single home, asserted.
-- [ ] 1.5 No string this surface can render states a percentage, a fraction, a count, a step or a time.
+      Each of the four asserted to its own file — three to `DropRejection`, one to `DropFeedbackOverlay`
+      — with the copy owner declaring none of them.
+- [x] 1.5 No string this surface can render states a percentage, a fraction, a count, a step or a time.
       The sweep runs over the copy values **and** over the string literals of this surface's own sources,
       because a figure added straight into the view would never reach the copy type.
+      Both halves run: over the six values, and over the string literals of `ImportFlowCopy.swift` and
+      `ImportFlowView.swift`. Any digit and `%` are refused outright — a progress figure is a number
+      before it is anything else — alongside fifteen words a claimed quantity would arrive in.
+      `ImportFlowView` stays in scope after group 3 moves its literals onto the copy owner.
 
 ## 2. The shell, and the two things that must not move
 

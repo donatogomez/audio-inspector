@@ -17,10 +17,12 @@
 
 ---
 
-**Focus:** **R2 — `restructure-empty-state` — is specified and designed, and not implemented.** The
-branch is `feat/restructure-empty-state`; `Sources/` and `Tests/` are untouched, and the next step is
-writing it. R1 is merged and the umbrella that sequences both is still open. What landed most recently is
-named first; the redesign and its slice order follow.
+**Focus:** **R2 — `restructure-empty-state` — is being implemented, and only its first group is done.**
+The branch is `feat/restructure-empty-state`, the change is at **5/43**, and what exists is the copy
+contract the surface will be rebuilt from: `ImportFlowCopy` in `FeatureImport`, its six sentences, and
+the test that pins the read-only guarantee verbatim. **Nothing on screen has changed** — `ImportFlowView`
+and `RootView` are untouched, so idle, working and failed still render exactly as they did. The next step
+is the shell itself. R1 is merged and the umbrella that sequences both is still open.
 
 **`add-two-file-visual-comparison` is merged, archived and closed.** PR
 [#50](https://github.com/donatogomez/audio-inspector/pull/50) landed on `main` as a two-parent merge
