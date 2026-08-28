@@ -3,15 +3,14 @@ import Testing
 
 @testable import AudioInspectorApp
 
-// R5's other half: **which surface the workspace shows, and that the drawing it moved has one owner.**
+// R6's other half: **which surface the workspace shows, and that the drawing it moved has one owner.**
 //
-// Read off the composition root, where the section lives and where the choice is necessarily made:
-// `WorkspaceSection` is `AudioInspectorApp`'s and `FeatureAnalysis` cannot see it. The shape is
-// `DetailsRoutingTests`' and `MeasurementsRoutingTests`', deliberately — the three slices make the same
-// kind of claim.
+// Read off the composition root, where the section lives and where the choice is necessarily made.
+// The shape is `DetailsRoutingTests`', `MeasurementsRoutingTests`' and `WaveformRoutingTests`' —
+// the four slices make the same kind of claim.
 
-@Suite("App — routing the waveform workspace")
-struct WaveformRoutingTests {
+@Suite("App — routing the spectrum workspace")
+struct SpectrumRoutingTests {
 
     private static var root: URL {
         URL(fileURLWithPath: #filePath)
@@ -38,27 +37,21 @@ struct WaveformRoutingTests {
 
     // MARK: - 4.1 — the section is routed to its own surface
 
-    @Test("selecting waveform shows the waveform workspace")
-    func waveformShowsTheWorkspace() throws {
+    @Test("selecting spectrum shows the spectrum workspace")
+    func spectrumShowsTheWorkspace() throws {
         let routing = try routing()
-        #expect(routing.contains { $0.contains("case .waveform:") })
-        #expect(routing.contains { $0.contains("ReportWaveformView(") })
+        #expect(routing.contains { $0.contains("case .spectrum:") })
+        #expect(routing.contains { $0.contains("ReportSpectrumView(") })
     }
 
-    /// **Which drawing is shown is decided once, for both surfaces.** The workspace is handed the same
-    /// `ReportVisuals` the transitional page is handed, built by the same call from the same one read of
-    /// the comparison — so a pair can never appear on one and a single drawing on the other.
+    /// **Which drawing is shown is decided once, for every visual surface.** The workspace is handed the
+    /// same `ReportVisuals` the waveform workspace and the transitional page are handed, from the same
+    /// call and the same one read of the comparison.
     @Test("the workspace is handed the report's own visuals")
     func theWorkspaceIsHandedTheReportsOwnVisuals() throws {
         let routing = try routing()
-        let handOff = "ReportWaveformView(visuals: Self.reportVisuals(for: presentation, in: comparison))"
+        let handOff = "ReportSpectrumView(visuals: Self.reportVisuals(for: presentation, in: comparison))"
         #expect(routing.contains { $0.contains(handOff) })
-        // The same call every visual surface uses, so there is exactly one rule about which drawings
-        // are shown. R6 added the spectrum workspace as the third caller; a fourth would mean a surface
-        // deciding for itself.
-        let code = try code()
-        #expect(code.filter { $0.contains("Self.reportVisuals(for:") }.count == 3,
-                "the visuals are derived from more places than the two workspaces and the page")
     }
 
     /// **Total, with no default**, so a section added later has to be routed rather than silently
@@ -75,48 +68,43 @@ struct WaveformRoutingTests {
 
     // MARK: - 4.1 — one visible owner
 
-    /// **The workspace and the page it replaces are alternatives, never both.** The drawing the page
-    /// carries cannot appear beside the section named for it.
-    @Test("the workspace and the legacy report page are alternatives")
-    func theWorkspaceAndTheLegacyPageAreAlternatives() throws {
+    /// **The workspace and the page it replaces are alternatives, never both**, and every surface is
+    /// built exactly once in the whole root.
+    @Test("every surface is built exactly once, and they are alternatives")
+    func everySurfaceIsBuiltOnce() throws {
         let routing = try routing()
-        let workspace = try #require(routing.firstIndex { $0.contains("ReportWaveformView(") })
+        let workspace = try #require(routing.firstIndex { $0.contains("ReportSpectrumView(") })
         let legacy = try #require(routing.firstIndex { $0.contains("legacyReportSurface(") })
         #expect(workspace != legacy, "both surfaces are built in the same branch")
 
         let calls = try code().filter { !$0.contains("private func") }
-        #expect(calls.filter { $0.contains("ReportWaveformView(") }.count == 1)
-        #expect(calls.filter { $0.contains("ReportDetailsView(") }.count == 1)
-        #expect(calls.filter { $0.contains("ReportMeasurementsView(") }.count == 1)
-        #expect(calls.filter { $0.contains("legacyReportSurface(") }.count == 1)
-        #expect(calls.filter { $0.contains("ReportView(") }.count == 1)
+        for surface in ["ReportSpectrumView(", "ReportWaveformView(", "ReportDetailsView(",
+                        "ReportMeasurementsView(", "legacyReportSurface(", "ReportView("] {
+            #expect(calls.filter { $0.contains(surface) }.count == 1, "\(surface) is built more than once")
+        }
     }
 
-    /// Overview keeps the transitional page, until R7 builds its own. **Waveform does not, and neither
-    /// does Spectrum since R6** — the branch that stands in for unfinished sections must not reclaim a
-    /// section that has its own surface.
+    /// **Only Overview still stands in.** Four sections have their own surfaces now.
     @Test("only overview still shows the transitional page")
     func onlyOverviewStillShowsTheTransitionalPage() throws {
         let routing = try routing()
         let legacy = try #require(routing.firstIndex { $0.contains("case .overview") })
-        #expect(!routing[legacy].contains(".waveform"), "waveform falls into the transitional branch")
-        #expect(!routing[legacy].contains(".spectrum"), "spectrum falls into the transitional branch")
-        #expect(!routing[legacy].contains(".details"))
-        #expect(!routing[legacy].contains(".measurements"))
+        for section in [".details", ".measurements", ".waveform", ".spectrum"] {
+            #expect(!routing[legacy].contains(section), "\(section) falls into the transitional branch")
+        }
     }
 
-    /// R3 and R4 are untouched: their sections still route to their own surfaces.
-    @Test("details and measurements still show their own surfaces")
-    func detailsAndMeasurementsAreUntouched() throws {
+    /// R3, R4 and R5 are untouched: their sections still route to their own surfaces.
+    @Test("details, measurements and waveform still show their own surfaces")
+    func theEarlierSectionsAreUntouched() throws {
         let routing = try routing()
-        #expect(routing.contains { $0.contains("case .details:") })
         #expect(routing.contains { $0.contains("ReportDetailsView(report: presentation.report)") })
-        #expect(routing.contains { $0.contains("case .measurements:") })
         #expect(routing.contains { $0.contains("ReportMeasurementsView(") })
+        let waveform = "ReportWaveformView(visuals: Self.reportVisuals(for: presentation, in: comparison))"
+        #expect(routing.contains { $0.contains(waveform) })
     }
 
-    /// The transitional page is untouched by this slice: it still carries the comparison, in the same
-    /// call, with the same presentation, and the export in its toolbar.
+    /// The transitional page is untouched by this slice: it still carries the comparison and the export.
     @Test("the legacy report page still carries the comparison, unchanged")
     func theLegacyPageStillCarriesTheComparison() throws {
         let code = try code()
@@ -132,8 +120,8 @@ struct WaveformRoutingTests {
         #expect(WorkspaceSection.allCases == [.overview, .measurements, .waveform, .spectrum, .details])
     }
 
-    /// **No new navigation.** A section that is now spatial is still chosen by the value R1 owns.
-    @Test("routing a third section introduces no navigation machinery")
+    /// **No new navigation.** A fourth spatial section is still chosen by the value R1 owns.
+    @Test("routing a fourth section introduces no navigation machinery")
     func noNavigationMachineryIsIntroduced() throws {
         let code = try code()
         for machinery in ["NavigationStack", "NavigationSplitView", "NavigationLink", "NavigationPath",
