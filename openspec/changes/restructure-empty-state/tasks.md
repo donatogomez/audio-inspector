@@ -132,14 +132,43 @@ than discovered.
 
 ## 4. Working
 
-- [ ] 4.1 An indeterminate indicator plus the status line, and the primary action **present and
+- [x] 4.1 An indeterminate indicator plus the status line, and the primary action **present and
       unavailable** rather than removed.
-- [ ] 4.2 **The running state names no file**, because it also covers the moment before one has been
+      Both inside the region group 2 built — `ProgressView()` and `Text(ImportFlowCopy.inspecting)` in one
+      row — because a spinner alone leaves the reader to infer what is happening from an animation. The
+      indicator is asserted indeterminate, and `ProgressView(value:` is refused across the whole surface.
+      The action stays in the **frame**, so it neither moves nor disappears, and is unavailable through
+      the running state itself rather than a second reading of the flow. A control that vanishes reads as
+      a bug and takes everything below it with it. That a second selection starts nothing is already
+      pinned by `ImportFlowModelTests.aSecondSelectionIsIgnoredWhileOneIsInFlight`, and a drop by
+      `ImportFlowDropTests.aDropIsIgnoredWhileAnInspectionIsInFlight`; neither is restated here.
+- [x] 4.2 **The running state names no file**, because it also covers the moment before one has been
       chosen (`design.md` §1, §11). Asserted from the presentation value, which has no file to name.
-- [ ] 4.3 No cancellation is offered, and the reason is recorded rather than assumed: `ImportFlowModel`
+      Structural on both sides. `PreInspectionPresentation.working` carries no associated value — asserted
+      against the declaration — so there is nothing for the surface to name; and the running branch is
+      asserted to render **no string literal of its own**, so a name, a stage or a figure cannot be
+      slipped in beside the value. Thirteen stage words are swept as well: the flow distinguishes no
+      stage, so naming one would be a claim about something nothing observes.
+      **Seen to fail.** `Text("Inspecting example.wav…")` in the running branch — **4 issues across 3
+      tests**, including the literal the branch may not have. Reverted, checksum verified.
+- [x] 4.3 No cancellation is offered, and the reason is recorded rather than assumed: `ImportFlowModel`
       exposes none, and dismissing the panel is already neutral.
-- [ ] 4.4 **Negative control — a claimed quantity would be caught.** Add a percentage to the running
+      Asserted at the source of the absence rather than at the surface: the flow declares no
+      `cancel`/`stop`/`abort`, and its task stays private, so **there is no capability for a control to
+      call**. The distinction is written into the surface itself — dismissing the open panel ends the
+      *selection*, which the flow already treats as neutral, and is not cancelling an inspection. Six
+      stopping words are swept over everything the surface can render.
+      **Seen to fail.** `Button("Cancel")` in the running branch — **5 issues across 3 tests** in two
+      suites: the action count from both this group and group 3, the branch's literal, the region holding
+      a button, and the stopping-word sweep naming `cancel`. Reverted, checksum verified.
+- [x] 4.4 **Negative control — a claimed quantity would be caught.** Add a percentage to the running
       state temporarily and demonstrate 1.5 fails; revert.
+      The mutation was chosen to attack the guard where it is weakest: `Text("\(ImportFlowCopy.inspecting)
+      50%")` — an interpolation in the view that a value-only sweep cannot see, which is how a figure
+      would realistically arrive. **1.5's value half stayed green and its source half failed**, which is
+      exactly the division of labour it was written with: **4 issues across 4 tests**, one of them 1.5's
+      own, naming the file, the line and the literal. Reverted, checksum verified before the next control
+      was applied.
 
 ## 5. Failed
 
