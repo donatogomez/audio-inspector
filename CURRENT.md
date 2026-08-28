@@ -22,8 +22,23 @@
 commit `8d5d01f` on 2026-08-28; the change is archived at
 `openspec/changes/archive/2026-08-28-restructure-report-details/` at **25/28** — the three open tasks are
 the deferred ones, named so they are not quietly dropped. R1 and R2 are merged before it, and the umbrella
-that sequences the redesign is open at **13/29**. **ADR-0026 stays `Proposed`.** **The next slice is R4
-`restructure-report-measurements`**, and it is not started.
+that sequences the redesign is open at **13/29**. **ADR-0026 stays `Proposed`.**
+
+**R4 — `restructure-report-measurements` — is implemented** on
+`feat/restructure-report-measurements` and awaits a PR. Selecting **Measurements** now shows the four
+figures the inspection derives from the samples — the signal levels, the true peak, the integrated
+loudness and the programme bandwidth — as one reading surface: two named groups, *Level* and
+*Frequency*, one label column, and each method sentence behind a disclosure that never removes it.
+Every value, unit, per-channel breakdown, absence, failure and resolution is the one the four copy
+owners already produce, and nothing is read, measured or recomputed to draw it. **No comparison reaches
+the section**, for any comparison state: the comparison stays whole, where it is, until R8 — the
+precedent R3 set for Details. Overview, Waveform and Spectrum still show the transitional report page.
+
+**Two findings from R4, on the record.** R3 deferred splitting `PropertyDisplay.detail` on the
+expectation that R4's surfaces would share that type; **they do not** — the measurements have their own
+row types — so the debt stays deferred and its owner is whichever slice next reworks Details or the
+comparison. And collapsing a method line is taken as *permitted* rather than assumed: ADR-0026 §11 names
+a method line first among what may be collapsed, so "collapsed" cannot mean "removed".
 
 **Details is the first section with content of its own.** Selecting it shows the technical properties in
 the report's own two groups, the file's identity, the notes when there are any, and the result of the
