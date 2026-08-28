@@ -54,11 +54,4 @@ enum PreInspectionPresentation: Equatable {
 
     /// Whether an inspection is under way — the one question the surface's controls ask of this value.
     var isInspecting: Bool { self == .working }
-
-    /// Whether no inspection could be started. A predicate about the state, not a sentence about it:
-    /// what the surface *says* lives in `ImportFlowCopy` and in the flow's own message.
-    var hasFailed: Bool {
-        if case .failed = self { return true }
-        return false
-    }
 }

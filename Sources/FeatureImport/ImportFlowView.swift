@@ -65,7 +65,7 @@ public struct ImportFlowView: View {
             // The one action on this surface, and the only thing on it that can be invoked. Dragging is
             // an alternative stated in words, never a second control — a person using the keyboard alone
             // must be able to do everything this surface offers.
-            Button(presentation.hasFailed ? "Try again" : ImportFlowCopy.chooseFile) {
+            Button(actionLabel(for: presentation)) {
                 Task { await model.selectAndInspect() }
             }
             .buttonStyle(.borderedProminent)
@@ -99,6 +99,22 @@ public struct ImportFlowView: View {
     ///
     /// **It renders none of the frame's words**, and `IdleSurfaceTests` asserts that: the four sentences
     /// belong to every state, and what belongs to one state belongs here.
+    /// What the one action calls itself, which is the only thing about it that varies.
+    ///
+    /// **Total, with no default**, so a state added to the presentation has to be named here rather than
+    /// inheriting a label that would be wrong for it.
+    ///
+    /// After a failure it is named for what it does. It used to read *Try again*, which named something
+    /// the system cannot do: nothing about the failed selection is retained — no URL, no bookmark
+    /// (ADR-0010, ADR-0013) — so pressing it opens the file chooser exactly as the idle one does. The
+    /// action is identical in all three states; only the word for it changes.
+    private func actionLabel(for presentation: PreInspectionPresentation) -> String {
+        switch presentation {
+        case .idle, .working: ImportFlowCopy.chooseFile
+        case .failed: ImportFlowCopy.chooseAnotherFile
+        }
+    }
+
     @ViewBuilder
     private func statusRegion(_ presentation: PreInspectionPresentation) -> some View {
         switch presentation {
@@ -125,9 +141,22 @@ public struct ImportFlowView: View {
                     .foregroundStyle(.secondary)
             }
         case let .failed(message):
-            Text(message)
-                .font(.callout)
-                .foregroundStyle(.red)
+            // **The flow's own sentence, and a mark that is not a colour.** The message is the associated
+            // value, carried through untouched: no prefix, no summary, no constant of this surface's
+            // standing in for it.
+            //
+            // The symbol is what stops red from being the only thing separating a failure from ordinary
+            // text. It is **hidden from assistive readers on purpose**: the sentence beside it already
+            // says, in words, what happened, and announcing a warning triangle first would repeat the
+            // meaning rather than add to it.
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .accessibilityHidden(true)
+                Text(message)
+                    .multilineTextAlignment(.leading)
+            }
+            .font(.callout)
+            .foregroundStyle(.red)
         }
     }
 }
