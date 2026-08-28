@@ -17,32 +17,30 @@
 
 ---
 
-**Focus:** **R2 — `restructure-empty-state` — is implemented.** The branch is
-`feat/restructure-empty-state` and the change is at **35/43**; the eight open tasks are the three that
-are post-merge by their own words and the five *deferred and named so they are not quietly dropped*.
-Nothing more can be closed before a PR. R1 is merged and the umbrella that sequences both is still open.
+**Focus:** **R2 — `restructure-empty-state` — is merged, archived and closed.** PR
+[#53](https://github.com/donatogomez/audio-inspector/pull/53) landed on `main` as the two-parent merge
+commit `eb81ae8` on 2026-08-28; the change is archived at
+`openspec/changes/archive/2026-08-28-restructure-empty-state/`. **The next slice is R3
+`restructure-report-details`**, and it is not started. R1 is merged and the umbrella that sequences the
+redesign is still open at **12/29**.
 
-**The surface before a report is now one shell with three states.** It says what the application does,
-offers one way to begin, states that a file may be dragged onto the window, and — last, and in **every**
-state — *"The file is only read, never modified, moved or copied."* That sentence used to be the tail of
-a line about dragging, mentioned by no test and no requirement; it is now rendered by production, and
-both losing the value and keeping the value while dropping the render fail. While an inspection runs, an
-indeterminate indicator and *"Inspecting…"* — no file, because the state begins before the panel is
-answered; no stage, no figure, no way to stop it, because the flow exposes none. When one cannot be
-started, the flow's own message beside a symbol so red is not the only marker, and one action reading
-*"Choose another file…"*, because nothing about the failed selection is retained and *Try again* named
-something the app cannot do.
+**The surface before a report is one shell with three states.** It says what the application does, offers
+one way to begin, states that a file may be dragged onto the window, and — last, and in **every** state —
+*"The file is only read, never modified, moved or copied."* That sentence used to be the tail of a line
+about dragging, protected by nothing; it is now rendered by production, and both losing the value and
+keeping it while dropping the render fail. While an inspection runs: an indeterminate indicator and
+*"Inspecting…"*, naming no file, no stage and no figure, because the flow reports none — and offering no
+way to stop it, because it exposes none. When one cannot be started: the flow's own message beside a
+non-colour marker, and one action reading *"Choose another file…"*, because nothing about the failed
+selection is retained and *Try again* named something the app cannot do.
 
-**What it did not cost.** The whole window still takes the drop, in every state, wired above the branch
-that chooses the surface — the alternative is a sentence, never a target. `RootView`, `ImportFlowModel`,
-the picker, the drop's rules, security-scoped access, the stale guards, the export and the one PCM read
-are untouched, each asserted where it lives rather than argued from the diff. **No pre-existing test was
-modified**: every test file this slice touched is one it created. R1's five sections are still five, and
-a sixth fails R1's own suites.
+**What it did not cost.** The whole window still takes the drop, in every state. `RootView`,
+`ImportFlowModel`, the picker, the drop's rules, security-scoped access, the stale guards, the export and
+the one PCM read are untouched — each asserted where it lives rather than argued from the diff — and **no
+pre-existing test was modified.**
 
 **ADR-0026 stays `Proposed`.** Its seventh promotion condition is a vocabulary sweep over the Comparison
-Overview, which R8 builds and which does not exist. **The next slice is R3 `restructure-report-details`**,
-after R2's PR lands.
+Overview, which R8 builds and which does not exist.
 
 **`add-two-file-visual-comparison` is merged, archived and closed.** PR
 [#50](https://github.com/donatogomez/audio-inspector/pull/50) landed on `main` as a two-parent merge
