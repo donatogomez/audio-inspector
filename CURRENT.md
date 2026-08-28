@@ -17,17 +17,18 @@
 
 ---
 
-**Focus:** **R5 — `restructure-waveform-workspace` — is merged, archived and closed.** PR
-[#56](https://github.com/donatogomez/audio-inspector/pull/56) landed on `main` as the two-parent merge
-commit `c78c309` on 2026-08-28; the change is archived at
-`openspec/changes/archive/2026-08-28-restructure-waveform-workspace/` at **20/24** — the four open tasks
-are the deferred ones, named so they are not quietly dropped. R1 through R4 are merged before it, and the
-umbrella that sequences the redesign is open at **15/29**. **ADR-0025 stays `Accepted` and ADR-0026 stays
-`Proposed`.**
+**Focus:** **R6 — `restructure-spectrum-workspace` — is merged, archived and closed.** PR
+[#57](https://github.com/donatogomez/audio-inspector/pull/57) landed on `main` as the two-parent merge
+commit `3f75900` on 2026-08-28; the change is archived at
+`openspec/changes/archive/2026-08-28-restructure-spectrum-workspace/` at **22/27** — the five open tasks
+are the deferred ones, named so they are not quietly dropped. R1 through R5 are merged before it, and the
+umbrella that sequences the redesign is open at **16/29**. **ADR-0025 stays `Accepted`; ADR-0016,
+ADR-0017 and ADR-0026 stay `Proposed`.** **The next slice is R7 `add-inspection-overview`**, and it is
+not started — it is the last section still showing the transitional report page.
 
-**R6 — `restructure-spectrum-workspace` — is implemented** on `feat/restructure-spectrum-workspace` and
-awaits a PR. Selecting **Spectrum** now shows a workspace: the drawing takes the height the section can
-give it, with its frequency axis, its time axis and its legend — and for a pair, two lanes above the
+**Four of the five sections have their own surface.** Selecting **Spectrum** shows a workspace: the
+drawing takes the height the section can give it, with its frequency axis, its time axis and its
+legend — and for a pair, two lanes above the
 shared-extent sentences and **one legend describing both**, which the pairing never had. Only Overview
 still shows the transitional report page.
 
@@ -150,12 +151,19 @@ among the marks of a native macOS app. ADR-0026 §12 declines it — a sidebar n
 there is none — and says so rather than diverging quietly. `docs/vision.md` is not edited; if
 persistence or batch ever creates a collection, that is the decision to reopen.
 
-**The order.** R1 is the umbrella's own work (the shell), and it is merged. R2 through R5 followed.
+**The order.** R1 is the umbrella's own work (the shell), and it is merged. R2 through R6 followed.
 **Next is R7 `add-inspection-overview`, not yet opened** · then R8
 Comparison mode · R9 responsive, accessibility and the human pass — each its own change and its own
 small PR. R0 is merged
 and outside the sequence. Manual validation sits on R9, not on the ADR: ADR-0026's subject is
 structure, and every claim it makes is a value a test can read.
+
+**`add-static-spectrogram-visualization` is still open at 73/89**, its remaining tasks the manual
+validation battery deferred by product decision — which is why **`spectrogram-visualization` is not a
+canonical capability**: its spec lives only inside that change. R6 deliberately wrote no delta against
+it and left it byte-identical, and archiving R6 did not materialise it. **One thing R6 could not check
+by eye**: the single-file spectrogram's raster cells, because they come from an async `.task` that the
+render harness does not run; its layout, axes and legend were seen, and the paired cells were.
 
 **Inherited debt, untouched.** `add-two-file-technical-comparison` is still open and **ADR-0017 is
 still `Proposed`**; **ADR-0016 is still `Proposed`**; the VoiceOver traversal gap they share with
