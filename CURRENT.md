@@ -17,8 +17,8 @@
 
 ---
 
-**Focus:** **R2 — `restructure-empty-state` — is being implemented, and its first four groups are
-done.** The branch is `feat/restructure-empty-state` and the change is at **15/43**. `ImportFlowCopy`
+**Focus:** **R2 — `restructure-empty-state` — is being implemented, and its first five groups are
+done.** The branch is `feat/restructure-empty-state` and the change is at **20/43**. `ImportFlowCopy`
 owns the surface's six sentences; `PreInspectionPresentation` is a failable projection of the flow's
 three pre-report states that refuses a report rather than degrading it; and `ImportFlowView` is one
 frame plus **one** status region rather than two insertion points at two heights.
@@ -29,8 +29,10 @@ no test and no requirement mentioning it; it is now rendered by production and i
 The heading that repeated the window's own title bar is gone. **The running state now says so**: the
 indicator is joined by *"Inspecting…"*, and by nothing else — no file (the state carries none, and begins
 before the panel is answered), no stage, no figure, and no way to stop it, because the flow exposes no
-cancellation for a control to call. **The failed state still keeps its own content** — the flow's message
-with `Try again` beside it — which is group 5.
+cancellation for a control to call. **The failure is now recoverable and honestly named**: the flow's own
+message, unaltered, beside a symbol so red is not the only thing marking it, and one action reading
+*"Choose another file…"* — because nothing about the failed selection is retained, so *Try again* named
+something the app cannot do.
 `RootView`, `ImportFlowModel` and the drop are untouched. R1 is merged and the umbrella that sequences
 both is still open.
 

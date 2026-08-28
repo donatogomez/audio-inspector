@@ -172,18 +172,55 @@ than discovered.
 
 ## 5. Failed
 
-- [ ] 5.1 The flow's message, presented unaltered, with a non-colour marker beside it so the failure does
+- [x] 5.1 The flow's message, presented unaltered, with a non-colour marker beside it so the failure does
       not depend on red.
-- [ ] 5.2 The way forward: the primary action, named for choosing a file rather than for retrying one,
+      The message is still the associated value: `Text(message)`, with no prefix, no interpolation, no
+      `String(format:)` and no constant of this surface's standing in for it — asserted, and the copy
+      owner is asserted not to restate it either.
+      **The marker is a symbol, not a word**, and that is deliberate: `design.md` §6's copy table fixes
+      exactly two things for this state — the flow's sentence and the recovery label — so a failure
+      heading would be visible copy outside the agreed contract. `exclamationmark.triangle.fill` carries
+      the distinction by **shape**, and is **hidden from assistive readers**, because the sentence beside
+      it already says what happened in words and announcing a warning triangle first would repeat the
+      meaning rather than add to it. Red stays as reinforcement rather than as the carrier.
+- [x] 5.2 The way forward: the primary action, named for choosing a file rather than for retrying one,
       and the drop still accepted.
-- [ ] 5.3 No action on this surface is named *try again*, *retry*, *repeat* or *run again* — asserted
+      `ImportFlowCopy.chooseAnotherFile`, rendered once, chosen by a **total switch** over the three
+      states — so the word varies and the action does not: one `Button`, one `model.selectAndInspect()`,
+      the same call idle's makes. Available while the failure is shown, and disabled from exactly one
+      place. The drop is untouched: `RootView` passes `isInspecting: flow.state == .working`, so a failed
+      surface accepts a valid drop exactly as an idle one does.
+      **The guard was widened after the first control exposed a hole in it.** Disabling is not the only
+      way to build a dead end — *hiding* the action would have left every assertion true — so the frame
+      is now required to carry no branch at all: only the region varies, and nothing in the frame can
+      vanish.
+- [x] 5.3 No action on this surface is named *try again*, *retry*, *repeat* or *run again* — asserted
       over the renderable strings, with the reason in the assertion: nothing about the failed selection
       is retained (ADR-0010, ADR-0013).
-- [ ] 5.4 The failure is not presented as a report, and a globally failed **report** still reaches the
+      Nine terms swept over the copy owner's values and the surface's own literals. The reason is
+      asserted at its source as well: the flow declares no `retry`, no `rerun`, no `lastURL`, no
+      `lastSource`, no `bookmarkData` and no `retainedURL`, so there is nothing a repeat could act on.
+- [x] 5.4 The failure is not presented as a report, and a globally failed **report** still reaches the
       workspace rather than this surface — the distinction `ImportFlowModel` already draws, asserted here
       so this slice cannot blur it.
-- [ ] 5.5 **Negative control — a dead end would be caught.** Remove the way forward from the failed state
+      Two boundaries. The projection still refuses a report outright, and the surface is asserted to name
+      no report or workspace type — matched on **word boundaries**, because this surface's own
+      `PreInspectionPresentation` contains one of those names as a substring. The failure is also
+      asserted not to be dressed as an outcome: no status, verdict, conclusion, code, export or detail.
+      **A conflation with the report's own vocabulary is structurally impossible**, not merely untested:
+      `FeatureImport` depends on `AudioInspectorDomain` alone and cannot see `FeatureAnalysis`.
+      **Seen to fail** on the conflation that *is* reachable — `case let .report(p): self = .failed(…)` —
+      **5 issues across 4 tests** in two suites. Reverted, checksum verified.
+- [x] 5.5 **Negative control — a dead end would be caught.** Remove the way forward from the failed state
       temporarily and demonstrate 5.2 fails; revert.
+      Run twice, and the first run is the more useful of the two. **Disabling** the action failed 2 tests
+      — but it also revealed that *hiding* it would not have been caught, so the guard was widened before
+      the control was repeated. **Hiding** it then failed the widened assertion by name, quoting the
+      branch it added. Reverted and checksum-verified between the two.
+      **And the wording control beside it.** Restoring `"Try again"` failed **5 issues across 3 tests**,
+      and — this is the part that matters — the vocabulary guard fired **independently** of the
+      exact-copy contract, on `try again` and on `again`. The misleading word is refused on its own
+      terms, not merely as a side effect of the right one going missing. Reverted, checksum verified.
 
 ## 6. Drag and drop — preserved, and proved preserved
 
