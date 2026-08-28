@@ -94,12 +94,41 @@ than discovered.
 
 ## 3. Idle
 
-- [ ] 3.1 The purpose, the primary action, the drag-and-drop alternative and the read-only line, in that
+- [x] 3.1 The purpose, the primary action, the drag-and-drop alternative and the read-only line, in that
       order, each rendered once.
-- [ ] 3.2 Exactly **one** action on the surface, asserted — no second call to action, no secondary
+      All four now come from `ImportFlowCopy`, and they are the **frame** rather than the idle state's own
+      content — which is what both requirements say: the purpose, the action and the alternative are
+      *"present in every one of them"*, and the guarantee is required *"in every one of its states"* and
+      *"SHALL NOT be conditional on any state"*. Task 2.1 had already fixed that shape. A person who has
+      just been told an inspection failed still needs to know their file was not touched.
+      They replace one sentence that carried three of these claims at once, so none could be given its own
+      weight, and the heading that repeated the window's own title bar. **Nothing dropped, nothing added.**
+      The order is asserted **relatively** — the four symbols' positions in the surface's source, strictly
+      increasing, with no line number written down — plus one test that the guarantee is last, and one
+      that it is rendered outright rather than behind a hover, a disclosure or a condition.
+      **The varying region moved one position**, from after the guarantee to before it, so the guarantee
+      is last as `design.md` §4b and §5 require. That is the group's only change to what the running and
+      failed states look like; their own content is untouched, asserted.
+- [x] 3.2 Exactly **one** action on the surface, asserted — no second call to action, no secondary
       button, no link.
-- [ ] 3.3 Nothing that the system cannot do: no history, no recents, no library, no sample file, no
+      One `Button`, asserted by count, plus the absence of `Link`, `Menu`, `NavigationLink`, `Toggle`,
+      `DisclosureGroup`, `onTapGesture` and `help(`. The drag-and-drop alternative is asserted to be a
+      `Text` and to carry no control: a person using the keyboard alone must be able to do everything this
+      surface offers, which a drop target cannot give them.
+      **Seen to fail.** A second `Button` on the surface — 1 issue, naming the count. Reverted, checksum
+      verified.
+- [x] 3.3 Nothing that the system cannot do: no history, no recents, no library, no sample file, no
       feature list, no settings, asserted over the surface's renderable strings.
+      Twenty terms swept over `ImportFlowCopy`'s values **and** the surface's own remaining literals —
+      scoped to what this surface can render, never the repository, and never its documentation.
+      **Seen to fail.** *"Or open a recent file from the library."* — 2 issues, naming `recent` and
+      `library` separately. Reverted, checksum verified.
+      **And the control this slice exists for, now that the victim is rendered.** The surface stopped
+      delivering the guarantee while `ImportFlowCopy` kept the value: group 1's value tests stayed
+      **green, 12/12** — the string still existed — and this group's surface contract failed with **5
+      issues across 4 tests**. That is the whole distinction: it is not enough for the sentence to exist,
+      the surface has to say it. Reverted, checksum verified. **Task 8.3 stays open**: its literal victim
+      is 1.2 and it belongs to group 8.
 
 ## 4. Working
 
