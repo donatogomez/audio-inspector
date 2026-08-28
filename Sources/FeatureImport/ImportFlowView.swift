@@ -105,8 +105,25 @@ public struct ImportFlowView: View {
         case .idle:
             EmptyView()
         case .working:
-            ProgressView()
-                .controlSize(.small)
+            // **The indicator and the sentence travel together**, because a spinner alone leaves the
+            // reader to infer what is happening from an animation. What the sentence may say is settled
+            // by what the flow knows, and it knows almost nothing: the state carries no file — it begins
+            // before the open panel has been answered — and the read path publishes no fraction, no unit
+            // count and no phase. So it names the operation and stops there. No file, no stage, no
+            // figure, no estimate.
+            //
+            // **And no way to stop it**, because there is none to offer: `ImportFlowModel` exposes no
+            // cancellation and keeps its task private. Dismissing the open panel is a different thing —
+            // it ends the *selection* and the flow treats it as neutral, returning the reader where they
+            // were — and a control that claimed to cancel an inspection would be naming something the
+            // system cannot do.
+            HStack(spacing: 8) {
+                ProgressView()
+                    .controlSize(.small)
+                Text(ImportFlowCopy.inspecting)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
         case let .failed(message):
             Text(message)
                 .font(.callout)
