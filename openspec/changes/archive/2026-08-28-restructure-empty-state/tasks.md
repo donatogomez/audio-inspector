@@ -328,10 +328,28 @@ than discovered.
 
 ## 10. Closure
 
-- [ ] 10.1 Merged on its own small PR, `main` green.
-- [ ] 10.2 `CURRENT.md` refreshed, and `restructure-inspection-workspace` §3.1 marked — **by the umbrella,
+- [x] 10.1 Merged on its own small PR, `main` green.
+      PR [#53](https://github.com/donatogomez/audio-inspector/pull/53), merged 2026-08-28 as the
+      **two-parent merge commit `eb81ae8`** — 22 commits, 18 files, +2698/−30. Integration proved six
+      ways rather than taken from the label: the PR reports `MERGED` with a non-null `mergedAt`; the
+      commit has exactly two parents, `a683c0a` and `61dc11c`; the second parent **is** the feature head;
+      the merge's tree is byte-identical to the feature head's (`d46210e5…`), so the merge resolved
+      nothing and added nothing; `origin/main` is the merge commit; and the feature has **0** commits
+      outside it. `main` green after: 1739 tests in 191 suites, twice, plus boundaries,
+      warnings-as-errors, the Xcode build and `openspec validate --all --strict`.
+- [x] 10.2 `CURRENT.md` refreshed, and `restructure-inspection-workspace` §3.1 marked — **by the umbrella,
       after this change merges**, not here.
-- [ ] 10.3 Archive through `openspec archive` **after merge**.
+      Both done after the merge, in that order. The umbrella's §3.1 records what landed and what it did
+      not cost, and its counter moves **11/29 → 12/29**; R3–R9 are untouched, asserted. `CURRENT.md` says
+      R2 is merged and archived, names the next slice, and claims no visual validation that was not
+      performed.
+- [x] 10.3 Archive through `openspec archive` **after merge**.
+      Archived as `openspec/changes/archive/2026-08-28-restructure-empty-state/`, after the merge, after
+      `main` was fast-forwarded to it, and after the post-merge baseline was green.
+      **The canonical capability was audited rather than assumed.** `audio-file-inspection` went from
+      **7 requirements / 33 scenarios to 12 / 49** — exactly this change's delta, no more — its seven
+      existing requirements all survive, and there is no duplicate heading. The **other eight
+      capabilities are byte-identical**, compared by SHA-256 before and after.
 
 ## 11. Deferred, and named so it is not quietly dropped
 

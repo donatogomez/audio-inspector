@@ -94,9 +94,17 @@ calling it legacy.
 
 Each is a separate change, created when its turn comes. None is started here.
 
-- [ ] 3.1 **R2** `restructure-empty-state` — **the change exists and is specified**
-      (`openspec/changes/restructure-empty-state`, 0/43); not implemented, and marked here only when it
-      merges.
+- [x] 3.1 **R2** `restructure-empty-state` — **merged.** PR
+      [#53](https://github.com/donatogomez/audio-inspector/pull/53) landed on `main` as the two-parent
+      merge commit `eb81ae8` on 2026-08-28. The surface before a report is now one shell with three
+      states: it says what the application does, offers one way to begin, states that a file may be
+      dragged onto the window, and — last, and in **every** state — that the file is only read. The
+      running state is indeterminate and names no file, no stage and no figure, because the flow reports
+      none; a failure keeps the flow's own message beside a non-colour marker and one action named for
+      choosing a file, because nothing about the failed selection is retained.
+      **Nothing the redesign inherited was spent**: the whole window still takes the drop in every state,
+      the picker, the security-scoped access, the stale guards, the export and the one PCM read are
+      untouched, and no pre-existing test was modified. R1's five sections are still five.
 - [ ] 3.2 **R3** `restructure-report-details`.
 - [ ] 3.3 **R4** `restructure-report-measurements`.
 - [ ] 3.4 **R5** `restructure-waveform-workspace` — and the paired-waveform text overlap closes here.
