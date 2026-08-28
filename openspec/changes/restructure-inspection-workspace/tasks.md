@@ -5,9 +5,10 @@ that moves between them — the plan's R1 — because that behaviour is architec
 content, and because OpenSpec requires a change to carry a delta. Everything a section *contains* is
 re-laid-out by R2–R9, each its own change, its own branch and its own small PR.
 
-**R1 is implemented; nothing after it is started.** The tasks below were written before a line of the
-shell existed, so the order was decided rather than discovered. §2 is now closed against real production
-code; §3 onward is untouched, and each slice becomes its own change when its turn comes.
+**R1 is merged; nothing after it is implemented.** The tasks below were written before a line of the
+shell existed, so the order was decided rather than discovered. §2 is closed against real production
+code, and §3 onward is untouched. Each slice becomes its own change when its turn comes — the first of
+them, R2, now exists and is specified.
 
 Boundaries every slice inherits: the domain, the media adapter and the analysis target are not touched;
 `ImportFlowModel` and `ComparisonState` remain the only sources of the data lifecycle; the selected
@@ -93,7 +94,9 @@ calling it legacy.
 
 Each is a separate change, created when its turn comes. None is started here.
 
-- [ ] 3.1 **R2** `restructure-empty-state`.
+- [ ] 3.1 **R2** `restructure-empty-state` — **the change exists and is specified**
+      (`openspec/changes/restructure-empty-state`, 0/43); not implemented, and marked here only when it
+      merges.
 - [ ] 3.2 **R3** `restructure-report-details`.
 - [ ] 3.3 **R4** `restructure-report-measurements`.
 - [ ] 3.4 **R5** `restructure-waveform-workspace` — and the paired-waveform text overlap closes here.

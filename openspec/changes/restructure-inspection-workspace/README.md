@@ -17,4 +17,6 @@ workspace · **R6** Spectrum workspace · **R7** Inspection Overview · **R8** C
 responsive, accessibility and the manual pass. R0 — `extract-exportable-measurements` — is already
 merged and outside this sequence.
 
-**Nothing is implemented yet.**
+**R1 is merged** (PR #52, merge commit `9a5f006`). **R2 is open** as its own change,
+[`restructure-empty-state`](../restructure-empty-state/), and is specified but not implemented. R3–R9
+are not started.
