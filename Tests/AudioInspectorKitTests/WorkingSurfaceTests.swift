@@ -200,17 +200,23 @@ struct WorkingSurfaceTests {
         )
     }
 
-    /// The failure keeps its own content: the flow's message, and the label this group does not rename.
-    @Test("the failed state is untouched by this group")
+    /// The failure keeps its own content: the flow's message, carried as the associated value.
+    ///
+    /// **One clause here was a marker rather than a property** — *"group 5's rename happened early"*,
+    /// true only until the group that renames the action had run. It has, so the clause is gone;
+    /// `FailedSurfaceTests` asserts the durable version, that the surface renders no *try again* wording
+    /// at all.
+    @Test("the failed state keeps its own content")
     func theFailedStateIsUntouched() throws {
         let code = try code()
         let start = try #require(code.firstIndex { $0.contains("case let .failed") })
         let region = Array(code[start...])
         #expect(region.contains { $0.contains("Text(message)") })
         #expect(!region.contains { $0.contains("ImportFlowCopy.inspecting") })
+        // The failure's recovery wording belongs to the frame's one action, not to this region: what
+        // varies here is what happened, not what to do about it.
         #expect(!region.contains { $0.contains("ImportFlowCopy.chooseAnotherFile") },
-                "the failure gained its recovery wording early")
-        #expect(code.contains { $0.contains("\"Try again\"") }, "group 5's rename happened early")
+                "the recovery wording moved into the varying region")
     }
 
     /// Idle stays empty: the sentence belongs to one state, and an empty region contributes nothing.

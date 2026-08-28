@@ -119,21 +119,25 @@ struct PreInspectionPresentationTests {
         #expect(Set(states.map { PreInspectionPresentation($0) == nil }).count == 2)
     }
 
-    /// The two predicates the surface's controls ask, answered by the value and by nothing else — so
-    /// "is the button available" and "which label does it carry" cannot come from two different reads.
-    @Test("the predicates the controls ask are answered by the state alone")
+    /// The predicate the surface's controls ask, answered by the value and by nothing else — so "is the
+    /// action available" cannot come from a second read of the flow.
+    ///
+    /// **`hasFailed` was retired with the ternary it existed for.** The label is now decided by a total
+    /// switch over the three cases, which answers the same question without a boolean and fails to
+    /// compile if a fourth state appears; a derived property nothing derives is dead. The invariant it
+    /// carried — a surface is never working *and* failed — is a property of the enum and is asserted
+    /// below by matching the cases directly.
+    @Test("the predicate the controls ask is answered by the state alone")
     func thePredicatesFollowTheState() {
         #expect(PreInspectionPresentation.idle.isInspecting == false)
         #expect(PreInspectionPresentation.working.isInspecting == true)
         #expect(PreInspectionPresentation.failed(message: "x").isInspecting == false)
 
-        #expect(PreInspectionPresentation.idle.hasFailed == false)
-        #expect(PreInspectionPresentation.working.hasFailed == false)
-        #expect(PreInspectionPresentation.failed(message: "x").hasFailed == true)
         // Never both: a surface cannot be working and failed at once, and the type makes that
         // unrepresentable rather than merely unobserved.
         for state in [PreInspectionPresentation.idle, .working, .failed(message: "x")] {
-            #expect(!(state.isInspecting && state.hasFailed))
+            let failed = if case .failed = state { true } else { false }
+            #expect(!(state.isInspecting && failed))
         }
     }
 
@@ -179,16 +183,35 @@ struct PreInspectionPresentationTests {
         )
     }
 
-    /// **One region, not two insertion points.** The states differ in exactly one place, and the frame
-    /// around it is built by one code path that no state branches around.
+    /// **One region, not two insertion points.** The states differ in exactly one *place on screen*, and
+    /// the frame around it is built by one code path that no state branches around.
+    ///
+    /// **The count of `switch presentation` was a proxy, and it stopped being an exact one.** A later
+    /// group gave the one action a label that varies by state — a word at a fixed position, decided by a
+    /// total switch returning `String`. That is not a second region: nothing moves, appears or
+    /// disappears. So the assertion now says what it always meant — exactly one branch *that builds
+    /// views* — and every other switch on the state is required to return a value rather than a view.
     @Test("the three states differ in exactly one region")
     func thereIsOneStatusRegion() throws {
         let code = try lines(of: "FeatureImport/ImportFlowView.swift")
-        let switches = code.filter { $0.text.contains("switch presentation") }
-        #expect(switches.count == 1, "the surface switches on its state in \(switches.count) places")
 
-        // The frame reads the state only through the projection, and only for the two predicates the
-        // controls ask. Nothing in the surface reaches back into the flow's own state.
+        let builders = code.filter { $0.text.contains("@ViewBuilder") }
+        #expect(builders.count == 1, "the surface has \(builders.count) view-building branches, not one")
+
+        // Every switch on the state either builds that one region, or produces a value for the frame.
+        let switches = code.filter { $0.text.contains("switch presentation") }
+        #expect(!switches.isEmpty)
+        let valueProducing = code.filter {
+            $0.text.contains("(for presentation: PreInspectionPresentation) -> ") &&
+                !$0.text.contains("-> some View")
+        }
+        #expect(
+            switches.count == builders.count + valueProducing.count,
+            "a switch on the state belongs to neither the region nor a value: \(switches.map(\.number))"
+        )
+
+        // The frame reads the state only through the projection. Nothing in the surface reaches back
+        // into the flow's own state.
         let directReads = code.filter { $0.text.contains("model.state") }
         #expect(
             directReads.count == 1,

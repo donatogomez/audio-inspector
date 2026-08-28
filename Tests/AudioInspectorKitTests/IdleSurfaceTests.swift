@@ -40,6 +40,21 @@ struct IdleSurfaceTests {
     /// The four the frame renders, in the order the capability requires them.
     private static let frame = ["purpose", "chooseFile", "dragAlternative", "readOnlyGuarantee"]
 
+    /// **Where each of the four is rendered**, which is not always where its sentence is named. The one
+    /// action's word is chosen by a helper further down the file — a total switch, because the word
+    /// varies by state — so the frame renders a call, not a constant. Order is a property of the render
+    /// sites; tracking the constants would follow a helper's position instead of the reader's.
+    private static let renderSites = [
+        "Text(ImportFlowCopy.purpose)",
+        "Button(actionLabel(for:",
+        "Text(ImportFlowCopy.dragAlternative)",
+        "Text(ImportFlowCopy.readOnlyGuarantee)",
+    ]
+
+    private func positionOfRenderSite(_ site: String, in code: [String]) -> [Int] {
+        code.indices.filter { code[$0].contains(site) }
+    }
+
     // MARK: - 3.1 — each rendered once
 
     @Test("each of the four sentences is rendered exactly once")
@@ -57,13 +72,16 @@ struct IdleSurfaceTests {
     @Test("the four are rendered in reading order: purpose, action, alternative, guarantee")
     func theFourAreInReadingOrder() throws {
         let code = try code()
-        let found = try Self.frame.map { value -> Int in
-            let positions = positions(of: value, in: code)
-            #expect(positions.count == 1)
+        let found = try Self.renderSites.map { site -> Int in
+            let positions = positionOfRenderSite(site, in: code)
+            #expect(positions.count == 1, "\(site) is rendered \(positions.count) times")
             return try #require(positions.first)
         }
-        #expect(found == found.sorted(), "the frame's sentences are out of order: \(Self.frame) at \(found)")
-        #expect(Set(found).count == found.count, "two sentences are rendered on the same line")
+        #expect(
+            found == found.sorted(),
+            "the frame's elements are out of order: \(Self.renderSites) at \(found)"
+        )
+        #expect(Set(found).count == found.count, "two elements are rendered on the same line")
     }
 
     /// The guarantee is **last**, and it is the last thing the frame says in every state — never pushed
@@ -71,10 +89,11 @@ struct IdleSurfaceTests {
     @Test("the guarantee is the last thing the frame says")
     func theGuaranteeIsLast() throws {
         let code = try code()
-        let guarantee = try #require(positions(of: "readOnlyGuarantee", in: code).first)
-        for other in Self.frame where other != "readOnlyGuarantee" {
-            let position = try #require(positions(of: other, in: code).first)
-            #expect(position < guarantee, "\(other) is rendered after the guarantee")
+        let guaranteeSite = "Text(ImportFlowCopy.readOnlyGuarantee)"
+        let guarantee = try #require(positionOfRenderSite(guaranteeSite, in: code).first)
+        for site in Self.renderSites where site != guaranteeSite {
+            let position = try #require(positionOfRenderSite(site, in: code).first)
+            #expect(position < guarantee, "\(site) is rendered after the guarantee")
         }
     }
 
