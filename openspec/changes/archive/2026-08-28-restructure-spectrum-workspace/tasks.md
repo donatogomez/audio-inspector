@@ -72,14 +72,52 @@ Large tasks. This slice is one coherent unit of work and closes in one pass.
 
 ## 7. Gates
 
-- [ ] 7.1 Boundaries, warnings-as-errors, the full suite twice, the Xcode build, OpenSpec strict, and
+- [x] 7.1 Boundaries, warnings-as-errors, the full suite twice, the Xcode build, OpenSpec strict, and
       `git diff --check` — plus a style comparison of the touched files against `main`.
+      Green before the PR and green again on `main` after the merge: boundaries, a zero-warning build,
+      **1848 tests in 200 suites, twice**, the Xcode build, `openspec validate --all --strict` and
+      `git diff --check`. The style comparison found **no regression**: the new production file carries
+      zero swiftformat and zero swiftlint violations, the three pre-existing files touched carry the
+      **same** counts as on `main`, and the new test files introduce no violation class absent from
+      `main/Tests`. Three violations this slice did introduce were corrected rather than accepted.
 
 ## 8. Closure — after merge
 
-- [ ] 8.1 Merged on its own small PR, `main` green.
-- [ ] 8.2 `CURRENT.md` refreshed and `restructure-inspection-workspace` §3.5 marked — after merge.
-- [ ] 8.3 Archive through `openspec archive` **after merge**.
+- [x] 8.1 Merged on its own small PR, `main` green.
+      PR [#57](https://github.com/donatogomez/audio-inspector/pull/57), merged 2026-08-28 as the
+      **two-parent merge commit `3f75900`** — 6 commits, 14 files, +1268/−26, CI green in 8m57s.
+      Integration proved six ways rather than taken from the label: the PR reports `MERGED` with a
+      non-null `mergedAt`; the commit has exactly two parents, `72dd0d9` and `4657858`; the second parent
+      **is** the feature head; the merge's tree is byte-identical to the feature head's (`b4dd86d5…`), so
+      the merge resolved nothing and added nothing of its own; `origin/main` **is** the merge commit; and
+      the feature has **0** commits outside it. `main` green after, with the baseline recorded in 7.1.
+- [x] 8.2 `CURRENT.md` refreshed and `restructure-inspection-workspace` §3.5 marked — after merge.
+      Both done after the merge, in that order. §3.5 records what landed and what it did not cost, and
+      the counter moves **15/29 → 16/29**; §3.6–§3.8 — R7 through R9 — are untouched, asserted.
+      `CURRENT.md` names the PR, the merge commit, the archive path, the final task count with its
+      deferrals, the umbrella count, all four ADR states and the next slice. It also keeps two facts
+      live rather than tidy: `add-static-spectrogram-visualization` is still open at 73/89, and the
+      single-file raster cells were the one thing this slice could not check by eye.
+- [x] 8.3 Archive through `openspec archive` **after merge**.
+      Archived as `openspec/changes/archive/2026-08-28-restructure-spectrum-workspace/`, after the merge,
+      after `main` was fast-forwarded to it, and after the post-merge baseline was green.
+      **The canonical delta was computed from the state and checked against the archived delta spec.**
+      `audio-file-inspection` went from **25 requirements / 89 scenarios to 29 / 101** — exactly +4 / +12
+      — purely additive: 119 lines added, **0 removed**, so every existing requirement survives
+      byte-identical and there is no duplicate heading. **The other eight capabilities are
+      byte-identical**, including `audio-two-file-visual-presentation`: this slice implemented a legend
+      that capability **already required** and wrote no delta for it, because conformance is not a
+      contract change.
+      **The open spectrogram change was left alone, and that was checked rather than assumed.**
+      `add-static-spectrogram-visualization` is **byte-identical across all seven of its files** before
+      and after this archive, still active at **73/89**, and `spectrogram-visualization` was **not**
+      materialised as a canonical capability — it remains a delta inside that change, where it belongs
+      until its own archive. `add-two-file-technical-comparison` is byte-identical too.
+
+      **A correction on the record.** The pre-merge report gave this slice's delta as +4 requirements /
+      **+13** scenarios. The four requirements carry 3 + 4 + 2 + 3 = **12**, and the archive applied 12.
+      The expected total was therefore 29 / **101**, not 29 / 102. Caught in this turn's pre-review,
+      before publishing, and confirmed against the archive.
 
 ## 9. Deferred, and named so it is not quietly dropped
 

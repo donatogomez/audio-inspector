@@ -158,7 +158,28 @@ Each is a separate change, created when its turn comes. None is started here.
       surface was built, so the comparison stays whole until R8. The export, `schemaVersion` 1 and the
       one PCM read are untouched, and `AudioInspectorDomain`, `AudioInspectorAnalysis`,
       `AudioInspectorMedia` and `FeatureImport` have zero files changed. R1–R4 are unchanged, asserted.
-- [ ] 3.5 **R6** `restructure-spectrum-workspace`.
+- [x] 3.5 **R6** `restructure-spectrum-workspace` — **merged.** PR
+      [#57](https://github.com/donatogomez/audio-inspector/pull/57) landed on `main` as the two-parent
+      merge commit `3f75900` on 2026-08-28. **Four of the five sections have their own surface now**;
+      only Overview still shows the report page, until R7. The spectral drawing takes the height the
+      section can offer, with its frequency axis, its time axis and its legend, instead of a fixed
+      220 pt plot or two fixed 140 pt lanes — and **the bound on that height is the data**: a model
+      carries at most 512 bands and is drawn with interpolation off, so past one pixel per band a taller
+      image is upscaled rather than more detailed.
+      **The pairing gained the legend the contract already required.**
+      `audio-two-file-visual-presentation` asks that two models be drawn with one ramp, one floor and
+      *one legend describing both*; the paired surface drew the ramp and explained it nowhere. The
+      single-file section's own legend now sits once beneath both lanes — **implementation catching up
+      to a canonical contract, with no delta written for it**, because restating a requirement that
+      already exists is not a change.
+      **Nothing the redesign inherited was spent**: the accumulator, the model, the grid mapping, the
+      raster, the axes, the geometry, the colour ramp and the paired axes have zero files changed; the
+      absolute dBFS scale, its −120 floor and the shared Nyquist geometry are untouched; above a file's
+      own Nyquist keeps its achromatic treatment **and** its sentence, so it still cannot be mistaken
+      for the floor — confirmed by rendering 44.1 kHz beside 96 kHz. No normalisation, no per-file
+      scale, no overlay, no difference, no alignment and no interaction. The export, `schemaVersion` 1
+      and the one PCM read are untouched, and `AudioInspectorDomain`, `AudioInspectorAnalysis`,
+      `AudioInspectorMedia` and `FeatureImport` have zero files changed. R1–R5 are unchanged, asserted.
 - [ ] 3.6 **R7** `add-inspection-overview` — ADR-0026 §6 exactly, including §7's three conditions on the
       warning count.
 - [ ] 3.7 **R8** `add-comparison-mode-surface` — the reduced Comparison Overview, gated by a vocabulary
