@@ -17,24 +17,32 @@
 
 ---
 
-**Focus:** **R2 — `restructure-empty-state` — is being implemented, and its first five groups are
-done.** The branch is `feat/restructure-empty-state` and the change is at **20/43**. `ImportFlowCopy`
-owns the surface's six sentences; `PreInspectionPresentation` is a failable projection of the flow's
-three pre-report states that refuses a report rather than degrading it; and `ImportFlowView` is one
-frame plus **one** status region rather than two insertion points at two heights.
-**The surface has changed for the first time.** The frame now says, in reading order, what the app does,
-the way to begin, that a file can be dragged instead, and — last, and in every state — *"The file is only
-read, never modified, moved or copied."* That sentence used to be the tail of a line about dragging, with
-no test and no requirement mentioning it; it is now rendered by production and its absence fails.
-The heading that repeated the window's own title bar is gone. **The running state now says so**: the
-indicator is joined by *"Inspecting…"*, and by nothing else — no file (the state carries none, and begins
-before the panel is answered), no stage, no figure, and no way to stop it, because the flow exposes no
-cancellation for a control to call. **The failure is now recoverable and honestly named**: the flow's own
-message, unaltered, beside a symbol so red is not the only thing marking it, and one action reading
-*"Choose another file…"* — because nothing about the failed selection is retained, so *Try again* named
+**Focus:** **R2 — `restructure-empty-state` — is implemented.** The branch is
+`feat/restructure-empty-state` and the change is at **35/43**; the eight open tasks are the three that
+are post-merge by their own words and the five *deferred and named so they are not quietly dropped*.
+Nothing more can be closed before a PR. R1 is merged and the umbrella that sequences both is still open.
+
+**The surface before a report is now one shell with three states.** It says what the application does,
+offers one way to begin, states that a file may be dragged onto the window, and — last, and in **every**
+state — *"The file is only read, never modified, moved or copied."* That sentence used to be the tail of
+a line about dragging, mentioned by no test and no requirement; it is now rendered by production, and
+both losing the value and keeping the value while dropping the render fail. While an inspection runs, an
+indeterminate indicator and *"Inspecting…"* — no file, because the state begins before the panel is
+answered; no stage, no figure, no way to stop it, because the flow exposes none. When one cannot be
+started, the flow's own message beside a symbol so red is not the only marker, and one action reading
+*"Choose another file…"*, because nothing about the failed selection is retained and *Try again* named
 something the app cannot do.
-`RootView`, `ImportFlowModel` and the drop are untouched. R1 is merged and the umbrella that sequences
-both is still open.
+
+**What it did not cost.** The whole window still takes the drop, in every state, wired above the branch
+that chooses the surface — the alternative is a sentence, never a target. `RootView`, `ImportFlowModel`,
+the picker, the drop's rules, security-scoped access, the stale guards, the export and the one PCM read
+are untouched, each asserted where it lives rather than argued from the diff. **No pre-existing test was
+modified**: every test file this slice touched is one it created. R1's five sections are still five, and
+a sixth fails R1's own suites.
+
+**ADR-0026 stays `Proposed`.** Its seventh promotion condition is a vocabulary sweep over the Comparison
+Overview, which R8 builds and which does not exist. **The next slice is R3 `restructure-report-details`**,
+after R2's PR lands.
 
 **`add-two-file-visual-comparison` is merged, archived and closed.** PR
 [#50](https://github.com/donatogomez/audio-inspector/pull/50) landed on `main` as a two-parent merge
@@ -70,24 +78,6 @@ state, a dismissed picker, or a globally failed report. Three negative controls 
 a section that moves on its own (**39 issues across 8 tests**, once the lifetime tests were widened to
 assert from *every* section), persistence (4), and a `"3 differences"` count on the shell's comparison
 surface (4) — and all three were reverted and verified by checksum.
-
-**R2 is open, and it is documentation only so far.** The change is
-`openspec/changes/restructure-empty-state` at **0/43**, adding five requirements and sixteen scenarios to
-`audio-file-inspection` about the surface *before* a report — the starting screen, the running state and
-the recoverable failure, as three states of **one** shell rather than three screens. **No ADR**:
-ADR-0026 §1 and §12 already decide that there is one subject, no collection and no sidebar, and layout is
-not an ADR's business.
-
-Four findings came out of reading production, and each is a fact about the code rather than a preference.
-One sentence carries three claims at once, so the **read-only promise** — *"The file is only read, never
-modified, moved or copied."* — is the tail of a sentence about dragging, and **no test or requirement
-protects it**. **`Try again` names something the app cannot do**: nothing about a failed selection is
-retained (ADR-0010, ADR-0013), so the button opens the panel exactly as the idle one does. The running
-state shows a bare spinner and says nothing. And **`.working` begins before a file has been chosen**,
-because `selectAndInspect()` sets it and *then* awaits the panel — which is why the running state may
-name no file and no phase, a limitation recorded rather than papered over. There is **no quantitative
-progress anywhere in `Sources/`**, so no percentage is invented, and **no cancellation exists**, so no
-`Cancel` is offered.
 
 **What R1 deliberately does not do.** No section has its own content yet. Selecting one changes the
 control's state and nothing else: all five still show the existing report page underneath, exactly as it

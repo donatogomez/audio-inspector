@@ -224,47 +224,107 @@ than discovered.
 
 ## 6. Drag and drop — preserved, and proved preserved
 
-- [ ] 6.1 The drop destination is still the **whole window**, in every state, and the overlay is
+- [x] 6.1 The drop destination is still the **whole window**, in every state, and the overlay is
       unchanged. Asserted at the composition root rather than argued from the diff.
-- [ ] 6.2 The existing drop suites — `DroppedSourceTests`, `ImportFlowDropTests`,
+      Asserted in `RootView` where it is wired: one destination, attached to the root **after** the branch
+      that chooses between the pre-report surface and the workspace closes — so it applies to every state
+      rather than to whichever is on screen — with the overlay on the same root. And from the other side:
+      the surface installs no destination of its own and swallows nothing the window is listening for
+      (`.dropDestination`, `.onDrop`, `.contentShape`, `.allowsHitTesting`, `.onTapGesture`, `.gesture`
+      are all absent from it). The three refusals keep their exact words and their single home, and the
+      alternative is asserted to be a `Text` that names *this window* — no box, no zone, no second target.
+      `RootView` is **untouched by this slice**: 0 lines of diff against `main`.
+- [x] 6.2 The existing drop suites — `DroppedSourceTests`, `ImportFlowDropTests`,
       `DroppedSourceInspectionTests` — pass unmodified. **None is edited by this slice**; if one becomes
       impossible to write in the same words, that is a finding about the slice.
-- [ ] 6.3 **Negative control — losing the alternative would be caught.** Remove the drag-and-drop line
+      All three pass, and `git diff main..HEAD` over the three files is **empty**. The stronger claim
+      holds too: **no pre-existing test anywhere is edited by this slice** — every test file it touches is
+      one it created.
+- [x] 6.3 **Negative control — losing the alternative would be caught.** Remove the drag-and-drop line
       from the surface temporarily and demonstrate 3.1 fails; revert.
+      **Seen to fail with 6 issues across 5 tests** in two suites: 3.1's own render-order and
+      rendered-once assertions, the one that requires it to be a sentence rather than a control, and this
+      group's own. Reverted, checksum verified.
 
 ## 7. Accessibility and the keyboard
 
-- [ ] 7.1 Focus follows reading order, and the primary action is reachable and invocable from the
+- [x] 7.1 Focus follows reading order, and the primary action is reachable and invocable from the
       keyboard alone.
-- [ ] 7.2 The running state and the failure are **announced**, not conveyed by an animation or a colour.
-- [ ] 7.3 Every element that carries meaning carries it in words; nothing on this surface means anything
+      The one action is the window's **default**, so Return begins an inspection (`design.md` §7). Focus
+      order is reading order because nothing rearranges it: no `FocusState`, no `.focused`, no
+      `.prefersDefaultFocus`, no `.focusable` and no decorative control to sit in the way — asserted.
+- [x] 7.2 The running state and the failure are **announced**, not conveyed by an animation or a colour.
+      Each is a coherent element whose words carry the meaning: the running indicator and its sentence are
+      combined into **one** element, so it is heard as one thing rather than an indicator to be joined to
+      a sentence; the failure's symbol is hidden and the flow's sentence is the element.
+      **Announcement here means *reachable and readable*, not a live interruption**, and that reading is
+      the documents': the capability requires the state to be *"stated in words"*, and `design.md` §7
+      defers the traversal audit to R9. It is also the only safe reading — the running state begins while
+      the system's open panel is key, so an unprompted announcement would interrupt a person mid-selection
+      to tell them what they had just asked for. Nothing takes focus, asserted.
+- [x] 7.3 Every element that carries meaning carries it in words; nothing on this surface means anything
       by colour alone.
-- [ ] 7.4 The full traversal audit is **R9's** and is not attempted here — recorded so its absence is a
+      Colour appears in **exactly one** place on the whole surface — asserted by count — and that place is
+      the failure, which also carries a symbol and the flow's sentence. Nothing is behind a pointer
+      either: no `.help`, no `DisclosureGroup`, no `.popover`, no `.onHover`.
+- [x] 7.4 The full traversal audit is **R9's** and is not attempted here — recorded so its absence is a
       decision.
+      What is *not* done: VoiceOver rotor behaviour across the app, the reading order of the report
+      surface, Dynamic Type at accessibility sizes, and the human pass. This slice covers its own surface
+      and states the boundary rather than implying the rest was checked.
 
 ## 8. What must still be true afterwards
 
-- [ ] 8.1 **The surface is not a section.** `WorkspaceSection` still has exactly its five cases, the
+- [x] 8.1 **The surface is not a section.** `WorkspaceSection` still has exactly its five cases, the
       section navigation is still built only inside the report surface, and no case exists for an empty,
       idle, working or failed state. R1's own suites pass unmodified.
-- [ ] 8.2 **Negative control — a sixth section would be caught.** Add an empty-state case to
+      Five cases in order, no section named for a pre-report state, the pre-report surface naming no
+      navigation type, and the navigation built further down `RootView` than the surface it is not part
+      of. R1's three suites pass, unedited.
+- [x] 8.2 **Negative control — a sixth section would be caught.** Add an empty-state case to
       `WorkspaceSection` temporarily and demonstrate 8.1 and R1's contract suite fail; revert.
-- [ ] 8.3 **Negative control — losing the trust statement would be caught.** Delete the read-only
+      **Seen to fail with 8 issues across 5 tests in 4 suites** — 8.1's own, **R1's**
+      `WorkspaceSectionContractTests`, `WorkspaceNavigationLifecycleTests` and `WorkspaceOwnershipTests`.
+      R1's guards bite on R2's mistake, which is the point of asserting the boundary from both sides.
+      Reverted, checksum verified.
+- [x] 8.3 **Negative control — losing the trust statement would be caught.** Delete the read-only
       sentence temporarily and demonstrate 1.2 fails; revert. It is the control this slice exists to make
       possible: nothing protects that sentence today.
-- [ ] 8.4 The file-access guarantees are untouched, asserted rather than asserted-by-diff: the panel's
+      Run against the finished surface, in **both** of its forms. Deleting the value failed **5 issues
+      across 4 tests**, 1.2's own among them. Then the half that only exists now the surface renders it:
+      keeping the value and dropping the render failed **7 issues across 5 tests in 4 suites** — the
+      sentence still existed and the product had stopped making the promise. Reverted between the two and
+      verified by checksum.
+- [x] 8.4 The file-access guarantees are untouched, asserted rather than asserted-by-diff: the panel's
       configuration, the drop's acceptance rules, the entitlements, the absence of a bookmark and the
       absence of any retained URL.
-- [ ] 8.5 The export and `schemaVersion` 1 are unreachable from this surface and unchanged.
-- [ ] 8.6 One PCM read per inspection, unchanged — this slice causes no read and no recomputation.
+      Read at the three places they live: the panel's `allowedContentTypes = [.audio]`,
+      `allowsMultipleSelection = false` and `canChooseDirectories = false`; the drop's whole-payload
+      refusal, its `conforms(to: .audio)` and its directory check; and the coordinator's paired
+      start/stop of security-scoped access. Nothing retains a location — `bookmarkData`, `lastURL`,
+      `retainedURL`, `storedURL` and `UserDefaults` are absent from the flow, the surface and the
+      coordinator alike. `OfflineConfigurationTests` covers the entitlements and is unedited.
+- [x] 8.5 The export and `schemaVersion` 1 are unreachable from this surface and unchanged.
+      The surface names no export type, no exporter, no coordinator and no `schemaVersion` — and could
+      not: it has no report to export, and `FeatureImport` cannot see the export at all. The JSON suites
+      pass, unedited.
+- [x] 8.6 One PCM read per inspection, unchanged — this slice causes no read and no recomputation.
+      The surface names no decoding, no analysis and no sample type: it renders what the flow already
+      holds, so it can cause neither a read nor a recomputation. `SharedPCMDecodeCountTests` — the suite
+      that counts reads at the port — passes, unedited.
 
 ## 9. Gates
 
-- [ ] 9.1 Four gates green — `./Scripts/check-boundaries.sh`, `swift build -Xswiftc -warnings-as-errors`,
+- [x] 9.1 Four gates green — `./Scripts/check-boundaries.sh`, `swift build -Xswiftc -warnings-as-errors`,
       `swift test` twice, `openspec validate --all --strict` — plus the Xcode macOS build and
-      `git diff --check`.
-- [ ] 9.2 A focused run over this slice's own suites, and the full suite with **no existing test
+      `git diff --check`. All green; the figures are in the final report.
+- [x] 9.2 A focused run over this slice's own suites, and the full suite with **no existing test
       modified**.
+      Six suites of this slice's own, and the full suite green twice. **No pre-existing test is modified**
+      — `git diff --name-only main..HEAD -- Tests` lists only files this slice created. Three assertions
+      *inside those files* were adjusted as later groups landed, each recorded where it happened: two were
+      *"not yet"* markers for the group that followed, and one counted switches as a proxy for *one
+      region*. Every semantic assertion they carried survives, in the suite that now owns it.
 
 ## 10. Closure
 
