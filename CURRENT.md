@@ -17,13 +17,13 @@
 
 ---
 
-**Focus:** **R2 — `restructure-empty-state` — is merged, archived and closed.** PR
-[#53](https://github.com/donatogomez/audio-inspector/pull/53) landed on `main` as the two-parent merge
-commit `eb81ae8` on 2026-08-28; the change is archived at
-`openspec/changes/archive/2026-08-28-restructure-empty-state/`. **R3 `restructure-report-details` is
-implemented** on `feat/restructure-report-details` at **22/28** and awaits a PR; the six open tasks are
-three post-merge and three deferred. R1 is merged and the umbrella that sequences the redesign is still
-open at **12/29**.
+**Focus:** **R3 — `restructure-report-details` — is merged, archived and closed.** PR
+[#54](https://github.com/donatogomez/audio-inspector/pull/54) landed on `main` as the two-parent merge
+commit `8d5d01f` on 2026-08-28; the change is archived at
+`openspec/changes/archive/2026-08-28-restructure-report-details/` at **25/28** — the three open tasks are
+the deferred ones, named so they are not quietly dropped. R1 and R2 are merged before it, and the umbrella
+that sequences the redesign is open at **13/29**. **ADR-0026 stays `Proposed`.** **The next slice is R4
+`restructure-report-measurements`**, and it is not started.
 
 **Details is the first section with content of its own.** Selecting it shows the technical properties in
 the report's own two groups, the file's identity, the notes when there are any, and the result of the
@@ -108,8 +108,8 @@ among the marks of a native macOS app. ADR-0026 §12 declines it — a sidebar n
 there is none — and says so rather than diverging quietly. `docs/vision.md` is not edited; if
 persistence or batch ever creates a collection, that is the decision to reopen.
 
-**The order.** R1 is the umbrella's own work (the shell), and it is merged. **Next is R2
-`restructure-empty-state`, not yet opened** · then R3 Details · R4 Measurements · R5 Waveform workspace ·
+**The order.** R1 is the umbrella's own work (the shell), and it is merged. R2 and R3 followed.
+**Next is R4 `restructure-report-measurements`, not yet opened** · then R5 Waveform workspace ·
 R6 Spectrum workspace · R7 Inspection Overview · R8 Comparison mode · R9 responsive, accessibility and
 the human pass — each its own change and its own small PR. R0 is
 merged and outside the sequence. Manual validation sits on R9, not on the ADR: ADR-0026's subject is
@@ -132,4 +132,4 @@ the export path already applies"*, and it does not — the two differ on `loadin
 clause. Worth correcting the next time something legitimate opens that file.
 
 ---
-_Last touched: 2026-08-27. Overwrite freely; empty is fine._
+_Last touched: 2026-08-28. Overwrite freely; empty is fine._
