@@ -39,21 +39,50 @@ public struct ImportFlowView: View {
     }
 
     /// The frame every pre-report state shares, and the one region in which they differ.
+    ///
+    /// **Four elements, in reading order**: what the application does, the way to begin, the second way
+    /// to begin, and what it promises about the file. They are the *frame* rather than the idle state's
+    /// own content, because the capability says so in both of its requirements — the purpose, the action
+    /// and the drag-and-drop alternative are *"present in every one of them"*, and the read-only
+    /// statement is required *"in every one of its states"* and *"SHALL NOT be conditional on any
+    /// state"*. A person who has just been told an inspection failed still needs to know that their file
+    /// was not touched.
+    ///
+    /// The sentence they replace carried three of these claims at once — purpose, dragging and the
+    /// guarantee, in one line of secondary text — so none of them could be given its own weight. Nothing
+    /// is dropped and nothing is added; the three claims are separated, and the heading that repeated the
+    /// window's own title bar is gone.
+    ///
+    /// **The region sits fourth, between the alternative and the guarantee**, so the guarantee is last
+    /// and the varying content never pushes it off the reader's line of sight (`design.md` §4b option B,
+    /// and §5's *"quiet, last, and always present"*).
     private func shell(_ presentation: PreInspectionPresentation) -> some View {
         VStack(spacing: 12) {
-            Text("Audio Inspector")
-                .font(.title2)
-            Text("Choose a local audio file — or drag one onto this window — to inspect its technical properties. The file is only read, never modified, moved or copied.")
+            Text(ImportFlowCopy.purpose)
+                .font(.title3)
+                .multilineTextAlignment(.center)
+
+            // The one action on this surface, and the only thing on it that can be invoked. Dragging is
+            // an alternative stated in words, never a second control — a person using the keyboard alone
+            // must be able to do everything this surface offers.
+            Button(presentation.hasFailed ? "Try again" : ImportFlowCopy.chooseFile) {
+                Task { await model.selectAndInspect() }
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.large)
+            .disabled(presentation.isInspecting)
+
+            Text(ImportFlowCopy.dragAlternative)
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
 
-            Button(presentation.hasFailed ? "Try again" : "Choose audio file…") {
-                Task { await model.selectAndInspect() }
-            }
-            .disabled(presentation.isInspecting)
-
             statusRegion(presentation)
+
+            Text(ImportFlowCopy.readOnlyGuarantee)
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
         }
         .padding(40)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -66,7 +95,10 @@ public struct ImportFlowView: View {
     /// surface and says nothing at all.
     ///
     /// Idle occupies it with nothing. The region is not reserved: an empty `VStack` member contributes
-    /// no height and no spacing, so the idle frame is exactly the frame it was.
+    /// no height and no spacing, so idle reads as the frame alone.
+    ///
+    /// **It renders none of the frame's words**, and `IdleSurfaceTests` asserts that: the four sentences
+    /// belong to every state, and what belongs to one state belongs here.
     @ViewBuilder
     private func statusRegion(_ presentation: PreInspectionPresentation) -> some View {
         switch presentation {
