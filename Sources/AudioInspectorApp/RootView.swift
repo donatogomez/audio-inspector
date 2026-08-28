@@ -331,16 +331,21 @@ public struct RootView: View {
             // **One read of the comparison, two answers derived from it.** Reading `flow.comparison`
             // twice in one body could, in principle, straddle a change; binding it once cannot.
             let comparison = flow.comparison
-            ReportView(
-                report: presentation.report,
-                visuals: Self.reportVisuals(for: presentation, in: comparison),
-                signalLevelMetrics: Self.signalLevelMetricsPresentation(for: presentation.signalLevelMetrics),
-                truePeak: Self.truePeakPresentation(for: presentation.truePeak),
-                loudness: Self.loudnessPresentation(for: presentation.loudness),
-                programmeBandwidth: Self.programmeBandwidthPresentation(for: presentation.significantBandwidth),
-                comparison: Self.comparisonPresentation(for: comparison),
-                export: export
-            )
+            // **Details is a section now.** R1 gave the workspace five sections and the selection that
+            // moves between them; this is the first one whose content exists, so it is the first the
+            // root routes to a surface of its own. The other four still show the report page that has
+            // stood in for them since R1 — they are **alternatives**, never both at once, so the blocks
+            // Details presents have exactly one visible owner at any moment.
+            //
+            // The root chooses because it is the only place that can: `WorkspaceSection` lives here and
+            // `FeatureAnalysis` cannot see it. Nothing about R1's lifecycle changes — no stack, no split
+            // view, no second selection.
+            switch navigation.section {
+            case .details:
+                ReportDetailsView(report: presentation.report)
+            case .overview, .measurements, .waveform, .spectrum:
+                legacyReportSurface(presentation, comparison: comparison)
+            }
             Divider()
             HStack(spacing: 12) {
                 Spacer()
@@ -351,5 +356,23 @@ public struct RootView: View {
             }
             .padding(12)
         }
+    }
+
+    /// The report page as it has been since R1, shown by every section whose own content has not been
+    /// built yet. It is untouched by this slice: the same blocks, in the same order, with the same words
+    /// — including the comparison, which stays exactly where and what it is until R8.
+    private func legacyReportSurface(
+        _ presentation: InspectionPresentation, comparison: ImportFlowModel.ComparisonState
+    ) -> some View {
+        ReportView(
+            report: presentation.report,
+                visuals: Self.reportVisuals(for: presentation, in: comparison),
+                signalLevelMetrics: Self.signalLevelMetricsPresentation(for: presentation.signalLevelMetrics),
+                truePeak: Self.truePeakPresentation(for: presentation.truePeak),
+                loudness: Self.loudnessPresentation(for: presentation.loudness),
+                programmeBandwidth: Self.programmeBandwidthPresentation(for: presentation.significantBandwidth),
+            comparison: Self.comparisonPresentation(for: comparison),
+            export: export
+        )
     }
 }
