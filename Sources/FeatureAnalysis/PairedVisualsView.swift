@@ -9,6 +9,9 @@ import SwiftUI
 /// says so.
 struct PairedWaveformSection: View {
     let presentation: PairedWaveformPresentation
+    /// How tall each lane's drawing is. The report page keeps the strip it has always had; the waveform
+    /// workspace hands in a flexible one.
+    var sizing: WaveformPlotSizing = .reportPage
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -24,14 +27,29 @@ struct PairedWaveformSection: View {
     }
 
     /// One file's lane: which file it is, its drawing across the share of the axis its own audio spans,
-    /// and — where its audio ends first — what the rest of the lane means.
+    /// what became of that drawing, and — where its audio ends first — what the rest of the lane means.
+    ///
+    /// ## Only the drawing goes in the measured area
+    ///
+    /// This lane used to put the **whole** single-file section — the drawing *and* its two lines of
+    /// prose — inside a `GeometryReader` frozen at the height of the drawing alone. A `GeometryReader`
+    /// does not clip, so the prose was drawn outside the box, over the next lane's attribution and over
+    /// the out-of-range sentence. That was the reported overlap, and raising the height would only have
+    /// moved it to the next text size.
+    ///
+    /// So the measured area now holds a **drawing**, and the words are ordinary siblings laid out by the
+    /// layout — the shape `PairedSpectrogramSection` below has always had. There is no nested fixed
+    /// height left for anything to overflow.
+    ///
+    /// The words are `PairedVisualsCopy`'s, which already produced them for this lane: they used to be
+    /// computed here and rendered by the section nested inside, so one sentence had two owners and the
+    /// one that drew it had no room.
     ///
     /// The remainder carries nothing. Not a baseline, not a silent bucket: past a file's last frame
     /// nothing was measured, and the sentence beside it says exactly that rather than *silence*.
     ///
-    /// **One accessibility element for the whole lane**, labelled with the file and the artefact. The
-    /// drawing's own element is folded into it, so a reader hears one sentence per drawing rather than
-    /// one per bucket.
+    /// **One accessibility element for the whole lane**, labelled with the file and the artefact, so a
+    /// reader hears one sentence per drawing rather than one per bucket.
     private func lane(
         _ side: PairedWaveformAxis.Side, _ lane: PairedWaveformLane, geometry: PairedWaveformAxis.Lane?
     ) -> some View {
@@ -40,18 +58,51 @@ struct PairedWaveformSection: View {
         )
         return VStack(alignment: .leading, spacing: 4) {
             Text(text.attribution).font(.caption).foregroundStyle(.secondary)
-            GeometryReader { proxy in
-                WaveformSection(presentation: lane.asSingle)
-                    .frame(width: proxy.size.width * CGFloat(geometry?.fraction ?? 0), alignment: .leading)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+            plot(lane, fraction: geometry?.fraction ?? 0)
+            if let headline = text.headline {
+                Text(headline)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            .frame(height: 96)
+            if let detail = text.detail {
+                Text(detail)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             if let outOfRange = text.outOfRange {
-                Text(outOfRange).font(.caption).foregroundStyle(.secondary)
+                Text(outOfRange)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(text.accessibilityLabel)
+    }
+
+    /// This lane's drawing, across the share of the axis its own audio spans — and **nothing else**.
+    ///
+    /// The share is `PairedWaveformAxis`', untouched: the same bucket arithmetic that draws one file
+    /// alone, handed a fraction of the width, so a shorter file stops where its audio stops. Where there
+    /// is no envelope the area is simply not occupied; the lane's own sentence says why, rather than a
+    /// flat line implying a measured zero.
+    @ViewBuilder
+    private func plot(_ lane: PairedWaveformLane, fraction: Double) -> some View {
+        switch lane {
+        case let .envelope(envelope) where !envelope.buckets.isEmpty:
+            GeometryReader { proxy in
+                WaveformDrawing(envelope: envelope, sizing: sizing)
+                    .frame(width: proxy.size.width * CGFloat(fraction), alignment: .leading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .frame(minHeight: sizing.minimum, maxHeight: sizing.maximum)
+        case .envelope, .absent, .failed:
+            // Nothing is drawn: the words for it are the lane's, not a rectangle's — the rule the
+            // spectral lane below already follows.
+            EmptyView()
+        }
     }
 }
 
