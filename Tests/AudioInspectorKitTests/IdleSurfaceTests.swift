@@ -169,18 +169,23 @@ struct IdleSurfaceTests {
         }
     }
 
-    /// The two states this group does not touch still say what they said. Their content is the next two
-    /// groups' subject, and this asserts the boundary rather than assuming it.
-    @Test("the running and failed states keep their own content untouched")
+    /// The states this group does not touch still say what they said, asserted rather than assumed.
+    ///
+    /// **One clause of this test was a marker rather than a property.** It read *"the running state
+    /// gained its sentence early"* — true while the running state had no sentence, and deliberately
+    /// false once the group that gives it one has run. That group has, so the clause is gone and the
+    /// durable version of it lives where it belongs: `WorkingSurfaceTests` asserts the running sentence
+    /// is rendered exactly once and only inside the running branch, which is the property the marker was
+    /// standing in for. Everything else here is unchanged.
+    @Test("the states this group does not own keep their own content")
     func theOtherStatesAreUnchanged() throws {
         let code = try code()
         let start = try #require(code.firstIndex { $0.contains("private func statusRegion") })
         let region = Array(code[start...])
 
-        // Running: an indeterminate indicator and nothing else — no status sentence yet.
+        // Running: still an indeterminate indicator, and still nothing that claims a figure.
         #expect(region.contains { $0.contains("ProgressView()") })
-        #expect(!region.contains { $0.contains("ImportFlowCopy.inspecting") },
-                "the running state gained its sentence early")
+        #expect(!region.contains { $0.contains("ProgressView(value") })
 
         // Failed: the flow's own message, still carried as the associated value.
         #expect(region.contains { $0.contains("Text(message)") })
