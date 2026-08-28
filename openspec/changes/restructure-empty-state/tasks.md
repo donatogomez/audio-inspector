@@ -57,14 +57,40 @@ than discovered.
 
 ## 2. The shell, and the two things that must not move
 
-- [ ] 2.1 One surface with a stable frame and one state region (`design.md` §4b, option B): the purpose,
+- [x] 2.1 One surface with a stable frame and one state region (`design.md` §4b, option B): the purpose,
       the primary action and the read-only line are rendered by **one** code path shared by every
       pre-report state, not by three.
-- [ ] 2.2 A presentation value maps the flow's three pre-report states onto what the region shows —
+      `ImportFlowView` is now a frame plus `statusRegion`, and the three states differ in that one place:
+      one `switch presentation`, asserted, and one read of the flow, asserted. The surface used to insert
+      the failure *above* the action and the progress indicator *below* it — two states moving different
+      things at two heights, which is the defect option B exists to remove.
+      **One visible difference, and it is the one the design specifies**: the failure message now sits
+      below the action instead of above it, because the region is one region and §4b places it beneath.
+      Idle and working render exactly as before — `EmptyView` contributes no height and no spacing, so
+      the idle frame is the frame it was, and the indicator stays where it was.
+      **The frame still says what it said.** Group 1's copy is not read here: the four rendered strings
+      are byte-identical to the previous commit's, verified against `git show`. Groups 3–5 are where the
+      words change.
+- [x] 2.2 A presentation value maps the flow's three pre-report states onto what the region shows —
       total, with no default, so a state added to the flow is a compile error here rather than a silently
       empty region. Asserted without rendering anything.
-- [ ] 2.3 `RootView`'s switch is unchanged: the surface is chosen for `.idle`, `.working` and `.failed`,
+      `PreInspectionPresentation` — `idle`, `working`, `failed(message:)` — projected by a **failable**
+      initialiser, so a report is refused rather than degraded: it has no pre-report presentation and says
+      so with `nil`. The failure's message is an associated value carried through unaltered, never a
+      constant of `ImportFlowCopy`'s.
+      **The claim was demonstrated, not asserted.** Adding a fourth state to `ImportFlowModel.State`
+      temporarily stopped the build at `PreInspectionPresentation.swift:47` — *"switch must be
+      exhaustive"* — which is this task's sentence, compiled. Reverted, checksum verified.
+      **And the other half, which the compiler cannot see.** `case .report: self = .idle` compiles
+      cleanly and would render a starting screen over a finished inspection: **4 issues across 3 tests**,
+      including both report tests and the totality count. Reverted, checksum verified.
+      **No parallel lifecycle.** `@State private var lastSeen` added to the surface — a second place this
+      window's state could live — **1 issue**, naming the file and line. Reverted, checksum verified.
+- [x] 2.3 `RootView`'s switch is unchanged: the surface is chosen for `.idle`, `.working` and `.failed`,
       and `.report` still renders the workspace.
+      Zero lines of diff in `RootView.swift`, and the boundary is now stated twice rather than once: the
+      composition root chooses the surface, and the surface's own projection refuses a report even if it
+      were handed one.
 
 ## 3. Idle
 

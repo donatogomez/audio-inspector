@@ -17,12 +17,16 @@
 
 ---
 
-**Focus:** **R2 — `restructure-empty-state` — is being implemented, and only its first group is done.**
-The branch is `feat/restructure-empty-state`, the change is at **5/43**, and what exists is the copy
-contract the surface will be rebuilt from: `ImportFlowCopy` in `FeatureImport`, its six sentences, and
-the test that pins the read-only guarantee verbatim. **Nothing on screen has changed** — `ImportFlowView`
-and `RootView` are untouched, so idle, working and failed still render exactly as they did. The next step
-is the shell itself. R1 is merged and the umbrella that sequences both is still open.
+**Focus:** **R2 — `restructure-empty-state` — is being implemented, and its first two groups are done.**
+The branch is `feat/restructure-empty-state` and the change is at **8/43**. What exists is the copy the
+surface will be rebuilt from — `ImportFlowCopy`, six sentences, the read-only guarantee pinned verbatim —
+and the structure that will render them: `PreInspectionPresentation`, a failable projection of the flow's
+three pre-report states that refuses a report rather than degrading it, and an `ImportFlowView` that is
+now one frame plus **one** status region instead of two insertion points at two heights.
+**Almost nothing on screen has changed**: the four strings it renders are byte-identical, and the single
+difference is that the failure message now sits below the action instead of above it, which is where
+`design.md` §4b puts the region. `RootView` is untouched. The next step is the idle state's own content.
+R1 is merged and the umbrella that sequences both is still open.
 
 **`add-two-file-visual-comparison` is merged, archived and closed.** PR
 [#50](https://github.com/donatogomez/audio-inspector/pull/50) landed on `main` as a two-parent merge
