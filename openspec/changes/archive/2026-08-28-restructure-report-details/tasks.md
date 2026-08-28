@@ -124,9 +124,29 @@ Each: clean state, checksum, one mutation, the named victim, revert, checksum ag
 
 ## 6. Closure
 
-- [ ] 6.1 Merged on its own small PR, `main` green.
-- [ ] 6.2 `CURRENT.md` refreshed and `restructure-inspection-workspace` §3.2 marked — after merge.
-- [ ] 6.3 Archive through `openspec archive` **after merge**.
+- [x] 6.1 Merged on its own small PR, `main` green.
+      PR [#54](https://github.com/donatogomez/audio-inspector/pull/54), merged 2026-08-28 as the
+      **two-parent merge commit `8d5d01f`** — 4 commits, 11 files, +1227/−13. Integration proved six ways
+      rather than taken from the label: the PR reports `MERGED` with a non-null `mergedAt`; the commit has
+      exactly two parents, `04ea212` and `f73218c`; the second parent **is** the feature head; the merge's
+      tree is byte-identical to the feature head's (`e72ca7be…`), so the merge resolved nothing and added
+      nothing of its own; `origin/main` **is** the merge commit; and the feature has **0** commits outside
+      it. `main` green after: 1757 tests in 193 suites, twice, plus boundaries, warnings-as-errors, the
+      Xcode build, `openspec validate --all --strict` and `git diff --check`.
+- [x] 6.2 `CURRENT.md` refreshed and `restructure-inspection-workspace` §3.2 marked — after merge.
+      Both done after the merge, in that order. The umbrella's §3.2 records what landed and what it did
+      not cost, and its counter moves **12/29 → 13/29**; §3.3–§3.8 — R4 through R9 — are untouched,
+      asserted. `CURRENT.md` names the PR, the merge commit, the archive path, the umbrella count and the
+      next slice, and claims no validation that was not performed.
+- [x] 6.3 Archive through `openspec archive` **after merge**.
+      Archived as `openspec/changes/archive/2026-08-28-restructure-report-details/`, after the merge,
+      after `main` was fast-forwarded to it, and after the post-merge baseline was green.
+      **The canonical capability was audited rather than assumed.** `audio-file-inspection` went from
+      **12 requirements / 49 scenarios to 17 / 62** — exactly this change's delta of five requirements and
+      thirteen scenarios, no more — and the update is a **single appending hunk**: 127 lines added, **0
+      removed**, so all twelve existing requirements and all 452 preceding lines survive byte-identical,
+      and there is no duplicate heading. The **other eight capabilities are byte-identical**, compared by
+      SHA-1 before and after.
 
 ## 7. Deferred, and named so it is not quietly dropped
 

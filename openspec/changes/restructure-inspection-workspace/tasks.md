@@ -105,7 +105,20 @@ Each is a separate change, created when its turn comes. None is started here.
       **Nothing the redesign inherited was spent**: the whole window still takes the drop in every state,
       the picker, the security-scoped access, the stale guards, the export and the one PCM read are
       untouched, and no pre-existing test was modified. R1's five sections are still five.
-- [ ] 3.2 **R3** `restructure-report-details`.
+- [x] 3.2 **R3** `restructure-report-details` — **merged.** PR
+      [#54](https://github.com/donatogomez/audio-inspector/pull/54) landed on `main` as the two-parent
+      merge commit `8d5d01f` on 2026-08-28. **Details is the first of the five sections whose content is
+      its own**: selecting it shows the technical properties in the report's two named groups, the file's
+      identity, the notes when there are any, and the result of the reading set apart from the facts.
+      **It moves content and decides none of it** — every value, unit, absence, certainty state, note and
+      outcome sentence is the one `ReportPropertyFormatter` already produces, and the grouping is
+      `groups(for:)`'s; the view reaches for no property by name. Nothing is collapsed, because the only
+      candidate conflates the exact figure with the reason an unreliable reading carries.
+      **Nothing the redesign inherited was spent**: the other four sections still show the report page
+      that has stood in for them since R1 — as alternatives, so every block Details presents has exactly
+      one visible owner — and the comparison, the export, `schemaVersion` 1 and the one PCM read are
+      untouched. No aggregate, no quality verdict, no provenance inference and no path. R1's navigation
+      and R2's pre-inspection surface are unchanged, asserted.
 - [ ] 3.3 **R4** `restructure-report-measurements`.
 - [ ] 3.4 **R5** `restructure-waveform-workspace` — and the paired-waveform text overlap closes here.
 - [ ] 3.5 **R6** `restructure-spectrum-workspace`.
