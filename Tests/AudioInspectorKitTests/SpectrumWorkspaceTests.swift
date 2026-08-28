@@ -39,6 +39,17 @@ struct SpectrumWorkspaceTests {
             .joined(separator: "\n")
     }
 
+    /// `PairedSpectrogramSection.body` alone — the lanes' own composition, without the helpers beneath
+    /// it whose stacks are legitimate.
+    private func pairedSpectrogramBody() throws -> String {
+        let body = try code("PairedVisualsView.swift")
+        let type = try #require(body.range(of: "struct PairedSpectrogramSection"))
+        let rest = body[type.upperBound...]
+        let start = try #require(rest.range(of: "var body: some View {"))
+        let end = try #require(rest.range(of: "private var hasDrawnLane"))
+        return String(rest[start.upperBound ..< end.lowerBound])
+    }
+
     private func model(
         rate: Double = 48_000, columns: Int = 64, bands: Int = 32, decibels: Float = -30
     ) throws -> Spectrogram {
@@ -262,6 +273,23 @@ struct SpectrumWorkspaceTests {
                 .filter { $0.outOfRangeFraction > 0 }
             #expect(outOfRange.count <= 1, "both lanes are out of range at \(first) / \(second)")
         }
+    }
+
+    /// **Two lanes, never one plot.** An overlay would put two files in one picture and invite a
+    /// comparison neither drawing can support.
+    ///
+    /// Asserted over the section's **body** rather than the whole type: the lane's own `plot` uses a
+    /// `ZStack` legitimately, to put the grid over the region the file cannot represent. What may not
+    /// happen is the two *lanes* sharing one.
+    @Test("the two spectral lanes are separate, never overlaid")
+    func theTwoLanesAreSeparate() throws {
+        let body = try pairedSpectrogramBody()
+        #expect(body.contains("lane(.first,"))
+        #expect(body.contains("lane(.second,"))
+        #expect(!body.contains("ZStack"), "the two spectral lanes share a stack")
+        #expect(!body.contains("overlay("), "one spectral lane is drawn over the other")
+        let full = try code("PairedVisualsView.swift")
+        #expect(!full.contains("blendMode"), "a lane is composited onto another")
     }
 
     // MARK: - 5.5 — room buys no powers
