@@ -22,8 +22,21 @@
 commit `d5e07ad` on 2026-08-28; the change is archived at
 `openspec/changes/archive/2026-08-28-restructure-report-measurements/` at **18/21** — the three open tasks
 are the deferred ones, named so they are not quietly dropped. R1, R2 and R3 are merged before it, and the
-umbrella that sequences the redesign is open at **14/29**. **ADR-0026 stays `Proposed`.** **The next slice
-is R5 `restructure-waveform-workspace`**, and it is not started.
+umbrella that sequences the redesign is open at **14/29**. **ADR-0026 stays `Proposed`.**
+
+**R5 — `restructure-waveform-workspace` — is implemented** on `feat/restructure-waveform-workspace` and
+awaits a PR. Selecting **Waveform** now shows a workspace: the drawing takes the height the section can
+give it instead of a 96 pt strip, above the line naming it — and, for a pair, two lanes above the one
+line naming the shared extent. Nothing is read, decoded, measured or recomputed to draw it, and room
+buys no powers: the drawing is still still.
+
+**The paired waveform's text overlap is closed, structurally.** Its cause was proven rather than
+guessed: the lane put a composite of drawing-plus-prose inside a `GeometryReader` frozen at the
+drawing's own height, and a `GeometryReader` does not clip. The correct shape was already twenty lines
+below in the same file — the spectral lane puts a drawing, and only a drawing, in its measured area — so
+the lane now converges on it, and a structural test refuses the old shape. **The surface was rendered
+and looked at**, at three window sizes in five states; that is what found the one layout fault this
+slice fixed beyond the overlap.
 
 **Measurements is the second section with content of its own.** Selecting it shows the four
 figures the inspection derives from the samples — the signal levels, the true peak, the integrated

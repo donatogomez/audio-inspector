@@ -58,8 +58,11 @@ struct WaveformSection: View {
 /// - *Honesty.* A continuous outline interpolates between one bucket's extremes and the next's, which
 ///   draws a value that was never measured. Separate bars assert the extremes of each slice and
 ///   nothing between them, which is exactly what the envelope contains.
-private struct WaveformDrawing: View {
+struct WaveformDrawing: View {
     let envelope: WaveformEnvelope
+    /// How much vertical space this drawing takes. Defaults to the strip the report page has always
+    /// given it, so every existing caller is unchanged.
+    var sizing: WaveformPlotSizing = .reportPage
 
     var body: some View {
         Canvas(opaque: false) { context, size in
@@ -79,8 +82,9 @@ private struct WaveformDrawing: View {
             // audio would be a verdict on it, and every meaning here is already carried by the label.
             context.fill(bars, with: .color(.accentColor))
         }
-        .frame(height: 96)
+        .frame(minHeight: sizing.minimum, maxHeight: sizing.maximum)
         // Still, in the strongest sense available: no gesture, no hover, no cursor, nothing to hit.
+        // **Room is not a power** (ADR-0026 §9): a taller drawing is the same still drawing.
         .allowsHitTesting(false)
     }
 
@@ -90,4 +94,39 @@ private struct WaveformDrawing: View {
             path.addLine(to: CGPoint(x: size.width, y: size.height / 2))
         }
     }
+}
+
+/// How much height a waveform drawing is given.
+///
+/// It exists so a height is a **value with a reason** rather than a literal inside a view. The report
+/// page has always drawn into a fixed strip and still does; the workspace flexes between a minimum that
+/// survives the window's smallest supported size and a maximum past which a taller envelope stops
+/// telling the reader anything (`design.md` §4).
+///
+/// The numbers are budgeted from the window's own minimum of 720 × 480 — the section navigation, the two
+/// dividers, the action bar and the workspace's padding leave about 334 pt for content — rather than
+/// chosen by eye.
+struct WaveformPlotSizing: Equatable {
+    let minimum: CGFloat
+    /// `nil` would mean unbounded, which no case here wants: an envelope's vertical information is
+    /// bounded by the amplitude scale rather than by pixels.
+    let maximum: CGFloat
+
+    /// A fixed strip: the two bounds are the same, so the drawing neither grows nor shrinks.
+    static func fixed(_ height: CGFloat) -> WaveformPlotSizing {
+        WaveformPlotSizing(minimum: height, maximum: height)
+    }
+
+    /// What the report page has drawn into since the waveform existed. Unchanged by this slice, so the
+    /// transitional page looks exactly as it did.
+    static let reportPage = WaveformPlotSizing.fixed(96)
+
+    /// One file, filling the workspace. The minimum is already half again the strip it replaces and
+    /// fits inside the 480 pt window with the prose beside it.
+    static let workspaceSingle = WaveformPlotSizing(minimum: 140, maximum: 420)
+
+    /// One lane of a pair, which has to fit twice over with two sets of prose and the shared-extent
+    /// line. The minimum is what survives the 480 pt window; the maximum keeps two lanes from drifting
+    /// apart on a tall display.
+    static let workspaceLane = WaveformPlotSizing(minimum: 90, maximum: 260)
 }
