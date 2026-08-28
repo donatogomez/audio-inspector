@@ -20,9 +20,18 @@
 **Focus:** **R2 — `restructure-empty-state` — is merged, archived and closed.** PR
 [#53](https://github.com/donatogomez/audio-inspector/pull/53) landed on `main` as the two-parent merge
 commit `eb81ae8` on 2026-08-28; the change is archived at
-`openspec/changes/archive/2026-08-28-restructure-empty-state/`. **The next slice is R3
-`restructure-report-details`**, and it is not started. R1 is merged and the umbrella that sequences the
-redesign is still open at **12/29**.
+`openspec/changes/archive/2026-08-28-restructure-empty-state/`. **R3 `restructure-report-details` is
+implemented** on `feat/restructure-report-details` at **22/28** and awaits a PR; the six open tasks are
+three post-merge and three deferred. R1 is merged and the umbrella that sequences the redesign is still
+open at **12/29**.
+
+**Details is the first section with content of its own.** Selecting it shows the technical properties in
+the report's own two groups, the file's identity, the notes when there are any, and the result of the
+reading set apart from the facts — nothing added, nothing reworded, nothing recomputed. The other four
+sections still show the report page that has stood in for them since R1; they are alternatives, so the
+blocks Details presents have exactly one visible owner. Nothing is collapsed: the only candidate conflates
+the exact figure with the reason an unreliable reading carries, and splitting it touches a type R4 will
+share. The comparison, the export and `schemaVersion` 1 are untouched.
 
 **The surface before a report is one shell with three states.** It says what the application does, offers
 one way to begin, states that a file may be dragged onto the window, and — last, and in **every** state —
