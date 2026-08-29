@@ -123,8 +123,10 @@ by calling it legacy.
       settled comparison needs a second real file through the picker, which no harness here can drive.
       What exists instead is a structural assertion — the page is built exactly once, from this branch,
       with the same comparison and export arguments — and that is evidence, not a rendering. It stays
-      open until someone drives two real files through the app, which is a natural part of R9's human
-      pass.
+      open until someone drives two real files through the app. **Classification: manual validation,
+      deferred to R9.** The change is archived with it open on purpose — an archive may carry a
+      deferred task, and closing this one on evidence that does not exist would have been the only
+      dishonest route to a full count.
 - [x] 6.3 Record what could **not** be seen, and why, rather than implying it was.
 
       **What could not be seen, and why.** SwiftUI draws no `ScrollView` content in a headless test process — proven with a two-line control, `ScrollView { Text(…) }`, which came out blank — so the surface was hosted in a real app window instead. The same limitation applies to R3's Details, which is built the same way; it is inherited, not introduced. The **comparison** state was not rendered: reaching it needs a second real file through the picker, which no harness here can drive.
@@ -146,16 +148,29 @@ by calling it legacy.
 - [x] 8.2 Update `CURRENT.md`.
       Overwritten as an R7 snapshot: what landed, the two findings, what could not be seen and why, the
       next step, and the two open questions.
-- [ ] 8.3 **Post-merge only.** Record in the umbrella's task 3.6 what R7 landed, and carry the
+- [x] 8.3 **Post-merge only.** Record in the umbrella's task 3.6 what R7 landed, and carry the
       **ADR-0026 §7 is unreachable** finding to the umbrella's closure task 5.3.
-      This was done pre-merge and **reverted**: §3.6 closes on merge, not on implementation, and 5.3 is
-      another change's task — appending an R7 finding to it before R7 exists on `main` rewrites someone
-      else's scope. The umbrella is back at **16/29**, byte-identical to `origin/main`. Until then the
-      finding lives where it belongs: `proposal.md`'s first finding, `design.md` §2 and its Open
-      Questions, and `CURRENT.md`.
+      **§3.6 is closed**, after the merge and not before — it was marked once pre-merge and reverted,
+      because §3.6 closes on merge and the umbrella had to stay byte-identical to `origin/main` until
+      then. The umbrella is now **17/29**, and §3.6 is the only task this change touched: §3.7 (R8) and
+      §3.8 (R9) are untouched and open.
+      **5.3 is deliberately left verbatim.** Its text — *"Decide ADR-0026's status from what R1 actually
+      demonstrated, and no earlier"* — describes a **decision still to be taken**, and appending an
+      R7-derived condition to it would convert a decision task into a narrative log and widen it with a
+      condition its own wording does not contemplate. The finding is authoritative where it was
+      written — this change's `proposal.md` (first finding) and `design.md` §2 and Open Questions — and
+      §3.6's record now cites it by name, which is what 5.3 reads when its turn comes. Nothing is lost,
+      and no other change's scope is rewritten.
 
-- [ ] 8.4 **Post-merge only.** The administrative close: the PR, the merge, and
+- [x] 8.4 **Post-merge only.** The administrative close: the PR, the merge, and
       `openspec archive add-inspection-overview`. R7 is not administratively closed before any of them
       exist.
+      PR [#58](https://github.com/donatogomez/audio-inspector/pull/58), CI green (*Build, test & enforce
+      boundaries*, 6m55s), merged as the **two-parent** commit `607f901` whose second parent is this
+      change's head `f9f6414` and whose tree is byte-identical to the feature's — a clean merge with
+      nothing resolved. `main` fast-forwarded to `607f901` with no local merge commit, all three feature
+      commits preserved and no unrelated commit introduced. Archived at
+      `openspec/changes/archive/2026-08-29-add-inspection-overview/`, applying **+5 requirements** to
+      `audio-file-inspection` and modifying no other capability.
 
 **No push, no PR, no merge, no archive. R8 is not implemented here.**

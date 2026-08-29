@@ -180,8 +180,51 @@ Each is a separate change, created when its turn comes. None is started here.
       scale, no overlay, no difference, no alignment and no interaction. The export, `schemaVersion` 1
       and the one PCM read are untouched, and `AudioInspectorDomain`, `AudioInspectorAnalysis`,
       `AudioInspectorMedia` and `FeatureImport` have zero files changed. R1–R5 are unchanged, asserted.
-- [ ] 3.6 **R7** `add-inspection-overview` — ADR-0026 §6 exactly, including §7's three conditions on the
-      warning count.
+- [x] 3.6 **R7** `add-inspection-overview` — **merged.** PR
+      [#58](https://github.com/donatogomez/audio-inspector/pull/58) landed on `main` as the two-parent
+      merge commit `607f901` on 2026-08-29. **All five sections are real in inspection mode now**:
+      selecting Overview shows the file's identity, the six core technical facts, one figure per
+      measurement, a compact drawing of the envelope the inspection already produced, and what became of
+      the reading. **It arranges facts and derives none** — `ReportPropertyFormatter`,
+      `MeasurementsDisplay` and `WaveformCopy` produce every name, value, unit, absence, failure and
+      outcome sentence, and the view names no property of its own: §6's six facts are selected by
+      `ReportPropertyFormatter.coreFacts(for:)`, beside `groups(for:)` and `summary(for:)`, because
+      §6's six are not a group boundary and a view is not where property meaning belongs.
+      **§6 is built except for the warning count, and the count is refused on a ground §7 does not
+      consider.** §7's three conditions each hold; what they do not survive is R3's own shipped
+      requirement in `audio-file-inspection` — *"A note MUST NOT be counted, scored, ranked by severity,
+      or summarised into a total"* — which is unqualified, which calls warnings **Notes**, and which
+      became canonical on 2026-08-28 (`f9aa9b7`), *after* this record was written on 2026-08-27. A
+      `Proposed` record does not overrule a shipped capability, so §7's own last line is taken: *the
+      count goes and the section title carries the reader instead.* Specialising the requirement by a
+      delta was available and declined — §8 specialised a rule in the direction of refusing **more**,
+      and this would specialise one to be allowed an exception to it. **The finding that ADR-0026 §7 is
+      unreachable as written is recorded in R7's archived `proposal.md` and `design.md`**, which task
+      5.3 reads when it decides this record's status; 5.3's own text is left as it was.
+      **The transitional page survives in exactly one place, deliberately.** `legacyReportSurface` is
+      `ReportView`'s only composition caller, and `ReportView` is the only host of `ComparisonSection`
+      (declared in `ComparisonView.swift`) — the comparison surface itself — so replacing the
+      `.overview` branch outright would have **deleted the comparison from the application** until R8.
+      The branch splits on `ComparisonPresentation` — not on `ReportVisuals`, which becomes a pair only
+      once both files have settled both drawings and would have silently dropped the comparison's
+      *loading* and *failed* states. **R8 removes this fallback**; it is the only surviving dependency
+      on the legacy `ReportView`.
+      **Two defects were found by rendering the surface and looking at it, and by nothing else**: a
+      measurement's figure carried the *measurement's* title rather than the fact's, so *Signal levels:
+      −3.00 dBFS* did not say which level it was; and only the drawing's `headline` was rendered, which
+      an envelope does not have, leaving the one state with a drawing as the one state with no words.
+      Every test passed before both.
+      **Nothing the redesign inherited was spent**: no second PCM read, no recomputation, no
+      normalisation and no alternative reduced envelope; the absolute amplitude scale, the export,
+      `schemaVersion` 1, R1's five sections and their order, and R2–R6's surfaces are asserted
+      unchanged; and `AudioInspectorDomain`, `AudioInspectorAnalysis`, `AudioInspectorMedia`,
+      `FeatureImport` and `AudioInspectorTesting` have **zero files changed**. Four production files,
+      379 lines. Four negative controls seen to fail and reverted by checksum — the one that made the
+      `.overview` branch unconditional was caught by R3's and R6's own suites as well as R7's.
+      **The change archives with one task open, deliberately**: 6.2, rendering the branch with a
+      *settled* comparison, needs two real files driven through the picker, which no harness could do.
+      It is **manual validation deferred to R9**, and closing it on evidence that does not exist would
+      have been the only dishonest way to reach a full count.
 - [ ] 3.7 **R8** `add-comparison-mode-surface` — the reduced Comparison Overview, gated by a vocabulary
       sweep that includes the all-agree case.
 - [ ] 3.8 **R9** `polish-inspection-workspace` — narrow windows, keyboard, VoiceOver, and the human pass.
