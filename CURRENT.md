@@ -61,6 +61,16 @@ was hosted in a real app window to be looked at — the same limitation applies 
 inherited, not introduced. **Looking is what found the two presentation defects R7 fixed**, both of which
 every test had passed.
 
+**One thing R7 broke and a hotfix has since restored.** PR
+[#59](https://github.com/donatogomez/audio-inspector/pull/59) landed as `a351f19`: giving Overview its own
+content took `ReportView` off the single-file path, and the *only* export toolbar was owned by that
+view — so `Export JSON…` became unreachable during ordinary inspection while JSON generation stayed
+correct. The action now attaches at the report surface, **above the section routing**, so it is reachable
+from all five sections and in every comparison state. The payload, the seam and `schemaVersion` 1 are
+untouched. **R8 inherits the relocated control**: the export half of its control migration is already
+done. The gap was as much a testing one as a code one — every export suite asserted the *document* and
+none asserted the *action was reachable*, which is why 1873 tests stayed green through it.
+
 **ADR states.** **ADR-0025 `Accepted`.** **ADR-0026 stays `Proposed`** — five sections existing does not
 promote it; its outstanding condition is a vocabulary sweep over a Comparison Overview that R8 builds and
 that does not exist. **ADR-0016 and ADR-0017 stay `Proposed`**, unchanged.
@@ -69,6 +79,14 @@ that does not exist. **ADR-0016 and ADR-0017 stay `Proposed`**, unchanged.
 `add-static-spectrogram-visualization` at **73/89**, its remaining tasks the manual validation battery
 deferred by product decision — which is why `spectrogram-visualization` is still not a canonical
 capability. The VoiceOver traversal gap shared with ADR-0015 is inherited rather than fixed or worsened.
+
+**A required input to R8, recorded here so it is not lost.**
+`ComparisonSection.warningSummary` renders *"1 warning on this file"* — a per-file **count of notes**,
+written on 2026-08-22, before R3 made *"A note MUST NOT be counted, scored, ranked by severity, or
+summarised into a total"* canonical on 2026-08-28. It is a **pre-existing conflict between shipped
+production and the canon**, deliberately untouched by the hotfix. R8 migrates that context row into
+Details, and when it does it must **drop the count** rather than carry it forward — the same ground on
+which R7 refused the Overview's warning count.
 
 **Open questions.**
 - **ADR-0026's status** (umbrella 5.3), for which the §7 finding is an input.
