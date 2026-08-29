@@ -3,12 +3,13 @@ import SwiftUI
 
 /// A minimal, data-driven SwiftUI view that presents an already-available `InspectionReport`: the
 /// file identity, the eight technical properties with their distinct states, the report's warnings,
-/// and the global status — plus an export action.
+/// and the global status.
 ///
 /// It is **purely presentational**: it takes a non-optional report as input and never inspects a
 /// file, selects a source, owns the report's lifecycle, or knows `AudioFilePropertyReading`. The
-/// export work is an injected `ReportExportAction` (wired by the composition root); the view holds
-/// only the transient export phase. No AppKit, no `URL`, no filesystem.
+/// **The export is not here.** It was, while this view *was* the report; it now lives in
+/// `ReportExportToolbar`, attached by the composition root to the surface that exists exactly when a
+/// report does, so it survives this view being taken apart. No AppKit, no `URL`, no filesystem.
 public struct ReportView: View {
     private let report: InspectionReport
     /// Which drawings this report presents — the first file's own, or two files' on shared axes.
@@ -22,7 +23,6 @@ public struct ReportView: View {
     private let loudness: LoudnessPresentation
     private let programmeBandwidth: SignificantBandwidthPresentation
     private let comparison: ComparisonPresentation
-    @State private var exportModel: ReportExportModel
 
     /// Every sample-based analysis is a **required** parameter with no default. A default would let a
     /// caller forget one and ship a report that silently shows nothing where a state belongs.
@@ -34,7 +34,6 @@ public struct ReportView: View {
         loudness: LoudnessPresentation,
         programmeBandwidth: SignificantBandwidthPresentation,
         comparison: ComparisonPresentation = .none,
-        export: @escaping ReportExportAction
     ) {
         self.report = report
         self.visuals = visuals
@@ -43,7 +42,6 @@ public struct ReportView: View {
         self.loudness = loudness
         self.programmeBandwidth = programmeBandwidth
         self.comparison = comparison
-        _exportModel = State(initialValue: ReportExportModel(action: export))
     }
 
     public var body: some View {
@@ -91,11 +89,6 @@ public struct ReportView: View {
             }
             .padding(24)
             .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        // The export is an action, not a row of the report. `.toolbar` from here attaches it to the
-        // window without moving `ReportExportModel` out of this view, so no ownership changes.
-        .toolbar {
-            ToolbarItem(placement: .primaryAction) { exportAction }
         }
     }
 
@@ -297,38 +290,6 @@ public struct ReportView: View {
         }
     }
 
-    // MARK: - Export action (transient phase only)
-
-    /// The transient phase sits beside the action rather than occupying a permanent row of the report.
-    private var exportAction: some View {
-        HStack(spacing: 8) {
-            switch exportModel.phase {
-            case .idle:
-                EmptyView()
-            case .exporting:
-                Text("Exporting…").font(.callout).foregroundStyle(.secondary)
-            case .succeeded:
-                Text("Exported").font(.callout).foregroundStyle(.secondary)
-            case let .failed(message):
-                Text(message).font(.callout).foregroundStyle(.red)
-            }
-
-            Button("Export JSON…") {
-                Task {
-                    await exportModel.export(
-                        report,
-                        measurements: ExportableMeasurements.measurements(
-                            signalLevelMetrics: signalLevelMetrics,
-                            truePeak: truePeak,
-                            loudness: loudness,
-                            programmeBandwidth: programmeBandwidth
-                        )
-                    )
-                }
-            }
-            .disabled(exportModel.phase == .exporting)
-        }
-    }
 }
 
 /// A titled block of the report. Replaces `Form` + `.formStyle(.grouped)`, whose grouped-inset look is
@@ -537,7 +498,6 @@ extension SignificantBandwidthPresentation {
         visuals: .single(waveform: .preview, spectrogram: .preview),
         signalLevelMetrics: .preview,
         truePeak: .preview, loudness: .preview, programmeBandwidth: .preview,
-        export: { _, _ in .succeeded }
     )
 }
 #endif

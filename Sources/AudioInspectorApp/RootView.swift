@@ -324,7 +324,24 @@ public struct RootView: View {
         .padding(.vertical, 8)
     }
 
+    /// **The export belongs to the window, not to a section.** It is attached here, once, to the
+    /// surface that exists exactly when a report does — so it is reachable from all five sections and in
+    /// every comparison state, and it cannot leave with any one of them. It used to be attached from
+    /// inside `ReportView`, which stopped being on screen for a single inspected file when R7 gave
+    /// Overview its own content.
     private func reportSurface(_ presentation: InspectionPresentation) -> some View {
+        reportSections(presentation)
+            .reportExportToolbar(
+                report: presentation.report,
+                signalLevelMetrics: Self.signalLevelMetricsPresentation(for: presentation.signalLevelMetrics),
+                truePeak: Self.truePeakPresentation(for: presentation.truePeak),
+                loudness: Self.loudnessPresentation(for: presentation.loudness),
+                programmeBandwidth: Self.programmeBandwidthPresentation(for: presentation.significantBandwidth),
+                export: export
+            )
+    }
+
+    private func reportSections(_ presentation: InspectionPresentation) -> some View {
         VStack(spacing: 0) {
             sectionNavigation
             Divider()
@@ -426,8 +443,7 @@ public struct RootView: View {
                 truePeak: Self.truePeakPresentation(for: presentation.truePeak),
                 loudness: Self.loudnessPresentation(for: presentation.loudness),
                 programmeBandwidth: Self.programmeBandwidthPresentation(for: presentation.significantBandwidth),
-            comparison: Self.comparisonPresentation(for: comparison),
-            export: export
+            comparison: Self.comparisonPresentation(for: comparison)
         )
     }
 }
