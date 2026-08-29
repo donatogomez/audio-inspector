@@ -200,19 +200,40 @@ struct ExportableMeasurementsTests {
     }
 
     /// **`ReportView` no longer knows how to build an export payload**, which is the property R0
-    /// exists to establish: the redesign can take that view apart without the export following it.
+    /// exists to establish: *the redesign can take that view apart without the export following it.*
+    ///
+    /// **That is now literally true, and the assertion moved with it.** R0's original form asserted the
+    /// seam was called *from `ReportView`*, because that view was still where the export lived. The
+    /// redesign then took the view apart exactly as R0 anticipated — with every section carrying its own
+    /// content, `ReportView` stopped being on screen for a single inspected file — so the export moved
+    /// to `ReportExportToolbar`, attached once by the composition root. Asserting the old call site
+    /// would now assert the opposite of R0's property: that the export *did* follow the view.
+    ///
+    /// So both halves are asserted, and the negative half is stronger than it was: `ReportView` names
+    /// neither the four extractions **nor the seam**, and the seam has exactly one production caller.
     @Test("the report view holds no exportable extraction of its own")
     func theViewNoLongerOwnsTheRule() throws {
-        let source = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Sources/FeatureAnalysis/ReportView.swift")
-        let text = try String(contentsOf: source, encoding: .utf8)
+        func source(_ path: String) throws -> String {
+            try String(
+                contentsOf: URL(fileURLWithPath: #filePath)
+                    .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+                    .appendingPathComponent(path),
+                encoding: .utf8
+            )
+        }
+        let view = try source("Sources/FeatureAnalysis/ReportView.swift")
 
-        #expect(!text.contains("exportableSignalLevelMetrics"))
-        #expect(!text.contains("exportableTruePeak"))
-        #expect(!text.contains("exportableLoudness"))
-        #expect(!text.contains("exportableProgrammeBandwidth"))
-        // It calls the seam instead — so this is "moved", not "deleted".
-        #expect(text.contains("ExportableMeasurements.measurements("))
+        #expect(!view.contains("exportableSignalLevelMetrics"))
+        #expect(!view.contains("exportableTruePeak"))
+        #expect(!view.contains("exportableLoudness"))
+        #expect(!view.contains("exportableProgrammeBandwidth"))
+        // Stronger than R0 could assert: the view does not reach the seam at all any more.
+        #expect(!view.contains("ExportableMeasurements"))
+        #expect(!view.contains("ReportExportModel"))
+
+        // It is called from the export's new owner — so this is "moved", not "deleted".
+        let owner = try source("Sources/FeatureAnalysis/ReportExportToolbar.swift")
+        #expect(owner.contains("ExportableMeasurements.measurements("))
+        #expect(owner.contains("ReportExportModel(action: export)"))
     }
 }
