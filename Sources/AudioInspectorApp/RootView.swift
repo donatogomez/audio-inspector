@@ -331,11 +331,12 @@ public struct RootView: View {
             // **One read of the comparison, two answers derived from it.** Reading `flow.comparison`
             // twice in one body could, in principle, straddle a change; binding it once cannot.
             let comparison = flow.comparison
-            // **Four sections are real now.** R1 gave the workspace five sections and the selection
-            // that moves between them; R3 filled Details, R4 Measurements, R5 Waveform and R6 Spectrum.
-            // Only Overview still shows the report page that has stood in for them since R1, until R7 —
-            // every branch is an **alternative**, never two at once, so the blocks and the drawings
-            // these sections present have exactly one visible owner at any moment.
+            // **All five sections are real now.** R1 gave the workspace five sections and the
+            // selection that moves between them; R3 filled Details, R4 Measurements, R5 Waveform, R6
+            // Spectrum and R7 the Overview — every branch an **alternative**, never two at once, so the
+            // blocks and the drawings these sections present have exactly one visible owner at any
+            // moment. The report page survives in exactly one place, under Overview while a comparison
+            // exists, because it is the comparison's only host until R8.
             //
             // The root chooses because it is the only place that can: `WorkspaceSection` lives here and
             // `FeatureAnalysis` cannot see it. Nothing about R1's lifecycle changes — no stack, no split
@@ -368,7 +369,35 @@ public struct RootView: View {
                 // pairing still stands in place of the single drawing rather than beside it.
                 ReportSpectrumView(visuals: Self.reportVisuals(for: presentation, in: comparison))
             case .overview:
-                legacyReportSurface(presentation, comparison: comparison)
+                // **The last transitional branch, and it may not be removed outright.**
+                // `legacyReportSurface` is `ReportView`'s only caller and `ReportView` is
+                // `ComparisonView`'s only host, so replacing this branch unconditionally would delete
+                // the comparison from the application until R8 builds its own surface. So the split is
+                // on the comparison and nothing else: one file gets the section R7 built, and a window
+                // that has a second file keeps the page it has always had, unchanged.
+                //
+                // **It splits on `ComparisonPresentation`, not on `ReportVisuals`.** The visuals become
+                // a pair only once *both* files have settled both drawings; the comparison surface
+                // renders while it is loading and where it failed as well. Splitting on the visuals
+                // would have silently dropped those two states.
+                switch Self.comparisonPresentation(for: comparison) {
+                case .none:
+                    // **The same values every other section is handed**, built by the same mappings from
+                    // the same inspection, so a figure or a drawing cannot differ between this surface
+                    // and the section that owns it.
+                    InspectionOverviewView(
+                        report: presentation.report,
+                        waveform: Self.waveformPresentation(for: presentation.waveform),
+                        signalLevelMetrics: Self.signalLevelMetricsPresentation(for: presentation.signalLevelMetrics),
+                        truePeak: Self.truePeakPresentation(for: presentation.truePeak),
+                        loudness: Self.loudnessPresentation(for: presentation.loudness),
+                        programmeBandwidth: Self.programmeBandwidthPresentation(for: presentation.significantBandwidth)
+                    )
+                case .loading, .ready, .failed:
+                    // Named rather than defaulted, so a new comparison state has to be answered here
+                    // instead of quietly falling to one side of the split.
+                    legacyReportSurface(presentation, comparison: comparison)
+                }
             }
             Divider()
             HStack(spacing: 12) {
@@ -382,9 +411,11 @@ public struct RootView: View {
         }
     }
 
-    /// The report page as it has been since R1, shown by every section whose own content has not been
-    /// built yet. It is untouched by this slice: the same blocks, in the same order, with the same words
-    /// — including the comparison, which stays exactly where and what it is until R8.
+    /// The report page as it has been since R1. Every section now has content of its own, so this has
+    /// **one** caller left: the Overview, while a comparison exists. It stays because `ReportView` is
+    /// `ComparisonView`'s only host, and removing it before R8 builds the comparison's own surface would
+    /// delete the comparison rather than move it. It is untouched by this slice: the same blocks, in the
+    /// same order, with the same words.
     private func legacyReportSurface(
         _ presentation: InspectionPresentation, comparison: ImportFlowModel.ComparisonState
     ) -> some View {

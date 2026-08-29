@@ -125,6 +125,16 @@ struct WaveformPlotSizing: Equatable {
     /// fits inside the 480 pt window with the prose beside it.
     static let workspaceSingle = WaveformPlotSizing(minimum: 140, maximum: 420)
 
+    /// The inspection overview's compact strip (ADR-0026 §6).
+    ///
+    /// **Fixed, and smaller than the report page's** — which is what makes it compact. The overview is a
+    /// reading surface where the drawing is one block among five rather than the subject, so it does not
+    /// compete for the height a workspace exists to give: the reader who wants the envelope with room
+    /// around it selects Waveform, where R5 put it. 72 pt keeps the centre line, the amplitude scale and
+    /// the shape legible while leaving the 720 × 480 window's ~334 pt of content height for the four
+    /// blocks the overview carries besides it.
+    static let overviewCompact = WaveformPlotSizing.fixed(72)
+
     /// One lane of a pair, which has to fit twice over with two sets of prose and the shared-extent
     /// line. The minimum is what survives the 480 pt window; the maximum keeps two lanes from drifting
     /// apart on a tall display.
