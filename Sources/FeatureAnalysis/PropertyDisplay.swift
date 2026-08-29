@@ -290,6 +290,27 @@ enum ReportPropertyFormatter {
         ]
     }
 
+    /// The facts ADR-0026 §6 permits the inspection overview to state: **container, codec, duration,
+    /// sample rate, channel count, bit depth**.
+    ///
+    /// **It lives here rather than in the overview** because deciding which properties identify a file is
+    /// what this type is for — `groups(for:)` and `summary(for:)` both name properties for the same
+    /// reason. A view that picked them would be a second place property meaning lives, free to drift from
+    /// this one.
+    ///
+    /// **It is not `groups(for:)` narrowed.** §6's six are not a group boundary: *Format* holds three of
+    /// them and *Encoding* holds three of them plus the three bitrates, which are three separate claims
+    /// about a rate (ADR-0018) and belong with the detail rather than at a glance.
+    ///
+    /// **It is not `summary(for:)` either.** That one drops a fact it could not read, which is right for
+    /// a one-line header and wrong for a section: here every row keeps its `PropertyDisplay` state, so a
+    /// fact the file does not carry is stated **in words** rather than silently missing.
+    static func coreFacts(for properties: TechnicalProperties) -> [PropertyDisplay] {
+        let rows = displays(for: properties)
+        return ["Container", "Codec", "Duration", "Sample rate", "Channel count", "Bit depth"]
+            .compactMap { name in rows.first { $0.name == name } }
+    }
+
     /// The glance-level answer: name, then the handful of facts that identify the file. Anything the
     /// reader could not establish is left out rather than guessed.
     static func summary(for report: InspectionReport) -> ReportSummary {

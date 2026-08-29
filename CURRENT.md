@@ -17,162 +17,87 @@
 
 ---
 
-**Focus:** **R6 — `restructure-spectrum-workspace` — is merged, archived and closed.** PR
-[#57](https://github.com/donatogomez/audio-inspector/pull/57) landed on `main` as the two-parent merge
-commit `3f75900` on 2026-08-28; the change is archived at
-`openspec/changes/archive/2026-08-28-restructure-spectrum-workspace/` at **22/27** — the five open tasks
-are the deferred ones, named so they are not quietly dropped. R1 through R5 are merged before it, and the
-umbrella that sequences the redesign is open at **16/29**. **ADR-0025 stays `Accepted`; ADR-0016,
-ADR-0017 and ADR-0026 stay `Proposed`.** **The next slice is R7 `add-inspection-overview`**, and it is
-not started — it is the last section still showing the transitional report page.
+**Focus:** **R7 — `add-inspection-overview` — is implemented on `feat/add-inspection-overview` and not
+merged.** Nothing is pushed, no PR is open, nothing is archived. The four gates are green (boundaries,
+`swift build` and `xcodebuild` clean, **1871 tests in 202 suites**, `openspec validate --strict`), and the
+change sits at **33/36**. The umbrella is deliberately still at **16/29**: its §3.6 closes on *merge*,
+not on implementation, so R7 does not mark it.
 
-**Four of the five sections have their own surface.** Selecting **Spectrum** shows a workspace: the
-drawing takes the height the section can give it, with its frequency axis, its time axis and its
-legend — and for a pair, two lanes above the
-shared-extent sentences and **one legend describing both**, which the pairing never had. Only Overview
-still shows the transitional report page.
+**All five sections are real in inspection mode.** Selecting Overview now shows the file's identity, the
+six core technical facts, one figure per measurement, a compact drawing of the envelope the inspection
+already produced, and what became of the reading. It arranges facts and derives none: every name, value,
+unit, absence, failure and outcome sentence is `ReportPropertyFormatter`'s, `MeasurementsDisplay`'s or
+`WaveformCopy`'s, and the view names no property of its own — the selection lives in
+`ReportPropertyFormatter.coreFacts(for:)`, beside `groups(for:)` and `summary(for:)`, where property
+meaning already lives.
 
-**The bound on that height is the data, not taste.** A model carries at most 512 bands and is drawn with
-interpolation off, so past one pixel per band a taller image is upscaled rather than more detailed.
-Nothing is re-coloured: no normalisation, no auto-range, no per-file scale — the one comparison two
-spectrograms can honestly support is the one an absolute scale makes possible. Above a file's own
-Nyquist keeps its achromatic treatment and its sentence, so it still cannot be mistaken for the ramp's
-floor, and a render of 44.1 kHz beside 96 kHz confirmed that by eye.
+**The warning count ADR-0026 §6 permits is refused, and the ground is not §7.** §7's three conditions each
+hold. What they do not survive is R3's own shipped requirement in `audio-file-inspection` — *"a note MUST
+NOT be counted, scored, ranked by severity, or summarised into a total"* — which is unqualified, which
+calls warnings **Notes**, and which became canonical on 2026-08-28, *after* ADR-0026 was written on
+2026-08-27. A `Proposed` record does not overrule a shipped capability, so §7's own last line is taken:
+*the count goes and the section title carries the reader instead.* Specialising the requirement by a
+delta — §8's manoeuvre against `audio-two-file-comparison` — was available and declined: §8 specialised a
+rule in the direction of refusing **more**, and this would specialise one in order to be allowed an
+exception to it. **The finding — that ADR-0026 §7 is unreachable as written — lives in R7's own
+artefacts** (`proposal.md`'s first finding, `design.md` §2 and its Open Questions, and here). It belongs
+eventually in the umbrella's closure task 5.3, where ADR-0026's status is decided; writing it there was
+tried and **reverted**, because 5.3 is another change's task and appending an R7-derived condition to it
+before R7 is on `main` widens someone else's scope. R7's task 8.3 carries it, post-merge. ADR-0026 is not
+edited.
 
-**Waveform is a workspace.** The drawing takes the height the section can give it instead of a 96 pt
-strip, above the line naming it — and, for a pair, two lanes above the one line naming the shared
-extent. Nothing is read, decoded, measured or recomputed to draw it, and room
-buys no powers: the drawing is still still.
+**The transitional report page survives in exactly one place, deliberately.** `legacyReportSurface` was
+`ReportView`'s only caller and `ReportView` is `ComparisonView`'s only host, so replacing the `.overview`
+branch outright would have **deleted the comparison from the application** until R8. The branch splits on
+`ComparisonPresentation` — not on `ReportVisuals`, which becomes a pair only once both files have settled
+both drawings and would have silently dropped the comparison's *loading* and *failed* states — and the
+page keeps every comparison state, unchanged, until R8 owns it. That is the one surviving dependency on
+the legacy `ReportView`, and R8 removes it.
 
-**The paired waveform's text overlap is closed, structurally** — the one cosmetic defect carried since
-ADR-0025's manual pass, and R5 is where the umbrella assigned it. Its cause was proven rather than
-guessed: the lane put a composite of drawing-plus-prose inside a `GeometryReader` frozen at the
-drawing's own height, and a `GeometryReader` does not clip. The correct shape was already twenty lines
-below in the same file — the spectral lane puts a drawing, and only a drawing, in its measured area — so
-the lane now converges on it, and a structural test refuses the old shape. **The surface was rendered
-and looked at**, at three window sizes in five states; that is what found the one layout fault this
-slice fixed beyond the overlap.
+**Two defects were found by rendering the surface and looking at it, and by nothing else.** A
+measurement's figure carried the *measurement's* title rather than the fact's, so *Signal levels: −3.00
+dBFS* did not say which level it was; it now carries the row's own name, *Peak sample*, and speaks the
+measurement aloud. And only the drawing's `headline` was rendered — which an envelope does not have —
+leaving the one state that has a drawing as the one state with no words. Every test passed before both.
 
-**Measurements is the second section with content of its own.** Selecting it shows the four
-figures the inspection derives from the samples — the signal levels, the true peak, the integrated
-loudness and the programme bandwidth — as one reading surface: two named groups, *Level* and
-*Frequency*, one label column, and each method sentence behind a disclosure that never removes it.
-Every value, unit, per-channel breakdown, absence, failure and resolution is the one the four copy
-owners already produce, and nothing is read, measured or recomputed to draw it. **No comparison reaches
-the section**, for any comparison state: the comparison stays whole, where it is, until R8 — the
-precedent R3 set for Details. Overview, Waveform and Spectrum still show the transitional report page.
+**What could not be seen, and why.** SwiftUI draws no `ScrollView` content in a headless test process,
+proven with a two-line control that came out blank, so the surface was hosted in a real app window
+instead; the same limitation applies to R3's Details, which is built the same way, and it is inherited
+rather than introduced. The **comparison** state was not rendered: reaching it needs a second real file
+through the picker, which no harness here can drive, so it is asserted structurally instead.
 
-**Two findings from R4, on the record.** R3 deferred splitting `PropertyDisplay.detail` on the
-expectation that R4's surfaces would share that type; **they do not** — the measurements have their own
-row types — so the debt stays deferred and its owner is whichever slice next reworks Details or the
-comparison. And collapsing a method line is taken as *permitted* rather than assumed: ADR-0026 §11 names
-a method line first among what may be collapsed, so "collapsed" cannot mean "removed".
+**Nothing the redesign inherited was spent.** No second PCM read, no recomputation, no normalisation and
+no alternative reduced envelope. The export, `schemaVersion` 1, `ComparisonView` and every comparison
+semantic, the four measurement presentations, `WaveformEnvelope` and `WaveformGeometry`, and R1's five
+sections and their order are untouched — asserted where they live rather than argued from the diff.
+`AudioInspectorDomain`, `AudioInspectorAnalysis`, `AudioInspectorMedia` and `FeatureImport` have **zero
+files changed**. Three production files, 71 lines, plus one new view and two new test suites.
 
-**Details is the first section with content of its own.** Selecting it shows the technical properties in
-the report's own two groups, the file's identity, the notes when there are any, and the result of the
-reading set apart from the facts — nothing added, nothing reworded, nothing recomputed. The other four
-sections still show the report page that has stood in for them since R1; they are alternatives, so the
-blocks Details presents have exactly one visible owner. Nothing is collapsed: the only candidate conflates
-the exact figure with the reason an unreliable reading carries, and splitting it touches a type R4 will
-share. The comparison, the export and `schemaVersion` 1 are untouched.
+**Next step.** R7 is functionally complete and committed locally, with no upstream. What remains is the
+user's call: push, open the PR, merge. **Three tasks are open and none of them can honestly close before
+that**: 6.2 (rendering the branch with a *settled* comparison — no harness here can drive two real files
+through the picker, so it waits for R9's human pass), 8.3 (recording R7 in the umbrella's §3.6 and
+carrying the §7 finding to 5.3 — both post-merge), and 8.4 (the PR, the merge and the archive). After it
+merges, **R8 `add-comparison-mode-surface`** is next — the reduced Comparison Overview of ADR-0026 §8,
+gated by a vocabulary sweep that includes the all-agree case — then **R9** for narrow windows, keyboard,
+VoiceOver and the human pass. R8 is where the transitional page finally goes.
 
-**The surface before a report is one shell with three states.** It says what the application does, offers
-one way to begin, states that a file may be dragged onto the window, and — last, and in **every** state —
-*"The file is only read, never modified, moved or copied."* That sentence used to be the tail of a line
-about dragging, protected by nothing; it is now rendered by production, and both losing the value and
-keeping it while dropping the render fail. While an inspection runs: an indeterminate indicator and
-*"Inspecting…"*, naming no file, no stage and no figure, because the flow reports none — and offering no
-way to stop it, because it exposes none. When one cannot be started: the flow's own message beside a
-non-colour marker, and one action reading *"Choose another file…"*, because nothing about the failed
-selection is retained and *Try again* named something the app cannot do.
+**Open questions.**
+- **ADR-0026's status** (umbrella task 5.3), which the §7 finding above is an input to — to be written
+  there post-merge, not before.
+- At the 720 × 480 window minimum the Overview needs scrolling to reach the drawing and the result. That
+  is a property of a reading surface at the minimum size, not a defect, and **R9 owns it** — recorded so
+  it is looked at there rather than discovered.
 
-**What it did not cost.** The whole window still takes the drop, in every state. `RootView`,
-`ImportFlowModel`, the picker, the drop's rules, security-scoped access, the stale guards, the export and
-the one PCM read are untouched — each asserted where it lives rather than argued from the diff — and **no
-pre-existing test was modified.**
+**Inherited debt, untouched.** `add-two-file-technical-comparison` is still open at **52/58** and
+ADR-0017 is still `Proposed`; ADR-0016 is still `Proposed`; `add-static-spectrogram-visualization` is
+still open at **73/89**, its remaining tasks the manual validation battery deferred by product decision.
+The VoiceOver traversal gap shared with ADR-0015 is inherited rather than fixed or worsened.
 
-**ADR-0026 stays `Proposed`.** Its seventh promotion condition is a vocabulary sweep over the Comparison
-Overview, which R8 builds and which does not exist.
-
-**`add-two-file-visual-comparison` is merged, archived and closed.** PR
-[#50](https://github.com/donatogomez/audio-inspector/pull/50) landed on `main` as a two-parent merge
-commit `a62e021` on 2026-08-27, **ADR-0025 is `Accepted` (2026-08-27)**, and the change is archived at
-`openspec/changes/archive/2026-08-27-add-two-file-visual-comparison/`, which created the
-`audio-two-file-visual-presentation` capability with 11 requirements and 38 scenarios. Two files'
-waveforms and spectrograms now sit side by side on shared axes — time by real duration, frequency by
-Nyquist — reusing what the second file's single read already produced. The paired drawings **stand in
-for** the single ones rather than joining them. Past a file's own audio and above its own Nyquist are
-two different facts with two different sentences, and neither is drawn as silence or as the ramp's
-floor. There is no visual outcome: nothing says the two are the same, different, similar or matching.
-
-**The export payload no longer lives in a view.** PR
-[#51](https://github.com/donatogomez/audio-inspector/pull/51) merged as `58a9b18`: the rule that turns
-four presentation states into `ReportMeasurements`' four optionals moved out of `ReportView` into
-`ExportableMeasurements`. **Nothing observable changed** — same UI, same JSON, same `schemaVersion` 1 —
-and that is the point: it was a preparation, deliberately with no OpenSpec change and no ADR.
-
-**R1 — the shell — is merged, and it is only the shell.** PR
-[#52](https://github.com/donatogomez/audio-inspector/pull/52) landed on `main` as a two-parent merge
-commit `9a5f006` on 2026-08-27, carrying ADR-0026, the umbrella change and the shell together — the
-shape #45, #48 and #50 all used. **The umbrella is not archived**: it is at **11/29** and stays open
-until its last slice lands, because it is the record the eight remaining slices are sequenced by. Its §1
-and §2 are closed, §3 onward untouched. What exists
-is `WorkspaceSection` (five cases), `WorkspaceNavigation` (the selection and the one rule that moves
-it), `WorkspaceCopy` (the shell's words), and a segmented control in `RootView`. The selection lives in
-the composition root's own `@State`: no domain value, no field of `ImportFlowModel` or
-`ComparisonState`, no persistence, and a source assertion over `Sources/` and `App/` refuses any target
-below it naming it. It moves in exactly one place — a single `.onChange` on the whole window — and only
-when a **new primary report that did not fail globally** arrives. A comparison starting, settling, being
-dismissed, superseded, cancelled or failing moves nobody; nor does an analysis settling, a `.working`
-state, a dismissed picker, or a globally failed report. Three negative controls were seen to fail —
-a section that moves on its own (**39 issues across 8 tests**, once the lifetime tests were widened to
-assert from *every* section), persistence (4), and a `"3 differences"` count on the shell's comparison
-surface (4) — and all three were reverted and verified by checksum.
-
-**What R1 deliberately does not do.** No section has its own content yet. Selecting one changes the
-control's state and nothing else: all five still show the existing report page underneath, exactly as it
-was. There is no Inspection Overview, no Comparison Overview, no comparison mode, no Details or
-Measurements rework, no waveform or spectrum workspace, no toolbar, and no responsive pass. The
-paired-waveform overlap defect below is untouched. Those are R2–R9, each its own change and its own PR.
-**ADR-0026 is still `Proposed`** — R1 satisfies seven of its eight promotion conditions, and the eighth
-is a vocabulary sweep over a Comparison Overview that does not exist yet.
-
-**The decision that was blocking it is settled, against the capability rather than by preference.** The
-Comparison Overview carries the two file identities, each side's own facts, the existing factual framing
-and a way through to the full comparison — and nothing else. The `5 same · 3 different · 2 not
-comparable` block is refused because `audio-two-file-comparison` forbids aggregates. **The filtered
-*properties that differ* list is refused too, and on a narrower ground than it looks**: it survives while
-it has rows and fails on its empty state, where the absence of rows is itself the phrase *"the two files
-match"* that capability's own scenario refuses. ADR-0026 §8 writes that out; the older requirement is
-specialised, not weakened.
-
-**One thing the ADR disagrees with, on the record.** `docs/vision.md` §7 names `NavigationSplitView`
-among the marks of a native macOS app. ADR-0026 §12 declines it — a sidebar navigates a collection and
-there is none — and says so rather than diverging quietly. `docs/vision.md` is not edited; if
-persistence or batch ever creates a collection, that is the decision to reopen.
-
-**The order.** R1 is the umbrella's own work (the shell), and it is merged. R2 through R6 followed.
-**Next is R7 `add-inspection-overview`, not yet opened** · then R8
-Comparison mode · R9 responsive, accessibility and the human pass — each its own change and its own
-small PR. R0 is merged
-and outside the sequence. Manual validation sits on R9, not on the ADR: ADR-0026's subject is
-structure, and every claim it makes is a value a test can read.
-
-**`add-static-spectrogram-visualization` is still open at 73/89**, its remaining tasks the manual
-validation battery deferred by product decision — which is why **`spectrogram-visualization` is not a
-canonical capability**: its spec lives only inside that change. R6 deliberately wrote no delta against
-it and left it byte-identical, and archiving R6 did not materialise it. **One thing R6 could not check
-by eye**: the single-file spectrogram's raster cells, because they come from an async `.task` that the
-render harness does not run; its layout, axes and legend were seen, and the paired cells were.
-
-**Inherited debt, untouched.** `add-two-file-technical-comparison` is still open and **ADR-0017 is
-still `Proposed`**; **ADR-0016 is still `Proposed`**; the VoiceOver traversal gap they share with
-ADR-0015 is inherited rather than fixed or worsened. `add-static-spectrogram-visualization` is also
-open, its manual validation battery deferred by product decision.
-
-**Minor follow-up, not a thread:** `SettledMeasurements` describes itself as applying *"the same rule
-the export path already applies"*, and it does not — the two differ on `loading` and on the bandwidth
-clause. Worth correcting the next time something legitimate opens that file.
+**Minor follow-ups, not threads:** `SettledMeasurements` describes itself as applying *"the same rule the
+export path already applies"*, and it does not — the two differ on `loading` and on the bandwidth clause.
+And R3's deferred split of `PropertyDisplay.detail` is still deferred: R7 did not need it either, because
+the Overview shows no `detail` line at all.
 
 ---
-_Last touched: 2026-08-28. Overwrite freely; empty is fine._
+_Last touched: 2026-08-29. Overwrite freely; empty is fine._
