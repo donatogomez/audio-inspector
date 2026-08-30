@@ -45,6 +45,12 @@ public struct ReportDetailsView: View {
         self.comparison = comparison
     }
 
+    /// Whether this section is presenting two files. It changes the measure and nothing else.
+    private var isComparing: Bool {
+        if case .ready = comparison { return true }
+        return false
+    }
+
     public var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
@@ -61,9 +67,16 @@ public struct ReportDetailsView: View {
                     secondFileState
                 }
             }
-            // A reading measure rather than the window's width: a wider window gets more space around
-            // the section, not longer lines. Below the measure it simply fills what there is.
-            .frame(maxWidth: 640, alignment: .leading)
+            // **A reading measure for prose, the window's width for a table.**
+            //
+            // 640 pt is right for one file: a column of short values beside their names, and a wider
+            // window should give it more space around rather than longer lines. It is wrong for two. A
+            // compared row carries both files' values *and* the sentence saying what comparing them
+            // established — *"Not comparable — the second file's format does not define it"* — and
+            // capping that at a reading measure clipped the reason instead of wrapping it. **A reason a
+            // reader cannot finish is not a stated reason**, which is the whole of what that column is
+            // for. Found by rendering it, not by a test.
+            .frame(maxWidth: isComparing ? .infinity : 640, alignment: .leading)
             .frame(maxWidth: .infinity, alignment: .center)
             .padding(24)
         }
@@ -202,6 +215,9 @@ extension ReportDetailsView {
                         Text(row.outcome.text)
                             .font(.callout)
                             .foregroundStyle(row.outcome.isSecondary ? .secondary : .primary)
+                            // The reasons are sentences, not labels: they wrap rather than truncate.
+                            .fixedSize(horizontal: false, vertical: true)
+                            .frame(maxWidth: 320, alignment: .leading)
                     }
                     // One element per row, so a reader hears a coherent sentence — the property, each
                     // file's value, then what comparing them established — rather than correlating two
