@@ -61,17 +61,22 @@ struct MeasurementsRoutingTests {
         }
     }
 
-    /// **No comparison reaches this section.** It is one whole surface and R8 owns it; the transitional
-    /// page keeps it, exactly as R3 left it.
-    @Test("no comparison is handed to the measurements surface")
-    func noComparisonReachesTheSection() throws {
+    /// **The comparison reaches this section now, and it is the same one every other section is
+    /// handed.** R4 asserted the opposite — that no comparison reached here — because the comparison
+    /// still lived whole on the transitional page and R8 owned moving it. R8 moved it, so the property
+    /// worth protecting is no longer *absence* but *identity*: the section is handed the comparison
+    /// derived from the one read of the flow, not a second read that could belong to another operation.
+    @Test("the measurements surface is handed the one comparison the root read")
+    func theSectionIsHandedTheOneComparison() throws {
         let routing = try routing()
         let start = try #require(routing.firstIndex { $0.contains("ReportMeasurementsView(") })
         let rest = routing[(start + 1)...]
         let end = try #require(rest.firstIndex { $0.trimmingCharacters(in: .whitespaces).hasPrefix(")") })
-        for line in rest[..<end] {
-            #expect(!line.contains("comparison"), "a comparison reached the measurements section: \(line)")
-        }
+        #expect(rest[..<end].contains { $0.contains("comparison: comparison") },
+                "the section is not handed the comparison")
+        // And the root reads the flow's comparison exactly once, so nothing it hands out can straddle
+        // a change.
+        #expect(try code().filter { $0.contains("let flowComparison = flow.comparison") }.count == 1)
     }
 
     /// **Total, with no default**, so a section added later has to be routed rather than silently
@@ -91,19 +96,14 @@ struct MeasurementsRoutingTests {
     /// **The section and the page it replaces are alternatives, never both.** The transitional report
     /// page is another branch of the same switch, so the four measurement blocks it carries cannot
     /// appear beside this section.
-    @Test("measurements and the legacy report page are alternatives")
-    func measurementsAndTheLegacyPageAreAlternatives() throws {
-        let routing = try routing()
-        let measurements = try #require(routing.firstIndex { $0.contains("ReportMeasurementsView(") })
-        let legacy = try #require(routing.firstIndex { $0.contains("legacyReportSurface(") })
-        #expect(measurements != legacy, "both surfaces are built in the same branch")
-
-        // Each is *built* exactly once in the whole root, so neither is rendered a second time.
+    @Test("each section is built exactly once, and no transitional page remains")
+    func eachSectionIsBuiltOnce() throws {
         let calls = try code().filter { !$0.contains("private func") }
         #expect(calls.filter { $0.contains("ReportMeasurementsView(") }.count == 1)
         #expect(calls.filter { $0.contains("ReportDetailsView(") }.count == 1)
-        #expect(calls.filter { $0.contains("legacyReportSurface(") }.count == 1)
-        #expect(calls.filter { $0.contains("ReportView(") }.count == 1)
+        for gone in ["legacyReportSurface(", "ReportView(", "ComparisonSection("] {
+            #expect(!calls.contains { $0.contains(gone) }, "the root still builds \(gone)")
+        }
     }
 
     /// R3 is untouched: Details still routes to Details, and never to the measurements surface.
@@ -112,16 +112,17 @@ struct MeasurementsRoutingTests {
         let routing = try routing()
         let details = try #require(routing.firstIndex { $0.contains("case .details:") })
         let next = try #require(routing[(details + 1)...].first { !$0.trimmingCharacters(in: .whitespaces).isEmpty })
-        #expect(next.contains("ReportDetailsView(report: presentation.report)"))
+        #expect(next.contains("ReportDetailsView(report: presentation.report"))
     }
 
-    /// The transitional page is untouched by this slice: it still carries the comparison, in the same
-    /// call, with the same presentation, and the export in its toolbar.
-    @Test("the legacy report page still carries the comparison, unchanged")
-    func theLegacyPageStillCarriesTheComparison() throws {
+    /// The export survives the page's removal, where the hotfix put it: above the section routing, once.
+    @Test("the export is still attached above the routing")
+    func theExportSurvives() throws {
         let code = try code()
-        #expect(code.contains { $0.contains("comparison: Self.comparisonPresentation(for: comparison)") })
-        #expect(code.contains { $0.contains("export: export") })
+        let attach = try #require(code.firstIndex { $0.contains(".reportExportToolbar(") })
+        let routing = try #require(code.firstIndex { $0.contains("switch navigation.section") })
+        #expect(attach < routing)
+        #expect(code.filter { $0.contains(".reportExportToolbar(") }.count == 1)
     }
 
     // MARK: - 3.2 — R1 is untouched

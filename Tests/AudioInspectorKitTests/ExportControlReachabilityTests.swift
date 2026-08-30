@@ -85,14 +85,24 @@ struct ExportControlReachabilityTests {
         #expect(owners == ["ReportExportToolbar.swift"], "the toolbar is attached by \(owners)")
     }
 
-    /// **`ReportView` no longer carries it.** That view is the one the redesign is taking apart, and the
-    /// export following it there is exactly what made the action unreachable.
-    @Test("the report page carries no export of its own")
-    func theReportPageCarriesNoExport() throws {
-        let page = try code(of: "Sources/FeatureAnalysis/ReportView.swift")
-        for residue in ["Export JSON", "ReportExportModel", "ReportExportAction", "exportModel",
-                        ".toolbar"] {
-            #expect(!page.contains { $0.contains(residue) }, "the report page still carries \(residue)")
+    /// **No section carries an export of its own.** The hotfix took it out of the report page; R8 then
+    /// removed that page entirely, so the property is now asserted where it has to hold — over every
+    /// surface a reader can be looking at.
+    @Test("no section carries an export of its own")
+    func noSectionCarriesAnExport() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        #expect(
+            !FileManager.default.fileExists(atPath: root.appendingPathComponent("Sources/FeatureAnalysis/ReportView.swift").path),
+            "the transitional report page is back"
+        )
+        for section in ["InspectionOverviewView", "ComparisonOverviewView", "ReportDetailsView",
+                        "ReportMeasurementsView", "ReportWaveformView", "ReportSpectrumView"] {
+            let source = try code(of: "Sources/FeatureAnalysis/\(section).swift")
+            for residue in ["Export JSON", "ReportExportModel", "ReportExportAction", "exportModel",
+                            ".toolbar"] {
+                #expect(!source.contains { $0.contains(residue) }, "\(section) carries \(residue)")
+            }
         }
     }
 }
