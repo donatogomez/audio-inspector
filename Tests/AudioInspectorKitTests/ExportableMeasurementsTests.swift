@@ -221,15 +221,24 @@ struct ExportableMeasurementsTests {
                 encoding: .utf8
             )
         }
-        let view = try source("Sources/FeatureAnalysis/ReportView.swift")
+        // **The view R0 was written about no longer exists**, which is the strongest possible form of
+        // its property: the redesign took it apart, and the export did not follow it — it had already
+        // moved. The four extractions and the seam are asserted absent from every surface that replaced
+        // it, so nothing can quietly acquire them.
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        #expect(!FileManager.default.fileExists(atPath: root.appendingPathComponent("Sources/FeatureAnalysis/ReportView.swift").path))
 
-        #expect(!view.contains("exportableSignalLevelMetrics"))
-        #expect(!view.contains("exportableTruePeak"))
-        #expect(!view.contains("exportableLoudness"))
-        #expect(!view.contains("exportableProgrammeBandwidth"))
-        // Stronger than R0 could assert: the view does not reach the seam at all any more.
-        #expect(!view.contains("ExportableMeasurements"))
-        #expect(!view.contains("ReportExportModel"))
+        for section in ["InspectionOverviewView", "ComparisonOverviewView", "ReportDetailsView",
+                        "ReportMeasurementsView", "ReportWaveformView", "ReportSpectrumView"] {
+            let view = try source("Sources/FeatureAnalysis/\(section).swift")
+            #expect(!view.contains("exportableSignalLevelMetrics"))
+            #expect(!view.contains("exportableTruePeak"))
+            #expect(!view.contains("exportableLoudness"))
+            #expect(!view.contains("exportableProgrammeBandwidth"))
+            #expect(!view.contains("ExportableMeasurements"), "\(section) reaches the seam")
+            #expect(!view.contains("ReportExportModel"), "\(section) owns the export model")
+        }
 
         // It is called from the export's new owner — so this is "moved", not "deleted".
         let owner = try source("Sources/FeatureAnalysis/ReportExportToolbar.swift")

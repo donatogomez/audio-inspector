@@ -103,29 +103,30 @@ struct OverviewRoutingTests {
 
     /// **The split is on the comparison, and it is total.** A new comparison state has to be answered
     /// here rather than silently falling to one side — which is exactly how the comparison would go
-    /// missing.
+    /// missing. R8 changed what the second side is: the transitional page became a Comparison Overview
+    /// of its own, and the split itself is unchanged.
     @Test("the overview splits on the comparison, with no default")
     func theSplitIsOnTheComparisonAndIsTotal() throws {
         let branch = try overviewBranch()
-        #expect(branch.contains { $0.contains("switch Self.comparisonPresentation(for: comparison)") })
+        #expect(branch.contains { $0.contains("switch comparison {") })
         #expect(branch.contains { $0.contains("case .none:") })
         #expect(branch.contains { $0.contains("case .loading, .ready, .failed:") })
         #expect(!branch.contains { $0.contains("default:") }, "a comparison state falls through to a default")
-        #expect(branch.contains { $0.contains("legacyReportSurface(presentation, comparison: comparison)") })
+        #expect(branch.contains { $0.contains("ComparisonOverviewView(report: presentation.report, comparison: comparison)") })
     }
 
-    /// **The finding this slice was shaped by**: `legacyReportSurface` is `ReportView`'s only caller and
-    /// `ReportView` is `ComparisonView`'s only host, so the page is the comparison's only route onto the
-    /// screen until R8 builds its own. It is still built exactly once, and only from this branch.
-    @Test("the transitional page has exactly one caller, and it is the overview")
-    func theTransitionalPageHasOneCaller() throws {
+    /// **The page R7 could not remove is gone.** R7 kept `legacyReportSurface` because it was the only
+    /// route the comparison had onto the screen; R8 gave the comparison routes of its own in all five
+    /// sections, so the page has no caller left — and neither the page, the view it built, nor the
+    /// comparison surface inside it exists any more.
+    @Test("the transitional page is gone, and both overviews are built once")
+    func theTransitionalPageIsGone() throws {
         let calls = try code().filter { !$0.contains("private func") }
-        #expect(calls.filter { $0.contains("legacyReportSurface(") }.count == 1)
-        #expect(calls.filter { $0.contains("ReportView(") }.count == 1)
+        for gone in ["legacyReportSurface(", "ReportView(", "ComparisonSection("] {
+            #expect(!calls.contains { $0.contains(gone) }, "the root still builds \(gone)")
+        }
         #expect(calls.filter { $0.contains("InspectionOverviewView(") }.count == 1)
-        let branch = try overviewBranch()
-        #expect(branch.contains { $0.contains("legacyReportSurface(") },
-                "the only caller is no longer the overview branch")
+        #expect(calls.filter { $0.contains("ComparisonOverviewView(") }.count == 1)
     }
 
     /// Three of the four comparison states still reach the page that carries the comparison, and exactly
@@ -205,13 +206,15 @@ struct OverviewRoutingTests {
 
     // MARK: - 4.8 — nothing beneath this slice changed
 
-    /// The transitional page still carries the comparison and the export, in the same call, with the
-    /// same presentation.
-    @Test("the transitional page is untouched")
-    func theTransitionalPageIsUntouched() throws {
+    /// The export survives the page's removal, where the hotfix put it: above the section routing, once,
+    /// and reachable whatever the comparison is doing.
+    @Test("the export is still attached above the routing")
+    func theExportSurvives() throws {
         let code = try code()
-        #expect(code.contains { $0.contains("comparison: Self.comparisonPresentation(for: comparison)") })
-        #expect(code.contains { $0.contains("export: export") })
+        let attach = try #require(code.firstIndex { $0.contains(".reportExportToolbar(") })
+        let routing = try #require(code.firstIndex { $0.contains("switch navigation.section") })
+        #expect(attach < routing)
+        #expect(code.filter { $0.contains(".reportExportToolbar(") }.count == 1)
     }
 
     /// **No new navigation.** The section is still chosen by the value R1 owns, and no content on the
@@ -234,10 +237,10 @@ struct OverviewRoutingTests {
     func theEarlierSlicesAreUnchanged() throws {
         #expect(WorkspaceSection.allCases == [.overview, .measurements, .waveform, .spectrum, .details])
         let code = try code()
-        #expect(code.contains { $0.contains("ReportDetailsView(report: presentation.report)") })
-        let waveform = "ReportWaveformView(visuals: Self.reportVisuals(for: presentation, in: comparison))"
+        #expect(code.contains { $0.contains("ReportDetailsView(report: presentation.report") })
+        let waveform = "ReportWaveformView(visuals: Self.reportVisuals(for: presentation, in: flowComparison))"
         #expect(code.contains { $0.contains(waveform) })
-        let spectrum = "ReportSpectrumView(visuals: Self.reportVisuals(for: presentation, in: comparison))"
+        let spectrum = "ReportSpectrumView(visuals: Self.reportVisuals(for: presentation, in: flowComparison))"
         #expect(code.contains { $0.contains(spectrum) })
     }
 }

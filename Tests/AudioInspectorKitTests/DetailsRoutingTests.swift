@@ -41,7 +41,7 @@ struct DetailsRoutingTests {
     func detailsShowsTheDetailsSurface() throws {
         let routing = try routing()
         #expect(routing.contains { $0.contains("case .details:") })
-        #expect(routing.contains { $0.contains("ReportDetailsView(report: presentation.report)") })
+        #expect(routing.contains { $0.contains("ReportDetailsView(report: presentation.report") })
     }
 
     /// **Total, with no default**, so a section added later has to be routed rather than silently
@@ -75,30 +75,19 @@ struct DetailsRoutingTests {
 
     // MARK: - 1.3 — one visible owner
 
-    /// **Details and the page it replaces are alternatives, never both.** The legacy report page is one
-    /// branch of the same switch, so the blocks Details presents cannot appear twice on screen.
-    @Test("details and the legacy report page are alternatives")
-    func detailsAndTheLegacyPageAreAlternatives() throws {
-        let routing = try routing()
-        let details = try #require(routing.firstIndex { $0.contains("ReportDetailsView(") })
-        let legacy = try #require(routing.firstIndex { $0.contains("legacyReportSurface(") })
-        #expect(details != legacy, "both surfaces are built in the same branch")
-
-        // Each is *built* exactly once in the whole root, so neither is rendered a second time
-        // elsewhere. Declarations are excluded — what matters is how many places render one.
+    /// **Details is built exactly once, and there is no page for it to be an alternative to.**
+    ///
+    /// R3 wrote this as *"Details and the page it replaces are alternatives"*, because the transitional
+    /// page was still one branch of the same switch. R8 removed that page, so the property it protected —
+    /// that the blocks Details presents cannot appear twice on screen — is now stronger and simpler:
+    /// nothing else renders them at all.
+    @Test("details is built exactly once, and no transitional page remains")
+    func detailsIsBuiltOnceAndNoPageRemains() throws {
         let calls = try code().filter { !$0.contains("private func") }
         #expect(calls.filter { $0.contains("ReportDetailsView(") }.count == 1)
-        #expect(calls.filter { $0.contains("legacyReportSurface(") }.count == 1)
-        #expect(calls.filter { $0.contains("ReportView(") }.count == 1)
-    }
-
-    /// The legacy page is untouched by this slice: it still carries the comparison, in the same call,
-    /// with the same presentation.
-    @Test("the legacy report page still carries the comparison, unchanged")
-    func theLegacyPageStillCarriesTheComparison() throws {
-        let code = try code()
-        #expect(code.contains { $0.contains("comparison: Self.comparisonPresentation(for: comparison)") })
-        #expect(code.contains { $0.contains("export: export") })
+        for gone in ["legacyReportSurface(", "ReportView(", "ComparisonSection("] {
+            #expect(!calls.contains { $0.contains(gone) }, "the root still builds \(gone)")
+        }
     }
 
     // MARK: - 4.1 — R1 is untouched

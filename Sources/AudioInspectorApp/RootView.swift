@@ -177,12 +177,12 @@ public struct RootView: View {
         }
     }
 
-    /// The inspected report plus the way back to picking another file. `ReportView` is used exactly as
-    /// group 5 shipped it — the export action is passed straight through, unchanged.
     /// The comparison's own controls, beside the existing way to pick another file.
     ///
     /// **No new navigation.** Comparing is an action on the report already on screen, so it is an
-    /// action next to it — not a mode, not a second window, not a separate screen.
+    /// action next to it — not a mode of navigation, not a second window, not a separate screen. R8
+    /// made the comparison a mode of the *data* every section presents; it moved none of these controls
+    /// and added none, because none of them ever lived in the page it removed.
     @ViewBuilder
     private var comparisonControls: some View {
         switch flow.comparison {
@@ -345,63 +345,57 @@ public struct RootView: View {
         VStack(spacing: 0) {
             sectionNavigation
             Divider()
-            // **One read of the comparison, two answers derived from it.** Reading `flow.comparison`
-            // twice in one body could, in principle, straddle a change; binding it once cannot.
-            let comparison = flow.comparison
-            // **All five sections are real now.** R1 gave the workspace five sections and the
-            // selection that moves between them; R3 filled Details, R4 Measurements, R5 Waveform, R6
-            // Spectrum and R7 the Overview — every branch an **alternative**, never two at once, so the
-            // blocks and the drawings these sections present have exactly one visible owner at any
-            // moment. The report page survives in exactly one place, under Overview while a comparison
-            // exists, because it is the comparison's only host until R8.
+            // **One read of the comparison, every answer derived from it.** Reading `flow.comparison`
+            // twice in one body could, in principle, straddle a change; binding it once cannot — so the
+            // five sections, the drawings and the controls can never disagree about whether this window
+            // has one file or two.
+            let flowComparison = flow.comparison
+            let comparison = Self.comparisonPresentation(for: flowComparison)
+            // **Five sections, two modes, and no page left.** R1 gave the workspace its five sections
+            // and the selection that moves between them; R3 through R7 gave each one content of its own;
+            // R8 gave each one a comparison. Every branch is an **alternative**, never two at once, so
+            // the blocks and the drawings these sections present have exactly one visible owner at any
+            // moment — and there is no transitional surface underneath any of them any more.
+            //
+            // **A comparison is a mode, not a section** (ADR-0026 §2, §3). The five are the same five in
+            // both, in the same order; what a comparison changes is what each one contains. It moves no
+            // reader: R1's rule is that only a new successful primary does.
             //
             // The root chooses because it is the only place that can: `WorkspaceSection` lives here and
             // `FeatureAnalysis` cannot see it. Nothing about R1's lifecycle changes — no stack, no split
             // view, no second selection.
             switch navigation.section {
             case .details:
-                ReportDetailsView(report: presentation.report)
+                // **The same section, for one file or two.** `.none` is the whole of inspection mode;
+                // every other case is a fact about the second file, and the section decides how to say
+                // it. Nothing here chooses content.
+                ReportDetailsView(report: presentation.report, comparison: comparison)
             case .measurements:
-                // **The four sample-derived measurements, and nothing else.** The presentations are the
-                // ones the legacy page is handed in the same body — built by the same four mappings, from
-                // the same inspection — so a figure cannot differ between the two surfaces. No comparison
-                // reaches here: it is one whole surface and R8 owns it, exactly as R3 left the technical
-                // comparison out of Details.
+                // The four sample-derived measurements, and — while a comparison exists — the
+                // comparison of those same four, in the same two groups. `MeasurementComparison` is
+                // carried inside the presentation, so the figures and the comparison of them come from
+                // one read of the flow.
                 ReportMeasurementsView(
                     signalLevelMetrics: Self.signalLevelMetricsPresentation(for: presentation.signalLevelMetrics),
                     truePeak: Self.truePeakPresentation(for: presentation.truePeak),
                     loudness: Self.loudnessPresentation(for: presentation.loudness),
-                    programmeBandwidth: Self.programmeBandwidthPresentation(for: presentation.significantBandwidth)
+                    programmeBandwidth: Self.programmeBandwidthPresentation(for: presentation.significantBandwidth),
+                    comparison: comparison
                 )
             case .waveform:
-                // **The drawing, given the section's height.** It is handed the same `ReportVisuals` the
-                // transitional page is handed — built by the same call, from the same one read of the
-                // comparison — so the two cannot disagree about whether this is one file or two, and the
-                // pair still stands in place of the single drawing rather than beside it.
-                ReportWaveformView(visuals: Self.reportVisuals(for: presentation, in: comparison))
+                // **Unchanged by this slice.** R5 built it against `ReportVisuals`, which has paired the
+                // two files since R5 shipped — so the waveform has always worked in comparison mode and
+                // needed nothing from R8 but the comparison it was already being handed.
+                ReportWaveformView(visuals: Self.reportVisuals(for: presentation, in: flowComparison))
             case .spectrum:
-                // **The spectral drawing, given the section's height.** Handed the same `ReportVisuals`
-                // the transitional page is handed — the same call, the same one read of the comparison —
-                // so the two cannot disagree about whether this is one file or two, and a settled
-                // pairing still stands in place of the single drawing rather than beside it.
-                ReportSpectrumView(visuals: Self.reportVisuals(for: presentation, in: comparison))
+                // Unchanged by this slice, for R5's reason: R6 built it against the same value.
+                ReportSpectrumView(visuals: Self.reportVisuals(for: presentation, in: flowComparison))
             case .overview:
-                // **The last transitional branch, and it may not be removed outright.**
-                // `legacyReportSurface` is `ReportView`'s only caller and `ReportView` is
-                // `ComparisonView`'s only host, so replacing this branch unconditionally would delete
-                // the comparison from the application until R8 builds its own surface. So the split is
-                // on the comparison and nothing else: one file gets the section R7 built, and a window
-                // that has a second file keeps the page it has always had, unchanged.
-                //
-                // **It splits on `ComparisonPresentation`, not on `ReportVisuals`.** The visuals become
-                // a pair only once *both* files have settled both drawings; the comparison surface
-                // renders while it is loading and where it failed as well. Splitting on the visuals
-                // would have silently dropped those two states.
-                switch Self.comparisonPresentation(for: comparison) {
+                // **Two types rather than one branch** (`design.md` §2). ADR-0026 §8's list is short and
+                // its prohibitions absolute, so it is a property of a type: a later slice adding a
+                // measurement to "the overview" cannot reach the comparison one by accident.
+                switch comparison {
                 case .none:
-                    // **The same values every other section is handed**, built by the same mappings from
-                    // the same inspection, so a figure or a drawing cannot differ between this surface
-                    // and the section that owns it.
                     InspectionOverviewView(
                         report: presentation.report,
                         waveform: Self.waveformPresentation(for: presentation.waveform),
@@ -411,9 +405,7 @@ public struct RootView: View {
                         programmeBandwidth: Self.programmeBandwidthPresentation(for: presentation.significantBandwidth)
                     )
                 case .loading, .ready, .failed:
-                    // Named rather than defaulted, so a new comparison state has to be answered here
-                    // instead of quietly falling to one side of the split.
-                    legacyReportSurface(presentation, comparison: comparison)
+                    ComparisonOverviewView(report: presentation.report, comparison: comparison)
                 }
             }
             Divider()
@@ -428,22 +420,4 @@ public struct RootView: View {
         }
     }
 
-    /// The report page as it has been since R1. Every section now has content of its own, so this has
-    /// **one** caller left: the Overview, while a comparison exists. It stays because `ReportView` is
-    /// `ComparisonView`'s only host, and removing it before R8 builds the comparison's own surface would
-    /// delete the comparison rather than move it. It is untouched by this slice: the same blocks, in the
-    /// same order, with the same words.
-    private func legacyReportSurface(
-        _ presentation: InspectionPresentation, comparison: ImportFlowModel.ComparisonState
-    ) -> some View {
-        ReportView(
-            report: presentation.report,
-                visuals: Self.reportVisuals(for: presentation, in: comparison),
-                signalLevelMetrics: Self.signalLevelMetricsPresentation(for: presentation.signalLevelMetrics),
-                truePeak: Self.truePeakPresentation(for: presentation.truePeak),
-                loudness: Self.loudnessPresentation(for: presentation.loudness),
-                programmeBandwidth: Self.programmeBandwidthPresentation(for: presentation.significantBandwidth),
-            comparison: Self.comparisonPresentation(for: comparison)
-        )
-    }
 }

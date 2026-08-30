@@ -50,7 +50,7 @@ struct SpectrumRoutingTests {
     @Test("the workspace is handed the report's own visuals")
     func theWorkspaceIsHandedTheReportsOwnVisuals() throws {
         let routing = try routing()
-        let handOff = "ReportSpectrumView(visuals: Self.reportVisuals(for: presentation, in: comparison))"
+        let handOff = "ReportSpectrumView(visuals: Self.reportVisuals(for: presentation, in: flowComparison))"
         #expect(routing.contains { $0.contains(handOff) })
     }
 
@@ -74,23 +74,24 @@ struct SpectrumRoutingTests {
     func everySurfaceIsBuiltOnce() throws {
         let routing = try routing()
         let workspace = try #require(routing.firstIndex { $0.contains("ReportSpectrumView(") })
-        let legacy = try #require(routing.firstIndex { $0.contains("legacyReportSurface(") })
-        #expect(workspace != legacy, "both surfaces are built in the same branch")
-
         let calls = try code().filter { !$0.contains("private func") }
         for surface in ["ReportSpectrumView(", "ReportWaveformView(", "ReportDetailsView(",
-                        "ReportMeasurementsView(", "legacyReportSurface(", "ReportView("] {
+                        "ReportMeasurementsView(", "InspectionOverviewView(", "ComparisonOverviewView("] {
             #expect(calls.filter { $0.contains(surface) }.count == 1, "\(surface) is built more than once")
+        }
+        for gone in ["legacyReportSurface(", "ReportView(", "ComparisonSection("] {
+            #expect(!calls.contains { $0.contains(gone) }, "the root still builds \(gone)")
         }
     }
 
-    /// **Only Overview still stands in.** Four sections have their own surfaces now.
-    @Test("only overview still shows the transitional page")
-    func onlyOverviewStillShowsTheTransitionalPage() throws {
+    /// **No section stands in for another any more.** Every one of the five routes to a surface of its
+    /// own, in both modes.
+    @Test("no section falls back to another's surface")
+    func noSectionStandsInForAnother() throws {
         let routing = try routing()
-        let legacy = try #require(routing.firstIndex { $0.contains("case .overview") })
+        let overview = try #require(routing.firstIndex { $0.contains("case .overview") })
         for section in [".details", ".measurements", ".waveform", ".spectrum"] {
-            #expect(!routing[legacy].contains(section), "\(section) falls into the transitional branch")
+            #expect(!routing[overview].contains(section), "\(section) falls into the overview branch")
         }
     }
 
@@ -98,18 +99,20 @@ struct SpectrumRoutingTests {
     @Test("details, measurements and waveform still show their own surfaces")
     func theEarlierSectionsAreUntouched() throws {
         let routing = try routing()
-        #expect(routing.contains { $0.contains("ReportDetailsView(report: presentation.report)") })
+        #expect(routing.contains { $0.contains("ReportDetailsView(report: presentation.report") })
         #expect(routing.contains { $0.contains("ReportMeasurementsView(") })
-        let waveform = "ReportWaveformView(visuals: Self.reportVisuals(for: presentation, in: comparison))"
+        let waveform = "ReportWaveformView(visuals: Self.reportVisuals(for: presentation, in: flowComparison))"
         #expect(routing.contains { $0.contains(waveform) })
     }
 
-    /// The transitional page is untouched by this slice: it still carries the comparison and the export.
-    @Test("the legacy report page still carries the comparison, unchanged")
-    func theLegacyPageStillCarriesTheComparison() throws {
+    /// The export survives the page's removal, where the hotfix put it: above the section routing, once.
+    @Test("the export is still attached above the routing")
+    func theExportSurvives() throws {
         let code = try code()
-        #expect(code.contains { $0.contains("comparison: Self.comparisonPresentation(for: comparison)") })
-        #expect(code.contains { $0.contains("export: export") })
+        let attach = try #require(code.firstIndex { $0.contains(".reportExportToolbar(") })
+        let routing = try #require(code.firstIndex { $0.contains("switch navigation.section") })
+        #expect(attach < routing)
+        #expect(code.filter { $0.contains(".reportExportToolbar(") }.count == 1)
     }
 
     // MARK: - 4.2 — R1 is untouched

@@ -41,6 +41,10 @@ import SwiftUI
 /// difference: the comparison stays whole, where it is, until R8 (`design.md` §6).
 public struct ReportMeasurementsView: View {
     private let groups: [MeasurementGroupDisplay]
+    /// The comparison this section is being read inside, if any. **`.none` is the whole of inspection
+    /// mode.** Every other case is a fact about the *second* file, so this file's own measurements are
+    /// presented unchanged in all four.
+    private let comparison: ComparisonPresentation
 
     /// Every measurement is a **required** parameter with no default, for `ReportView`'s own reason: a
     /// default would let a caller forget one and ship a section that silently shows nothing where a
@@ -49,8 +53,10 @@ public struct ReportMeasurementsView: View {
         signalLevelMetrics: SignalLevelMetricsPresentation,
         truePeak: TruePeakPresentation,
         loudness: LoudnessPresentation,
-        programmeBandwidth: SignificantBandwidthPresentation
+        programmeBandwidth: SignificantBandwidthPresentation,
+        comparison: ComparisonPresentation = .none
     ) {
+        self.comparison = comparison
         groups = MeasurementsDisplay.groups(
             signalLevelMetrics: signalLevelMetrics,
             truePeak: truePeak,
@@ -62,8 +68,13 @@ public struct ReportMeasurementsView: View {
     public var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
-                ForEach(groups) { group in
-                    MeasurementGroupSection(group: group)
+                if case let .ready(_, measurements) = comparison {
+                    comparedMeasurements(measurements)
+                } else {
+                    ForEach(groups) { group in
+                        MeasurementGroupSection(group: group)
+                    }
+                    secondFileState
                 }
             }
             // A reading measure rather than the window's width, exactly as Details takes it: a wider
@@ -71,6 +82,45 @@ public struct ReportMeasurementsView: View {
             .frame(maxWidth: 640, alignment: .leading)
             .frame(maxWidth: .infinity, alignment: .center)
             .padding(24)
+        }
+    }
+
+    // MARK: - Comparison mode — the same four measurements, for two files
+
+    /// **The comparison in place, not appended.** The four measurements sit in the two groups they sit in
+    /// for one file — *Level* and *Frequency* — so a reader who was looking at the loudness finds the
+    /// loudness of both files where the loudness was, rather than a second table underneath.
+    ///
+    /// The blocks come from `MeasurementComparisonFormatter`, which decides every outcome, every reason
+    /// and the one difference; nothing here re-decides any of them, and no row gains a place for a
+    /// difference the domain does not publish.
+    /// **The comparison in place, not appended.** It sits where the four measurements sit for one
+    /// file, rather than as a second table after them — which is the shape this slice exists to remove.
+    ///
+    /// **It reuses `MeasurementComparisonSection` rather than re-rendering the same displays.** That view
+    /// already renders `MeasurementComparisonFormatter`'s four blocks, each under its own measurement's
+    /// name, and two suites already hold it to properties worth keeping: that it is given the comparison
+    /// and **nothing else** — so two values and one outcome can never come from two operations — and that
+    /// it says what is happening rather than rendering an empty table before both files have settled. A
+    /// second rendering of the same values here would be free to drift from the one those suites pin.
+    ///
+    /// Its own heading repeats this section's name, which is a wording overlap R9 owns; a drifting
+    /// duplicate would not have been.
+    private func comparedMeasurements(_ measurements: MeasurementComparison?) -> some View {
+        MeasurementComparisonSection(comparison: measurements)
+    }
+
+    /// What is happening to the second file, beneath this file's own measurements — which are untouched,
+    /// because a comparison that has not settled or has failed says nothing about them.
+    @ViewBuilder
+    private var secondFileState: some View {
+        switch comparison {
+        case .none, .ready:
+            EmptyView()
+        case .loading:
+            ComparedState(headline: ComparisonCopy.loading, detail: nil, isFailure: false)
+        case let .failed(message):
+            ComparedState(headline: ComparisonCopy.failedHeadline, detail: message, isFailure: true)
         }
     }
 }

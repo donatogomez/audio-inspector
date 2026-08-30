@@ -51,14 +51,14 @@ struct WaveformRoutingTests {
     @Test("the workspace is handed the report's own visuals")
     func theWorkspaceIsHandedTheReportsOwnVisuals() throws {
         let routing = try routing()
-        let handOff = "ReportWaveformView(visuals: Self.reportVisuals(for: presentation, in: comparison))"
+        let handOff = "ReportWaveformView(visuals: Self.reportVisuals(for: presentation, in: flowComparison))"
         #expect(routing.contains { $0.contains(handOff) })
         // The same call every visual surface uses, so there is exactly one rule about which drawings
         // are shown. R6 added the spectrum workspace as the third caller; a fourth would mean a surface
         // deciding for itself.
         let code = try code()
-        #expect(code.filter { $0.contains("Self.reportVisuals(for:") }.count == 3,
-                "the visuals are derived from more places than the two workspaces and the page")
+        #expect(code.filter { $0.contains("Self.reportVisuals(for:") }.count == 2,
+                "the visuals are derived from more places than the two visual workspaces")
     }
 
     /// **Total, with no default**, so a section added later has to be routed rather than silently
@@ -81,15 +81,13 @@ struct WaveformRoutingTests {
     func theWorkspaceAndTheLegacyPageAreAlternatives() throws {
         let routing = try routing()
         let workspace = try #require(routing.firstIndex { $0.contains("ReportWaveformView(") })
-        let legacy = try #require(routing.firstIndex { $0.contains("legacyReportSurface(") })
-        #expect(workspace != legacy, "both surfaces are built in the same branch")
-
         let calls = try code().filter { !$0.contains("private func") }
         #expect(calls.filter { $0.contains("ReportWaveformView(") }.count == 1)
         #expect(calls.filter { $0.contains("ReportDetailsView(") }.count == 1)
         #expect(calls.filter { $0.contains("ReportMeasurementsView(") }.count == 1)
-        #expect(calls.filter { $0.contains("legacyReportSurface(") }.count == 1)
-        #expect(calls.filter { $0.contains("ReportView(") }.count == 1)
+        for gone in ["legacyReportSurface(", "ReportView(", "ComparisonSection("] {
+            #expect(!calls.contains { $0.contains(gone) }, "the root still builds \(gone)")
+        }
     }
 
     /// Overview keeps the transitional page, until R7 builds its own. **Waveform does not, and neither
@@ -110,18 +108,19 @@ struct WaveformRoutingTests {
     func detailsAndMeasurementsAreUntouched() throws {
         let routing = try routing()
         #expect(routing.contains { $0.contains("case .details:") })
-        #expect(routing.contains { $0.contains("ReportDetailsView(report: presentation.report)") })
+        #expect(routing.contains { $0.contains("ReportDetailsView(report: presentation.report") })
         #expect(routing.contains { $0.contains("case .measurements:") })
         #expect(routing.contains { $0.contains("ReportMeasurementsView(") })
     }
 
-    /// The transitional page is untouched by this slice: it still carries the comparison, in the same
-    /// call, with the same presentation, and the export in its toolbar.
-    @Test("the legacy report page still carries the comparison, unchanged")
-    func theLegacyPageStillCarriesTheComparison() throws {
+    /// The export survives the page's removal, where the hotfix put it: above the section routing, once.
+    @Test("the export is still attached above the routing")
+    func theExportSurvives() throws {
         let code = try code()
-        #expect(code.contains { $0.contains("comparison: Self.comparisonPresentation(for: comparison)") })
-        #expect(code.contains { $0.contains("export: export") })
+        let attach = try #require(code.firstIndex { $0.contains(".reportExportToolbar(") })
+        let routing = try #require(code.firstIndex { $0.contains("switch navigation.section") })
+        #expect(attach < routing)
+        #expect(code.filter { $0.contains(".reportExportToolbar(") }.count == 1)
     }
 
     // MARK: - 4.2 — R1 is untouched

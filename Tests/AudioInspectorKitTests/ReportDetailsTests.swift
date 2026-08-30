@@ -244,8 +244,11 @@ struct ReportDetailsTests {
         #expect(source.contains { $0.contains("ReportPropertyFormatter.outcome(") })
         // It is not inside a ReportSection — the facts' container.
         let resultStart = try #require(source.firstIndex { $0.contains("private var resultStatement") })
-        let resultEnd = source[resultStart...].firstIndex { $0.contains("private struct DetailPropertyRow") }
-            ?? source.endIndex
+        // The block ends where the next declaration begins. R8 appended comparison mode to this file,
+        // so the marker is whichever of the two comes first rather than the one that used to be last.
+        let resultEnd = source[resultStart...].firstIndex {
+            $0.contains("private struct DetailPropertyRow") || $0.contains("extension ReportDetailsView")
+        } ?? source.endIndex
         let result = Array(source[resultStart ..< resultEnd])
         #expect(!result.contains { $0.contains("ReportSection(") }, "the result is styled as a fact area")
         #expect(result.contains { $0.contains("Text(\"Result\")") })
