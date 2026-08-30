@@ -181,9 +181,21 @@ and no semantic test is retired by calling it legacy.
       Walked against `design.md`'s seven decisions. 23 files, +1815/−883; `AudioInspectorDomain`, `AudioInspectorAnalysis`, `AudioInspectorMedia` and `FeatureImport` have **zero files changed**.
 - [x] 13.2 The umbrella stays **17/29** and §3.7 stays open until merge; ADR-0026 stays `Proposed`.
 
-- [ ] 13.3 **Post-merge only.** The administrative close: the PR, the merge, the umbrella's §3.7, and
+- [x] 13.3 **Post-merge only.** The administrative close: the PR, the merge, the umbrella's §3.7, and
       `openspec archive add-comparison-mode-surface`. R8 is not administratively closed before any of
       them exists.
+      PR [#60](https://github.com/donatogomez/audio-inspector/pull/60), CI green (*Build, test & enforce
+      boundaries*, 5m27s), merged as the **two-parent** commit `2765bae` whose second parent is this
+      change's head `e499539` and whose tree is byte-identical to the feature's — a clean merge with
+      nothing resolved. `main` fast-forwarded to `2765bae` with no local merge commit, all five feature
+      commits preserved and no unrelated commit introduced. Archived at
+      `openspec/changes/archive/2026-08-30-add-comparison-mode-surface/`, applying **+7 requirements** to
+      `audio-file-inspection` (34/120 → 41/134) and **+2** to `audio-two-file-comparison` (5/10 → 7/14),
+      with every other canonical capability byte-identical. The umbrella's §3.7 closed with it, 17/29 →
+      18/29.
+
+      **10.2, 10.4 and 10.5 stay open.** The change archives with three visual observations undone, on
+      purpose: the automated presentation tests passing is not the observation those tasks ask for.
 
 **No push, no PR, no merge, no archive. R9 is not implemented here.**
 

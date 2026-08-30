@@ -225,8 +225,44 @@ Each is a separate change, created when its turn comes. None is started here.
       *settled* comparison, needs two real files driven through the picker, which no harness could do.
       It is **manual validation deferred to R9**, and closing it on evidence that does not exist would
       have been the only dishonest way to reach a full count.
-- [ ] 3.7 **R8** `add-comparison-mode-surface` — the reduced Comparison Overview, gated by a vocabulary
-      sweep that includes the all-agree case.
+- [x] 3.7 **R8** `add-comparison-mode-surface` — **merged.** PR
+      [#60](https://github.com/donatogomez/audio-inspector/pull/60) landed on `main` as the two-parent
+      merge commit `2765bae` on 2026-08-30. **A comparison is a mode of this workspace now**, which is
+      what ADR-0026 §2 and §3 decided and what no slice before this could make true: the same five
+      sections exist in both modes, in the same order, and what a comparison changes is what each one
+      *contains*. Details renders the technical comparison, both identities, each file's notes and each
+      file's result; Measurements renders the comparison of the same four measurements in place rather
+      than appended; **Waveform and Spectrum needed nothing at all** — R5 and R6 built them against
+      `ReportVisuals`, which has paired the two files since it shipped, so they have zero lines changed.
+      **The Comparison Overview is §8 exactly**, and its safety is structural rather than lexical. §8
+      refused a filtered *properties that differ* list on the narrow ground that it fails on its **empty
+      state**, where the absence of rows is itself the prohibited phrase; R8 generalises that answer —
+      **no outcome reaches the surface at all.** It reads each file's own `AudioFileReference` and the
+      copy, never a property, a measurement, a warning, a status or any comparison type, so no element
+      can appear or disappear for a reason that means the files are alike. An all-agree pair and a pair
+      agreeing about nothing render the same elements, confirmed by test and by rendering both.
+      **The vocabulary sweep this task named as R8's gate ran**: 22 terms over the three new surfaces,
+      20 with zero occurrences, two audited and allowed with their reasons recorded. It found a real
+      defect rather than confirming a hunch — `ComparisonCopy.subtitle` described the page being removed
+      and carried three outcome words, so the overview was given its own framing.
+      **The transitional page is gone.** `legacyReportSurface`, `ReportView` and `ComparisonSection` had
+      no callers left and were deleted, but `ReportSection` was **extracted first**: it was declared
+      inside `ReportView.swift` and four live sections use it. That is the distinction the deletion
+      turned on — dead UI goes, reusable containers, formatters and copy stay.
+      **`ComparisonSection.warningSummary` was deleted rather than migrated.** It rendered *"1 warning on
+      this file"* per side — a cardinality over notes, written before `audio-file-inspection` made *"A
+      note MUST NOT be counted, scored, ranked by severity, or summarised into a total"* canonical.
+      Nothing stands in for it, and Details presents each file's notes in the report's own words, which
+      is more than a count ever said.
+      **Nothing the redesign inherited was spent**: no second PCM read, no DSP, no recomputation; every
+      measurement and comparison semantic, the paired axes and ramps, the export, `ReportExportToolbar`,
+      `schemaVersion` 1 and R1's navigation lifetime are untouched, and `AudioInspectorDomain`,
+      `AudioInspectorAnalysis`, `AudioInspectorMedia` and `FeatureImport` have **zero files changed**.
+      Twelve negative controls seen to fail and reverted by checksum. **1897 tests in 205 suites**,
+      twice.
+      **It archives with three visual validations open** — the settled measurement comparison, the paired
+      waveform and the paired spectrum — deferred to R9's human pass rather than closed on evidence that
+      does not exist.
 - [ ] 3.8 **R9** `polish-inspection-workspace` — narrow windows, keyboard, VoiceOver, and the human pass.
 
 ## 4. Closure
