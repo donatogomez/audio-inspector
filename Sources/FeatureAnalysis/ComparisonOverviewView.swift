@@ -62,11 +62,11 @@ public struct ComparisonOverviewView: View {
     /// them.
     private var framing: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(ComparisonCopy.subtitle)
+            Text(ComparisonOverviewCopy.twoFilesAreOpen)
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
-            Text(ComparisonOverviewCopy.whereTheComparisonIs)
+            Text(ComparisonOverviewCopy.whereEachSectionLooks)
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -145,12 +145,22 @@ public struct ComparisonOverviewView: View {
     }
 }
 
-/// This surface's own words. One sentence, and it says where the comparison is rather than anything
-/// about it.
+/// This surface's own words — and it needed its own.
+///
+/// **`ComparisonCopy.subtitle` was the obvious candidate and is wrong here.** It says *"The technical
+/// facts of both files, side by side"*, which described the page this slice removed: this surface shows
+/// no technical facts at all. It also carries *same*, *differs* and *better* — legitimately, as the
+/// disclaimer it is, beside a table of outcomes — but a surface whose whole guarantee is that no outcome
+/// can reach it should not open by naming three of them. The sentence keeps its place beside the rows it
+/// was written for.
+///
+/// What is left says two things and neither is about the files: how many are open, and where to look.
 enum ComparisonOverviewCopy {
-    static let whereTheComparisonIs =
-        "Each section below presents both files: the technical facts and notes in Details, the "
-            + "measurements in Measurements, and the drawings in Waveform and Spectrum."
+    static let twoFilesAreOpen = "Two files are open. Each is named below by its position."
+
+    static let whereEachSectionLooks =
+        "Every section presents both of them: their technical facts in Details, their measurements in "
+            + "Measurements, and their drawings in Waveform and Spectrum."
 }
 
 /// One identifying fact, against the section's shared label column.
