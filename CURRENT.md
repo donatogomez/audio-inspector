@@ -17,88 +17,72 @@
 
 ---
 
-**Focus:** **R7 — `add-inspection-overview` — is merged, archived and closed.** PR
-[#58](https://github.com/donatogomez/audio-inspector/pull/58) landed on `main` as the two-parent merge
-commit `607f901` on 2026-08-29; the change is archived at
-`openspec/changes/archive/2026-08-29-add-inspection-overview/` at **35/36**, and the umbrella that
-sequences the redesign is open at **17/29**. **The next slice is R8 `add-comparison-mode-surface`**
-(umbrella §3.7) — the reduced Comparison Overview of ADR-0026 §8, gated by a vocabulary sweep that
-includes the all-agree case — and it is not started.
+**Focus:** **R8 — `add-comparison-mode-surface` — is merged, archived and closed.** PR
+[#60](https://github.com/donatogomez/audio-inspector/pull/60) landed on `main` as the two-parent merge
+commit `2765bae` on 2026-08-30; the change is archived at
+`openspec/changes/archive/2026-08-30-add-comparison-mode-surface/` at **56/59**, and the umbrella is at
+**18/29**. **The next slice is R9 `polish-inspection-workspace`** (umbrella §3.8) — narrow windows,
+keyboard, VoiceOver and the human pass — and it is not started.
 
-**All five sections are real in inspection mode.** Selecting Overview shows the file's identity, the six
-core technical facts ADR-0026 §6 names, one figure per measurement, a compact drawing of the envelope the
-inspection already produced, and what became of the reading. It arranges facts and derives none: every
-name, value, unit, absence, failure and outcome sentence is the one `ReportPropertyFormatter`,
-`MeasurementsDisplay` or `WaveformCopy` already produces, and the view names no property of its own —
-the six are selected by `ReportPropertyFormatter.coreFacts(for:)`, beside `groups(for:)` and
-`summary(for:)`, because a view is not where property meaning belongs.
+**A comparison is a mode of this workspace, not a page.** The same five sections exist whether one file
+is open or two, in the same order; what a comparison changes is what each one *contains*. Details renders
+the technical comparison, both identities, each file's notes and each file's result. Measurements renders
+the comparison of the same four measurements **in place**, not appended. **Waveform and Spectrum needed
+nothing**: R5 and R6 built them against `ReportVisuals`, which has paired the two files since it shipped,
+so they have zero lines changed.
 
-**The warning count §6 permits is absent, and the ground is not §7.** §7's three conditions each hold.
-What they do not survive is R3's shipped requirement in `audio-file-inspection` — *"A note MUST NOT be
-counted, scored, ranked by severity, or summarised into a total"* — which is unqualified, which calls
-warnings **Notes**, and which became canonical on 2026-08-28 (`f9aa9b7`), *after* ADR-0026 was written on
-2026-08-27. A `Proposed` record does not overrule a shipped capability, so §7's own last line is taken:
-*the count goes and the section title carries the reader instead.* **ADR-0026 §7 is therefore unreachable
-as written** — recorded in R7's archived `proposal.md` and `design.md`, and cited from the umbrella's
-§3.6. **Umbrella task 5.3 is deliberately left verbatim**: it is the task that will *decide* this
-record's status, and appending a finding to it would turn a decision into a log. The canonical
-requirement is untouched.
+**The transitional report page is gone.** `legacyReportSurface`, `ReportView` and `ComparisonSection` had
+no callers left and were deleted — but `ReportSection` was **extracted first**, because it was declared
+inside `ReportView.swift` and four live sections use it. That is the distinction the deletion turned on:
+dead UI goes, reusable containers, formatters and copy stay.
 
-**The legacy comparison fallback remains, and R8 removes it.** `legacyReportSurface` is `ReportView`'s
-only composition caller, and `ReportView` is the only host of `ComparisonSection` — the comparison
-surface itself — so replacing the `.overview` branch outright would have deleted the comparison from the
-application. The branch splits on `ComparisonPresentation`, deliberately not on `ReportVisuals`, which
-becomes a pair only once both files have settled both drawings and would have silently dropped the
-comparison's *loading* and *failed* states. One file gets the real Overview; a window with a second file
-keeps the page it has always had. **This is the only surviving dependency on the legacy `ReportView`.**
+**The Comparison Overview is ADR-0026 §8 exactly, and its safety is structural rather than lexical.** It
+carries the two identities and two sentences of framing. **No outcome reaches it at all** — it reads each
+file's own `AudioFileReference` and the copy, never a property, a measurement, a warning, a status or any
+comparison type — so no element can appear or disappear for a reason that means the two files are alike.
+An all-agree pair and a pair agreeing about nothing render the same elements; only the files' own facts
+differ. That generalises §8's own argument, which refused a filtered *properties that differ* list on the
+ground that it fails on its **empty state**, where the absence of rows *is* the prohibited phrase.
 
-**R7 is archived with one task open, on purpose.** **6.2 — rendering the `.overview` branch with a
-*settled* comparison — is manual validation deferred to R9.** Reaching that state needs two real files
-driven through the picker, which no harness could do; what exists instead is a structural assertion, and
-that is evidence, not a look. Closing it would have been the only dishonest route to a full count.
-Separately, SwiftUI draws no `ScrollView` content in a headless test process, so the single-file surface
-was hosted in a real app window to be looked at — the same limitation applies to R3's Details and is
-inherited, not introduced. **Looking is what found the two presentation defects R7 fixed**, both of which
-every test had passed.
+**`warningSummary` is deleted, not migrated.** It rendered *"1 warning on this file"* per side — a
+cardinality over notes, written before `audio-file-inspection` made *"A note MUST NOT be counted, scored,
+ranked by severity, or summarised into a total"* canonical. Nothing stands in for it: no badge, no icon,
+no pluralised phrase. Details presents each file's notes in the report's own words, which is more than a
+count ever said.
 
-**One thing R7 broke and a hotfix has since restored.** PR
-[#59](https://github.com/donatogomez/audio-inspector/pull/59) landed as `a351f19`: giving Overview its own
-content took `ReportView` off the single-file path, and the *only* export toolbar was owned by that
-view — so `Export JSON…` became unreachable during ordinary inspection while JSON generation stayed
-correct. The action now attaches at the report surface, **above the section routing**, so it is reachable
-from all five sections and in every comparison state. The payload, the seam and `schemaVersion` 1 are
-untouched. **R8 inherits the relocated control**: the export half of its control migration is already
-done. The gap was as much a testing one as a code one — every export suite asserted the *document* and
-none asserted the *action was reachable*, which is why 1873 tests stayed green through it.
+**The export stays where the hotfix put it** — `ReportExportToolbar`, once, above the section routing,
+reachable from all five sections and in every comparison state. R8 did not move it, and that placement is
+what made removing `ReportView` possible without losing it.
 
-**ADR states.** **ADR-0025 `Accepted`.** **ADR-0026 stays `Proposed`** — five sections existing does not
-promote it; its outstanding condition is a vocabulary sweep over a Comparison Overview that R8 builds and
-that does not exist. **ADR-0016 and ADR-0017 stay `Proposed`**, unchanged.
+**R8 archives with three visual observations open, on purpose**: **10.2** the settled measurement
+comparison, **10.4** the paired waveform and **10.5** the paired spectrum. R8 changed no line of the two
+drawings and R5/R6 rendered them when they were built, but that is not having looked at them here, and
+the automated presentation tests passing is not the observation those tasks ask for. **They are deferred
+to R9's human pass.** What *was* rendered — the Comparison Overview in four states and Details compared
+at three window sizes — found a defect no test had: at the 640 pt reading measure the outcome column was
+clipped mid-word, and a reason a reader cannot finish is not a stated reason.
+
+**ADR states.** **ADR-0024 and ADR-0025 `Accepted`.** **ADR-0026 stays `Proposed`** — but its position
+changed materially: its eighth promotion condition was a vocabulary sweep over a Comparison Overview that
+did not exist, and now it does and the sweep ran. All eight of its conditions have live coverage, and the
+record states *"Manual — none in this record, and that is a decision."* **Promoting it is a decision that
+has not been taken**, and it belongs with the umbrella's closure task 5.3 — where the finding that §7 is
+unreachable as written is also waiting. **ADR-0016 and ADR-0017 stay `Proposed`.**
 
 **Inherited debt, untouched.** `add-two-file-technical-comparison` is still open at **52/58** and
 `add-static-spectrogram-visualization` at **73/89**, its remaining tasks the manual validation battery
-deferred by product decision — which is why `spectrogram-visualization` is still not a canonical
-capability. The VoiceOver traversal gap shared with ADR-0015 is inherited rather than fixed or worsened.
-
-**A required input to R8, recorded here so it is not lost.**
-`ComparisonSection.warningSummary` renders *"1 warning on this file"* — a per-file **count of notes**,
-written on 2026-08-22, before R3 made *"A note MUST NOT be counted, scored, ranked by severity, or
-summarised into a total"* canonical on 2026-08-28. It is a **pre-existing conflict between shipped
-production and the canon**, deliberately untouched by the hotfix. R8 migrates that context row into
-Details, and when it does it must **drop the count** rather than carry it forward — the same ground on
-which R7 refused the Overview's warning count.
+deferred by product decision. The VoiceOver traversal gap shared with ADR-0015 is inherited rather than
+fixed or worsened.
 
 **Open questions.**
-- **ADR-0026's status** (umbrella 5.3), for which the §7 finding is an input.
-- At the 720 × 480 window minimum the Overview needs scrolling to reach the drawing and the result. A
-  property of a reading surface at the minimum size, not a defect — **R9 owns it**.
+- **ADR-0026's status** (umbrella 5.3), now with all eight conditions covered and the §7 finding as an
+  input. R9's human pass is the natural moment to decide it.
+- At the 720 × 480 minimum the compared grid runs past the window and scrolls horizontally inside its
+  section — the closed decision R8 was given. **R9 owns whether that is the final answer.**
 
-**Minor follow-ups, not threads:** `SettledMeasurements` describes itself as applying *"the same rule the
-export path already applies"*, and it does not — the two differ on `loading` and on the bandwidth clause.
-R3's deferred split of `PropertyDisplay.detail` is still deferred; R7 did not need it either. And two
-comments in `RootView.swift` say *`ComparisonView`* where the type is *`ComparisonSection`* — the file is
-`ComparisonView.swift`, which is where the slip came from; R8 rewrites those comments when it removes the
-fallback.
+**Minor follow-ups, not threads:** `SettledMeasurements` still describes itself as applying *"the same
+rule the export path already applies"*, and it does not. R3's deferred split of `PropertyDisplay.detail`
+is still deferred.
 
 ---
 _Last touched: 2026-08-30. Overwrite freely; empty is fine._
